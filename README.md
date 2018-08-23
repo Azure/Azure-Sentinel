@@ -1,4 +1,7 @@
 
+This repo contains sample queries, dashboards and playbooks for Orion. 
+
+
 # Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
