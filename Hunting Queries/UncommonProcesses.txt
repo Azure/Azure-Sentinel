@@ -1,0 +1,18 @@
+//Shows the rarest processes seen running for the first time. These new processes could be benign new programs installed on hosts; however, especially in normally stable environments, these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run. Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.
+
+// Uncommon processes/files - bottom 5%
+let ProcessCreationEvents=() {
+let processEvents=SecurityEvent
+| where EventID==4688
+| project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
+FileName=reverse(substring(reverse(NewProcessName), 0, indexof(reverse(NewProcessName), "\\"))), // convert SecurityEvents raw schema to get FileName & CommandLine 
+ProcessCommandLine = CommandLine, 
+InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+processEvents ;
+};
+ let freqs = ProcessCreationEvents 
+ | project FileName=replace(@'\d', 'n', FileName) // normalize digits away; could also match on eg guids
+| summarize frequency=count() by FileName;
+freqs | where frequency < toscalar(
+    freqs | serialize | extend r=row_number() | project r, frequency 
+    | summarize percentilesw (r, frequency, 95));

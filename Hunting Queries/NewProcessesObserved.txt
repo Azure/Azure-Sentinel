@@ -1,0 +1,21 @@
+//Shows new processes observed in the last 24 hours versus the previous 30 days.   These new processes could be benign new programs installed on hosts; however, especially in normally stable environments, these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run. Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.
+
+// New processes observed in last 24 hours versus previous 30days
+// Pie chart summarizes the number of hosts each new process was seen to be running on
+let ProcessCreationEvents=() {
+let processEvents=SecurityEvent
+| where EventID==4688
+| project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
+FileName=reverse(substring(reverse(NewProcessName), 0, indexof(reverse(NewProcessName), "\\"))), // convert SecurityEvents raw schema to get FileName & CommandLine 
+ProcessCommandLine = CommandLine, 
+InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+processEvents ;
+};
+ProcessCreationEvents
+| where EventTime >= ago(30d)
+| summarize by FileName
+ | where FileName !in ("conhost.exe", "wuauclt.exe", "SIHClient.exe") // DEMO - filter processes out of baseline to ensure they show up as new
+| join kind=rightanti 
+(ProcessCreationEvents | where EventTime >= ago(1d) | summarize HostCount=dcount(ComputerName) by FileName) 
+on FileName
+| render piechart
