@@ -1,0 +1,18 @@
+// The query finds attempts to list users or groups using Net commands
+let ProcessCreationEvents1=() {
+let processEvents=SecurityEvent
+| where EventID==4688
+| project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,        AccountDomain=SubjectDomainName,
+FileName=reverse(substring(reverse(NewProcessName), 0, indexof(reverse(NewProcessName), "\\"))), // convert SecurityEvents raw schema to get FileName & CommandLine 
+ProcessCommandLine = CommandLine, 
+FolderPath = "",
+InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+processEvents ;
+};
+ProcessCreationEvents1 
+| where EventTime > ago(14d) 
+| where FileName == 'net.exe' and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add' 
+| where (ProcessCommandLine contains ' user ' or ProcessCommandLine contains ' group ') and (ProcessCommandLine endswith ' /do' or ProcessCommandLine endswith ' /domain') 
+| extend Target = extract("(?i)[user|group] (\"*[a-zA-Z0-9-_ ]+\"*)", 1, ProcessCommandLine) | filter Target  != '' 
+| project AccountName, Target, ProcessCommandLine, ComputerName, EventTime  
+| sort by AccountName, Target
