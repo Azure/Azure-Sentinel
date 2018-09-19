@@ -1,0 +1,37 @@
+//Malware writers often use windows system process names for their malicious process names to make them blend in with other legitimate commands that the Windows system executes.
+//an analyst can create a simple query looking for a process named Svchost.exe. 
+//It is recommended to filter out well-known security identifiers (SIDs) that are used to launch the legitimate svchost.exe process. 
+//The query also filters out the legitimate locations from which svchost.exe is launched.
+SecurityEvent
+| where TimeGenerated >= ago(2d)
+| where ProcessName contains "svchost.exe"
+| where SubjectUserSid != "S-1-5-18"
+| where SubjectUserSid != "S-1-5-19"
+| where SubjectUserSid != "S-1-5-20"
+| where NewProcessName !contains "C:\\Windows\\System32"
+| where NewProcessName !contains "C:\\Windows\\Syswow64"
+
+//Attackers often move to the next step which can loosely be called network propagation stage. 
+//The goal of the Network Propagation phase is to identify and move to desired systems within the target environment with the intention of discovering credentials and sensitive data. 
+//Sometimes as part of this one might see one account being used to log in on unusually high number of machines in the environment or lot of different account authentication requests coming from one machine. 
+SecurityEvent
+    | where EventID == 4624
+    | where AccountType == "User"
+    | where TimeGenerated >= ago(1d)
+    | summarize IndividualAccounts = dcount(Account) by Computer
+    | where IndividualAccounts > 4
+    
+//If we also wanted to see what alerts fired on these machines we could extend the above query and join them with the SecurityAlerts table from Azure Security Center.
+//Azure Security Center must be enabled for this query to be valid
+SecurityEvent
+    | where EventID == 4624
+    | where AccountType == "User"
+    | where TimeGenerated >= ago(1d)
+    | extend Computer = toupper(Computer)
+    | summarize IndividualAccounts = dcount(Account) by Computer
+    | where IndividualAccounts > 4
+| join (SecurityAlert
+                 | extend ExtProps=parsejson(ExtendedProperties)
+                 | extend Computer=toupper(tostring(ExtProps["Compromised Host"]))
+                 )
+on Computer
