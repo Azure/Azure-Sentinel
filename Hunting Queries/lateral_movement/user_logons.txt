@@ -58,24 +58,17 @@ SecurityEvent
 SecurityEvent
 | where EventID == 4740
 
-//Provides a summary view of a given account's logon history – for use when investigating an account that has been identified as having associated suspect activity or been otherwise compromised.
-let LogonEvents=() {
-let logonFail=OfficeActivity
-| where RecordType in ("AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon") and ResultStatus =~ "Failed"
-| project  EventTime=TimeGenerated, AccountName=split(UserId, "@").[0], AccountDomain = iff(RecordType == "AzureActiveDirectoryAccountLogon",UserDomain,split(UserId, "@").[1]), UserId, IpAddress=ClientIP, OrganizationId, 
-ActionType="LogonFailure";
-let logonSuccess=OfficeActivity
-| where RecordType in ("AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon") and ResultStatus =~ "Succeeded"
-| project  EventTime=TimeGenerated, AccountName=split(UserId, "@").[0], AccountDomain = iff(RecordType == "AzureActiveDirectoryAccountLogon",UserDomain,split(UserId, "@").[1]), UserId, IpAddress=ClientIP, OrganizationId, 
-ActionType="Logon";
- logonFail | union logonSuccess;
-}; //LogonEvents | where UserId has "admin"
-let logonSummary =
- LogonEvents 
-|summarize count() by ActionType, IpAddress, tostring(AccountName), tostring(AccountDomain), UserId, OrganizationId, bin(EventTime, 1m); //logonSummary | render timechart 
-let logon_success = logonSummary | where ActionType == "Logon";
-let logon_fail = logonSummary | where ActionType == "LogonFailure";
-logon_fail | join kind = leftouter (logon_success) on  IpAddress
-| project EventTime, IpAddress, failCount=count_, AccountName, OrganizationId, UserId, successCount=count_1 
-| extend successRate = 1.0*successCount/(successCount+failCount)
-| project EventTime, IpAddress, AccountName, successRate, failCount, successCount, UserId, OrganizationId
+
+//Attackers often move to the next step which can loosely be called network propagation stage. 
+//The goal of the Network Propagation phase is to identify and move to desired systems within the target environment with the intention of discovering credentials and sensitive data. 
+//Sometimes as part of this one might see one account being used to log in on unusually high number of machines in the environment or lot of different account authentication requests coming from one machine. 
+SecurityEvent
+//Tags: #LateralMovement
+    | where EventID == 4624
+    | where AccountType == "User"
+    | where TimeGenerated >= ago(1d)
+    | summarize IndividualAccounts = dcount(Account) by Computer
+    | where IndividualAccounts > 4
+    
+    
+    
