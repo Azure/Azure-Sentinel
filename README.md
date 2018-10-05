@@ -1,8 +1,8 @@
 # Azure Security Insights
-Welcome to the Azure Security Insights repository! This repo contains sample queries, dashboards and playbooks to help you get ramped up with Azure Security Insights. You can also file [issues](https://github.com/Azure/Orion/issues) or feature requests as you onboard to Security Insights. 
+Welcome to the Azure Security Insights repository! This repo contains sample queries, dashboards and playbooks to help you get ramped up with Azure Security Insights. You can also submit any [issues](https://github.com/Azure/Orion/issues) or feature requests as you onboard to Security Insights. 
 
 # Community
-Post any product questions about Azure Security in our TechCommunity Site or contact ASI_discussion@microsoft.com
+Post any product questions about Azure Security Insights in our [TechCommunity Site](https://techcommunity.microsoft.com/t5/Azure-Security-Insights/bd-p/AzureSecurityInsights) or contact ASI_discussion@microsoft.com
 
 # Contributing
 
