@@ -1,0 +1,23 @@
+let processEvents = SecurityEvent
+| where EventID==4688
+| project TimeGenerated,
+ComputerName=Computer,
+AccountName=SubjectUserName,
+FileName=NewProcessName,
+AccountDomain=SubjectDomainName,
+ProcessCommandLine=CommandLine,
+InitiatingProcessFileName=ParentProcessName,
+InitiatingProcessCommandLine='',
+InitiatingProcessParentFileName='' ;
+let freqs = processEvents
+| project FileName
+| where FileName !startswith "C:\\\\Program Files\\\\" and FileName !startswith "C:\\\\Program Files (x86)" and FileName !contains "DismHost.exe" and FileName !startswith "C:\\\\Windows"
+| summarize frequency=count() by tostring(FileName)
+| join kind= leftouter (
+   processEvents
+| summarize Since=min(TimeGenerated) by tostring(FileName)
+) on FileName;
+freqs
+| where frequency < toscalar(freqs | serialize | extend r=row_number() | project r, frequency | summarize percentilesw (r, frequency, 95))
+| order by frequency asc
+| project FileName, frequency, Since
