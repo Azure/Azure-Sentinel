@@ -17,39 +17,3 @@ logon_fail | join kind = leftouter (logon_success) on  IpAddress
 | project TimeGenerated, IpAddress, failCount=count_, AccountName, OrganizationId, UserId, successCount=count_1 
 | extend successRate = 1.0*successCount/(successCount+failCount)
 | project TimeGenerated, IpAddress, AccountName, successRate, failCount, successCount, UserId, OrganizationId
-
-
-// OLD- without timewindow join
-
-// Query joining the two above together to minimize noise - joining
-// - UserAgents seen in authentications from multiple IPs within short timeframe
-// - User Ids seen authenticated from multiple IPs
-// A user agent string that had low prevalence across multiple IPs
-// This time window join looks for minimum time between logons - rather than the simplistic min/max above
-let timeRange=ago(7d);
-let officeAuthentications = 
-OfficeActivity
-| where TimeGenerated >= timeRange
-| where RecordType in ("AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon") 
-| extend UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))
-| where Operation == "UserLoggedIn";
-officeAuthentications
-| project-rename Start=TimeGenerated 
-| join kind = inner (
-  officeAuthentications | project-rename End=TimeGenerated   
-) on UserAgent 
-| where (End-Start) between (1m..1d) 
-| project timeSpan = End - Start, UserId, ClientIP , UserAgent , Start, End
-| summarize dcount(ClientIP) by  UserAgent
-| where dcount_ClientIP >1
-| join kind=inner (
-   // User IDs associated with multiple different client IPs within a 1-day period:
-   // Because of the join we can increase the timeframe for  which we consider accounts with multiple source IPs
-   officeAuthentications
-   | summarize minTime=min(TimeGenerated), maxTime=max(TimeGenerated), dcount(ClientIP) by UserId, UserAgent
-   | project UserId, dcount_ClientIP , timeSpan = maxTime-minTime, UserAgent 
-   | where dcount_ClientIP >1 and timeSpan <= 1d
-   | project UserId, distinctIPCount=dcount_ClientIP, timeSpan, UserAgent) on UserAgent
-| project UserAgent, UserId, distinctIPCount  
-
-// NEW - with timewindow join

@@ -1,52 +1,15 @@
-// Shows new processes observed 
-// These new processes could be benign new programs installed on hosts; however, 
-// especially in normally stable environments, these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run. 
-// Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.
-// Tags: #Execution
-let ProcessCreationEvents=() {
 let processEvents=SecurityEvent
-| where EventID==4688
-| project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
-  FileName=tostring(split(NewProcessName, '\\')[-1]), // convert SecurityEvents raw schema to get FileName & CommandLine 
-ProcessCommandLine = CommandLine, 
-InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
-processEvents;
-};
-ProcessCreationEvents | take 5;
-let LogonEvents=()
-{
-    let logonSuccess=SecurityEvent
-    | where EventID==4624
-    | project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress,ActionType="Logon";
-    let logonFail=SecurityEvent
-    | where EventID==4625
-    | project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType="LogonFailure";
-    logonFail
-    | union logonSuccess;
-};
-LogonEvents | take 5
-
-// Shows new processes observed in the last 24 hours versus the previous 30 days.   
-// These new processes could be benign new programs installed on hosts; however, 
-// especially in normally stable environments, these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run. 
-// Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.
-// New processes observed in last 24 hours versus previous 30days
-// Pie chart summarizes the number of hosts each new process was seen to be running on
-// Tags: #Execution
-let ProcessCreationEvents=() {
-let processEvents=SecurityEvent
-| where EventID==4688
-| project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
-  FileName=tostring(split(NewProcessName, '\\')[-1]), // convert SecurityEvents raw schema to get FileName & CommandLine 
-ProcessCommandLine = CommandLine, 
-InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
-processEvents ;
-};
-ProcessCreationEvents
-| where EventTime >= ago(30d)
-| summarize by FileName
- | where FileName !in ("conhost.exe", "wuauclt.exe", "SIHClient.exe") // DEMO - filter processes out of baseline to ensure they show up as new
-| join kind=rightanti 
-(ProcessCreationEvents | where EventTime >= ago(1d) | summarize HostCount=dcount(ComputerName) by FileName) 
-on FileName
-| render piechart
+                        | where EventID==4688
+                        | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName, FileName=split(NewProcessName, @'')[(-1)], ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine='',InitiatingProcessParentFileName=''
+                        | where TimeGenerated >= ago(30d); 
+                    processEvents
+                    | where TimeGenerated < ago(1d)
+                    | summarize HostCount=dcount(ComputerName) by tostring(FileName)
+                    | join kind=rightanti
+                    (
+                        processEvents
+                        | where TimeGenerated >= ago(1d)
+                        | summarize HostCount=dcount(ComputerName) by tostring(FileName)
+                    )
+                    on FileName
+                    | project HostCount, FileName
