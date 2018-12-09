@@ -18,6 +18,7 @@ export enum Techniques {
 }
 
 export interface HuntingQuery {
+    id: string;
     name: string;
     description: string;
     query: string;
