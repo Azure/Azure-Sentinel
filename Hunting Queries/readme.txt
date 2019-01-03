@@ -9,7 +9,9 @@ You can access the full list of tables and columns in the portal or reference th
 
 # TODO
   Table columns and descriptions
-  Query language reference
+  Query language reference:
+  KQL course: https://www.pluralsight.com/courses/kusto-query-language-kql-from-scratch.  
+  (access to pluralsight: http://aka.ms/getpluralsight - Follow the instructions.)
 
 # TODO  
 # Suggestions and feedback
