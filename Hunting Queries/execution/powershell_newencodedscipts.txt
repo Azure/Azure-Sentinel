@@ -1,0 +1,27 @@
+// Identify and decode new encoded powershell scripts this week versus previous fortnight - generic
+// Tags: #Initial Access, #Execution, #Persistence
+let ProcessCreationEvents=() {
+let processEvents=SecurityEvent
+| where EventID==4688
+| project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,        AccountDomain=SubjectDomainName,
+  FileName=tostring(split(NewProcessName, '\\')[-1]),
+ProcessCommandLine = CommandLine, 
+InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+processEvents};
+let encodedPSScripts = 
+ProcessCreationEvents | where TimeGenerated >= ago(21d)
+| where FileName == "powershell.exe"
+| where ProcessCommandLine contains "-encodedCommand";
+encodedPSScripts
+| where TimeGenerated > ago(7d)
+| summarize count() by ProcessCommandLine
+| parse ProcessCommandLine with * "-EncodedCommand " encodedCommand
+| project decodedCommand=base64_decodestring(substring(encodedCommand, 0, 
+ strlen(encodedCommand) - (strlen(encodedCommand) %8))), encodedCommand 
+| join kind=anti (encodedPSScripts
+  | where TimeGenerated between(ago(21d)..ago(7d))
+  | summarize count() by ProcessCommandLine
+  | parse ProcessCommandLine with * "-EncodedCommand " encodedCommand
+  | project decodedCommand=base64_decodestring(substring(encodedCommand, 0, 
+   strlen(encodedCommand) - (strlen(encodedCommand) %8))), encodedCommand 
+) on encodedCommand, decodedCommand 
