@@ -1,0 +1,39 @@
+// Name: DNS Domain anomalous lookup increase
+
+// Description: 
+// Checking for a threefold increase or more of Domain lookup per ClientIP for today based on daily average for the previous week. 
+// This can potentially identify excessive traffic to a given location that could be indicative of data transfer out of your network to a group of systems on the same second level domain.  
+// For example, if one client is sending requests for test1.badguy.com and another client is sending requests for test2.badguy.com, you may not see a high enough count to be interesting. 
+// However, a combination of the requests to badguy.com could have a high enough count to be interesting. 
+// This is only Name lookups, so it would be recommended to review the Firewall\Webproxy logs in relation to the ClientIP making the interesting requests.
+
+// Data Source: DNS Events
+
+// Tags: #C2, #Exfiltration
+
+DnsEvents 
+| where TimeGenerated >= startofday(ago(8d)) and TimeGenerated <= startofday(ago(1d)) //setting to 00:00:00 for the given days ago
+| where SubType == "LookupQuery"
+| extend DayNumberofWeek = tostring(dayofweek(TimeGenerated)) //getting the associated number of the day of the week so we can map to a given day for later parsing if needed
+| extend DayofWeek = iff(DayNumberofWeek == "00:00:00", "Sunday", //Setting the Day of the week value so that certain days could be excluded if needed
+(iff(DayNumberofWeek == "1.00:00:00", "Monday", 
+(iff(DayNumberofWeek == "2.00:00:00", "Tuesday", 
+(iff(DayNumberofWeek == "3.00:00:00", "Wednesday", 
+(iff(DayNumberofWeek == "4.00:00:00", "Thursday", 
+(iff(DayNumberofWeek == "5.00:00:00", "Friday", 
+(iff(DayNumberofWeek == "6.00:00:00", "Saturday", DayNumberofWeek)))))))))))))
+| where DayofWeek !in ("Saturday", "Sunday") //example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change
+| extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
+| summarize count() by ClientIP, Domain
+| project ClientIP, Domain, DailyAvgLookupCountOverLastWeek = count_ /5 // average is across 5 days as we are dropping weekends, change as needed
+| join ( DnsEvents 
+| where TimeGenerated >= startofday(ago(1d)) 
+| where SubType == "LookupQuery"
+| extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
+| summarize count() by ClientIP, Domain
+| project ClientIP, LookupCountToday = count_, Domain
+)
+on ClientIP, Domain
+| where LookupCountToday > ( DailyAvgLookupCountOverLastWeek * 3) and LookupCountToday > 1000 // limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed
+| project ClientIP, SecondLevelDomain = Domain , LookupCountToday , DailyAvgLookupCountOverLastWeek
+| order by LookupCountToday desc nulls last 
