@@ -12,16 +12,29 @@
 //
 // AlertTriggerOperator: gt
 //
-// AlertTriggerThreshold: 0// Data Source: OfficeActivity,AzureDiagnostics
+// AlertTriggerThreshold: 0
+//
+// Data Source: OfficeActivity,AzureDiagnostics
 //
 // Techniques: #InitialAccess, #C2, #Exfiltration
 //
-union isfuzzy=true
+(union isfuzzy=true
 (OfficeActivity | where UserAgent != ""),
 (OfficeActivity 
 | where RecordType in ("AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon")
 | extend UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))),
 (AzureDiagnostics | where ResourceType == "APPLICATIONGATEWAYS" 
 | where OperationName == "ApplicationGatewayAccess" 
-| extend UserAgent = replace(@'\+', @' ', userAgent_s))
-| where UserAgent startswith "UserAgent:"
+| extend UserAgent = replace(@'\+', @' ', userAgent_s)))
+// Likely artefact of hardcoding
+| where UserAgent startswith "User" or UserAgent startswith "\""
+// Incorrect casing
+or (UserAgent startswith "Mozilla" and not(UserAgent containscs "Mozilla"))
+// Incorrect casing
+or UserAgent containscs  "(Compatible;"
+// Missing MSIE version
+or UserAgent matches regex @"MSIE\s?;"
+// Incorrect spacing around MSIE version
+or UserAgent matches regex  @"MSIE(?:\d|.{1,5}?\d\s;)"
+
+
