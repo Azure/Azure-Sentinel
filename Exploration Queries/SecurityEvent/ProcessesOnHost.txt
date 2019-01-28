@@ -1,0 +1,33 @@
+// Name: Processes running on Host
+// Description: Any processes running on a given host during the time of or recently after compromise and in the range of +-30m
+//
+// Entity: #Host
+// Input: Computername, Hostname, HostId
+// Output: ProcessName
+//
+// QueryPeriod: +-30m default, change as needed
+//
+// Data Source: #SecurityEvent
+//
+// Techniques: #Persistence, #Discovery, #LateralMovement, #Collection
+//
+let GetActiveProcessesOnHost = (suspiciousEventTime:datetime, Host:string){
+let StartTime = suspiciousEventTime-30m;
+let EndTime = suspiciousEventTime+30m;
+SecurityEvent 
+| where TimeGenerated between (StartTime .. EndTime)
+| where EventID == 4688
+// excluding well known processes, feel free to add more specific to the environment
+| where NewProcessName !contains ":\\Windows\\System32\\conhost.exe" and ParentProcessName !contains ":\\Windows\\System32\\conhost.exe"
+and NewProcessName !contains ":\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\csc.exe" and ParentProcessName !contains ":\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\csc.exe"
+and NewProcessName !contains ":\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\cvtres.exe" and ParentProcessName !contains ":\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\cvtres.exe"
+and NewProcessName!contains ":\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe" and ParentProcessName !contains ":\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe"
+and ParentProcessName !contains ":\\Windows\\CCM\\CcmExec.exe"
+// excluding well known parent process, child process combinations, feel free to add more specific to the environment
+| where (ParentProcessName !contains ":\\Windows\\System32\\svchost.exe" and (NewProcessName !contains ":\\Windows\\System32\\wbem\\WmiPrvSE.exe" or NewProcessName !contains ":\\Windows\\SysWOW64\\wbem\\WmiPrvSE.exe"))
+| where (ParentProcessName !contains ":\\Windows\\System32\\services.exe" and NewProcessName !contains ":\\Windows\\servicing\\TrustedInstaller.exe")
+| where toupper(Computer) contains Host or toupper(WorkstationName) contains Host
+| summarize Count=count() by TimeGenerated, Computer, Account, NewProcessName, CommandLine
+| sort by TimeGenerated asc, Count desc
+};
+GetActiveProcessesOnHost(datetime('2019-01-20T10:02:51.000'), toupper("<hostname>"))
