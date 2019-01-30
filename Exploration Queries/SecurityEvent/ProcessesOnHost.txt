@@ -1,5 +1,5 @@
 // Name: Processes running on Host
-// Description: Any processes running on a given host during the time of or recently after compromise and in the range of +-30m
+// Description: Any processes running on a given host during the time of or recently after compromise and in the range of +-10m
 //
 // Entity: #Host
 // Input: Computername, Hostname, HostId
@@ -11,11 +11,12 @@
 //
 // Techniques: #Persistence, #Discovery, #LateralMovement, #Collection
 //
-let GetActiveProcessesOnHost = (suspiciousEventTime:datetime, Host:string){
-let StartTime = suspiciousEventTime-30m;
-let EndTime = suspiciousEventTime+30m;
+let GetActiveProcessesOnHost = (suspiciousEventTime:datetime, v_Host:string){
+let v_StartTime = suspiciousEventTime-10m;
+let v_EndTime = suspiciousEventTime+10m;
 SecurityEvent 
-| where TimeGenerated between (StartTime .. EndTime)
+| where TimeGenerated between (v_StartTime .. v_EndTime)
+| where toupper(Computer) contains v_Host or toupper(WorkstationName) contains v_Host
 | where EventID == 4688
 // excluding well known processes, feel free to add more specific to the environment
 | where NewProcessName !contains ":\\Windows\\System32\\conhost.exe" and ParentProcessName !contains ":\\Windows\\System32\\conhost.exe"
@@ -26,8 +27,9 @@ and ParentProcessName !contains ":\\Windows\\CCM\\CcmExec.exe"
 // excluding well known parent process, child process combinations, feel free to add more specific to the environment
 | where (ParentProcessName !contains ":\\Windows\\System32\\svchost.exe" and (NewProcessName !contains ":\\Windows\\System32\\wbem\\WmiPrvSE.exe" or NewProcessName !contains ":\\Windows\\SysWOW64\\wbem\\WmiPrvSE.exe"))
 | where (ParentProcessName !contains ":\\Windows\\System32\\services.exe" and NewProcessName !contains ":\\Windows\\servicing\\TrustedInstaller.exe")
-| where toupper(Computer) contains Host or toupper(WorkstationName) contains Host
-| summarize Count=count() by TimeGenerated, Computer, Account, NewProcessName, CommandLine
-| sort by TimeGenerated asc, Count desc
+| summarize min(TimeGenerated), max(TimeGenerated) by Computer, Account, NewProcessName, CommandLine
+| project min_TimeGenerated, max_TimeGenerated, Computer, Account, NewProcessName, CommandLine
+| top 10 by min_TimeGenerated desc
 };
-GetActiveProcessesOnHost(datetime('2019-01-20T10:02:51.000'), toupper("<hostname>"))
+// change datetime value and <hostname> value below
+GetActiveProcessesOnHost(datetime('2019-01-30T10:02:51.000'), toupper("<hostname>"))
