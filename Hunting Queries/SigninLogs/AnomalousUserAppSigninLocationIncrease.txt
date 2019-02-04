@@ -1,0 +1,23 @@
+// Name: anomalous sign-in location by user account and authenticating application
+//
+// Description: This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active 
+// Directory application and picks out the most anomalous change in location profile for a user within an 
+// individual application. The intent is to hunt for user account compromise, possibly via a specific application
+// vector.
+//
+// Data source: SigninLogs
+//
+// Techniques: #InitialAccess
+//
+SigninLogs 
+| extend  locationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";") 
+| project TimeGenerated, AppDisplayName , UserPrincipalName 
+// Create time series 
+| make-series dLocationCount = dcount(locationString) on TimeGenerated in range(datetime(01-01-2019),datetime(01-31-2019), 1d) 
+by UserPrincipalName, AppDisplayName 
+// Compute best fit line for each entry 
+| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount) 
+// Chart the 3 most interesting lines  
+// A 0-value slope corresponds to an account being completely stable over time for a given Azure Active Directory application
+| top 3 by Slope desc  
+| render timechart
