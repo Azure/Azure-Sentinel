@@ -1,0 +1,28 @@
+// Name: Resources on which an Account logged onto 
+// Description: Resources on which an Account was logged on during a given time period based on SigninLogs   
+//
+// Entity: Account
+// Input: Compromised Account
+// Output: Hosts
+//
+// QueryPeriod:  +-1d default, change as needed
+//
+// Data Source: #SigninLogs
+//
+// Techniques: #Persistence, #Discovery, #LateralMovement, #Collection
+let GetAllHostsbyAccount = (suspiciousEventTime:datetime, v_Account:string){
+let v_StartTime = suspiciousEventTime-1d;
+let v_EndTime = suspiciousEventTime+1d;
+SigninLogs 
+| where TimeGenerated between (v_StartTime .. v_EndTime)
+| where UserPrincipalName contains v_Account
+| extend RemoteHost = tolower(tostring(parsejson(DeviceDetail.["displayName"])))
+| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+| summarize min(TimeGenerated), max(TimeGenerated) by RemoteHost , UserDisplayName, UserPrincipalName, AppDisplayName, ClientAppUsed, tostring(OS), tostring(Browser), IPAddress, ResultType, ResultDescription, Location, State, City, StatusCode, StatusDetails
+| project min_TimeGenerated, max_TimeGenerated, RemoteHost, UserDisplayName, UserPrincipalName, AppDisplayName, ClientAppUsed, OS, Browser , IPAddress, ResultType, ResultDescription, Location, State, City, StatusCode, StatusDetails
+| top 10 by min_TimeGenerated desc nulls last 
+};
+// change datetime value and <username> value below
+GetAllHostsbyAccount (datetime('2019-01-30T10:36:07Z'), "<username>")
