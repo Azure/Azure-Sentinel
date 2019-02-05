@@ -1,0 +1,32 @@
+// Name: Granting permissions to account - detection variant
+//
+// Description: looks for IPs from which users grant access to others on azure resources. A new 
+// source IP address for such activity results in an alert being generated.
+//
+// Data source: AzureActivity
+//
+// Severity: Medium
+//
+// QueryFrequency: 24
+//
+// QueryPeriod: 24
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Techniques: #Persistence,#Privilege Escalation
+//
+let createRoleAssignmentActivity = AzureActivity
+| where OperationName == "Create role assignment"
+| where ActivityStatus == "Succeeded"
+| project TimeGenerated, EventSubmissionTimestamp, Caller, CallerIpAddress, SubscriptionId, ResourceId;
+// The number of operations below which an IP address is considered an unusual source of role assignment operations
+let alertOperationThreshold = 5;
+createRoleAssignmentActivity 
+| where TimeGenerated >= ago(30d)
+| summarize count() by CallerIpAddress
+| where count_ <= alertOperationThreshold
+| join kind = rightsemi ( createRoleAssignmentActivity
+| where TimeGenerated >= ago(1d)
+) on CallerIpAddress 

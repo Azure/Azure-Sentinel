@@ -1,0 +1,36 @@
+// Name: Creation of an anomalous number of resources - detection variant
+//
+// Description: looks for anomalous number of resources creation or deployment activities in azure activity log.
+// Will generate an alert if a recent spike is found, specifically where the  number of resources creation is anomalous over both 2-day and 7-day period.
+//
+// Data source: AzureActivity
+//
+// Severity: Medium
+//
+// QueryFrequency: 24
+//
+// QueryPeriod: 24
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Techniques: #Execution
+//
+AzureActivity
+| where TimeGenerated >= startofday(ago(7d))
+| where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment"
+| where ActivityStatus == "Succeeded"
+| make-series dResourceCount=dcount(ResourceId)  default=0 on EventSubmissionTimestamp in range(startofday(ago(7d)), now(), 1d) by Caller
+| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)
+| where Slope > 0.2
+| join kind=leftsemi (
+// Last day's activity is anomalous
+AzureActivity
+| where TimeGenerated >= startofday(ago(1d))
+| where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment"
+| where ActivityStatus == "Succeeded"
+| make-series dResourceCount=dcount(ResourceId)  default=0 on EventSubmissionTimestamp in range(startofday(ago(1d)), now(), 1d) by Caller
+| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)
+| where Slope >0.2    
+) on Caller
