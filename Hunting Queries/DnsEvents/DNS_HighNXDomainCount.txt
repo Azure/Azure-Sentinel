@@ -1,0 +1,23 @@
+// Name: DNS high NXDomain count
+// 
+// Description: clients with a high NXDomain count could be indicative of a DGA (cycling through possible C2 domains
+// where most C2s are not live). 
+//
+// Data Source: DnsEvents
+//
+// Techniques: #C2, #Exfiltration
+//
+// NXDomain events, with some likely uninteresting records filtered out
+let nxDomainDnsEvents = DnsEvents 
+| where ResultCode == "3" 
+| where QueryType in ("A", "AAAA")
+| where ClientIP != "127.0.0.1"
+| where Name !contains "/"
+| where Name contains ".";
+// Query for ClientIPs with high NXDomain counts
+nxDomainDnsEvents
+| extend sld = tostring(split(Name, ".")[-2])
+| summarize dcount(sld) by ClientIP
+| where dcount_sld > 100
+| join kind = inner (nxDomainDnsEvents | summarize by Name, ClientIP) on ClientIP
+| summarize sampleNXDomainList=makelist(Name, 10)  by ClientIP, dcount_sld
