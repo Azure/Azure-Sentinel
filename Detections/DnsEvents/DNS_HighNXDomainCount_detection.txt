@@ -1,0 +1,42 @@
+// Name: DNS high NXDomain count
+// Id: a0907abe-6925-4d90-af2b-c7e89dc201a6
+//
+// Description: clients with a high NXDomain count could be indicative of a DGA (cycling through possible C2 domains
+// where most C2s are not live). Alert is generated when a new IP is seen (based on not being seen associated with 
+// NXDomain records in prior 10-day baseline period)
+//
+// Data Source: DnsEvents
+//
+// Severity: Medium
+//
+// QueryFrequency: 24
+//
+// QueryPeriod: 24
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Techniques: #C2, #Exfiltration
+//
+// NXDomain events, with some likely uninteresting records filtered out
+let nxDomainDnsEvents = DnsEvents 
+| where ResultCode == "3" 
+| where QueryType in ("A", "AAAA")
+| where ClientIP != "127.0.0.1"
+| where Name !contains "/"
+| where Name contains ".";
+nxDomainDnsEvents
+| where TimeGenerated > ago(1d)
+| extend sld = tostring(split(Name, ".")[-2])
+| summarize dcount(sld) by ClientIP
+| where dcount_sld > 100
+// Filter out previously seen IPs
+| join kind=leftanti (nxDomainDnsEvents
+    | where TimeGenerated between(ago(10d)..ago(1d))
+    | extend sld = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld) by ClientIP
+    | where dcount_sld > 100 ) on ClientIP
+// Pull out sample NXDomain responses for those remaining potentially infected IPs
+| join kind = inner (nxDomainDnsEvents | summarize by Name, ClientIP) on ClientIP
+| summarize sampleNXDomainList=makelist(Name, 100)  by ClientIP, dcount_sld
