@@ -1,0 +1,25 @@
+// Name: Distributed Password cracking attempts.
+//
+// Description: This query over Azure AD sign-in activity highlights distributed password cracking attempt. The premise is simple wherein the query looks for unusually high number of failed password attempts coming from multiple location for a user account.
+//            50053   Account is locked because the user tried to sign in too many times with an incorrect user ID or password.
+//            50055   Invalid password, entered expired password.
+//            50056   Invalid or null password - Password does not exist in store for this user.
+//            50126    Invalid username or password, or invalid on-premises username or password.
+//
+// DataSource: #SigninLogs
+//
+// Techniques: #InitialAccess
+//
+let timeRange = ago(1d);
+SigninLogs
+| where TimeGenerated >= timeRange
+| where OperationName == "Sign-in activity"
+| where ResultType in ("50126", "50053" , "50055", "50056")
+// Error codes that we want to look at as they are related to use of incorrect password.
+| extend locationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]))
+| summarize  rawSigninCount=count(), locationCount=dcount(locationString) by  UserPrincipalName , locationString, IPAddress
+| where rawSigninCount > 30                                     
+// Setting a generic threshold - Can be different for different enviornment
+| where locationCount >  3                                         
+// Setting a generic threshold for location.
+| order by locationCount desc                     

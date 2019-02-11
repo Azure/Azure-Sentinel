@@ -1,0 +1,18 @@
+// Name: Login attempts using Legacy Auth
+//
+// Description: This query over Azure AD sign-in activity highlights use of legacy authentication protocol in the  environment. Because conditional access policies are not evaluated when legacy authentication is used, legacy authentication can be used to circumvent all Azure Conditional Access policies. 
+//
+// DataSource: #SigninLogs
+//
+// Techniques: #InitialAccess
+
+let timeRange = ago(30d);
+SigninLogs
+| where TimeGenerated >= timeRange 
+|extend ClientAppUsed = iff(isempty(ClientAppUsed)==true,"Unknown" ,ClientAppUsed)  
+|extend isLegacyAuth = case(ClientAppUsed contains "Browser", "No", ClientAppUsed contains "Mobile Apps and Desktop clients", "No", ClientAppUsed contains "Exchange ActiveSync", "No", ClientAppUsed contains "Other clients", "Yes", "Unknown") 
+|where isLegacyAuth=="Yes"
+| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
+| extend locationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]))
+|summarize count() by isLegacyAuth, UserPrincipalName, ClientAppUsed , tostring(OS) , tostring(Browser) , locationString
+|sort by count_  desc
