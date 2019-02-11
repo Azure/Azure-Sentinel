@@ -1,0 +1,40 @@
+// Name: signins from IP addresses that attempted to sign in to disabled accounts
+//
+// Id: 500c103a-0319-4d56-8e99-3cec8d860757
+//
+// Description: an IP address that had a (failed) attempts to sign in to one or more disabled accounts 
+// signed in successfully to another account.
+//
+// DataSource: #SigninLogs
+//
+// Severity: Medium
+//
+// QueryFrequency: 24
+//
+// QueryPeriod: 24
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Techniques: #InitialAccess
+//
+// Attempts to sign in to disabled accounts - by IP address from which login attempt originates
+SigninLogs 
+| where TimeGenerated >= ago(30d)
+| where ResultType == "50057" 
+| where ResultDescription == "User account is disabled. The account has been disabled by an administrator." 
+| summarize disabledAccountLoginAttempts=count(), disabledAccountsTargeted=dcount(UserPrincipalName),applicationsTargeted=dcount(AppDisplayName), disabledAccountSet=makeset(UserPrincipalName), applicationSet=makeset(AppDisplayName)  by IPAddress//, timeslice=bin(TimeGenerated, 1d)
+| order by disabledAccountLoginAttempts desc
+| join kind= leftouter (
+    // Consider these IPs suspicious - and alert any related  successful sign-ins
+    SigninLogs
+    | where ResultType == 0
+    | summarize successfulAccountSigninCount=dcount(UserPrincipalName), successfulAccountSigninSet=makeset(UserPrincipalName, 15) by IPAddress
+    // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe
+    | where successfulAccountSigninCount <100
+) on IPAddress  
+// IPs from which attempts to authenticate as disabled user accounts originated, and had a non-zero success rate for some other account
+| where successfulAccountSigninCount != 0
+| project IPAddress, disabledAccountLoginAttempts, disabledAccountsTargeted , disabledAccountSet , applicationSet , successfulAccountSigninCount ,successfulAccountSigninSet 
+
