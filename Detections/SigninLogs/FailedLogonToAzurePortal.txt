@@ -2,31 +2,32 @@
 // Id: 223db5c1-1bf8-47d8-8806-bed401b356a4
 //
 // Description: This query over Azure AD sign-in activity highlights failed login attempts to Azure Portal 
+// We want to exclude success and other non-failure results:
+// 0 - successful logon
+// 50125 - Sign-in was interrupted due to a password reset or password registration entry.
+// 50140 - This error occurred due to 'Keep me signed in' interrupt when the user was signing-in
 //
 // DataSource: #SigninLogs
 //
 // Severity: Low
 //
-// QueryFrequency: 24
+// QueryFrequency: 24h
 //
-// QueryPeriod: 24
+// QueryPeriod: 24h
 //
 // AlertTriggerOperator: gt
 //
 // AlertTriggerThreshold: 0
 //
 // Techniques: #InitialAccess
-let timeRange = ago(1d);
+let timeRange = ago(24h);
 SigninLogs
 | where TimeGenerated >= timeRange 
 | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
 | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
 | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
-| where  AppDisplayName contains "Azure Portal"
+| where AppDisplayName contains "Azure Portal"
+// Exclude non-failure types
 | where ResultType !in ("0", "50125", "50140")
-// 0 - successful logon
-// 50125 - Sign-in was interrupted due to a password reset or password registration entry.
-// 50140 - This error occurred due to 'Keep me signed in' interrupt when the user was signing-in
-| summarize makelist(TimeGenerated), makeset(IPAddress), makeset(OS), makeset(Browser), makeset(City), count() by UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State
-| project UserDisplayName, UserPrincipalName, AppDisplayName, AttemptCount = arraylength(list_TimeGenerated), list_TimeGenerated, DistinctIPCount = arraylength(set_IPAddress), set_IPAddress, ResultType, ResultDescription, StatusCode, StatusDetails, set_OS, set_Browser, Location, State, set_City 
-| sort by AttemptCount
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makeset(IPAddress), makeset(OS), makeset(Browser), makeset(City), AttemptCount = count(TimeGenerated) by UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State
+| project StartTimeUtc, EndTimeUtc, UserDisplayName, UserPrincipalName, AppDisplayName, AttemptCount, DistinctIPCount = arraylength(set_IPAddress), set_IPAddress, ResultType, ResultDescription, StatusCode, StatusDetails, set_OS, set_Browser, Location, State, set_City 

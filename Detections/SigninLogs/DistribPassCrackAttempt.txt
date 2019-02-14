@@ -23,16 +23,17 @@
 //
 // Techniques: #InitialAccess
 //
-let timeRange = ago(1d);
+let timeRange = ago(24h);
 SigninLogs
 | where TimeGenerated >= timeRange
 | where OperationName == "Sign-in activity"
+// Error codes that we want to look at as they are related to the use of incorrect password.
 | where ResultType in ("50126", "50053" , "50055", "50056")
-// Error codes that we want to look at as they are related to use of incorrect password.
-| extend locationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]))
-| summarize  rawSigninCount=count(), locationCount=dcount(locationString) by  UserPrincipalName , locationString, IPAddress
-| where rawSigninCount > 30                                     
-// Setting a generic threshold - Can be different for different enviornment
-| where locationCount >  3                                         
-// Setting a generic threshold for location.
-| order by locationCount desc                     
+| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
+| extend LocationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]))
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), SigninCount=count(), LocationCount=dcount(LocationString) by UserPrincipalName, IPAddress, LocationString, AppDisplayName, ResultDescription, tostring(Browser), tostring(OS)
+| project StartTimeUtc, EndTimeUtc, SigninCount, LocationCount, UserPrincipalName, IPAddress, LocationString, AppDisplayName, ResultDescription, Browser, OS
+// Setting a generic threshold - Can be different for different environment
+| where SigninCount > 30                                     
+// Setting a generic threshold for location  - Can be different for different environment
+| where LocationCount >=  3
