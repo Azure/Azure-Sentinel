@@ -3,9 +3,7 @@
 //
 // Id: 6135a90e-ba30-4f36-9b6a-3a350050704b
 //
-// QueryPeriod: -30d
-//
-// Data Source: #SecurityEvent
+// DataSource: #SecurityEvent
 //
 // Techniques: #Persistence, #Discovery, #LateralMovement, #Collection
 //
@@ -18,16 +16,16 @@ SecurityEvent
 // A user account was created
 | where EventID == "4720"
 | where AccountType == "User"
-| project TimeGenerated, EventID, Activity, Computer, TargetUserName, UserPrincipalName, SubjectUserName, TargetSid, SubjectUserSid 
+| project creationTime = TimeGenerated, CreateEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate = SubjectUserName, TargetSid, SubjectUserSid 
 | join kind= inner (
    SecurityEvent
    | where TimeGenerated > ago(timeframe) 
    // A user account was deleted 
    | where EventID == "4726" 
 | where AccountType == "User"
-| project TimeGenerated, EventID, Activity, Computer, TargetUserName, UserPrincipalName, SubjectUserName, TargetSid, SubjectUserSid 
+| project deletionTime = TimeGenerated, DeleteEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, AccountUsedToDelete = SubjectUserName, TargetSid, SubjectUserSid 
 ) on Computer, TargetUserName
-| where TimeGenerated < TimeGenerated1
-| extend TimeDelta = TimeGenerated1 - TimeGenerated
-| where TimeDelta <= timedelta
-| project TimeDelta, StartTimeUtc = TimeGenerated, CreateEventID = EventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate = SubjectUserName, EndTimeUtc = TimeGenerated1, DeleteEventID = EventID1, AccountUsedToDelete = SubjectUserName1
+| where deletionTime - creationTime < 10m
+| extend TimeDelta = deletionTime - creationTime
+| where tolong(TimeDelta) >= 0
+| project TimeDelta, creationTime, CreateEventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate, deletionTime, DeleteEventID, AccountUsedToDelete
