@@ -1,0 +1,35 @@
+// Name: User Account Created and Deleted within 10mins
+// Description: User account created and then deleted within 10 minutes
+//
+// Id: 4b93c5af-d20b-4236-b696-a28b8c51407f
+//
+// Severity: Medium
+//
+// QueryFrequency: 10m
+//
+// QueryPeriod: 20m
+//
+// DataSource: #SecurityEvent
+//
+// Techniques: #Persistence, #Discovery, #LateralMovement, #Collection
+//
+// TimeFrame is the number of lookback mins, default is last 10mins
+let timeframe = 10m;
+SecurityEvent 
+| where TimeGenerated > ago(2*timeframe) 
+// A user account was created
+| where EventID == "4720"
+| where AccountType == "User"
+| project creationTime = TimeGenerated, CreateEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate = SubjectUserName, TargetSid, SubjectUserSid 
+| join kind= inner (
+   SecurityEvent
+   | where TimeGenerated > ago(timeframe) 
+   // A user account was deleted 
+   | where EventID == "4726" 
+| where AccountType == "User"
+| project deletionTime = TimeGenerated, DeleteEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, AccountUsedToDelete = SubjectUserName, TargetSid, SubjectUserSid 
+) on Computer, TargetUserName
+| where deletionTime - creationTime < 10m
+| extend TimeDelta = deletionTime - creationTime
+| where tolong(TimeDelta) >= 0
+| project TimeDelta, creationTime, CreateEventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate, deletionTime, DeleteEventID, AccountUsedToDelete
