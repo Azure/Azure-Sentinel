@@ -1,3 +1,5 @@
+# Hunting Query Template
+
 ### Use a short name:
 				// Name: <Short Name for the query>
 
