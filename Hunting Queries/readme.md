@@ -4,7 +4,7 @@
 * To get started, simply paste a sample query into the user interface and run the query. 
 
 # Resources
-* [KQL reference] (https://www.pluralsight.com/courses/kusto-query-language-kql-from-scratch)
+* [KQL reference](https://www.pluralsight.com/courses/kusto-query-language-kql-from-scratch)
 * [MITRE ATT&CK](https://attack.mitre.org/wiki/Main_Page)
 * [MITRE CAR](https://car.mitre.org/wiki/Main_Page)
 
