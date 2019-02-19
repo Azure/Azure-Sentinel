@@ -17,7 +17,7 @@ A related technique called password spraying uses one password, or a small list 
 Adversaries are moving laterally within my network through SSH connections. 
 
 
-## Attack Simulation
+## Examples
 
 |Script  |Short Description | 
 |:-------|:-----------------|
