@@ -34,9 +34,8 @@ Adversaries are able to gain access and are moving laterally within my network t
 
 ## Sample Hunting Script
 ```
-// Start with the SSH Alert
-// This is the query for the alert, so this is auto-generated
-// Bookmark first row
+// *** Join SSH Brute Force ML detections with Host IP and Name information  *** //
+// Start with the SSH Alert detections
 SecurityAlert
 | where TimeGenerated >= ago(3d)
 | where AlertName contains "SSH Anomalous"
@@ -54,6 +53,7 @@ SecurityAlert
     | project MACAddress_s, PrivateIPAddress=PrivateIPAddresses_s, PublicIPAddress=PublicIPAddresses_s, Host
 )
 on $left.Host == $right.Host
+| take 3
 | extend SourceIP = IPAddress
 | extend AccountCustomEntity = Account
 | extend HostCustomEntity = Host
@@ -61,18 +61,18 @@ on $left.Host == $right.Host
 | extend Timestamp = TimeGenerated
 | order by TimeGenerated desc
 
-// *** Look at the data now returned from the alert query *** //
-// You notice that it returned a host name
+// *** Search for host across logs *** //
 // Lets search over all of our data using that host name
 // Replace HOST_NAME with the name of the host from the first above query
 search "HOST_NAME"
 | summarize count() by $table
 | order by count_ desc
 
-// ************************************************** //
-// Replace "10.0.3.4" or "104.211.30.1" with the 
-// name private and public ips from the first query
-// ************************************************* //
+// ************************************************** 
+//                             INVESTIGATE THE HOST                                         
+// Replace "10.0.3.4" or "104.211.30.1" with the                            
+// name private and public ips from the first query                        
+// ************************************************* 
 
 // Lets return to the 2 ip address in the original alert
 // One is a public Internet facing IP address and the other is private IP address
@@ -83,13 +83,21 @@ search ("10.0.3.4" or "104.211.30.1")
 | summarize count() by $table
 | order by count_ desc
 
-// Interesting!  We see the logs in the network logs  
+// *** Search for over raw network events *** //
 // Lets dig into that data a little more
-// Action: Bookmark the first row
+// This query will display the raw network events
 search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
 | where TimeGenerated >= ago(3d)
 | order by TimeGenerated desc
 
+// *** Search for over threat intel events *** //
+// Lets dig into that data a little more
+// This query will display the raw network events
+search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
+| where TimeGenerated >= ago(5d)
+| order by TimeGenerated desc
+
+// *** Visualize network traffic *** //
 // We are not confined to looking at raw tabular data
 // here is a quick example of the flows by the hour:
 search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
@@ -98,43 +106,50 @@ search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
 | summarize sum(FlowCount_d) by bin(TimeGenerated, 1h)
 | render timechart 
 
+// *** Filter network traffic on inbound traffic only *** //
 // While inbound and outbound are both relevant, lets start with the inbound data
-// You can see that it returns all of this nice data 
+// This query will filter on only accepted traffic as well as inbound only traffic
 search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
-| where TimeGenerated >= ago(3d)
+| where TimeGenerated >= ago(5d)
 | order by TimeGenerated desc
 | where FlowDirection_s == "I" 
 | where FlowStatus_s <> "D" 
+| where strlen(tostring(SrcIP_s)) > 0
 | project SrcIP_s 
 | summarize count() by SrcIP_s
 | order by count_ desc
 
-// Bookmark this row:
-search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
-| where TimeGenerated >= ago(3d)
-| order by TimeGenerated desc
-| where FlowDirection_s == "I" 
-| where FlowStatus_s <> "D" 
-| where SrcIP_s == "13.67.35.176"
 
-// Bookmark the '23.97.60.214'
-search in (AzureNetworkAnalytics_CL) ("10.0.3.4" or "104.211.30.1")
-| where TimeGenerated >= ago(3d)
+// ************************************************** 
+//     INVESTIGATE THE SOURCE OF THE TRAFFIC                                       
+// Replace "10.0.3.4" or "104.211.30.1" with the                            
+// name private and public ips from the first query                        
+// ************************************************* 
+
+// *** Find any instances of network traffic between this and anything else  *** //
+// Lets search for that ip address that is suspicious
+search ("23.97.60.214")
+| where TimeGenerated >= ago(5d)
+| summarize count() by Type
+| order by count_ desc
+
+// *** Find any instances of network traffic between this and other machines  *** //
+search in (AzureNetworkAnalytics_CL) ("23.97.60.214")
+| where TimeGenerated >= ago(5d)
 | order by TimeGenerated desc
 | where FlowDirection_s == "I" 
 | where FlowStatus_s <> "D"
 
-// This query should look familiar
-// Lets search for that ip address that is suspicious
-search ("23.97.60.214")
-| where TimeGenerated >= ago(3d)
-| summarize count() by Type
-| order by count_ desc
+// *** Search for over threat intel events *** //
+// Lets dig into that data a little more
+// This query will display the raw network events
+search in (BYOThreatIntelv1_CL) ("23.97.60.214")
+| where TimeGenerated >= ago(5d)
+| order by TimeGenerated desc
 
-// Now lets search in the office activity
-// Lets bookmark somce of those events
+
+// *** Find any instances of network traffic between this machine and Office *** //
 // Hm, I see a significant amount of downloading from sharepoint
-// Action: Bookmark first row
 // !! Make sure to highlight that you can see what file they are downloading !!
 search in (OfficeActivity) "23.97.60.214"
 | where TimeGenerated >= ago(3d)
