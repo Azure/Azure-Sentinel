@@ -14,7 +14,7 @@ A related technique called password spraying uses one password, or a small list 
 
 
 ## Hypothesis
-Adversaries are moving laterally within my network through SSH connections. 
+Adversaries are able to gain access and are moving laterally within my network through SSH connections. 
 
 
 ## Examples
