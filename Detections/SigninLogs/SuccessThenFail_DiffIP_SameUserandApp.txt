@@ -1,0 +1,32 @@
+// Name: Same User, Successful logon from a given IP and failure from another IP within 10 min
+//
+// Id: 02ef8d7e-fc3a-4d86-a457-650fa571d8d2
+//
+// Description: This alerts when a user account successfully logs onto an App from one IP and within 10 mins failed to logon to the same App via a different IP
+// This may indicate a malicious attempt at password guessing based on knowledge of the users account
+//
+// DataSource: #SigninLogs
+//
+// Severity: Medium
+//
+// QueryFrequency: 24h
+//
+// QueryPeriod: 10m
+//
+// AlertTriggerOperator: Success then fail
+//
+// AlertTriggerThreshold: 10m - For large environments, may need to adjust this down to as low as 1m
+//
+// Techniques: #InitialAccess
+//
+let timeFrame = ago(1d);
+let logonDiff = 10m;
+SigninLogs | where TimeGenerated >= timeFrame | where ResultType == "0" | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
+| project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress , AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1])
+| join kind= inner (
+    SigninLogs | where TimeGenerated >= timeFrame | where ResultType !in ("0", "50140") | where ResultDescription !~ "Other"  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
+    | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress , AppDisplayName, ResultType, ResultDescription
+) on UserPrincipalName, AppDisplayName 
+| where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock
+| summarize FailedLogonTime = min(FailedLogonTime), SuccessLogonTime = min(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription 
+| project UserPrincipalName, SuccessLogonTime, SuccessIPAddress, AppDisplayName, FailedLogonTime, FailedIPAddress, ResultType, ResultDescription
