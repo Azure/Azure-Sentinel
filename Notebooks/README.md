@@ -15,4 +15,4 @@ Azure Sentinel will provision notebooks and supporting modules for you in Azure 
 
 <a href="https://notebooks.azure.com/import/gh/Azure/Orion"><img src="https://notebooks.azure.com/launch.png" /></a>
 
-#### View [Get Start](https://nbviewer.jupyter.org/github/Azure/Orion/blob/master/Notebooks/Get%20Start.ipynb) notebook
+#### View [Get Start](https://nbviewer.jupyter.org/github/Azure/Orion/blob/master/Notebooks/Get%20Started.ipynb) notebook
