@@ -1,0 +1,38 @@
+// Name: Attempt to Bypass conditional access rule
+// Id: 3af9285d-bb98-4a35-ad29-5ea39ba0c628
+//
+// Description: This query over Azure AD sign-in activity highlights attempt to Bypass conditional access rule.
+// The ConditionalAccessStatus column value in the logs details if there was an attempt to bypass Conditional Access
+// or if the Conditional access rule was not satisfied (ConditionalAccessStatus == 1 )
+// ConditionalAccessStatus == 0     //Success
+// ConditionalAccessStatus == 1     // Failure
+// ConditionalAccessStatus == 2      // Not Applied
+// ConditionalAccessStatus == 3      // unknown
+//
+// DataSource: #SigninLogs
+//
+// Severity: Low
+//
+// QueryFrequency: 24h
+//
+// QueryPeriod: 24h
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Techniques: #InitialAccess
+//
+let timeRange = ago(24h);
+SigninLogs
+| where TimeGenerated >= timeRange
+//Conditional access rule was not satisfied when == 1
+| where ConditionalAccessStatus == 1 
+| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
+| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+| extend Region = tostring(LocationDetails["countryOrRegion"]), State = tostring(LocationDetails["state"]), City = tostring(LocationDetails["city"])
+| extend ConditionalAccessPol0Name = tostring(ConditionalAccessPolicies[0].displayName)
+| extend ConditionalAccessPol1Name = tostring(ConditionalAccessPolicies[1].displayName)
+| extend ConditionalAccessPol2Name = tostring(ConditionalAccessPolicies[2].displayName)
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserPrincipalName, IPAddress, AppDisplayName, ResultDescription, StatusCode, StatusDetails, tostring(Browser), tostring(OS), Region, State, City, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name
+| project StartTimeUtc, EndTimeUtc, UserPrincipalName, IPAddress, AppDisplayName, ResultDescription, StatusCode, StatusDetails, tostring(Browser), tostring(OS), Region, State, City, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name
