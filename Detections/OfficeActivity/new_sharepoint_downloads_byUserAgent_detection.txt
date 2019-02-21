@@ -1,0 +1,37 @@
+// Name: sharepoint downloads from devices associated with previously unseen user agents.
+//
+// Id: 5dd76a87-9f87-4576-bab3-268b0e2b338b
+//
+// Description: alerts when the number of documents downloaded from device(s) associated
+// with a previously unseen user agent exceeds a threshold. The default threshold value is 10.
+//
+// DataSource: #OfficeActivity
+//
+// Techniques: #Exfiltration
+//
+let szSharePointFileOperation = "SharePointFileOperation";
+let historicalActivity=
+OfficeActivity
+| where  RecordType == szSharePointFileOperation
+| where Operation in ("FileDownloaded", "FileUploaded")
+| where TimeGenerated between(ago(30d)..ago(7d))
+| summarize historicalCount=count() by UserAgent;
+let recentActivity = OfficeActivity
+| where  RecordType == szSharePointFileOperation
+| where Operation in ("FileDownloaded", "FileUploaded")
+| where TimeGenerated > ago(1d)
+| summarize recentCount=count() by UserAgent;
+recentActivity | join kind = leftanti (
+   historicalActivity
+) on UserAgent
+| project RecordType = szSharePointFileOperation, UserAgent, recentCount
+| order by recentCount asc, UserAgent
+// More than 10 downloads/uploads from a new user agent
+| where recentCount > 10
+| join kind = rightsemi 
+(OfficeActivity 
+| where TimeGenerated >= ago(1d) 
+| where RecordType == "SharePointFileOperation" | where Operation in ("FileDownloaded", "FileUploaded"))
+on UserAgent
+| summarize count() by RecordType, Operation, UserAgent, UserType, UserId, OfficeWorkload, Site_Url
+| order by UserAgent asc, Operation asc, UserId asc
