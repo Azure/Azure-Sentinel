@@ -1,6 +1,6 @@
 # Azure Sentinel Notebooks Help
 
-** 1. A Note about authenticating to Log Analytics**<br>
+## 1. A Note about authenticating to Log Analytics<br>
 The most typical authentication method is user/device authentication, where you authenticate using your Azure Active Directory credentials and provide and one-time device ID that is bound to the authentication.<br>
 If you are using user/device authentication, run the following cell. 
 - Click the 'Copy code to clipboard and authenticate' button.
