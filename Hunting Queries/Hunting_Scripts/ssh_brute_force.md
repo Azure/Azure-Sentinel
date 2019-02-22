@@ -39,10 +39,10 @@ Adversaries are able to gain access and are moving laterally within my network t
 SecurityAlert
 | where TimeGenerated >= ago(7d)
 | where AlertName contains "SSH Anomalous"
-| extend IPAddress = tostring(parse_json(tostring(parse_json(Entities).[0])).["Address"])
+| extend IPCustomEntity = tostring(parse_json(tostring(parse_json(Entities).[0])).["Address"])
 | extend Host = toupper(tostring(parse_json(tostring(parse_json(Entities).[1])).["HostName"]))
 | extend Account = tostring(parse_json(tostring(parse_json(Entities).[2])).["Name"])
-| project TimeGenerated, AlertName, IPAddress, Host, Account
+| project TimeGenerated, AlertName, IPCustomEntity, Host, Account
 | join
 (
     AzureNetworkAnalytics_CL
@@ -53,18 +53,16 @@ SecurityAlert
     | project MACAddress_s, PrivateIPAddress=PrivateIPAddresses_s, PublicIPAddress=PublicIPAddresses_s, Host
 )
 on $left.Host == $right.Host
-| take 3
-| extend SourceIP = IPAddress
+| extend SourceIP = IPCustomEntity
 | extend AccountCustomEntity = Account
 | extend HostCustomEntity = Host
-| extend IPCustomEntity = IPAddress
 | extend Timestamp = TimeGenerated
 | order by TimeGenerated desc
 
 // *** Search for host across logs *** //
 // Lets search over all of our data using that host name
 // Replace HOST_NAME with the name of the host from the first above query
-search "MSTICALERTSLXVM2"
+search "HOST_NAME"
 | where TimeGenerated >= ago(7d)
 | summarize count() by $table
 | order by count_ desc
