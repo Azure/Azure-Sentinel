@@ -1,5 +1,5 @@
-# Orion
-Welcome to the Orion repository! This repo contains sample queries, dashboards and playbooks to help you get ramped up with Orion. You can also submit any [issues](https://github.com/Azure/Orion/issues) or feature requests as you onboard to Orion. 
+# Azure Sentinel
+Welcome to the Azure Sentinel repository! This repo contains sample queries, dashboards and playbooks to help you get ramped up with Azure Sentinel. You can also submit any [issues](https://github.com/Azure/Azure-Sentinel/issues) or feature requests as you onboard to Azure Sentinel. 
 
 
 # Contributing
