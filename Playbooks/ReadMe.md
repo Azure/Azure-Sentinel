@@ -1,5 +1,5 @@
 # About
-* This repo contains sample security playbooks for automation, orchestration and response
+This repo contains sample security playbooks for automation, orchestration and response
 
 This folder contains security playbooks templates that can be used using Microsoft Azure Sentinel connector.
 After selecting a playbook, in the Azure Sentinel portal:
