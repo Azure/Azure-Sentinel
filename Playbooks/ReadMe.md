@@ -10,5 +10,5 @@ After selecting a playbook, in the Azure Sentinel portal:
 5. Paste the template content to the editor
 6. Select Save
 
-# Contact us
-We would love to get your feedback AzureSentinel@microsoft.com
+# Suggestions and feedback
+We value your feedback. Let us know if you run into any problems or share your suggestions and feedback by sending email to AzureSentinel@microsoft.com
