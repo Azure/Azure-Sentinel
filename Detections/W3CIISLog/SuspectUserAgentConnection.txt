@@ -1,0 +1,35 @@
+// Name: Suspect User Agent connection attempt
+//
+// Id: f845881e-2500-44dc-8ed7-b372af3e1e25
+//
+// Description: Connection attempts (success or fail) from clients with very short or very long User Agent strings and with less than 100 connection attempts
+//
+// DataSource: #W3CIISLog
+//
+// Severity: Low
+//
+// QueryFrequency: 24h
+//
+// QueryPeriod: 24h
+//
+// AlertTriggerOperator: lte or gte
+//
+// AlertTriggerThreshold: useragent length - lte 5 or gte 1000 and useragent count lte 100
+//
+// Techniques: #InitialAccess, #Discovery
+//
+W3CIISLog | where TimeGenerated >= ago(1d)
+// The below line can be used to exclude local IPs if these create noise
+//| where cIP !startswith "192.168." and cIP != "::1"
+| where isnotempty(csUserAgent) and csUserAgent !in~ ("-", "MSRPC") and (string_size(csUserAgent) <= 5 or string_size(csUserAgent) >= 1000)
+| extend csUserAgent_size = string_size(csUserAgent)
+| project TimeGenerated, sSiteName, sPort, csUserAgent, csUserAgent_size, csUserName , csMethod, csUriStem, sIP, cIP, scStatus, scSubStatus, scWin32Status, RemoteIPCountry, MaliciousIP
+| join (
+    W3CIISLog | where TimeGenerated >= ago(1d) 
+    //| where cIP !startswith "192.168." and cIP != "::1"
+    | where isnotempty(csUserAgent) and csUserAgent !in~ ("-", "MSRPC") 
+    | extend csUserAgent_size = string_size(csUserAgent)
+    | summarize csUserAgent_count = count() by bin(csUserAgent_size, 1)
+    | where csUserAgent_count <= 100
+    ) on csUserAgent_size 
+| project TimeGenerated, sSiteName, sPort, sIP, cIP, csUserAgent, csUserAgent_size, csUserAgent_count, csUserName , csMethod, csUriStem, scStatus, scSubStatus, scWin32Status, RemoteIPCountry, MaliciousIP
