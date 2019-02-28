@@ -1,0 +1,26 @@
+// Name: Login to AWS Management Console without MFA.
+// Description: Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This query looks for login to AWS Management Console without MFA. This is done by looking at eventName of ‘ConsoleLogin' and looking in the AdditionalEventData field to check if MFA was used and then confirming from the ResponseElements field that the login was a success.
+//
+// Id: d25b1998-a592-4bc5-8a3a-92b39eedb1bc
+//
+// Severity: Low
+//
+// QueryFrequency: 1d
+//
+// QueryPeriod: 1d
+//
+// DataSource: #AWSCloudTrail
+//
+// Techniques: #Persistence, #Discovery, #LateralMovement, #PrivilegeEscalation
+//
+let timeframe = 1d;
+AWSCloudTrail
+| where TimeGenerated >= ago(timeframe)
+| where EventName == "ConsoleLogin" 
+| extend AdditionalData = todynamic(AdditionalEventData)
+| extend MFAUsed = AdditionalData["MFAUsed"]
+| extend RElements = todynamic(ResponseElements)
+| extend CLogin = RElements["ConsoleLogin"]
+| where MFAUsed != "Yes"
+| where CLogin != "Failure"
+| project TimeGenerated , EventName , EventTypeName  , CLogin  , MFAUsed , UserIdentityAccountId ,  UserIdentityPrincipalid , UserAgent , UserIdentityUserName , SessionMfaAuthenticated , SourceIpAddress , AWSRegion , AdditionalData , RElements
