@@ -1,6 +1,12 @@
 # Azure Sentinel
 Welcome to the Azure Sentinel repository! This repository contains out of the box detections, exploration queries, hunting queries, dashboards and playbooks to help you get ramped up with Azure Sentinel and provide you security content to secure your environment and hunt for threats. You can also submit any [issues](https://github.com/Azure/Azure-Sentinel/issues) or feature requests as you onboard to Azure Sentinel. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
 
+# Resources
+[Getting started with GitHub](https://help.github.com/en#dotcom)
+
+[Azure Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2073774&clcid=0x409)
+
+[Azure Sentinel Techcommunity](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
 
 # Contributing
 
