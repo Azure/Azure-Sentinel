@@ -13,3 +13,6 @@
 # Contributing
 * The more queries and tools we add to the community the more effective we will be.
 * Utilize the QUERY_TEMPLATE format for Pull requests.
+
+# Feedback
+For questions or feedback, please contact AzureSentinel@microsoft.com
