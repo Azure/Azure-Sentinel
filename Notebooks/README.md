@@ -20,3 +20,6 @@ Azure Sentinel will provision notebooks and supporting modules for you in Azure 
 ## Other resources
 - View sample notebooks in the Sample-Notebooks folder
 - How tos and Troubleshooting in the How-Tos folder
+
+## Feedback
+For questions or feedback, please contact AzureSentinel@microsoft.com
