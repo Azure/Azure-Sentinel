@@ -160,12 +160,4 @@ search in (OfficeActivity) "23.97.60.214"
 | where RecordType == "SharePointFileOperation"
 | order by TimeGenerated desc
 ```
-## Hunting Techniques Recommended
 
-- [x] Grouping
-- [x] Searching
-- [ ] Clustering
-- [ ] Stack Counting
-- [ ] Scatter Plots
-- [ ] Box Plots
-- [ ] Isolation Forests
