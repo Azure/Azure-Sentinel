@@ -1,0 +1,52 @@
+// Name: Threat Intel detection on IP with low confidence, but large increase over previous 7 days
+// Description: This will help you determine if IP addresses showing up on your device have a large increase in the last day versus the previous 7 days related to lower confidence level Threat Intel detections
+//
+// Id: 84f8ce62-cd1a-4195-8aa3-fb42fcb0a236
+//
+// Severity: Low
+//
+// QueryFrequency: 1d
+//
+// QueryPeriod: 7d
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #CommonSecurityLog
+//
+// Techniques: #CommandAndControl
+//
+let timeframe = 1d;
+let last1dfull =
+CommonSecurityLog
+| where TimeGenerated >= ago(timeframe) 
+| where toint(ThreatConfidence) <= 76
+| where Message !contains "timed out"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makeset(Message), last1dCount = count() by DeviceVendor, DeviceProduct, DeviceName,ThreatConfidence, MaliciousIP, IndicatorThreatType
+| project StartTimeUtc, EndTimeUtc, DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, set_Message, MessageCount = arraylength(set_Message), last1dCount;
+let last1dCount = CommonSecurityLog
+| where TimeGenerated >= ago(timeframe) 
+| where toint(ThreatConfidence) <= 76
+| where Message !contains "timed out"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makeset(Message), last1dCount = count() by DeviceVendor, DeviceProduct, DeviceName,ThreatConfidence, MaliciousIP, IndicatorThreatType, MaliciousIPCountry
+| project StartTimeUtc, EndTimeUtc, DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, MaliciousIPCountry, IndicatorThreatType, set_Message, MessageCount = arraylength(set_Message), last1dCount
+;
+let prev7dCount = CommonSecurityLog
+| where TimeGenerated between (ago(8d) .. ago(1d))
+| where toint(ThreatConfidence) <= 76
+| where Message !contains "timed out"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makeset(Message), prev7dCount = count() by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, MaliciousIPCountry
+| project StartTimeUtc, EndTimeUtc, DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, MaliciousIPCountry, IndicatorThreatType, set_Message, MessageCount8d = arraylength(set_Message), prev7dCount
+;
+let largeIncrease = 
+last1dCount | join (
+   prev7dCount 
+   | project DeviceVendor, DeviceProduct, DeviceName, IndicatorThreatType, MaliciousIP, ThreatConfidence, prev7dCount, prev7dAvgCount = prev7dCount/7, set_Message, MessageCount8d
+) on DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType
+// Select only events that indicate a large increase over what was previously seen
+| where last1dCount > 5*prev7dAvgCount;
+last1dCount | join (
+   largeIncrease 
+) on StartTimeUtc, EndTimeUtc, DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, MessageCount
+| project StartTimeUtc, EndTimeUtc, DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, MaliciousIPCountry, IndicatorThreatType, set_Message, MessageCount, last1dCount, prev7dAvgCount, prev7dCount, ThreatConfidence
