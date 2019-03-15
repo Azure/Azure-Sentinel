@@ -12,17 +12,17 @@
 //
 // DataSource: W3CIISLog
 //
-// Tactics: #Discovery, #PrivilegeEscalation
+// Techniques: #Discovery, #PrivilegeEscalation
 //
 let timeFrame = ago(1h);
 W3CIISLog
 | where TimeGenerated >= timeFrame
 | where scStatus in ("401","403")
-| where cIP !startswith "192.168." and cIP != sIP and cIP != "::1"
+| where cIP !startswith "192.168." and cIP != sIP and cIP != "::1" //and csUserName != "-" 
 // Handling Exchange specific items in IIS logs to remove the unique log identifier in the URI
 | extend csUriQuery = iff(csUriQuery startswith "MailboxId=", tostring(split(csUriQuery, "&")[0]) , csUriQuery )
 | extend csUriQuery = iff(csUriQuery startswith "X-ARR-CACHE-HIT=", strcat(tostring(split(csUriQuery, "&")[0]),tostring(split(csUriQuery, "&")[1])) , csUriQuery )
-| summarize FailStartTimeUtc = min(TimeGenerated), FailEndTimeUtc = max(TimeGenerated), makeset(sPort), makeset(csUserAgent) , ConnectionCount = count() by Computer, sSiteName, sIP, cIP, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status
+| summarize FailStartTimeUtc = min(TimeGenerated), FailEndTimeUtc = max(TimeGenerated), makeset(sPort), makeset(csUserAgent), makeset(csUserName), csUserNameCount = dcount(csUserName), ConnectionCount = count() by Computer, sSiteName, sIP, cIP, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status
 | extend csUserAgentPerIPCount = arraylength(set_csUserAgent)
 | extend sPortCount = arraylength(set_sPort)
 | extend scStatusFull = strcat(scStatus, ".",scSubStatus) 
@@ -66,5 +66,5 @@ W3CIISLog
 | distinct LogonSuccessTimeUtc, Computer, sSiteName, sIP, cIP, Success_scStatus
 ) on Computer, sSiteName, sIP, cIP
 | where FailEndTimeUtc < LogonSuccessTimeUtc and not(LogonSuccessTimeUtc between (FailStartTimeUtc .. FailEndTimeUtc))
-| summarize makeset(LogonSuccessTimeUtc) by FailStartTimeUtc, FailEndTimeUtc, Computer, sSiteName, sIP, cIP, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status, tostring(set_sPort), tostring(set_csUserAgent), ConnectionCount, csUserAgentPerIPCount, sPortCount, scStatusFull, scStatusFull_Friendly, scWin32Status_Hex, scWin32Status_Friendly
-| project FailStartTimeUtc, FailEndTimeUtc, set_LogonSuccessTimeUtc, Computer, sSiteName, sIP, cIP, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status, set_sPort, set_csUserAgent, ConnectionCount, csUserAgentPerIPCount, sPortCount, scStatusFull, scStatusFull_Friendly, scWin32Status_Hex, scWin32Status_Friendly
+| summarize makeset(LogonSuccessTimeUtc) by FailStartTimeUtc, FailEndTimeUtc, Computer, sSiteName, sIP, cIP, tostring(set_csUserName), csUserNameCount, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status, tostring(set_sPort), tostring(set_csUserAgent), ConnectionCount, csUserAgentPerIPCount, sPortCount, scStatusFull, scStatusFull_Friendly, scWin32Status_Hex, scWin32Status_Friendly
+| project FailStartTimeUtc, FailEndTimeUtc, set_LogonSuccessTimeUtc, Computer, sSiteName, sIP, cIP, set_csUserName, csUserNameCount, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status, set_sPort, set_csUserAgent, ConnectionCount, csUserAgentPerIPCount, sPortCount, scStatusFull, scStatusFull_Friendly, scWin32Status_Hex, scWin32Status_Friendly
