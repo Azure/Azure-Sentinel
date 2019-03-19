@@ -1,0 +1,67 @@
+// Name: Large count of failed logons by a user in IIS in a short time period
+// Description: This query shows when 100 or more failed attempts by a given user in 10 minutes occur on a given server
+// This could be indicative of attempted probing based on known account information.  This could also simply indicate a misconfigured service or device. 
+//
+// Status code mappings for your convenience, also inline if the mapping is not available
+// IIS status code mapping - https://support.microsoft.com/en-us/help/943891/the-http-status-code-in-iis-7-0-iis-7-5-and-iis-8-0
+// Win32 Status code mapping - https://msdn.microsoft.com/en-us/library/cc231199.aspx
+//
+// Id: 884c4957-70ea-4f57-80b9-1bca3890315b
+//
+// Severity: Medium
+//
+// QueryFrequency: 10m
+//
+// QueryPeriod: 10m
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 100
+//
+// DataSource: W3CIISLog
+//
+// Techniques: #Discovery, #PrivilegeEscalation
+//
+let timeFrame = ago(10m);
+W3CIISLog
+| where TimeGenerated >= timeFrame
+| where scStatus in ("401","403")
+| where csUserName != "-"
+// Handling Exchange specific items in IIS logs to remove the unique log identifier in the URI
+| extend csUriQuery = iff(csUriQuery startswith "MailboxId=", tostring(split(csUriQuery, "&")[0]) , csUriQuery )
+| extend csUriQuery = iff(csUriQuery startswith "X-ARR-CACHE-HIT=", strcat(tostring(split(csUriQuery, "&")[0]),tostring(split(csUriQuery, "&")[1])) , csUriQuery )
+| summarize FailStartTimeUtc = min(TimeGenerated), FailEndTimeUtc = max(TimeGenerated), makeset(sPort), makeset(csUserAgent), ConnectionCount = count() by Computer, sSiteName, sIP, cIP, csUserName, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status
+| extend csUserAgentPerIPCount = arraylength(set_csUserAgent)
+| extend sPortCount = arraylength(set_sPort)
+| extend scStatusFull = strcat(scStatus, ".",scSubStatus) 
+// Map common IIS codes
+| extend scStatusFull_Friendly = case(
+scStatusFull == "401.0", "Access denied.",
+scStatusFull == "401.1", "Logon failed.",
+scStatusFull == "401.2", "Logon failed due to server configuration.",
+scStatusFull == "401.3", "Unauthorized due to ACL on resource.",
+scStatusFull == "401.4", "Authorization failed by filter.",
+scStatusFull == "401.5", "Authorization failed by ISAPI/CGI application.",
+scStatusFull == "403.0", "Forbidden.",
+scStatusFull == "403.4", "SSL required.",
+"See - https://support.microsoft.com/en-us/help/943891/the-http-status-code-in-iis-7-0-iis-7-5-and-iis-8-0")
+// Mapping to Hex so can be mapped using website in comments above
+| extend scWin32Status_Hex = tohex(tolong(scWin32Status)) 
+// Map common win32 codes
+| extend scWin32Status_Friendly = case(
+scWin32Status_Hex =~ "52e", "Logon failure: Unknown user name or bad password.", 
+scWin32Status_Hex =~ "533", "Logon failure: Account currently disabled.", 
+scWin32Status_Hex =~ "2ee2", "The request has timed out.", 
+scWin32Status_Hex =~ "0", "The operation completed successfully.", 
+scWin32Status_Hex =~ "1", "Incorrect function.", 
+scWin32Status_Hex =~ "2", "The system cannot find the file specified.", 
+scWin32Status_Hex =~ "3", "The system cannot find the path specified.", 
+scWin32Status_Hex =~ "4", "The system cannot open the file.", 
+scWin32Status_Hex =~ "5", "Access is denied.", 
+scWin32Status_Hex =~ "8009030e", "SEC_E_NO_CREDENTIALS", 
+scWin32Status_Hex =~ "8009030C", "SEC_E_LOGON_DENIED", 
+"See - https://msdn.microsoft.com/en-us/library/cc231199.aspx")
+// decode URI when available
+| extend decodedUriQuery = url_decode(csUriQuery)
+| where ConnectionCount >= 100
+| project FailStartTimeUtc, FailEndTimeUtc, Computer, sSiteName, sIP, cIP, csUserName, csUriQuery, csMethod, scStatus, scSubStatus, scWin32Status, set_sPort, set_csUserAgent, ConnectionCount, csUserAgentPerIPCount, sPortCount, scStatusFull, scStatusFull_Friendly, scWin32Status_Hex, scWin32Status_Friendly
