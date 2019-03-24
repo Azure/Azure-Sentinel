@@ -1,7 +1,7 @@
 # About
 * This folder containes Detections based on different tyoes of data sources that you can leverage in order to create alerts and respond to threats in your environment.
 * These detections are written using KQL query langauge and will provide you a starting point to protect your environment and get familiar with the different data tables.
-* To create the detectiosn in your environment - 
+* To create the detections in your environment - 
   - go to the 'Analytics' section
   - copy the required query
   - update the alert rule parameters according to the detection parameters - copy the name, the description, lookback time, threshold and severity.
