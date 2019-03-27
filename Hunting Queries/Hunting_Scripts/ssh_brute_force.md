@@ -138,7 +138,6 @@ search in (AzureNetworkAnalytics_CL)("IPs" or "IPs")
 
 // *** Find any instances of network traffic between this machine and Office *** //
 // Hm, I see a significant amount of downloading from sharepoint
-// !! Make sure to highlight that you can see what file they are downloading !!
 search in (OfficeActivity) ("IPs" or "IPs")
 | where TimeGenerated >= ago(14d)
 | where RecordType == "SharePointFileOperation"
