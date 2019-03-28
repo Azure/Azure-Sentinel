@@ -137,7 +137,6 @@ search in (AzureNetworkAnalytics_CL)("IPs" or "IPs")
 | where FlowStatus_s <> "D"
 
 // *** Find any instances of network traffic between this machine and Office *** //
-// Hm, I see a significant amount of downloading from sharepoint
 search in (OfficeActivity) ("IPs" or "IPs")
 | where TimeGenerated >= ago(14d)
 | where RecordType == "SharePointFileOperation"
