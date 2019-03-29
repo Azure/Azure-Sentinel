@@ -13,7 +13,7 @@
 				// DataSource: #SecurityEvent, #Syslog
 
 ### The MITRE ATT&CK Techniques that apply to the query (examples):
-				// Techniques: #InitialAccess, #Execution, #Persistance
+				// Tactics: #InitialAccess, #Execution, #Persistance
 								
 ### Example Query:
 				// Name: Cscript script daily summary breakdown
@@ -24,7 +24,7 @@
 				//
 				// DataSource: #SecurityEvent
 				//
-				// Techniques: #Execution
+				// Tactics: #Execution
 				//
 				let ProcessCreationEvents=() {
 				let processEvents=SecurityEvent
