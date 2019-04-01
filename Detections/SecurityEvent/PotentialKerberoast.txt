@@ -1,0 +1,58 @@
+// Name: Detect potential Kerberoasting
+// Description: A service principal name (SPN) is used to uniquely identify a service instance in Windows environment. Each SPN is usually associated with a service account.
+// A lot of organizations use service accounts with weak passwords in their environment. An attacker can try requesting Kerberos ticket-granting service (TGS) service tickets
+// for any SPN from a domain controller (DC) which contains a hash of the Service account.
+// This can then be used for offline cracking. This hunting query looks for accounts that are generating excessive requests to different resources within a small window of time the last hour out of the previous 24 hours
+// Normal users wouldn’t make unusually large number of request within a small time window. This is based of 4769 events which can be very noisy so environment based tweaking might be needed.
+//
+// Source: https://www.trustedsec.com/2018/05/art_of_kerberoast/
+//
+// Id: 1572e66b-20a7-4012-9ec4-77ec4b101bc8
+//
+// Severity: Meduim
+//
+// QueryFrequency: 1h
+//
+// QueryPeriod: 24h
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #SecurityEvent
+//
+// Tactics:  #Discovery, #CredentialHarvesting
+//
+let Kerbevent =
+SecurityEvent
+| where TimeGenerated >= ago(24h)
+| where EventID == "4769"
+| parse EventData with * 'TicketEncryptionType">' TicketEncryptionType "<" *
+| parse EventData with * 'IpAddress">::ffff:' Cl_IPAddress "<" *
+| parse EventData with * 'ServiceName">' ServiceName "<" *
+| parse EventData with * 'Status">' Status "<" *
+| parse EventData with * 'TargetUserName">' TargetUserName "<" *
+| parse EventData with * 'TicketOptions">' TicketOptions "<" *
+| parse EventData with * 'TicketOptions">' TicketOptions "<" *
+| parse EventData with * 'LogonGuid">' LogonGuid "<" *
+| where TargetUserName !contains "$@"
+| where TicketOptions == '0x40810000'
+| where Status == '0x0'
+| where TicketEncryptionType == '0x17'
+| where ServiceName !contains "$" and ServiceName !contains "krbtgt" 
+| where TargetUserName !contains ServiceName;
+let Kerbevent23h = Kerbevent
+| where TimeGenerated >= ago(24h) and TimeGenerated < ago(1h)
+| summarize ServiceNameCountPrev23h = dcount(ServiceName), ServiceNameSet23h = makeset(ServiceName) by TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status
+| where ServiceNameCountPrev23h < 4;
+let Kerbevent1h = 
+Kerbevent
+| where TimeGenerated >= ago(1h)
+| summarize min(TimeGenerated), max(TimeGenerated), ServiceNameCountPrev1h = dcount(ServiceName), ServiceNameSet1h = makeset(ServiceName) by TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status;
+Kerbevent1h 
+| join kind=leftanti
+(
+Kerbevent23h
+) on TargetUserName
+| where ServiceNameCountPrev1h > 15  // Taking an example threshold value above which we would prefer the query to get results based on testing in a few environment. Can be different for different environment
+| project min_TimeGenerated, max_TimeGenerated, TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status, ServiceNameCountPrev1h, ServiceNameSet1h

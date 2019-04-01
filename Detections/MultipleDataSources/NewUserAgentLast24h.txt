@@ -1,0 +1,57 @@
+// Name: New UserAgent observed in last 24 hours
+// Description: Shows new UserAgent observed in the last 24 hours versus the previous 30 days. These new UserAgent could be benign. 
+// However, in normally stable environments, these new UserAgent could provide a starting point for investigating malicious activity.
+//
+// Id: b725d62c-eb77-42ff-96f6-bdc6745fc6e0
+//
+// Severity: Low
+//
+// QueryFrequency: 1d
+//
+// QueryPeriod: 30d
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #AWSCloudTrail, #OfficeActivity, #AzureDiagnostics, #W3CIISLog
+//
+// Tactics: #InitialAccess, #Discovery
+//
+let UserAgentAll =
+(union isfuzzy=true
+(OfficeActivity
+| where TimeGenerated >= ago(30d) 
+| extend UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))
+| extend SourceIP = ClientIP
+),
+(
+AzureDiagnostics
+| where TimeGenerated >= ago(30d) 
+| extend UserAgent = replace(@'\+', @' ', userAgent_s)
+| where isnotempty(UserAgent)
+| parse msg_s with * 'HTTPS request from' SourceIP ':' * 
+| where isnotempty(SourceIP)
+),
+(
+W3CIISLog
+| where TimeGenerated >= ago(30d) 
+| where UserAgent = csUserAgent
+| where SourceIP = cIP
+),
+(
+AWSCloudTrail
+| where TimeGenerated >= ago(30d) 
+| where UserAgent = UserAgent
+| where SourceIP = SourceIpAddress
+));
+UserAgentAll
+| where TimeGenerated < ago(1d)
+| summarize IP =dcount(SourceIP) by tostring(UserAgent)
+| join kind=rightanti
+(
+UserAgentAll
+| where TimeGenerated >= ago(1d) 
+| summarize IP =dcount(SourceIP) by tostring(UserAgent), SourceIP 
+) on UserAgent 
+| project  UserAgent , SourceIP
