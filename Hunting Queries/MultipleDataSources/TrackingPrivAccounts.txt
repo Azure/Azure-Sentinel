@@ -1,0 +1,142 @@
+// Name: Tracking Priveleged Account Rare Logons
+// Description: This query will determine a rare logon to a system or a service in the last day which has not been seen in the previous 7 days.
+// Currently, if there is any account that has this activity, it will attempt to connect that into related activity on that same day and summarize the information for you.
+// We include Datatype logs that have Account entity types available in them.  We then expand in additional DataType logs when looking for related activity.
+// Included logs as of March 29, 2019: AWSCloudTrail, SigninLogs, SecurityEvent, OfficeActivity, W3CIISLog, SecurityAlert
+//
+// Id: 431cccd3-2dff-46ee-b34b-61933e45f556
+//
+// DataSource: #AWSCloudTrail, #SigninLogs, #SecurityEvent, #OfficeActivity, #W3CIISLog
+//
+// Tactics: #Discovery, #PrivilegeEscalation
+//
+let List1 = datatable(Account:string, Domain:string)["john", "johnsdomain.com", "greg", "gregsdomain.net", "larry", "Domain"];
+let LogonFormat = List1 | extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(Domain,"\\",Account));
+let LastDay = startofday(ago(1d));
+let PrevDay = endofday(ago(2d));
+let Prev7Day = startofday(ago(8d));
+let LogonsTodayInit = (union isfuzzy=true
+(AWSCloudTrail
+| where TimeGenerated > LastDay
+| extend DataType = "AWSCloudTrail" 
+| summarize min(TimeGenerated),max(TimeGenerated), RareLogonCount = count() by DataType, AccountName = tolower(UserIdentityUserName), EventType = EventName, ServiceOrSystem = EventSource
+| join kind=inner (LogonFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName),
+(SigninLogs
+| where TimeGenerated > LastDay 
+| extend DataType = "SigninLogs" 
+| summarize min(TimeGenerated),max(TimeGenerated), RareLogonCount = count() by DataType, AccountName = tolower(UserPrincipalName), EventType = ResultType, ServiceOrSystem = AppDisplayName, ClientIP = IPAddress
+| join kind=inner (LogonFormat | project AccountName = AccountAtDomain, AccountNameOnly, DomainSlashAccount) on AccountName),
+(SecurityEvent
+| where TimeGenerated > LastDay | where EventID in (4624, 4625) 
+| extend DataType = "SecurityEvent" | extend AccountName = tostring(split(Account,"\\")[1]), Domain = tostring(split(Account,"\\")[0]) 
+| summarize min(TimeGenerated),max(TimeGenerated), RareLogonCount = count() by DataType, AccountName = tolower(AccountName), WinSecEventDomain = Domain, EventType = Activity, ServiceOrSystem = Computer
+| join kind=inner (LogonFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName),
+(OfficeActivity 
+| where TimeGenerated > LastDay
+| extend DataType = "OfficeActivity" 
+| summarize min(TimeGenerated),max(TimeGenerated), RareLogonCount = count() by DataType, AccountName = tolower(UserId), EventType = Operation, ServiceOrSystem = OfficeWorkload, ClientIP
+| join kind= inner (LogonFormat | project AccountName = AccountAtDomain, AccountNameOnly, DomainSlashAccount) on AccountName),
+(W3CIISLog
+| where TimeGenerated > LastDay
+| extend DataType = "W3CIISLog"
+| where csUserName != "-" and isnotempty(csUserName)
+| summarize min(TimeGenerated),max(TimeGenerated), RareLogonCount = count() by DataType, AccountName = tolower(csUserName), EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
+| join kind= inner (LogonFormat | project AccountName = AccountAtDomain, AccountNameOnly, DomainSlashAccount) on AccountName),
+(W3CIISLog
+| where TimeGenerated > LastDay
+| extend DataType = "W3CIISLog"
+| where csUserName != "-" and isnotempty(csUserName)
+| summarize min(TimeGenerated),max(TimeGenerated), RareLogonCount = count() by DataType, AccountName = tolower(csUserName), EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
+| join kind= inner (LogonFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount ) on AccountName)
+);
+let Logons7day = (union isfuzzy=true
+(AWSCloudTrail
+| where TimeGenerated <= PrevDay and TimeGenerated >= Prev7Day
+| extend DataType = "AWSCloudTrail" 
+| summarize HistoricalLogonCount = count() by DataType, AccountName = tolower(UserIdentityUserName), EventType = EventName, ServiceOrSystem = EventSource
+| join kind=inner (LogonFormat | project AccountName = AccountNameOnly) on AccountName),
+(SigninLogs
+| where TimeGenerated <= PrevDay and TimeGenerated >= Prev7Day
+| extend DataType = "SigninLogs" 
+| summarize HistoricalLogonCount = count() by DataType, AccountName = tolower(UserPrincipalName), EventType = ResultType, ServiceOrSystem = AppDisplayName, ClientIP = IPAddress
+| join kind=inner (LogonFormat| project AccountName = AccountAtDomain) on AccountName),
+(SecurityEvent
+| where TimeGenerated <= PrevDay and TimeGenerated >= Prev7Day | where EventID in (4624, 4625) 
+| extend DataType = "SecurityEvent" | extend AccountName = tolower(tostring(split(Account,"\\")[1])), Domain = tolower(tostring(split(Account,"\\")[0])) 
+| summarize HistoricalLogonCount = count() by DataType, AccountName, Domain, EventType = Activity, ServiceOrSystem = Computer
+| join kind=inner (LogonFormat | project AccountName = AccountNameOnly) on AccountName),
+(OfficeActivity 
+| where TimeGenerated <= PrevDay and TimeGenerated >= Prev7Day
+| extend DataType = "OfficeActivity" 
+| summarize HistoricalLogonCount = count() by DataType, AccountName = tolower(UserId), EventType = Operation, ServiceOrSystem = OfficeWorkload, ClientIP
+| join kind= inner (LogonFormat| project AccountName = AccountAtDomain) on AccountName),
+(W3CIISLog
+| where TimeGenerated <= PrevDay and TimeGenerated >= Prev7Day
+| extend DataType = "W3CIISLog"
+| where csUserName != "-" and isnotempty(csUserName)
+| summarize by DataType, AccountName = tolower(csUserName), EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
+| join kind= inner (LogonFormat| project AccountName = AccountAtDomain) on AccountName),
+(W3CIISLog
+| where TimeGenerated <= PrevDay and TimeGenerated >= Prev7Day
+| extend DataType = "W3CIISLog"
+| where csUserName != "-" and isnotempty(csUserName)
+| summarize by DataType, AccountName = tolower(csUserName), EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
+| join kind= inner (LogonFormat | project AccountName = AccountNameOnly) on AccountName)
+);
+let LogonsToday = LogonsTodayInit | extend RareLogonStartTimeUtc = min_TimeGenerated, RareLogonEndTimeUtc = max_TimeGenerated  | join kind= leftanti
+(Logons7day)
+on DataType, AccountName, ServiceOrSystem
+| extend RareServiceOrSystem = ServiceOrSystem;
+let RelationalActivity = 
+(union isfuzzy=true
+(LogonsToday 
+| join kind=inner (
+OfficeActivity 
+| where TimeGenerated > LastDay
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityServiceOrSystemCount = dcount(OfficeWorkload), RelatedActivityServiceOrSystemSet = makeset(OfficeWorkload), RelatedActivityClientIPSet = makeset(ClientIP), RelatedActivityCount = count() by AccountName = tolower(UserId), RelatedActivityEventType = Operation 
+) on AccountName),
+(LogonsToday
+| join kind=innerunique (
+SecurityEvent | where TimeGenerated > LastDay
+| where EventID in (4624, 4625)
+| where AccountType == "User"
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(Computer), RelatedActivitySystemOrServiceSet = makeset(Computer), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
+) on DomainSlashAccount),
+(LogonsToday
+| join kind=inner (
+SecurityEvent | where TimeGenerated > LastDay
+// 7045: A service was installed in the system
+| where EventID == 7045
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(Computer), RelatedActivitySystemOrServiceSet = makeset(Computer), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
+) on DomainSlashAccount),
+(LogonsToday
+| join kind=inner (
+SecurityEvent | where TimeGenerated > LastDay
+// 4720: Account created, 4726: Account deleted
+| where EventID in (4720,4726)
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(UserPrincipalName), RelatedActivitySystemOrServiceSet = makeset(UserPrincipalName), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
+) on DomainSlashAccount),
+(LogonsToday
+| join kind=inner (
+SigninLogs | where TimeGenerated > LastDay
+| extend RemoteHost = tolower(tostring(parsejson(DeviceDetail.["displayName"])))
+| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+| extend State = tostring(LocationDetails.state)
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityRemoteHostSet = makeset(RemoteHost), RelatedActivitySystemOrServiceSet = makeset(AppDisplayName), RelatedActivitySystemOrServiceCount = dcount(AppDisplayName), RelatedActivityClientIPSet = makeset(IPAddress), RelatedActivityStateSet = makeset(State), RelatedActivityCount = count() by AccountAtDomain = tolower(UserPrincipalName), RelatedActivityEventType = iff(isnotempty(ResultDescription), ResultDescription, StatusDetails)
+) on AccountAtDomain),
+(LogonsToday
+| join kind=inner (
+AWSCloudTrail | where TimeGenerated > LastDay
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated),RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceSet = makeset(EventSource), RelatedActivitySystemOrServiceCount = dcount(EventSource), RelatedActivityCount= count() by AccountNameOnly = tolower(UserIdentityUserName), RelatedActivityEventType = EventName
+) on AccountNameOnly),
+(LogonsToday
+| join kind=inner (
+SecurityAlert | where TimeGenerated > LastDay
+| extend ExtProps=parsejson(ExtendedProperties) 
+| extend AccountName = tostring(ExtProps.["user name"])
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(AlertType), RelatedActivitySystemOrServiceSet = makeset(AlertType), RelatedActivityCount = count() by DomainSlashAccount = tolower(AccountName), RelatedActivityEventType = ProductName
+) on DomainSlashAccount)
+);
+RelationalActivity
+| project RareLogonStartTimeUtc, RareLogonEndTimeUtc, DataType, RareLogonCount, AccountName, WinSecEventDomain, AccountAtDomain, DomainSlashAccount, EventType, RareServiceOrSystem, RelatedActivityStartTimeUtc, RelatedActivityEndTimeUtc, RelatedActivityEventType, RelatedActivityRemoteHostSet, RelatedActivityClientIPSet, RelatedActivityStateSet, RelatedActivitySystemOrServiceCount, RelatedActivitySystemOrServiceSet, RelatedActivityCount
