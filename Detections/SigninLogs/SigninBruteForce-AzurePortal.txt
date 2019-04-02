@@ -1,0 +1,48 @@
+// Name: brute force attack against Azure Portal
+// Id: 28b42356-45af-40a6-a0b4-a554cdfd5d8a
+//
+// Description: This query looks for evidence of brute force activity against the Azure Portal
+// by highlighting multiple authentication failures and a successful authentication within
+// a given time window. (The query does not enforce any sequence - eg requiring the successful
+// authentication to occur last.)
+//  
+// We want to exclude success and other non-failure results:
+// 0 - successful logon
+// 50125 - Sign-in was interrupted due to a password reset or password registration entry.
+// 50140 - This error occurred due to 'Keep me signed in' interrupt when the user was signing-in
+//
+// DataSource: #SigninLogs
+//
+// Severity: Medium
+//
+// QueryFrequency: 24h
+//
+// QueryPeriod: 24h
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Tactics: #InitialAccess
+//
+// Evidence of Azure Portal brute force attack in SigninLogs:
+// This query returns results if there are more than 5 authentication failures and a successful authentication 
+// within a 20-minute window.
+let failureCountThreshold = 5;
+let successCountThreshold = 1;
+let timeRange = ago(1d);
+let authenticationWindow = 20m;
+SigninLogs
+| where TimeGenerated >= timeRange 
+| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+| where AppDisplayName contains "Azure Portal"
+// Split out failure versus non-failure types
+| extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140"), "Success", "Failure")
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), 
+makeset(IPAddress), makeset(OS), makeset(Browser), makeset(City), makeset(ResultType),
+FailureCount=countif(FailureOrSuccess=="Failure"),
+SuccessCount = countif(FailureOrSuccess=="Success") 
+by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, AppDisplayName
+| where FailureCount>=failureCountThreshold and SuccessCount>=successCountThreshold
