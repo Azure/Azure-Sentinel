@@ -10,8 +10,22 @@
 //
 // Tactics: #Discovery, #PrivilegeEscalation
 //
+let WellKnownLocalSID = "S-1-5-32-5[0-9][0-9]";
+let WellKnownGroupSID = "S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103";
+let GroupAdditionCheck = SecurityEvent 
+| where TimeGenerated > ago(8d) 
+| where EventID in ("4728", "4732", "4756") 
+| where AccountType == "User" and MemberName == "-"
+// Exclude Remote Desktop Users group: S-1-5-32-555
+| where TargetSid !in ("S-1-5-32-555")
+// 4728 - A member was added to a security-enabled global group
+// 4732 - A member was added to a security-enabled local group
+// 4756 - A member was added to a security-enabled universal group 
+| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
+| project DomainSlashAccount = tolower(SubjectAccount), AccountAtDomain = tolower(strcat(SubjectUserName,"@",SubjectDomainName)), AccountNameOnly = tolower(SubjectUserName);
 let List1 = datatable(Account:string, Domain:string)["john", "johnsdomain.com", "greg", "gregsdomain.net", "larry", "Domain"];
-let LogonFormat = List1 | extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(Domain,"\\",Account));
+let LogonFormatInit = List1 | extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(Domain,"\\",Account));
+let LogonFormat = GroupAdditionCheck | union LogonFormatInit;
 let LastDay = startofday(ago(1d));
 let PrevDay = endofday(ago(2d));
 let Prev7Day = startofday(ago(8d));
