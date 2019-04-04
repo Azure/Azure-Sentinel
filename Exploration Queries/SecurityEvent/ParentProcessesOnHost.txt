@@ -1,20 +1,18 @@
-// Name: Parent Processes running on Host
+// Id: 992b9912-a11e-487d-83b3-1d1ba6081746
+// DisplayName: Parent Processes running on Host
 // Description: Any 4688 event that contains Parent Process running on a given host during the time of or recently after compromise and in the range of +-10m
-// Entity: #Host
-// Input: Computername, Hostname, HostId
-// Output: Processes
-//
-// QueryPeriod: -1h and +30m default, change as needed, not all event 4688 have Parent Process available
-//
-// Data Source: #SecurityEvent
-//
+// InputEntityType: Host
+// InputFields: [HostName]
+// OutputEntityTypes: [Process]
+// QueryPeriodBefore: 10
+// QueryPeriodBeforeUnit: m
+// QueryPeriodAfter: 10
+// QueryPeriodAfterUnit: m
+// DataSources: [SecurityEvent]
 // Tactics: #Persistence, #Discovery, #LateralMovement, #Collection
-//
-let GetParentProcessesOnHost = (suspiciousEventTime:datetime, v_Host:string){
-let v_StartTime = suspiciousEventTime-10m;
-let v_EndTime = suspiciousEventTime+10m;
-SecurityEvent 
-| where TimeGenerated between (v_StartTime .. v_EndTime)
+
+let GetParentProcessesOnHost = (v_Host:string){
+SecurityEvent
 | where toupper(Computer) contains v_Host or toupper(WorkstationName) contains v_Host
 | where EventID == 4688 
 | where isnotempty(ParentProcessName)
@@ -27,9 +25,13 @@ and ParentProcessName !contains ":\\Windows\\CCM\\CcmExec.exe"
 // excluding well known parent process, child process combinations, feel free to add more specific to the environment
 | where (ParentProcessName !contains ":\\Windows\\System32\\svchost.exe" and (NewProcessName !contains ":\\Windows\\System32\\wbem\\WmiPrvSE.exe" or NewProcessName !contains ":\\Windows\\SysWOW64\\wbem\\WmiPrvSE.exe"))
 | where (ParentProcessName !contains ":\\Windows\\System32\\services.exe" and NewProcessName !contains ":\\Windows\\servicing\\TrustedInstaller.exe")
-| summarize min(TimeGenerated), max(TimeGenerated) by EventID, Account, AccountType, Computer, ParentProcessName, NewProcessName, TargetAccount
-| project min_TimeGenerated, max_TimeGenerated, EventID, Account, AccountType, Computer, ParentProcessName, NewProcessName, TargetAccount
+// always make sure to keep all the columns required for the construction of the fields in the output entity types
+| summarize min(TimeGenerated), max(TimeGenerated) by EventID, Account, AccountType, Computer, ParentProcessName, NewProcessName, TargetAccount, CommandLine
+// the projection needs to keep all the columns required for the construction of the fields in the output entity types
+| project min_TimeGenerated, max_TimeGenerated, EventID, Account, AccountType, Computer, ParentProcessName, NewProcessName, TargetAccount, CommandLine
 | top 10 by min_TimeGenerated asc
+// rename the relevant columns to the format {V3EntityType_FieldName}
+| project-rename Host_NetBiosName=Computer, Account_DisplayName=Account, Process_CommandLine=CommandLine, Process_ImageFile_FullPath=NewProcessName, Process_ParentProcess_ImageFile_FullPath=ParentProcessName
 };
-// change datetime value and <hostname> value below
-GetParentProcessesOnHost(datetime('2019-01-20T10:02:51.000'), toupper("<hostname>"))
+// change <HostName> value below
+GetParentProcessesOnHost(toupper("<HostName>"))
