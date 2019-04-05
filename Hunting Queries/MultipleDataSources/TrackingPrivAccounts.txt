@@ -23,10 +23,8 @@ let InferredPrivilegeAccounts = SecurityEvent
 // 4756 - A member was added to a security-enabled universal group 
 | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
 | summarize by DomainSlashAccount = tolower(SubjectAccount), AccountAtDomain = tolower(strcat(SubjectUserName,"@",SubjectDomainName)), AccountNameOnly = tolower(SubjectUserName);
-let CustomAccountList = datatable(Account:string, NtDomain:string, Domain:string)
-["john", "Contoso", "contoso.com",
- "greg", "Contoso", "contoso.com", 
- "larry", "Domain", "contoso.com" ];
+let CustomAccountList = datatable(Account:string, NtDomain:string, Domain:string)[
+   "john", "Contoso", "contoso.com",  "greg", "Contoso", "contoso.com",  "larry", "Domain", "contoso.com"];
 let AccountFormatCustomList = CustomAccountList 
 | extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(NtDomain,"\\",Account));
 let AccountFormat = InferredPrivilegeAccounts | union 
@@ -83,6 +81,7 @@ let Activity7day = activity(Prev7Day, PrevDay)
 let ActivityToday = ActivityLastDay | join kind=leftanti (Activity7day)
     on DataType, AccountName, ServiceOrSystem
 | extend RareServiceOrSystem = ServiceOrSystem;
+// Retrieve related activity as context
 let RelatedActivity = 
 (union isfuzzy=true
 (ActivityToday 
@@ -96,21 +95,21 @@ OfficeActivity
 SecurityEvent | where TimeGenerated > LastDay
 | where EventID in (4624, 4625)
 | where AccountType == "User"
-| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(Computer), RelatedActivitySystemOrServiceSet = makeset(Computer), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityServiceOrSystemCount = dcount(Computer), RelatedActivityServiceOrSystemSet = makeset(Computer), RelatedActivityClientIPSet = makeset("-"), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
 ) on DomainSlashAccount),
 (ActivityToday
 | join kind=inner (
 SecurityEvent | where TimeGenerated > LastDay
 // 7045: A service was installed in the system
 | where EventID == 7045
-| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(Computer), RelatedActivitySystemOrServiceSet = makeset(Computer), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityServiceOrSystemCount = dcount(Computer), RelatedActivityServiceOrSystemSet = makeset(Computer), RelatedActivityClientIPSet = makeset("-"), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
 ) on DomainSlashAccount),
 (ActivityToday
 | join kind=inner (
 SecurityEvent | where TimeGenerated > LastDay
 // 4720: Account created, 4726: Account deleted
 | where EventID in (4720,4726)
-| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(UserPrincipalName), RelatedActivitySystemOrServiceSet = makeset(UserPrincipalName), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityServiceOrSystemCount = dcount(UserPrincipalName), RelatedActivityServiceOrSystemSet = makeset(UserPrincipalName), RelatedActivityClientIPSet = makeset("-"), RelatedActivityCount = count() by DomainSlashAccount = tolower(Account), RelatedActivityEventType = Activity
 ) on DomainSlashAccount),
 (ActivityToday
 | join kind=inner (
@@ -119,22 +118,22 @@ SigninLogs | where TimeGenerated > LastDay
 | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
 | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
 | extend State = tostring(LocationDetails.state)
-| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityRemoteHostSet = makeset(RemoteHost), RelatedActivitySystemOrServiceSet = makeset(AppDisplayName), RelatedActivitySystemOrServiceCount = dcount(AppDisplayName), RelatedActivityClientIPSet = makeset(IPAddress), RelatedActivityStateSet = makeset(State), RelatedActivityCount = count() by AccountAtDomain = tolower(UserPrincipalName), RelatedActivityEventType = iff(isnotempty(ResultDescription), ResultDescription, StatusDetails)
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityRemoteHostSet = makeset(RemoteHost), RelatedActivityServiceOrSystemSet = makeset(AppDisplayName), RelatedActivityServiceOrSystemCount = dcount(AppDisplayName), RelatedActivityClientIPSet = makeset(IPAddress), RelatedActivityStateSet = makeset(State), RelatedActivityCount = count() by AccountAtDomain = tolower(UserPrincipalName), RelatedActivityEventType = iff(isnotempty(ResultDescription), ResultDescription, StatusDetails)
 ) on AccountAtDomain),
 (ActivityToday
 | join kind=inner (
 AWSCloudTrail | where TimeGenerated > LastDay
-| summarize RelatedActivityStartTimeUtc = min(TimeGenerated),RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceSet = makeset(EventSource), RelatedActivitySystemOrServiceCount = dcount(EventSource), RelatedActivityCount= count() by AccountNameOnly = tolower(UserIdentityUserName), RelatedActivityEventType = EventName
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated),RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityServiceOrSystemSet = makeset(EventSource), RelatedActivityServiceOrSystemCount = dcount(EventSource), RelatedActivityClientIPSet = makeset("-"), RelatedActivityCount= count() by AccountNameOnly = tolower(UserIdentityUserName), RelatedActivityEventType = EventName
 ) on AccountNameOnly),
 (ActivityToday
 | join kind=inner (
 SecurityAlert | where TimeGenerated > LastDay
 | extend ExtProps=parsejson(ExtendedProperties) 
 | extend AccountName = tostring(ExtProps.["user name"])
-| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivitySystemOrServiceCount = dcount(AlertType), RelatedActivitySystemOrServiceSet = makeset(AlertType), RelatedActivityCount = count() by DomainSlashAccount = tolower(AccountName), RelatedActivityEventType = ProductName
+| summarize RelatedActivityStartTimeUtc = min(TimeGenerated), RelatedActivityEndTimeUtc = max(TimeGenerated), RelatedActivityServiceOrSystemCount = dcount(AlertType), RelatedActivityServiceOrSystemSet = makeset(AlertType), RelatedActivityCount = count() by DomainSlashAccount = tolower(AccountName), RelatedActivityEventType = ProductName
 ) on DomainSlashAccount)
 );
 RelatedActivity
 | project RareActivityStartTimeUtc, RareActivityEndTimeUtc, DataType, RareActivityCount, AccountName, WinSecEventDomain,
- AccountAtDomain, DomainSlashAccount, // missing
- EventType, RareServiceOrSystem, RelatedActivityStartTimeUtc, RelatedActivityEndTimeUtc, RelatedActivityEventType, RelatedActivityRemoteHostSet, RelatedActivityClientIPSet, RelatedActivityStateSet, RelatedActivitySystemOrServiceCount, RelatedActivitySystemOrServiceSet, RelatedActivityCount
+ EventType, RareServiceOrSystem, RelatedActivityStartTimeUtc, RelatedActivityEndTimeUtc, RelatedActivityEventType,
+ RelatedActivityClientIPSet, RelatedActivityServiceOrSystemCount, RelatedActivityServiceOrSystemSet, RelatedActivityCount
