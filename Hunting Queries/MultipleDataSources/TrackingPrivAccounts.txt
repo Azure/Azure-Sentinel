@@ -23,9 +23,14 @@ let InferredPrivilegeAccounts = SecurityEvent
 // 4756 - A member was added to a security-enabled universal group 
 | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
 | summarize by DomainSlashAccount = tolower(SubjectAccount), AccountAtDomain = tolower(strcat(SubjectUserName,"@",SubjectDomainName)), AccountNameOnly = tolower(SubjectUserName);
-let CustomAccountList = datatable(Account:string, Domain:string)["john", "johnsdomain.com", "greg", "gregsdomain.net", "larry", "Domain"];
-let AccountFormatCustomList = CustomAccountList | extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(Domain,"\\",Account));
-let AccountFormat = InferredPrivilegeAccounts | union AccountFormatCustomList;
+let CustomAccountList = datatable(Account:string, NtDomain:string, Domain:string)
+["john", "Contoso", "contoso.com",
+ "greg", "Contoso", "contoso.com", 
+ "larry", "Domain", "contoso.com" ];
+let AccountFormatCustomList = CustomAccountList 
+| extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(NtDomain,"\\",Account));
+let AccountFormat = InferredPrivilegeAccounts | union 
+AccountFormatCustomList;
 let LastDay = startofday(ago(1d));
 let PrevDay = endofday(ago(2d));
 let Prev7Day = startofday(ago(8d));
@@ -34,37 +39,38 @@ let activity = view (ActivityStartTime:datetime, ActivityEndTime:datetime) {
 (union isfuzzy=true
 (AWSCloudTrail
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
-| extend DataType = "AWSCloudTrail", ClientIP = "-", WinSecEventDomain = "-"
-| project-rename AccountName = tolower(UserIdentityUserName), EventType = EventName, ServiceOrSystem = EventSource
+| extend DataType = "AWSCloudTrail", ClientIP = "-", AccountName = tolower(UserIdentityUserName), WinSecEventDomain = "-"
+| project-rename EventType = EventName, ServiceOrSystem = EventSource
 | join kind=inner (AccountFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName),
 (SigninLogs
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
-| extend DataType = "SigninLogs", WinSecEventDomain = "-"
-| project-rename AccountName = tolower(UserPrincipalName), EventType = ResultType, ServiceOrSystem = AppDisplayName, ClientIP = IPAddress
+| extend DataType = "SigninLogs", AccountName = tolower(UserPrincipalName), WinSecEventDomain = "-"
+| project-rename EventType = ResultType, ServiceOrSystem = AppDisplayName, ClientIP = IPAddress
 | join kind=inner (AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount) on AccountName),
 (SecurityEvent
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
 | where EventID in (4624, 4625) 
 | extend DataType = "SecurityEvent", ClientIP = "-"
-| extend AccountName = tolower(tostring(split(Account,"\\")[1])), Domain = tolower(tostring(split(Account,"\\")[0])) 
+| extend AccountName = tolower(tostring(split(Account,"\\")[1])), Domain = tolower(tostring(split(Account,"\\")[0]))
+| extend Account = tolower(Account) 
 | project-rename EventType = Activity, ServiceOrSystem = Computer, WinSecEventDomain = Domain
-| join kind=inner (AccountFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName),
+| join kind=inner (AccountFormat | project AccountNameOnly, AccountAtDomain, AccountName=DomainSlashAccount) on AccountName),
 (OfficeActivity 
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
-| extend DataType = "OfficeActivity", WinSecEventDomain = "-" 
-| project-rename AccountName = tolower(UserId), EventType = Operation, ServiceOrSystem = OfficeWorkload
+| extend DataType = "OfficeActivity", AccountName = tolower(UserId), WinSecEventDomain = "-" 
+| project-rename EventType = Operation, ServiceOrSystem = OfficeWorkload
 | join kind=inner (AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount) on AccountName),
 (W3CIISLog
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
-| extend DataType = "W3CIISLog", WinSecEventDomain = "-"
+| extend DataType = "W3CIISLog", AccountName = tolower(csUserName), WinSecEventDomain = "-"
 | where csUserName != "-" and isnotempty(csUserName)
-| project-rename AccountName = tolower(csUserName), EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
+| project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
 | join kind=inner (AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount) on AccountName),
 (W3CIISLog
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
-| extend DataType = "W3CIISLog", WinSecEventDomain = "-"
+| extend DataType = "W3CIISLog", AccountName = tolower(csUserName), WinSecEventDomain = "-"
 | where csUserName != "-" and isnotempty(csUserName)
-| project-rename AccountName = tolower(csUserName), EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
+| project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
 | join kind=inner (AccountFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName)
 );
 };
@@ -129,4 +135,6 @@ SecurityAlert | where TimeGenerated > LastDay
 ) on DomainSlashAccount)
 );
 RelatedActivity
-| project RareActivityStartTimeUtc, RareActivityEndTimeUtc, DataType, RareActivityCount, AccountName, WinSecEventDomain, AccountAtDomain, DomainSlashAccount, EventType, RareServiceOrSystem, RelatedActivityStartTimeUtc, RelatedActivityEndTimeUtc, RelatedActivityEventType, RelatedActivityRemoteHostSet, RelatedActivityClientIPSet, RelatedActivityStateSet, RelatedActivitySystemOrServiceCount, RelatedActivitySystemOrServiceSet, RelatedActivityCount
+| project RareActivityStartTimeUtc, RareActivityEndTimeUtc, DataType, RareActivityCount, AccountName, WinSecEventDomain,
+ AccountAtDomain, DomainSlashAccount, // missing
+ EventType, RareServiceOrSystem, RelatedActivityStartTimeUtc, RelatedActivityEndTimeUtc, RelatedActivityEventType, RelatedActivityRemoteHostSet, RelatedActivityClientIPSet, RelatedActivityStateSet, RelatedActivitySystemOrServiceCount, RelatedActivitySystemOrServiceSet, RelatedActivityCount
