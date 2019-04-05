@@ -28,48 +28,61 @@ AccountAtDomain = tolower(strcat(SubjectUserName,"@",SubjectDomainName)), Accoun
 let CustomAccountList = datatable(Account:string, NtDomain:string, Domain:string)[
    "john", "Contoso", "contoso.com",  "greg", "Contoso", "contoso.com",  "larry", "Domain", "contoso.com"];
 let AccountFormatCustomList = CustomAccountList 
-| extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), DomainSlashAccount = tolower(strcat(NtDomain,"\\",Account));
+| extend AccountAtDomain = tolower(strcat(Account,"@",Domain)), AccountNameOnly = tolower(Account), 
+DomainSlashAccount = tolower(strcat(NtDomain,"\\",Account));
 let AccountFormat = InferredPrivilegedAccounts | union 
 AccountFormatCustomList;
 // Normalize activity from diverse sources into common schema
 // Specify this in a function to support retrieving activity from different timeframes
 let activity = view (ActivityStartTime:datetime, ActivityEndTime:datetime) {
 (union isfuzzy=true
+(AccountFormat | project AccountName=AccountNameOnly, AccountAtDomain, DomainSlashAccount
+| join kind=inner 
 (AWSCloudTrail
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
 | extend DataType = "AWSCloudTrail", ClientIP = "-", AccountName = tolower(UserIdentityUserName), WinSecEventDomain = "-"
-| project-rename EventType = EventName, ServiceOrSystem = EventSource
-| join kind=inner (AccountFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName),
+| project-rename EventType = EventName, ServiceOrSystem = EventSource)
+ on AccountName),
+(AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount
+| join kind=inner 
 (SigninLogs
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
 | extend DataType = "SigninLogs", AccountName = tolower(UserPrincipalName), WinSecEventDomain = "-"
-| project-rename EventType = ResultType, ServiceOrSystem = AppDisplayName, ClientIP = IPAddress
-| join kind=inner (AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount) on AccountName),
+| project-rename EventType = ResultType, ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
+ on AccountName),
+(AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount
+| join kind=inner 
+(OfficeActivity 
+| where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
+| extend DataType = "OfficeActivity", AccountName = tolower(UserId), WinSecEventDomain = "-" 
+| project-rename EventType = Operation, ServiceOrSystem = OfficeWorkload)
+ on AccountName),
+(AccountFormat | project AccountNameOnly, AccountAtDomain, AccountName=DomainSlashAccount
+| join kind=inner 
 (SecurityEvent
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
 | where EventID in (4624, 4625) 
 | extend DataType = "SecurityEvent", ClientIP = "-"
 | extend AccountName = tolower(tostring(split(Account,"\\")[1])), Domain = tolower(tostring(split(Account,"\\")[0]))
 | extend Account = tolower(Account) 
-| project-rename EventType = Activity, ServiceOrSystem = Computer, WinSecEventDomain = Domain
-| join kind=inner (AccountFormat | project AccountNameOnly, AccountAtDomain, AccountName=DomainSlashAccount) on AccountName),
-(OfficeActivity 
-| where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
-| extend DataType = "OfficeActivity", AccountName = tolower(UserId), WinSecEventDomain = "-" 
-| project-rename EventType = Operation, ServiceOrSystem = OfficeWorkload
-| join kind=inner (AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount) on AccountName),
+| project-rename EventType = Activity, ServiceOrSystem = Computer, WinSecEventDomain = Domain)
+ on AccountName),
+(AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount
+| join kind=inner 
 (W3CIISLog
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
 | extend DataType = "W3CIISLog", AccountName = tolower(csUserName), WinSecEventDomain = "-"
 | where csUserName != "-" and isnotempty(csUserName)
-| project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
-| join kind=inner (AccountFormat | project AccountNameOnly, AccountName = AccountAtDomain, DomainSlashAccount) on AccountName),
+| project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP)
+ on AccountName),
+(AccountFormat | project AccountName=AccountNameOnly, AccountAtDomain, DomainSlashAccount
+| join kind=inner 
 (W3CIISLog
 | where TimeGenerated <= ActivityEndTime and TimeGenerated >= ActivityStartTime
 | extend DataType = "W3CIISLog", AccountName = tolower(csUserName), WinSecEventDomain = "-"
 | where csUserName != "-" and isnotempty(csUserName)
-| project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP
-| join kind=inner (AccountFormat | project AccountName = AccountNameOnly, AccountAtDomain, DomainSlashAccount) on AccountName)
+| project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP)
+ on AccountName)
 );
 };
 // Find new activity today versus prior week
