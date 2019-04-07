@@ -93,13 +93,18 @@ let ActivityLastDay = activity(LastDay, now())
 | summarize RareActivityStartTimeUtc = min(TimeGenerated),RareActivityEndTimeUtc = max(TimeGenerated), RareActivityCount = count() 
   by DataType, AccountName, EventType, ServiceOrSystem, WinSecEventDomain;
 let Activity7day = activity(Prev7Day, PrevDay)
-| summarize HistoricalActivityCount = count() by DataType, AccountName, EventType, ServiceOrSystem;
+| summarize HistoricalActivityCount = count() by DataType, AccountName, EventType, ServiceOrSystem, WinSecEventDomain;
 let NewActivityToday = ActivityLastDay | join kind=leftanti (Activity7day)
     on DataType, AccountName, ServiceOrSystem
 | extend RareServiceOrSystem = ServiceOrSystem;
 // Retrieve related activity as context
 let RelatedActivity = 
 (union isfuzzy=true
+(
+// Make sure we at least publish the unusual activity we identified above - even if no related context activity is found in the subsequent union
+NewActivityToday 
+),
+// Remaining elements of the union look for related activity
 (NewActivityToday 
 | join kind=inner (
 OfficeActivity 
