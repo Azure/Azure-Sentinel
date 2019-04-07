@@ -16,6 +16,7 @@ while($null -ne ($line = $reader.ReadLine()))
 }
 $pathLength = ${pwd}.Path.Length+1
 $queriesFiles = Get-ChildItem -Filter *.txt -Recurse | Select-Object -ExpandProperty FullName
+$queriesFiles += Get-ChildItem -Path '../Detections' -Filter *.txt -Recurse | Select-Object -ExpandProperty FullName
 
 foreach ($query in $queriesFiles) {
     $shortName = $query.Substring($pathLength)
