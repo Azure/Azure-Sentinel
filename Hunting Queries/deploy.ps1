@@ -28,7 +28,9 @@ foreach ($query in $queriesFiles) {
         $name = ""
         $description = ""
         $tactics = @()
-        $query = ($content.Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object { $_ -notmatch "^\/\/" }) -join "`n"
+        $queryText = ($content.Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object { $_ -notmatch "^\/\/" }) -join "`n"
+        $created = git log --format=%aI $query
+        $created = $created.Split([Environment]::NewLine)[-1]
 
         if ($content -match "(?m)Name: (.*)\r\n") {
             $name = $matches[1]
@@ -45,7 +47,8 @@ foreach ($query in $queriesFiles) {
             name = $name;
             description = $description;
             tactics = $tactics;
-            query = $query;
+            query = $queryText;
+            created = $created;
         }
         Write-Host $id $name
     }
