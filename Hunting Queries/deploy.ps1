@@ -14,10 +14,13 @@ while($null -ne ($line = $reader.ReadLine()))
     $id = $line.Substring(0,36).ToLower()
     $deployedIDs += $id
 }
+$reader.Close()
+
 $pathLength = ${pwd}.Path.Length+1
 $queriesFiles = Get-ChildItem -Filter *.txt -Recurse | Select-Object -ExpandProperty FullName
 $queriesFiles += Get-ChildItem -Path '../Detections' -Filter *.txt -Recurse | Select-Object -ExpandProperty FullName
 
+$env:TZ="UTC"
 foreach ($query in $queriesFiles) {
     $shortName = $query.Substring($pathLength)
     Write-Host -NoNewline "    Processing ${shortName} ... "
@@ -29,8 +32,7 @@ foreach ($query in $queriesFiles) {
         $description = ""
         $tactics = @()
         $queryText = ($content.Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object { $_ -notmatch "^\/\/" }) -join "`n"
-        $created = git log --format=%aI $query
-        $created = $created.Split([Environment]::NewLine)[-1]
+        $createdTimeUtc = (git log --format=%aI ''$query'')[-1]
 
         if ($content -match "(?m)Name: (.*)\r\n") {
             $name = $matches[1]
@@ -48,7 +50,7 @@ foreach ($query in $queriesFiles) {
             description = $description;
             tactics = $tactics;
             query = $queryText;
-            created = $created;
+            createdTimeUtc = $createdTimeUtc;
         }
         Write-Host $id $name
     }
