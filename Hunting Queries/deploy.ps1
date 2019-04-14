@@ -22,7 +22,11 @@ $queriesFiles += Get-ChildItem -Path '../Detections' -Filter *.txt -Recurse | Se
 
 $env:TZ="UTC"
 foreach ($query in $queriesFiles) {
-    $shortName = $query.Substring($pathLength)
+    if ($query -like "*Detections*") {
+        $shortName = "..\" + $query.Substring($pathLength-16)
+    } else {
+        $shortName = $query.Substring($pathLength)
+    }
     Write-Host -NoNewline "    Processing ${shortName} ... "
     $content = [System.IO.File]::ReadAllText($query)
     if ($content -imatch "Id: ([a-z0-9-]+)")
