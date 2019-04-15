@@ -1,0 +1,33 @@
+// Name: Office Policy Tampering
+// Description: This will help you determine if any tampering is done to either auditlog, 
+// ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. 
+// Adversary may use this technique to evade detection or avoid other policy based defenses.
+//
+// https://docs.microsoft.com/en-us/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps
+//
+// Id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
+//
+// Severity: Medium
+//
+// QueryFrequency: 1d
+//
+// QueryPeriod: 1d
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #OfficeActivity
+//
+// Tactics:  #DefenseEvasion
+//
+let timeframe = 1d;
+OfficeActivity
+| where TimeGenerated >= ago(timeframe)
+| where RecordType=="ExchangeAdmin"
+| where UserType in ("Admin","DcAdmin") 
+// Only admin or global-admin can disable/remove policy
+| where Operation startswith "Remove-" or Operation startswith "Disable-"
+| where Operation contains "AntiPhish" or Operation contains "SafeAttachment" 
+  or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+| summarize min(TimeGenerated), max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ResultStatus, Parameters
