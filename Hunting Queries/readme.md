@@ -1,6 +1,6 @@
 # About
 * This repo contains sample queries for Hunting to aid in the development of techniques for threat hunting leveraging logs from multiple sources.
-* With these sample queries, you can get a headstart in learning the Kusto Query Language (KQS) and understanding the different data sources.
+* With these sample queries, you can get a headstart in learning the Kusto Query Language (KQL) and understanding the different data sources.
 * To get started, simply paste a sample query into the user interface and run the query. 
 
 # Resources
