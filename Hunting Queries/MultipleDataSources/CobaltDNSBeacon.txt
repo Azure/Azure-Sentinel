@@ -1,0 +1,34 @@
+//Name: Cobalt Strike DNS Beaconing
+//
+//Description: Cobalt Strike is a famous Pen Test tool that is used by pen testers as well as attackers alike To compromise an //environment. The query tries to detect suspicious DNS queries known from Cobalt Strike beacons.
+//This is based out of sigma rules described here: //https://github.com/Neo23x0/sigma/blob/master/rules/network/net_mal_dns_cobaltstrike.yml
+//
+// Id: dde206fc-3f0b-4175-bb5d-42d2aae9d4c9
+//
+// DataSource: Syslog, VMConnection , DnsEvents
+//
+// Tactics: #C2
+//
+(union isfuzzy=true
+(
+DnsEvents
+| where TimeGenerated >= ago(1d) 
+| extend Domain = Name, SourceIP = ClientIP , DestinationIp = IPAddresses
+| where Domain has "aaa.stage." or Domain has "post.1"
+),
+(
+Syslog
+| where TimeGenerated  >= ago(1d) 
+| where isnotempty(DNSName)
+| parse SyslogMessage with * '(' DNSName ')' *
+| extend Domain = DNSName , SourceIP = HostIP
+| where Domain has "aaa.stage." or Domain has "post.1"
+),
+(
+VMConnection
+| where TimeGenerated >= ago(1d)
+| where isnotempty(RemoteDnsCanonicalNames) 
+| parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+| extend Domain = DNSName
+| where Domain has "aaa.stage." or Domain has "post.1"
+))
