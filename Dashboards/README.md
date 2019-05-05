@@ -17,7 +17,6 @@
 
 * Do not define any time filters on your charts.
 
-![Azure Sentinel part](https://ibb.co/47dhVYG)
 
 
 # Step 2 - Export the dashboard into a JSON file:
