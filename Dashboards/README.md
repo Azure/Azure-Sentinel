@@ -17,6 +17,7 @@
 
 * Do not define any time filters on your charts.
 
+![Azure Sentinel part](https://ibb.co/47dhVYG)
 
 
 # Step 2 - Export the dashboard into a JSON file:
@@ -27,11 +28,11 @@
 
 * Replace the following fields:
 
-Subscription id to "{Subscription_Id}"
+> Subscription id to "{Subscription_Id}"
 
-Resource Group to "{Resource_Group}"
+> Resource Group to "{Resource_Group}"
 
-Name (your workspace id) to "{Workspace_Name}"
+> Name (your workspace id) to "{Workspace_Name}"
 
 # Step 3 - Share the Dashboard JSON with Azure Sentinel community
 
