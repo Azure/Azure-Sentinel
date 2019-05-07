@@ -138,7 +138,7 @@ search in (AzureNetworkAnalytics_CL)("IPs" or "IPs")
 
 // *** Find any instances of network traffic between this machine and Office *** //
 search in (OfficeActivity) ("IPs" or "IPs")
-| where TimeGenerated >= ago(14d)
+| where TimeGenerated >= ago(30d)
 | where RecordType == "SharePointFileOperation"
 | order by TimeGenerated desc
 ```
