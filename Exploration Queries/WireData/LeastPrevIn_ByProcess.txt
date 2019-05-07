@@ -1,28 +1,25 @@
-// Name: WireData Least Prevalent Inbound Connections by Process
-// Description: Bottom 10 (least prevalent) for WireData Inbound event by a given process in the range of +-30m
-//
-// Id: 0d824de5-fd23-44db-a963-f35970016d71
-//
-// Entity: Process
-// Input: Process, ProcessName
-// Output: Computer, Process, IP
-//
-// QueryPeriod: +-30m
-//
-// Data Source: WireData
-//
+// Id: 77f9839a-1c03-49e2-803e-72b97042fc05
+// DisplayName: WireData Least Prevalent Inbound Connections by Process
+// Description: Bottom 10 (least prevalent) for WireData Inbound event by a given process (set time range to +-30m when running the query)
+// InputEntityType: Process
+// InputFields: [CommandLine]
+// OutputEntityTypes: [Ip, Host]
+// QueryPeriodBefore: 30m
+// QueryPeriodAfter: 30m
+// DataSources: #WireData
 // Tactics: #Probing, #Discovery, #LateralMovement, #Collection
-//
-let GetWireDataOutboundWithProcess = (suspiciousEventTime:datetime, v_Process:string){
-let v_StartTime = suspiciousEventTime-1d;
-let v_EndTime = suspiciousEventTime+1d;
+
+let GetWireDataInboundWithProcess = (v_Process_CommandLine:string){
+let tempFullPath = tostring(split(v_Process_CommandLine, ' ')[0]);
+let tempFullPath2 = iff(tempFullPath startswith '"', substring(tempFullPath, 1, strlen(tempFullPath)-2), tempFullPath);
+let v_Process_ImageFile_FullPath = iff(tempFullPath2 startswith "\\??\\", substring(tempFullPath2, 4, strlen(tempFullPath2)-1), tempFullPath2);
 WireData
-| where TimeGenerated between (v_StartTime .. v_EndTime)
-| where Direction == "Inbound" 
-| where ProcessName has v_Process
-| summarize min(SessionStartTime), count() by Computer, ProcessName , LocalIP, LocalPortNumber, RemoteIP, Direction, ApplicationProtocol, MaliciousIP
+| where Direction == 'Inbound'
+| where ProcessName has v_Process_ImageFile_FullPath
+| summarize min(SessionStartTime), count() by Computer, LocalIP
 | top 10 by count_ asc
-| project min_SessionStartTime, Computer, ProcessName , LocalIP, LocalPortNumber, RemoteIP, Direction, ApplicationProtocol, MaliciousIP, count_
+| project min_SessionStartTime, Computer, LocalIP
+| project-rename IP_Address=LocalIP, Host_UnstructuredName=Computer
 };
-// change datetime value and <processname> value below
-GetWireDataOutboundWithProcess(datetime('2019-01-30T10:36:07Z'), "<processname>")
+// change <CommandLine> value below
+GetWireDataInboundWithProcess('<CommandLine>')

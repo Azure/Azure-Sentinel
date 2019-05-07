@@ -1,26 +1,25 @@
-// Name: Windows Hosts With This Process
-// Description: Any host with this same process in the range of +-1h
-//
-// Entity: Process
-// Input: ProcessName
-// Output: Hosts
-//
-// QueryPeriod: +-1h, change as needed
-//
-// Data Source: SecurityEvent
-//
+// Id: 0880a6d7-d914-40f6-91bc-150de4810e4e
+// DisplayName: Windows Hosts With This Process
+// Description: Any host with this same process (set time range to +-1h when running the query)
+// InputEntityType: Process
+// InputFields: [CommandLine]
+// OutputEntityTypes: [Host]
+// QueryPeriodBefore: 1h
+// QueryPeriodAfter: 1h
+// DataSources: #SecurityEvent
 // Tactics: #Execution, #Persistence, #Discovery, #Lateral Movement, #Collection
-//
-let GetHostsWithProcess = (suspiciousEventTime:datetime, v_Process:string){
-let v_StartTime = suspiciousEventTime-1h;
-let v_EndTime = suspiciousEventTime+1h;
+
+let GetHostsWithProcess = (v_Process_CommandLine:string){
+let tempFullPath = tostring(split(v_Process_CommandLine, ' ')[0]);
+let tempFullPath2 = iff(tempFullPath startswith '"', substring(tempFullPath, 1, strlen(tempFullPath)-2), tempFullPath);
+let v_Process_ImageFile_FullPath = iff(tempFullPath2 startswith "\\??\\", substring(tempFullPath2, 4, strlen(tempFullPath2)-1), tempFullPath2);
 SecurityEvent
-| where TimeGenerated between (v_StartTime .. v_EndTime)
 | where EventID == 4688
-| where NewProcessName has v_Process
-| summarize min(TimeGenerated), max(TimeGenerated) by Computer, Account, NewProcessName, CommandLine
-| project min_TimeGenerated, max_TimeGenerated, Computer, Account, NewProcessName, CommandLine
-| top 10 by min_TimeGenerated asc nulls last 
+| where NewProcessName has v_Process_ImageFile_FullPath
+| summarize min(TimeGenerated), max(TimeGenerated) by Computer
+| project min_TimeGenerated, max_TimeGenerated, Computer
+| top 10 by min_TimeGenerated asc nulls last
+| project-rename Host_UnstructuredName=Computer
 };
-// change datetime value and <processname> value below
-GetHostsWithProcess(datetime('2019-01-30T10:36:07Z'), "<processname>")
+// change <CommandLine> value below
+GetHostsWithProcess('<CommandLine>')

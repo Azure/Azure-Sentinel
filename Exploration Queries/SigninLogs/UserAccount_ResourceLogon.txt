@@ -1,29 +1,25 @@
-// Name: Resources on which an Account logged onto 
-// Description: Resources on which an Account was logged on during a given time period based on SigninLogs   
-//
-// Entity: Account
-// Input: Compromised Account
-// Output: Hosts
-//
-// QueryPeriod:  +-1d default, change as needed
-//
-// Data Source: #SigninLogs
-//
+// Id: c34bf507-cedf-4120-bf41-f835dd68b0d9
+// DisplayName: Resources on which an Account logged onto 
+// Description: Resources on which an Account was logged on during a given time period based on SigninLogs (set time range to +-1d when running the query)
+// InputEntityType: Account
+// InputFields: [Name]
+// OutputEntityTypes: [Host]
+// QueryPeriodBefore: 1d
+// QueryPeriodAfter: 1d
+// DataSources: #SigninLogs
 // Tactics: #Persistence, #Discovery, #LateralMovement, #Collection
-//
-let GetAllHostsbyAccount = (suspiciousEventTime:datetime, v_Account:string){
-let v_StartTime = suspiciousEventTime-1d;
-let v_EndTime = suspiciousEventTime+1d;
+
+let GetAllHostsbyAccount = (v_Account_Name:string){
 SigninLogs 
-| where TimeGenerated between (v_StartTime .. v_EndTime)
-| where UserPrincipalName contains v_Account
-| extend RemoteHost = tolower(tostring(parsejson(DeviceDetail.["displayName"])))
+| where UserPrincipalName contains v_Account_Name
+| extend RemoteHost = tolower(tostring(parsejson(DeviceDetail.['displayName'])))
 | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
 | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
 | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
-| summarize min(TimeGenerated), max(TimeGenerated) by RemoteHost , UserDisplayName, UserPrincipalName, AppDisplayName, ClientAppUsed, tostring(OS), tostring(Browser), IPAddress, ResultType, ResultDescription, Location, State, City, StatusCode, StatusDetails
-| project min_TimeGenerated, max_TimeGenerated, RemoteHost, UserDisplayName, UserPrincipalName, AppDisplayName, ClientAppUsed, OS, Browser , IPAddress, ResultType, ResultDescription, Location, State, City, StatusCode, StatusDetails
+| summarize min(TimeGenerated), max(TimeGenerated) by RemoteHost , tostring(OS)
+| project min_TimeGenerated, max_TimeGenerated, RemoteHost, OS
 | top 10 by min_TimeGenerated desc nulls last 
+| project-rename Host_UnstructuredName=RemoteHost, Host_OsVersion=OS
 };
-// change datetime value and <username> value below
-GetAllHostsbyAccount (datetime('2019-01-30T10:36:07Z'), "<username>")
+// change <Name> value below
+GetAllHostsbyAccount('<Name>')
