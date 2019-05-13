@@ -10,6 +10,8 @@
 // Tactics: #LateralMovement, #CredentialAccess
 
 let BRUTEFORCE_THRESHOLD = 10;
+let SuccessfulLoginEventId = 4624;
+let FailedLoginEventId = 4625;
 let AccountsPossibleSuccessfulBruteForce = (v_HostName:string, v_NTDomain:string, v_DnsDomain:string){
 SecurityEvent
 	| where AccountType == "User"
@@ -18,12 +20,12 @@ SecurityEvent
 		and tolower(Computer) contains tolower(v_NTDomain) 
 		and tolower(Computer) endswith tolower(v_DnsDomain)
 	| extend Account = tolower(Account)
-	| summarize Account_Aux_SuccessPerMin = sum(Success), Account_Aux_FailPerMin=sum(Fails) by Account, bin(TimeGenerated, 1m)
+	| summarize Account_Aux_SuccessPerMin = sum(Success), Account_Aux_FailPerMin = sum(Fails) by Account, bin(TimeGenerated, 1m)
  	| where Account_Aux_FailPerMin	> BRUTEFORCE_THRESHOLD and Account_Aux_SuccessPerMin	> 0
 	| parse Account with Account_NTDomain "\\" *
 	| extend Account_Name = extract(@"^([^\\]*\\)?([^@]+)(@.*)?$",2,Account),  
 		Account_UPNSuffix = extract(@"^([^\\]*\\)?([^@]+)(@.*)?$",3,Account)
 	| project-rename Account_Aux_TimeOfIncident = TimeGenerate
-	| top EXPLR_LEN by Account_Aux_FailPerMin
+	| top 10 by Account_Aux_FailPerMin
 };
 AccountsPossibleSuccessfulBruteForce(<HostName>,<NTDomain>,<DnsDomain>)
