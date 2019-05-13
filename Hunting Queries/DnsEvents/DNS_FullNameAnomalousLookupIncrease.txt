@@ -1,35 +1,43 @@
 // Name: DNS Full Name anomalous lookup increase
-
+//
 // Description: 
 // Checking for a threefold increase or more of Full Name lookup per ClientIP for today based on daily average for the previous week.  
 // This can potentially identify excessive traffic to a given location that could be indicative of data transfer out of your network.  
 // This is only Name lookups, so it would be recommended to review the Firewall\Webproxy logs in relation to the ClientIP making the interesting requests.
-
-// Data Source: DNS Events
-
-// Tags: #C2, #Exfiltration
-
-DnsEvents 
-| where TimeGenerated >= startofday(ago(8d)) and TimeGenerated <= startofday(ago(1d)) //setting to 00:00:00 for the given days ago
+//
+// Id: 81b478a7-46e2-4f7f-a1aa-aba5e541232b
+//
+// Data Source: #DNSEvents
+//
+// Tactics: #C2, #Exfiltration
+//
+DnsEvents
+//setting to 00:00:00 for the given days ago
+| where TimeGenerated >= startofday(ago(8d)) and TimeGenerated <= startofday(ago(1d)) 
 | where SubType == "LookupQuery"
-| extend DayNumberofWeek = tostring(dayofweek(TimeGenerated)) //getting the associated number of the day of the week so we can map to a given day for later parsing if needed
-| extend DayofWeek = iff(DayNumberofWeek == "00:00:00", "Sunday", //Setting the Day of the week value so that certain days could be excluded if needed
+//getting the associated number of the day of the week so we can map to a given day for later parsing if needed
+| extend DayNumberofWeek = tostring(dayofweek(TimeGenerated)) 
+//Setting the Day of the week value so that certain days could be excluded if needed
+| extend DayofWeek = iff(DayNumberofWeek == "00:00:00", "Sunday", 
 (iff(DayNumberofWeek == "1.00:00:00", "Monday", 
 (iff(DayNumberofWeek == "2.00:00:00", "Tuesday", 
 (iff(DayNumberofWeek == "3.00:00:00", "Wednesday", 
 (iff(DayNumberofWeek == "4.00:00:00", "Thursday", 
 (iff(DayNumberofWeek == "5.00:00:00", "Friday", 
 (iff(DayNumberofWeek == "6.00:00:00", "Saturday", DayNumberofWeek)))))))))))))
-| where DayofWeek !in ("Saturday", "Sunday") //example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change
-| summarize count() by ClientIP, Name
-| project ClientIP, FullNameLookup = Name, DailyAvgLookupCountOverLastWeek = count_ /5 // average is across 5 days as we are dropping weekends, change as needed
+//example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change
+| where DayofWeek !in ("Saturday", "Sunday") 
+| summarize count() by ClientIP, Name, IPAddresses
+// average is across 5 days as we are dropping weekends, change as needed
+| project ClientIP, FullNameLookup = Name, IPAddresses, DailyAvgLookupCountOverLastWeek = count_ /5 
 | join ( DnsEvents 
 | where TimeGenerated >= startofday(ago(1d))
 | where SubType == "LookupQuery"
-| summarize count() by ClientIP, FullNameLookup = Name
-| project ClientIP, LookupCountToday = count_, FullNameLookup
+| summarize count() by ClientIP, FullNameLookup = Name, IPAddresses
+| project ClientIP, LookupCountToday = count_, FullNameLookup, IPAddresses
 )
-on ClientIP, FullNameLookup
-| where LookupCountToday > ( DailyAvgLookupCountOverLastWeek * 3) and LookupCountToday >= 1000 // limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed
-| project ClientIP , LookupCountToday , DailyAvgLookupCountOverLastWeek, FullNameLookup
+on ClientIP, FullNameLookup, IPAddresses
+// limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed
+| where LookupCountToday > ( DailyAvgLookupCountOverLastWeek * 3) and LookupCountToday >= 1000 
+| project ClientIP , LookupCountToday , DailyAvgLookupCountOverLastWeek, FullNameLookup, IPAddresses
 | order by LookupCountToday desc nulls last 
