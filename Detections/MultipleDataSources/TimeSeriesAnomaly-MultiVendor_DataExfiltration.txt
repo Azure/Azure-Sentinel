@@ -12,29 +12,58 @@
 let starttime = 30d;
 let endtime = 1d;
 let timeframe = 1h;
+let scorethreshold = 3;
 let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
 let TimeSeriesData = (union isfuzzy=true
 (
 VMConnection
-| where TimeGenerated between (ago(starttime)..ago(endtime))
+| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
 | where isnotempty(DestinationIP) and isnotempty(SourceIP)
 | extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
-| where DestinationIpType =="public"
+| where DestinationIpType =="public" | extend DeviceVendor = "VMConnection"
 | project TimeGenerated,BytesSent, DeviceVendor
-| make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by DeviceVendor
+| make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor
 ),
 (
 CommonSecurityLog 
-| where TimeGenerated between (ago(starttime)..ago(endtime))
+| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
 | where isnotempty(DestinationIP) and isnotempty(SourceIP)
 | extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
 | where DestinationIpType =="public"
 | project TimeGenerated, SentBytes,DeviceVendor
-| make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by DeviceVendor
+| make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor
 )
 );
-TimeSeriesData
-| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, 1.5, -1, 'linefit')
+//Filter anomolies against TimeSeriesData
+let TimeSeriesAlerts = TimeSeriesData
+| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')
 | mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
-| where anomalies > 0
-| project DeviceVendor,TimeGenerated, TotalBytesSent, baseline, anomalies, score
+| where anomalies > 0 | extend AnomalyTimeattheHour = TimeGenerated 
+| extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2) ,score = round(score,2)
+| project DeviceVendor,AnomalyTimeattheHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score;
+//Union of all BaseLogs aggregated per hour
+let BaseLogs = (union isfuzzy=true
+(
+CommonSecurityLog 
+| where isnotempty(DestinationIP) and isnotempty(SourceIP)
+| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime))) 
+| extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024) 
+| summarize HourlyCount=count(), ListOfDestPorts=make_set(DestinationPort), TotalSentBytesinMB=sum(SentBytesinMB),TotalReceivedBytesinMB=sum(ReceivedBytesinMB) by SourceIP, DestinationIP,DeviceVendor , bin(TimeGenerated,1h)
+| project DeviceVendor,TimeGenerated, SourceIP, DestinationIP, ListOfDestPorts, TotalSentBytesinMB, TotalReceivedBytesinMB 
+),
+(
+VMConnection 
+| where isnotempty(DestinationIp) and isnotempty(SourceIp)
+| extend DeviceVendor = "VMConnection", SourceIP = SourceIp, DestinationIP = DestinationIp
+| extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)
+| summarize HourlyCount=count(), ListOfDestPorts=make_set(DestinationPort), TotalSentBytesinMB=sum(SentBytesinMB),TotalReceivedBytesinMB=sum(ReceivedBytesinMB)  by SourceIP, DestinationIP, DeviceVendor , bin(TimeGenerated,1h)
+| project DeviceVendor,TimeGenerated, SourceIP, DestinationIP, ListOfDestPorts, TotalSentBytesinMB, TotalReceivedBytesinMB 
+)
+);
+// Join against base logs to retrive records associated with the hour of anomoly
+TimeSeriesAlerts
+| join (
+    BaseLogs 
+) on DeviceVendor,TimeGenerated | sort by score desc 
+| project DeviceVendor, AnomalyTimeattheHour, SourceIP, DestinationIP, ListOfDestPorts, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score , anomalies 
+| order by score desc, TotalSentBytesinMB desc
