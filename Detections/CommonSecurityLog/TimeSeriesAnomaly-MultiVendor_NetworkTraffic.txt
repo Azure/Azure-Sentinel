@@ -1,0 +1,37 @@
+// Name: Time Series Anomaly detection for Total volume in network logs- MultiVendor
+// Description: This query will identify anamalous spike in network traffic logs as compared to baseline or normal historical pattern. 
+// The query leverages KQL built-in anomaly detection algorithm find large deviations from baseline pattern. 
+// Any sudden increase in network traffic volume may be an indication of data exfiltration attempts and should be investigated.
+// Adjust score threshold value to find the far outlier than baseline. Higher the score, far it is from baseline value
+//
+// Id: 06a9b845-6a95-4432-a78b-83919b28c375
+//
+// DataSource: #CommonSecurityLog
+//
+// Tactics: #Exfiltration
+//
+let starttime = 30d;
+let endtime = 1d;
+let timeframe = 1h;
+let scorethreshold = 3;
+let TimeSeriesData= CommonSecurityLog 
+| where isnotempty(DestinationIP) and isnotempty(SourceIP)
+| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+| project TimeGenerated,SourceIP, DestinationIP, DeviceVendor
+| make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor;
+//Filtering specific records associated with spikes as outliers
+let TimeSeriesAlerts=TimeSeriesData
+| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
+| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+| where anomalies > 0 | extend score = round(score,2)
+| project DeviceVendor,TimeGenerated, Total, baseline, anomalies, score;
+//Join anomalies with Base Data to popalate associated records for investigation - Results sorted by score in descending order 
+TimeSeriesAlerts 
+| join (
+    CommonSecurityLog 
+| where isnotempty(DestinationIP) and isnotempty(SourceIP)
+| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+| summarize HourlyCount=count(), ListOfDestPorts=makelist(DestinationPort)  by SourceIP, DestinationIP,DestinationPort, DeviceVendor , bin(TimeGenerated,1h)
+) on TimeGenerated, DeviceVendor | extend PercentTotal = round((HourlyCount / Total) * 100, 3) | sort by score desc 
+| project DeviceVendor, TimeGenerated , SourceIP, DestinationIP, ListOfDestPorts,HourlyCount, PercentTotal, Total, baseline , score , anomalies  
+| order by score desc, PercentTotal desc
