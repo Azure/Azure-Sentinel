@@ -1,0 +1,29 @@
+// Id: 98b2ce21-167d-43bd-a496-9f2c85c5f95b
+// DisplayName: Accounts With Several Failed Logins Immediately Followed By A Successful Login
+// Description: Accounts With Several Failed Logins immediately Followed By A Successful Login during the range of -1w and +1w
+// InputEntityType: Host
+// InputFields: [HostName, NTDomain, DnsDomain]
+// OutputEntityTypes: [Account]
+// QueryPeriodBefore: 1w
+// QueryPeriodAfter: 1w
+// DataSource: SecurityEvent
+// Tactics: #LateralMovement, #CredentialAccess
+
+let BRUTEFORCE_THRESHOLD = 10;
+let AccountsPossibleSuccessfulBruteForce = (v_HostName:string, v_NTDomain:string, v_DnsDomain:string){
+SecurityEvent
+	| where AccountType == "User"
+	| extend Fails = (EventID == FailedLoginEventId), Success = (EventID == SuccessfulLoginEventId)
+		and tolower(Computer) startswith tolower(v_HostName) 
+		and tolower(Computer) contains tolower(v_NTDomain) 
+		and tolower(Computer) endswith tolower(v_DnsDomain)
+	| extend Account = tolower(Account)
+	| summarize Account_Aux_SuccessPerMin = sum(Success), Account_Aux_FailPerMin=sum(Fails) by Account, bin(TimeGenerated, 1m)
+ 	| where Account_Aux_FailPerMin	> BRUTEFORCE_THRESHOLD and Account_Aux_SuccessPerMin	> 0
+	| parse Account with Account_NTDomain "\\" *
+	| extend Account_Name = extract(@"^([^\\]*\\)?([^@]+)(@.*)?$",2,Account),  
+		Account_UPNSuffix = extract(@"^([^\\]*\\)?([^@]+)(@.*)?$",3,Account)
+	| project-rename Account_Aux_TimeOfIncident = TimeGenerate
+	| top EXPLR_LEN by Account_Aux_FailPerMin
+};
+AccountsPossibleSuccessfulBruteForce(<HostName>,<NTDomain>,<DnsDomain>)
