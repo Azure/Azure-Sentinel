@@ -1,28 +1,24 @@
-// Name: WireData Least Prevalent Inbound Connections by IPAddress
-// Description: Bottom 10 (least prevalent) for WireData Inbound event by a given IPAddress in the range of +-30m
-//
-// Id: 5367ef3c-6c71-45a2-bd07-d9ca8ef502c1
-//
-// Entity: IPAddress
-// Input: IPAddress
-// Output: Computer, Process, IP
-//
-// QueryPeriod: +-30m
-//
-// Data Source: WireData
-//
+// Id: 188ff904-e3c3-4253-9326-e0190b4b7a01
+// DisplayName: WireData Least Prevalent Inbound Connections by IPAddress
+// Description: Bottom 10 (least prevalent) for WireData Inbound event by a given IPAddress (set time range to +-30m when running the query)
+// InputEntityType: Ip
+// InputFields: [Address]
+// OutputEntityTypes: [Ip, Process, Host]
+// QueryPeriodBefore: 30m
+// QueryPeriodAfter: 30m
+// DataSource: #WireData
 // Tactics: #Probing, #Discovery, #LateralMovement, #Collection
-//
-let GetWireDataOutboundWithHost = (suspiciousEventTime:datetime, v_IPAddress:string){
-let v_StartTime = suspiciousEventTime-1d;
-let v_EndTime = suspiciousEventTime+1d;
+
+let GetWireDataInboundWithIp = (v_IPAddress:string){
 WireData
-| where TimeGenerated between (v_StartTime .. v_EndTime)
-| where Direction == "Inbound" 
+| where Direction == 'Inbound' 
 | where RemoteIP has v_IPAddress
-| summarize min(SessionStartTime), count() by Computer, ProcessName , LocalIP, LocalPortNumber, RemoteIP, Direction, ApplicationProtocol, MaliciousIP
+| extend info = pack("LocalPortNumber", LocalPortNumber, "RemoteIP", RemoteIP, "Direction", Direction, "ApplicationProtocol", ApplicationProtocol, "MaliciousIP", MaliciousIP)
+| summarize min(SessionStartTime), count(), IP_Aux_info = makeset(info) by Computer, ProcessName , LocalIP, ProcessID
+| extend Process_Aux_info = IP_Aux_info, Host_Aux_info = IP_Aux_info
 | top 10 by count_ asc
-| project min_SessionStartTime, Computer, ProcessName , LocalIP, LocalPortNumber, RemoteIP, Direction, ApplicationProtocol, MaliciousIP, count_
+| project min_SessionStartTime, Computer, ProcessName , LocalIP, ProcessID, IP_Aux_info, Process_Aux_info, Host_Aux_info
+| project-rename IP_Address=LocalIP, Process_ImageFile_FullPath=ProcessName, Host_UnstructuredName=Computer, Process_ProcessId=ProcessID
 };
-// change datetime value and <processname> value below
-GetWireDataOutboundWithHost(datetime('2019-03-31T10:36:07Z'), "<ipaddress>")
+// change <Address> value below
+GetWireDataInboundWithIp('<Address>')

@@ -1,27 +1,25 @@
-// Name: User Account Created or Deleted
-// Description: User account creations and deletions on a given host during the time of or recently after compromise and in the range of +-12h
-// Entity: #Host
-// Input: Computername, Hostname, HostId
-// Output: Accounts
-//
-// QueryPeriod: +-12h default, change as needed
-//
-// Data Source: #SecurityEvent
-//
+// Id: 3aed43db-e358-4952-a5cd-a10f00d90af4
+// DisplayName: User Account Created or Deleted
+// Description: User account creations and deletions on a given host during the time of or recently after compromise (set time range to +-12h when running the query)
+// InputEntityType: Host
+// InputFields: [HostName]
+// OutputEntityTypes: [Account]
+// QueryPeriodBefore: 12h
+// QueryPeriodAfter: 12h
+// DataSource: #SecurityEvent
 // Tactics: #Persistence, #Discovery, #LateralMovement, #Collection
-//
-let GetAccountChangesOnHost = (suspiciousEventTime:datetime, v_Host:string){
-let v_StartTime = suspiciousEventTime-12h;
-let v_EndTime = suspiciousEventTime+12h;
-SecurityEvent 
-| where TimeGenerated between (v_StartTime .. v_EndTime)
-| where toupper(Computer) contains v_Host or toupper(WorkstationName) contains v_Host
+
+let GetAccountChangesOnHost = (v_Host_HostName:string){
+SecurityEvent
 // 4720: A user account was created, 4726: A user account was deleted
-| where EventID == "4720" or EventID == "4726"
-| where AccountType == "User"
-| summarize min(TimeGenerated), max(TimeGenerated) by Computer, Account, TargetAccount, Activity
-| project min_TimeGenerated, max_TimeGenerated, Computer, Account, TargetAccount, Activity
-| top 10 by min_TimeGenerated asc nulls last 
+| where EventID == 4720 or EventID == 4726
+| where AccountType == 'User'
+| where toupper(Computer) contains v_Host_HostName or toupper(WorkstationName) contains v_Host_HostName
+| extend info = pack("TargetAccount", TargetAccount, "Activity", Activity)
+| summarize min(TimeGenerated), max(TimeGenerated), Account_Aux_info = makeset(info) by Computer, Account
+| project min_TimeGenerated, max_TimeGenerated, Computer, Account, Account_Aux_info
+| project-rename Account_Host_UnstructuredName=Computer, Account_UnstructuredName=Account
+| top 10 by min_TimeGenerated asc nulls last
 };
-// change datetime value and <hostname> value below
-GetAccountChangesOnHost(datetime('2019-01-30T10:02:51.000'), toupper("<hostname>"))
+// change <HostName> value below
+GetAccountChangesOnHost(toupper('<HostName>'))

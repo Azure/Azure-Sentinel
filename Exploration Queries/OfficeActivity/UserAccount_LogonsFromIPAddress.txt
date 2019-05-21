@@ -1,25 +1,22 @@
-// Name: Office Activity Account logons from IP
-// Description: Summary of IP addresses for logins based on Office Activity data.
-//
-// Entity: Account
-// Input: Compromised Account
-// Output: IP address
-//
-// QueryPeriod:  +-12h
-//
-// Data Source: #OfficeActivity
-//
+// Id: 7f3989bf-1558-4d3c-bb5e-e17ac2a67a87
+// DisplayName: Office Activity Account logons from IP
+// Description: Summary of IP addresses for logins based on Office Activity data (set time range to +-12h when running the query)
+// InputEntityType: Account
+// InputFields: [Name]
+// OutputEntityTypes: [Ip]
+// QueryPeriodBefore: 12h
+// QueryPeriodAfter: 12h
+// DataSource: #OfficeActivity
 // Tactics: #Persistence, #Discovery, #LateralMovement, #Collection
-//
-let GetAllIPbyAccount = (suspiciousEventTime:datetime, v_Account:string){
-let v_StartTime = suspiciousEventTime-12h;
-let v_EndTime = suspiciousEventTime+12h;
+
+let GetAllIPbyAccount = (v_Account_Name:string){
 OfficeActivity 
-| where TimeGenerated between (v_StartTime .. v_EndTime)
-| where UserId contains v_Account
-| summarize min(TimeGenerated), max(TimeGenerated) by UserId, ClientIP, UserType, Operation, OfficeWorkload, ResultStatus
-| project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, UserId, ClientIP, UserType, Operation, OfficeWorkload, ResultStatus
+| where UserId contains v_Account_Name
+| extend info = pack("ClientIP", ClientIP, "UserType", UserType, "Operation", Operation, "OfficeWorkload", OfficeWorkload, "ResultStatus", ResultStatus)
+| summarize min(TimeGenerated), max(TimeGenerated), IP_Aux_info = makeset(info) by ClientIP
+| project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, ClientIP, IP_Aux_info
+| project-rename IP_Address=ClientIP
 | top 10 by StartTimeUtc desc nulls last 
 };
-// change datetime value and <username> value below
-GetAllIPbyAccount (datetime('2019-01-30T10:36:07Z'), "<username>")
+// change <Name> value below
+GetAllIPbyAccount ('<Name>')

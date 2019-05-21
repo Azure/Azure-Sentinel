@@ -1,27 +1,22 @@
-// Name: Least Prevalent Process on Host
-// Description: Bottom 10 process on host in range of +-1h
-//
-// Id: 87af2b18-c43d-49ad-b5d8-d639363b0d5e
-//
-// Entity: Host
-// Input: Host, HostName
-// Output: Process
-//
-// QueryPeriod: +-1h, change as needed
-//
-// Data Source: Syslog
-//
+// Id: ea747f91-23f9-425a-baa8-628f30193888
+// DisplayName: Least Prevalent Process on Host
+// Description: Bottom 10 process on host (set time range to +-1h when running the query)
+// InputEntityType: Host
+// InputFields: [HostName]
+// OutputEntityTypes: [Process]
+// QueryPeriodBefore: 1h
+// QueryPeriodAfter: 1h
+// DataSource: #Syslog
 // Tactics: #Execution, #Persistence, #Discovery, #Lateral Movement, #Collection
-//
-let GetSysLogEventsOnHost = (suspiciousEventTime:datetime, v_Host:string){
-let v_StartTime = suspiciousEventTime-1h;
-let v_EndTime = suspiciousEventTime+1h;
+
+let GetSysLogEventsOnHost = (v_Host_HostName:string){
 Syslog
-| where EventTime between (v_StartTime .. v_EndTime)
-| where Computer has v_Host
-| summarize min(EventTime), max(EventTime), count() by Computer, HostName, HostIP, ProcessName
+| where Computer has v_Host_HostName
+| extend info = pack("HostName", HostName, "HostIP", HostIP)
+| summarize min(EventTime), max(EventTime), count(), Process_Aux_info = makeset(info) by Computer, ProcessName, ProcessID
 | top 10 by count_ asc nulls last 
-| project min_EventTime, max_EventTime, Computer, HostIP, ProcessName, count_
+| project min_EventTime, max_EventTime, Computer, ProcessName, ProcessID, Process_Aux_info
+| project-rename Process_Host_UnstructuredName=Computer, Process_ProcessId=ProcessID, Process_ImageFile_FullPath=ProcessName
 };
-// change datetime value and <processname> value below
-GetSysLogEventsOnHost(datetime('2019-01-30T10:36:07Z'), "<hostname>")
+// change <HostName> value below
+GetSysLogEventsOnHost('<HostName>')
