@@ -1,0 +1,19 @@
+// Name: Least Common Processes Including Folder Depth
+// Id: 6d04a1ef-1b4d-4ff8-a76c-ad7d1a396136
+// Description: Looks across your environment for least commonly occurring Processes.  To observe for commonly known process names, this hunting query will also look at the process' depth from the root.  We don't compare full process path due to some processes having dynamic folder names. By ZanCo
+// DataSource: #SecurityEvent
+// Tactics: #InitialAccess, #Execution, #Persistance
+let Whitelist = dynamic (['foo.exe', 'baz.exe']);
+let Sensitivity = 15;
+let StartDate = ago(7d);
+let Duration = 7d;
+SecurityEvent
+| where EventID == 4688 and TimeGenerated > StartDate and TimeGenerated < (StartDate + Duration)
+| extend ProcArray = split(NewProcessName, '\\')
+| extend ProcArrayLength = arraylength(ProcArray)
+| extend LastIndex = ProcArrayLength - 1
+| extend Proc = ProcArray[LastIndex]
+| where Proc !in (Whitelist)
+| extend DriveDepthProc = strcat(ProcArray[0], '-', ProcArrayLength, '-', Proc)
+| summarize TimesSeen = count(), Hosts = makeset(Computer), Users = makeset(SubjectUserName) by DriveDepthProc
+| where TimesSeen < Sensitivity
