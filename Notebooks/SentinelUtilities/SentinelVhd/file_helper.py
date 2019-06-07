@@ -1,3 +1,10 @@
+"""
+File Helper:
+This module provides helper methong to download and display files
+
+It has dependency on .NET library for downloading files.
+"""
+
 import clr
 clr.AddReference("System")
 clr.AddReference("System.Collections")

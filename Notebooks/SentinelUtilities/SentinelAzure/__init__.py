@@ -1,3 +1,7 @@
+"""
+SentinelAzure: This package is developed for initializing and manipulating Python client objects of Azure Resource Management
+"""
+
 # __init__.py
 from .azure_aad_helper import *
 from .azure_compute_helper import *

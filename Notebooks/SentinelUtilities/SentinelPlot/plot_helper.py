@@ -1,3 +1,8 @@
+"""
+Plot Helper:
+This module provides plot functionalities through various Python plot packages.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as mdates

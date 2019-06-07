@@ -1,3 +1,9 @@
+"""
+Azure LogAnalytics Helper:
+This module provides helper methods to initialize and manipulate LogAnalyticsManagementClient object.
+Workspace is the focal point.
+"""
+
 from azure.mgmt.loganalytics import LogAnalyticsManagementClient
 
 class LogAnalyticsHelper(object):

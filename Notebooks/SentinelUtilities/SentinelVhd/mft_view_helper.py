@@ -1,3 +1,8 @@
+"""
+MFT View Helper:
+This module provides helper methods for UI components.
+"""
+
 import ipywidgets as widgets
 from ipywidgets import Button, GridBox, Layout, ButtonStyle, IntProgress
 

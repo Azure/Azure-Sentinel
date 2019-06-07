@@ -1,3 +1,8 @@
+"""
+Azure Network Helper:
+This module provides helper methods to initialize and manipulate NetworkManagementClient object.
+"""
+
 from azure.mgmt.network import NetworkManagementClient
 
 class NetworkHelper:

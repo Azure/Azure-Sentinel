@@ -1,3 +1,9 @@
+"""
+Anomaly Lookup:
+This module provides process flow functions for anomaly lookup.  Method - run is the main entry point.
+It has dependency on .NET library: Microsoft.Azure.CIS.Notebooks.AnomalyLookup.
+"""
+
 import clr
 clr.AddReference("System")
 clr.AddReference('Newtonsoft.Json')

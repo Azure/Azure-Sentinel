@@ -1,3 +1,9 @@
+"""
+Azure Storage Helper:
+This module provides helper methods to initialize and manipulate StorageManagementClient object.
+Storage account and blob service are the focal points.
+"""
+
 from datetime import *
 import time
 import azure.mgmt.storage.models

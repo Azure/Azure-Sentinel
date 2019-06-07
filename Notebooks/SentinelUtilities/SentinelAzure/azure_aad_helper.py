@@ -1,3 +1,8 @@
+"""
+Azure AAD Helper:
+This module provides helper methods to authenticate users into ARM using either 'servivce principal' or 'user id/password'.
+"""
+
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.common.credentials import UserPassCredentials
 from azure.mgmt.resource import ResourceManagementClient

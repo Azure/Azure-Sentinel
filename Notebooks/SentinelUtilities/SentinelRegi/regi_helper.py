@@ -1,3 +1,8 @@
+"""
+MFT Helper:
+This module is built on the top of Python Registry. It knows the registry data object.
+"""
+
 from Registry import Registry
 from Registry.RegistryParse import ParseException
 

@@ -1,3 +1,9 @@
+"""
+Azure Compute Helper:
+This module provides helper methods to initialize and manipulate ComputeClient object.
+VM, VM Extension, and VM snapshots are the focal points.
+"""
+
 from azure.mgmt.compute.models import DiskCreateOption
 from azure.mgmt.compute import ComputeManagementClient
 import azure.mgmt.compute.models

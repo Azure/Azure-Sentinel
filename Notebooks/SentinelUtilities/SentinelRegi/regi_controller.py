@@ -1,3 +1,8 @@
+"""
+Regi Controller:
+This controller module takes user actions and renders corresponding widgets.
+"""
+
 import pandas as pd
 from IPython.display import display, HTML
 import ipywidgets as widgets

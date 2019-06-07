@@ -1,3 +1,8 @@
+"""
+GitHub Helper:
+This module provides helper methods to access content in GitHub.
+"""
+
 import requests
 import json
 class GitHubHelper(object):

@@ -1,3 +1,25 @@
+"""
+MFT Helper:
+This module is consisted of 3 classes:
+    MFT Helper which knows MFT, 
+    MFT controller which takes user actions and renders corresponding widgets, and 
+    MFT Model Helper which knows the MFT data object.
+
+It has dependency on .NET libraries:
+System
+System.Collections
+System.Runtime
+Microsoft.Azure.Storage.Common
+Microsoft.Azure.Storage.Blob
+Microsoft.Azure.KeyVault.Core
+Newtonsoft.Json
+Microsoft.Azure.CIS.DiskLib
+Microsoft.Azure.CIS.DiskLib.Ntfs
+Microsoft.Azure.CIS.DiskLib.Vhd
+Microsoft.Azure.CIS.DiskLib.Vhd.Accessors
+PyHelper
+"""
+
 import clr
 clr.AddReference("System")
 clr.AddReference("System.Collections")

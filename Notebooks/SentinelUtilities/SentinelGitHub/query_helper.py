@@ -1,3 +1,8 @@
+"""
+Query Helper:
+This module returns constructed Kusto queries (KQL).
+"""
+
 import json
 class QueryHelper(object):
     

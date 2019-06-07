@@ -1,3 +1,9 @@
+"""
+Azure Resource Helper:
+This module provides helper methods to initialize and manipulate ResourceManagementClient object.
+Resource Group is the focal point.
+"""
+
 from azure.mgmt.resource import ResourceManagementClient
 
 class ResourceHelper:

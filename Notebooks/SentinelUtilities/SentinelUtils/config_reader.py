@@ -1,3 +1,8 @@
+"""
+Config Reader:
+This module is used to read JSON config file populated by Azure Notebooks API.
+"""
+
 import json
 class ConfigReader:
     def read_config_values(filePath):

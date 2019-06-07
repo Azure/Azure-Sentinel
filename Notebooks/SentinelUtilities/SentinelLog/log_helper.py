@@ -1,3 +1,9 @@
+"""
+Log Helper:
+This module provides log functionalities through Azure Application Insights.
+It has dependency on .NET library: Microsoft.Azure.CIS.Notebooks.LogHelper
+"""
+
 import clr
 clr.AddReference('Microsoft.Azure.CIS.Notebooks.LogHelper')
 clr.AddReference('Microsoft.ApplicationInsights')

@@ -1,3 +1,8 @@
+"""
+Widget View Helper:
+This module provides helper methods for UI controls and components.
+"""
+
 import os
 import ipywidgets as widgets
 from ipywidgets import Button, GridBox, Layout, ButtonStyle, IntProgress
@@ -73,14 +78,14 @@ class WidgetViewHelper(object):
     def get_vm_extension_properties(os_type, upload_container_path, user_id = None):
         if os_type == 'Windows':
             command_to_execute = 'powershell -File installNotebookExtension.ps1 "{0}" >> out.txt'.format(upload_container_path)
-            file_list = ['https://pinotebookresults.blob.core.windows.net/results/installNotebookExtension.ps1?sp=r&st=2019-03-28T21:34:09Z&se=2019-06-01T05:34:09Z&spr=https&sv=2018-03-28&sig=83jlp%2Fr%2BVcuGRLRij6jssqMerCgkk2pp0s007sLUPpM%3D&sr=b', 'https://pinotebookresults.blob.core.windows.net/results/piextension.zip?sp=r&st=2019-03-28T21:44:08Z&se=2019-06-01T05:44:08Z&spr=https&sv=2018-03-28&sig=UoBRXLRK9C4xurBjYu%2FkqqlkjCSi%2B3FlmFiWcsqlu6E%3D&sr=b']
+            file_list = ['https://sentinelnotebooks.blob.core.windows.net/piwindowsstorage/installNotebookExtension.ps1', 'https://sentinelnotebooks.blob.core.windows.net/piwindowsstorage/piextension.zip']
         elif os_type == 'Linux':
             command_to_execute = './piondemand.sh "' + upload_container_path + '"'
-            file_list = ['https://pilinuxstorage.blob.core.windows.net/release/ondemand/stable/piondemand.sh?sp=r&st=2019-06-05T20:44:53Z&se=2020-01-06T05:44:53Z&spr=https&sv=2018-03-28&sig=2fBkG2dWLDcguLtWyQzFapYSaLUxzT9AnZRiW4sdg38%3D&sr=b','https://pilinuxstorage.blob.core.windows.net/release/ondemand/stable/pilinux.ondemand.tar.bz2?sp=r&st=2019-06-05T20:43:37Z&se=2020-01-05T05:43:37Z&spr=https&sv=2018-03-28&sig=7%2FpyH4kR5%2B1Kf0uaftnhpFFy57Yzx32VUGumxmdNmtI%3D&sr=b']
+            file_list = ['https://sentinelnotebooks.blob.core.windows.net/pilinuxstorage/piondemand.sh','https://sentinelnotebooks.blob.core.windows.net/pilinuxstorage/release/ondemand/stable/pilinux.ondemand.tar.bz2']
 
         elif os_type == 'DSVM':
             command_to_execute = './azureforensics.sh {0}'.format(user_id)
-            file_list = ['https://pilinuxstorage.blob.core.windows.net/forensicsnotebooks/azureforensics.sh?sp=r&st=2019-06-05T20:56:53Z&se=2020-01-06T05:56:53Z&spr=https&sv=2018-03-28&sig=uKHb3fR%2FB7%2BgAwhn0uSeqh4f73jaEyQWO4D%2FWVy3BwM%3D&sr=b','https://pilinuxstorage.blob.core.windows.net/forensicsnotebooks/vhdexplorer.tar?sp=r&st=2019-06-05T20:57:46Z&se=2020-01-06T05:57:46Z&spr=https&sv=2018-03-28&sig=AzcecrNydEIuVKNkAimc6MnCGIjjdh4X6dn5oi30ixM%3D&sr=b']
+            file_list = ['https://sentinelnotebooks.blob.core.windows.net/forensicsnotebooks/azureforensics.sh','https://sentinelnotebooks.blob.core.windows.net/forensicsnotebooks/vhdexplorer.tar']
 
         return command_to_execute, file_list
 

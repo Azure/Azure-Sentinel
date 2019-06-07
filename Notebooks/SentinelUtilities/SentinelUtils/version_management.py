@@ -1,3 +1,8 @@
+"""
+Version Management:
+This module is used to validate installed Python packages that are required by Azure Sentinel Notebooks.
+"""
+
 import sys
 import pkg_resources
 from pkg_resources import DistributionNotFound, VersionConflict
