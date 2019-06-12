@@ -9,27 +9,28 @@ clr.AddReference("System")
 clr.AddReference('Newtonsoft.Json')
 clr.AddReference("Microsoft.Azure.CIS.Notebooks.AnomalyLookup")
 
+import copy
 import datetime as dt
 import pandas as pd
 from pandas.io.json import json_normalize
-import copy
 import sys
 import json
 import ipywidgets as widgets
 from ipywidgets import Button, GridBox, Layout, ButtonStyle
-from azure.loganalytics import LogAnalyticsDataClient
 from azure.loganalytics.models import QueryBody
+from azure.loganalytics import LogAnalyticsDataClient
+
 from System import *
 from Microsoft.Azure.CIS.Notebooks.AnomalyLookup import *
 from Microsoft.Azure.CIS.Notebooks.LogHelper import *
-from .anomaly_lookup_view_helper import *
 
+from .anomaly_lookup_view_helper import *
 
 class AnomalyLookup(object):
     def __init__(self, workspace_id, la_data_client):
         self.workspace_id = workspace_id
         self.la_data_client = la_data_client
-        self.logger = AILogger();
+        self.logger = AILogger()
 
     def query_table_list(self):
         return self.query_loganalytics(KqlLibrary.ListTables())
@@ -51,7 +52,7 @@ class AnomalyLookup(object):
         for tbl in dfAnomalies.Table.unique():
 
             curTableAnomalies = dfAnomalies.ix[dfAnomalies.Table == tbl,:]
-            query = """{tbl} | where TimeGenerated > ago(30d) | where ingestion_time() > datetime({maxTimestamp})-1d and ingestion_time() < datetime({maxTimestamp}) | where {entCol} has "{qEntity}" | where """.format(**{
+            query = """{tbl} | where TimeGenerated > ago(60d) | where ingestion_time() > datetime({maxTimestamp})-1d and ingestion_time() < datetime({maxTimestamp}) | where {entCol} has "{qEntity}" | where """.format(**{
                 'tbl': tbl,
                 'qTimestamp': curTableAnomalies.qTimestamp.iloc[0],
                 'maxTimestamp': curTableAnomalies.maxTimestamp.iloc[0],
@@ -122,8 +123,6 @@ class AnomalyLookup(object):
         return minTimestamp, delta, maxTimestamp, longMinTimestamp
 
     def run(self, qTimestamp, qEntity, tables):
-        scan = 'all'
-
         progress_bar = AnomalyLookupViewHelper.define_int_progress_bar()
         display(progress_bar)
 
@@ -170,51 +169,27 @@ class AnomalyLookup(object):
 
         progress_bar.value += 2
 
-        # find short-term anomalous categories
-        shortTermAnomalies = []
+        anomaliesList = []
         for colInfo in categoricalCols:
-            minTime = colInfo['minTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
-            maxTime = colInfo['maxTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
-            curAnomalies = self.query_loganalytics(KqlLibrary.AvgStdAnomalyDetection(colInfo['table'], colInfo['col'], colInfo['entCol'], qEntity, minTime, maxTime, qTimestamp, colInfo['delta']))
-            for j, row in curAnomalies.iterrows():
-                stAnomalyInfo = copy.deepcopy(colInfo)
-                stAnomalyInfo['colType'] = row['colType']
-                stAnomalyInfo['colVal'] = row['colVal'].replace("\\","\\\\").replace('"',"'")
-                stAnomalyInfo['befAvg'] = row['befAvg']
-                stAnomalyInfo['befStd'] = row['befStd']
-                stAnomalyInfo['aftAvg'] = row['aftAvg']
-                stAnomalyInfo['dist'] = row['dist']
-                shortTermAnomalies.append(stAnomalyInfo)
+            maxTimestamp = colInfo['maxTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
+            longMinTimestamp = colInfo['longMinTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
+
+            curAnomalies = self.query_loganalytics(KqlLibrary.TimeSeriesAnomalyDetection(
+                colInfo['table'],
+                colInfo['col'],
+                colInfo['entCol'],
+                qEntity,
+                longMinTimestamp,
+                maxTimestamp,
+                qTimestamp,
+                colInfo['delta']))
+
+            anomaliesList.append(curAnomalies)
 
         progress_bar.value += 2
 
-        # find long-term anomalous categories
-        longTermAnomalies = []
-        for anomalousCat in shortTermAnomalies:
-            minTimestamp = anomalousCat['minTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
-            maxTimestamp = anomalousCat['maxTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
-            longMinTimestamp = anomalousCat['longMinTimestamp'].strftime('%Y-%m-%dT%H:%M:%S.%f')
-            curLongTermAnomalies = self.query_loganalytics(KqlLibrary.LongWinAnomalyDetection(
-                anomalousCat['table'],
-                anomalousCat['col'],
-                anomalousCat['entCol'],
-                qEntity,
-                anomalousCat['colType'],
-                anomalousCat['colVal'],
-                minTimestamp,
-                maxTimestamp,
-                qTimestamp,
-                longMinTimestamp,
-                anomalousCat['befAvg'],
-                anomalousCat['befStd'],
-                anomalousCat['aftAvg'],
-                anomalousCat['dist'],
-                anomalousCat['delta']))
-
-            longTermAnomalies.append(curLongTermAnomalies)
-
-        if (len(longTermAnomalies) > 0):
-            anomalies = pd.concat(longTermAnomalies,axis=0)
+        if (len(anomaliesList) > 0):
+            anomalies = pd.concat(anomaliesList,axis=0)
         else:
             anomalies = pd.DataFrame()
 
@@ -229,7 +204,8 @@ class AnomalyLookup(object):
         val = self.is_tp.value
         if val:
             result = self.logger.IsResultTruePositive('AnomalyLookup', val, self.anomaly)
-            if result == True: print('saved')
+            if result == True: 
+                print('saved')
 
     def ask_is_entity_compromised(self):
         label_tp = widgets.Label(value='Is this entity compromised?')
