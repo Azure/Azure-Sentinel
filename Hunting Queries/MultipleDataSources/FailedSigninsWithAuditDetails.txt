@@ -1,0 +1,58 @@
+// Name: Failed service logon attempt by user account with available AuditData
+// Description: User account failed to logon in current period (default last 1 day). Excludes Windows Sign in attempts due to noise and limits to only more than 10 failed logons or 3 different IPs used.
+// Additionally, Azure Audit Log data from the last several days(default 7 days) related to the given UserPrincipalName will be joined if available.
+// This can help to understand any events for this same user related to User or Group Management.
+// Results may indicate a potential malicious use of an account that is rarely used. It is possible this is an account that is new or newly enabled.
+// The associated Azure Audit data should help determine any recent changes to this account and may help you understand why the logons are failing.
+// Receiving no results indicates that there were no less than 10 failed logons or that the Auditlogs related to this UserPrincipalName in the default 7 days.
+// You may attempt to adjust these values to receive results.
+//
+// Id: 22f33a4c-e60f-4817-bbfe-9e2ed33cb596
+//
+// DataSource: #SigninLogs, #AuditLogs
+//
+// Tactics: #Persistence, #LateralMovement
+//
+let current = 1d;
+let failLimit = 10;
+let ipLimit = 3;
+let auditLookback = 7d;
+let FailedSignins = SigninLogs | where TimeGenerated >= ago(current)| where ResultType != "0" | where AppDisplayName != "Windows Sign In"
+| extend UserPrincipalName = tolower(UserPrincipalName)
+| extend CityState = strcat(tostring(LocationDetails.city),"|", tostring(LocationDetails.state))
+| extend Result = strcat(ResultType,"-",ResultDescription) 
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctIPAddressCount = dcount(IPAddress), IPAddresses = makeset(IPAddress), CityStates = makeset(CityState), DistinctResultCount = dcount(Result), Results = makeset(Result), AppDisplayNames = makeset(AppDisplayName) , FailedLogonCount = count() by Type, OperationName, Category, UserPrincipalName = tolower(UserPrincipalName), ClientAppUsed, Location, CorrelationId
+| project Type, StartTimeUtc, EndTimeUtc, OperationName, Category, UserPrincipalName, AppDisplayNames, DistinctIPAddressCount, IPAddresses, DistinctResultCount, Results, FailedLogonCount, Location, CityStates 
+| where FailedLogonCount >= failLimit or DistinctIPAddressCount >= ipLimit
+| extend Activity = pack("IPAddresses", IPAddresses, "AppDisplayNames", AppDisplayNames, "Results", Results, "Location", Location, "CityStates", CityStates)
+| project Type, StartTimeUtc, EndTimeUtc, OperationName, Category, UserPrincipalName, FailedLogonCount, DistinctIPAddressCount, DistinctResultCount, Activity;
+let AccountMods = AuditLogs | where TimeGenerated >= ago(current+auditLookback)
+| where Category == "UserManagement" or Category == "GroupManagement"
+| extend ModProps = TargetResources.[0].modifiedProperties
+| extend InitiatedBy = case(
+tostring(InitiatedBy.user.userPrincipalName) != "", tostring(InitiatedBy.user.userPrincipalName),
+tostring(InitiatedBy.app.displayName) != "", tostring(InitiatedBy.app.displayName),
+"")
+| extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| mvexpand ModProps
+| extend PropertyName = tostring(ModProps.displayName), oldValue = tostring(ModProps.oldValue), newValue = tostring(ModProps.newValue)
+| extend ModifiedProps = pack("PropertyName",PropertyName,"oldValue",oldValue,"newValue",newValue) 
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedBy, UserPrincipalName, Category, OperationName, CorrelationId, Id;
+// Gather only Audit data for UserPrincipalNames that we have Audit data for
+let AccountNameOnly = FailedSignins | project UserPrincipalName;
+let AuditMods = AccountNameOnly
+| join kind= innerunique (
+AccountMods
+) on UserPrincipalName;
+let AvailableAudits = AuditMods | project UserPrincipalName;
+let SigninsWithAudit = AvailableAudits
+| join kind= innerunique (
+FailedSignins
+) on UserPrincipalName;
+// Union the Current Signin failures so we do not lose them with the Auditing data we do have
+let Activity = (union isfuzzy=true
+SigninsWithAudit, AuditMods)
+| order by StartTimeUtc, UserPrincipalName;
+Activity
+| project StartTimeUtc, EndTimeUtc, DataType = Type, Category, OperationName, UserPrincipalName, InitiatedBy, Activity, FailedLogonCount, DistinctIPAddressCount, DistinctResultCount, CorrelationId, Id
+| order by UserPrincipalName, StartTimeUtc

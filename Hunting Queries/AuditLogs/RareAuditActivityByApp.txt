@@ -1,0 +1,38 @@
+// Name: Rare Audit activity initiated by App
+// Description: Compares the current day to the last 30 days of audits to identify new audit activities by OperationName, InitiatedByApp, UserPrincipalName, PropertyName, newValue
+// This can be useful when attempting to track down malicious activity related to additions of new users, additions to groups, removal from groups by Azure Apps and automated approvals.
+//
+// Id: 5c799718-b361-4a91-9cb2-0c291e602707
+//
+// Datasource: #AuditLogs
+//
+// Tactics: #Persistence, #LateralMovement
+//
+let current = 1d;
+let auditLookback = 30d;
+let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current) 
+| extend InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| where isnotempty(InitiatedByApp)
+| extend ModProps = TargetResources.[0].modifiedProperties
+| extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| mvexpand ModProps
+| extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
+| where isnotempty(newValue) and newValue != "\"\""
+| summarize  by OperationName, InitiatedByApp,UserPrincipalName,PropertyName, newValue;
+let AccountMods = AuditLogs | where TimeGenerated >= ago(current)
+| extend ModProps = TargetResources.[0].modifiedProperties
+| extend InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| where isnotempty(InitiatedByApp)
+| extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| mvexpand ModProps
+| extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
+| where isnotempty(newValue) and newValue != "\"\""
+| where PropertyName != "TargetId.UserType"
+| extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId) 
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByApp, UserPrincipalName, Category, OperationName, PropertyName, newValue;
+let RareAudits = AccountMods | join kind= leftanti (
+   AuditTrail 
+) on OperationName, InitiatedByApp, UserPrincipalName, PropertyName, newValue;
+RareAudits
+| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc),Activity = make_set(Activity) by InitiatedByApp, OperationName, UserPrincipalName
+| order by UserPrincipalName asc, StartTimeUtc asc
