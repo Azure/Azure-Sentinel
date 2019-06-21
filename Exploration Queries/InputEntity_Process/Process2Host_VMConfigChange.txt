@@ -2,14 +2,14 @@
 // Name: 10 most recent VM configuration changes based on process
 // Description: Provides the 10 most recent changes to any VM based on the process name provided
 // InputEntityType: Process
-// InputFields: [ProcessName, Process, ServiceName]
+// InputFields: [Process, ServiceFileName]
 // OutputEntityTypes: [Host]
 // QueryPeriodBefore: 1d
 // QueryPeriodAfter: 1d
 // DataSource: ConfigurationChange
 // Tactics: #Persistence, #Execution
 
-let ConfigChange = (v_Process:string) {ConfigurationChange | where TimeGenerated >= ago(1d)
+let ConfigChange = (v_Process_ImageFile_Name:string, v_Service_FileName:string,  ) {ConfigurationChange | where TimeGenerated >= ago(1d)
 | where ConfigChangeType != "Software" 
 | extend Process = case(ConfigChangeType == "Registry" and ValueData contains ".exe", ValueData,
 ConfigChangeType == "WindowsServices", SvcPath,
@@ -19,9 +19,9 @@ ConfigChangeType == "Daemons", SvcPath,
  )
 // Removing Common processes to improve query performance
 | where Process !contains ":\\Windows\\System32\\svchost.exe" and Process !contains ":\\Windows\\system32\\wbem\\WmiApSrv.exe" 
-and Process !contains ":\\Windows\\CCM\\CcmExec.exe" and Process !contains ":\\Windows\\system32\\svchost.exe -k UnistackSvcGroup"
-and Process !contains "Windows Defender Antivirus" and Process !contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\"
-| where Process contains v_Process
+and Process !contains ":\\Windows\\CCM\\CcmExec.exe" and Process !contains "Windows Defender Antivirus" 
+and Process !contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\"
+| where Process contains v_Process_ImageFile_Name or v_Service_FileName
 | parse FileContentChecksum with * "Hash=" Hash " " *
 | parse PreviousFileContentChecksum with * "Hash=" Hash " " *
 | extend Changes = case( 
@@ -39,7 +39,8 @@ ConfigChangeType == "Files" and ChangeCategory == "Added", pack("ConfigChangeTyp
 ConfigChangeType == "Files" and ChangeCategory == "Removed", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "FileSystemPath", FileSystemPath, "DateCreated", PreviousDateCreated, "DateModified", PreviousDateModified, "Hash", Hash),
 ConfigChangeType == "Files" and ChangeCategory == "Modified", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "FileSystemPath", FileSystemPath, "FieldsChanged", FieldsChanged, "DateCreated", PreviousDateCreated, "DateModified", PreviousDateModified, "Hash", Hash),
 "")
-| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ConfigChangeDetail = makeset(Changes) by Computer
+| extend Host_HostName = tostring(split(Computer, ".")[0]), Host_DnsDomain = strcat_array(array_slice(split(Computer,'.'),1,256),'.')
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Process_Aux_ConfigChangeDetail = makeset(Changes) by Host_HostName, Host_DnsDomain
 | top 10 by StartTimeUtc desc
 };
-ConfigChange('<ProcessName>')
+ConfigChange('<Process_ImageFile>', '<Service_FileName>')
