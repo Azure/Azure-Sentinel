@@ -1,0 +1,39 @@
+// Name: NetworkEndpointCrossover
+//
+// Id: 01f64465-b1ef-41ea-a7f5-31553a11ad43
+//
+// Description:
+// Correlate blocked URLs hosting [malicious] executables with host endpoint data
+// to identify potential instances of executables of the same name having been recently run.
+//
+// Severity: Medium
+//
+// QueryFrequency: 24h
+//
+// QueryPeriod: 24h
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #CommonSecurityLog, #SecurityEvent
+//
+// Tactics: #Execution
+//
+// Windows endpoint data
+let endpointData = 
+ (SecurityEvent
+  | where TimeGenerated >= ago(1d) | where EventID == 4688
+  | project shortFileName = tostring(split(NewProcessName, '\\')[-1])
+  );
+// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints
+let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';​
+CommonSecurityLog ​
+| where TimeGenerated >= ago(1d)​
+| where DeviceVendor == "Trend Micro" ​
+| where RequestURL endswith ".exe" ​
+| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP ​
+| project suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))​
+| summarize by suspectExeName​
+| join (endpointData)​
+on $left.suspectExeName == $right.shortFileName ​
