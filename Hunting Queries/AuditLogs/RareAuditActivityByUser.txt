@@ -1,0 +1,38 @@
+// Name: Rare Audit activity initiated by User
+// Description: Compares the current day to the last 30 days of audits to identify new audit activities by OperationName, InitiatedByUser, UserPrincipalName, PropertyName, newValue
+// This can be useful when attempting to track down malicious activity related to additions of new users, additions to groups, removal from groups by specific users.
+//
+// Id: ea107ccc-2b80-410e-96e1-be6607ce293b
+//
+// DataSource: #AuditLogs
+//
+// Tactics: #Persistence, #LateralMovement
+//
+let current = 1d;
+let auditLookback = 30d;
+let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current) 
+| extend InitiatedByUser = tostring(InitiatedBy.user.userPrincipalName)
+| extend InitiatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+| where isnotempty(InitiatedByUser)
+| extend ModProps = TargetResources.[0].modifiedProperties
+| extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| mvexpand ModProps
+| extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
+| summarize count() by OperationName, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, PropertyName, newValue;
+let AccountMods = AuditLogs | where TimeGenerated >= ago(current)
+| extend ModProps = TargetResources.[0].modifiedProperties
+| extend InitiatedByUser = tostring(InitiatedBy.user.userPrincipalName)
+| extend InitiatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+| where isnotempty(InitiatedByUser)
+| extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| mvexpand ModProps
+| extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
+| where PropertyName !in ("TargetId.UserType", "StsRefreshTokensValidFrom", "LastDirSyncTime") and (PropertyName != "Action Client Name" and newValue != "\"DirectorySync\"") and (PropertyName != "Included Updated Properties" and newValue != "\"LastDirSyncTime\"")
+| extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId) 
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, Category, OperationName, PropertyName, newValue;
+let RareAudits = AccountMods | join kind= leftanti (
+   AuditTrail 
+) on OperationName, InitiatedByUser,InitiatedByIPAddress,UserPrincipalName,PropertyName,newValue;
+RareAudits 
+| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), make_set(Activity) by InitiatedByUser, InitiatedByIPAddress, OperationName, UserPrincipalName
+| order by UserPrincipalName asc, StartTimeUtc asc
