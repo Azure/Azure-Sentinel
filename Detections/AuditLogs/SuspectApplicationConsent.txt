@@ -28,42 +28,26 @@ let auditLookback = 7d;
 let threshold = 3;
 // Gather initial data from lookback period, excluding current, adjust current to more than a single day if no results
 let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
-// 2 other operations that can be part of malicious activity in this situation are "Add OAuth2PermissionGrant" and "Add service principal", replace the below if you are interested in those as starting points
+// 2 other operations that can be part of malicious activity in this situation are 
+// "Add OAuth2PermissionGrant" and "Add service principal", replace the below if you are interested in those as starting points
 | where OperationName == "Consent to application"
-| extend ModProps = TargetResources.[0].modifiedProperties
-| extend InitiatedByUserOrApp = tostring(InitiatedBy.user.userPrincipalName)
-| extend InitiatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
-| extend InitiatedByUserOrApp = iff(isempty(InitiatedByUserOrApp),tostring(InitiatedBy.app.displayName),InitiatedByUserOrApp)
-| extend InitiatedByUserOrAppId = tostring(InitiatedBy.user.id)
-| extend InitiatedByUserOrAppId = iff(isempty(InitiatedByUserOrAppId),tostring(InitiatedBy.app.servicePrincipalId),InitiatedByUserOrAppId)
-| extend TargetName = tolower(tostring(TargetResources.[0].userPrincipalName))
-| extend TargetName = tolower(tostring(TargetResources.[0].displayName))
-| extend TargetNameId = tostring(TargetResources.[0].id)
-| mvexpand ModProps
-| extend PropertyName = tostring(ModProps.displayName)
-| summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedByUserOrApp, InitiatedByIPAddress, TargetName, PropertyName
+| extend InitiatedBy= iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
+| extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
+| summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedBy, TargetAppName
 // only including operations by initiated by a user or app that is above the threshold so we see rare along with has not occurred in last 30 days
 | where OperationCount > threshold
 ;
 // Gather current period of audit data
 let RecentConsent = AuditLogs | where TimeGenerated >= ago(current)
 | where OperationName == "Consent to application"
-| extend ModProps = TargetResources.[0].modifiedProperties
-| extend InitiatedByUserOrApp = tostring(InitiatedBy.user.userPrincipalName)
-| extend InitiatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
-| extend InitiatedByUserOrApp = iff(isempty(InitiatedByUserOrApp),tostring(InitiatedBy.app.displayName),InitiatedByUserOrApp)
-| extend InitiatedByUserOrAppId = tostring(InitiatedBy.user.id)
-| extend InitiatedByUserOrAppId = iff(isempty(InitiatedByUserOrAppId),tostring(InitiatedBy.app.servicePrincipalId),InitiatedByUserOrAppId)
-| extend TargetName = tolower(tostring(TargetResources.[0].userPrincipalName))
-| extend TargetName = tolower(tostring(TargetResources.[0].displayName))
-| extend TargetNameId = tostring(TargetResources.[0].id)
-| mvexpand ModProps
-| extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
-| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Type, InitiatedByUserOrApp, InitiatedByUserOrAppId, InitiatedByIPAddress, TargetName, TargetNameId, Category, OperationName, PropertyName, newValue, CorrelationId, Id;
+| extend InitiatedBy= iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
+| extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
+| parse TargetResources.[0].modifiedProperties with * "ConsentType: " ConsentType "]" *
+| project TimeGenerated, InitiatedBy, TargetAppName, Category, OperationName, ConsentType , CorrelationId, Type;
 // Exclude previously seen audit activity for "Consent to application" that was seen in the lookback period
-let RareConsent = RecentConsent | join kind= leftanti (
-AuditTrail 
-) on OperationName, InitiatedByUserOrApp,InitiatedByIPAddress, TargetName, PropertyName;
-RareConsent
-| extend PropertyUpdate = pack(PropertyName, newValue, "Id", Id)
-| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) by InitiatedByUserOrApp, InitiatedByUserOrAppId, InitiatedByIPAddress, TargetName, TargetNameId, OperationName, CorrelationId
+// First for rare InitiatedBy
+let RareConsentby = RecentConsent | join kind= leftanti AuditTrail on OperationName, InitiatedBy | extend Reason = "Previously unseen user consenting";
+// Second for rare TargetAppName
+let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetAppName | extend Reason = "Previously unseen app granted consent";
+RareConsentby | union RareConsentApp
+| summarize Reason = makeset(Reason) by InitiatedBy, TargetAppName, Category, OperationName, ConsentType , CorrelationId, Type
