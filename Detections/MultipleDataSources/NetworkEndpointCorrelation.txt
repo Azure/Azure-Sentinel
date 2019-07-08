@@ -1,0 +1,39 @@
+﻿// Name: NetworkEndpointCorrelation
+//
+// Id: 01f64465-b1ef-41ea-a7f5-31553a11ad43
+//
+// Description:
+// Correlate blocked URLs hosting [malicious] executables with host endpoint data
+// to identify potential instances of executables of the same name having been recently run.
+//
+// Severity: Medium
+//
+// QueryFrequency: 24h
+//
+// QueryPeriod: 24h
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #CommonSecurityLog, #SecurityEvent
+//
+// Tactics: #Execution
+//
+// Windows endpoint data
+let endpointData = 
+ (SecurityEvent
+  | where TimeGenerated >= ago(1d) | where EventID == 4688
+  | extend shortFileName = tostring(split(NewProcessName, '\\')[-1])
+  );
+// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints
+CommonSecurityLog ​
+| where TimeGenerated >= ago(1d)​
+| where DeviceVendor == "Trend Micro" ​
+| where Activity == "Deny List updated" 
+| where RequestURL endswith ".exe" ​
+| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP ​
+| project suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))​
+| summarize by suspectExeName​
+| join (endpointData)​
+on $left.suspectExeName == $right.shortFileName ​
