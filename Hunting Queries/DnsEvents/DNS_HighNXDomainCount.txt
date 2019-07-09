@@ -9,16 +9,60 @@
 // Tactics: #C2, #Exfiltration
 //
 // NXDomain events, with some likely uninteresting records filtered out
-let nxDomainDnsEvents = DnsEvents 
+//
+let nxDomainDnsEvents = Dns
 | where ResultCode == "3" 
 | where QueryType in ("A", "AAAA")
 | where ClientIP != "127.0.0.1"
 | where Name !contains "/"
 | where Name contains ".";
-// Query for ClientIPs with high NXDomain counts
-nxDomainDnsEvents
+//
+let thirdQ = toscalar (nxDomainDnsEvents
+| where TimeGeneratedUtc > ago(1d)
 | extend sld = tostring(split(Name, ".")[-2])
 | summarize dcount(sld) by ClientIP
-| where dcount_sld > 100
+| summarize event_count = count() by dcount_sld
+| sort by dcount_sld asc
+| summarize percentilesw(dcount_sld, event_count, 75));
+//
+let firstQ = toscalar(nxDomainDnsEvents
+| where TimeGeneratedUtc > ago(1d)
+| extend sld = tostring(split(Name, ".")[-2])
+| summarize dcountsld = dcount(sld) by ClientIP
+| summarize event_count = count() by dcountsld
+| sort by dcountsld asc
+| summarize perc2 = percentilesw(dcountsld, event_count, 25));
+//
+let threshold = toscalar(thirdQ + (1.5*exp(3)*(thirdQ - firstQ)));database("Samples")
+//
+nxDomainDnsEvents
+| where TimeGeneratedUtc > ago(1d)
+| extend sld = tostring(split(Name, ".")[-2])
+| summarize dcount(sld) by ClientIP
+| where dcount_sld > ['threshold']
+| join kind = leftouter (nxDomainDnsEvents
+    | where TimeGeneratedUtc between(ago(2d)..ago(1d))
+    | extend sld1 = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld1) by ClientIP) on ClientIP
+| join kind = leftouter (nxDomainDnsEvents
+    | where TimeGeneratedUtc between(ago(3d)..ago(2d))
+    | extend sld2 = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld2) by ClientIP) on ClientIP
+| join kind = leftouter (nxDomainDnsEvents
+    | where TimeGeneratedUtc between(ago(4d)..ago(3d))
+    | extend sld3 = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld3) by ClientIP) on ClientIP
+| join kind = leftouter (nxDomainDnsEvents
+    | where TimeGeneratedUtc between(ago(5d)..ago(4d))
+    | extend sld4 = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld4) by ClientIP) on ClientIP
+| join kind = leftouter (nxDomainDnsEvents
+    | where TimeGeneratedUtc between(ago(6d)..ago(5d))
+    | extend sld5 = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld5) by ClientIP) on ClientIP
+| join kind = leftouter (nxDomainDnsEvents
+    | where TimeGeneratedUtc between(ago(7d)..ago(6d))
+    | extend sld6 = tostring(split(Name, ".")[-2])
+    | summarize dcount(sld6) by ClientIP) on ClientIP
 | join kind = inner (nxDomainDnsEvents | summarize by Name, ClientIP) on ClientIP
-| summarize sampleNXDomainList=makelist(Name, 10)  by ClientIP, dcount_sld
+| summarize sampleNXDomainList=makelist(Name, 100)  by ClientIP, dcount_sld, dcount_sld1, dcount_sld2, dcount_sld3, dcount_sld4, dcount_sld5, dcount_sld6
