@@ -1,27 +1,22 @@
-// Name: Most Prevalent Linux Hosts With This IPAddress
-// Description: Top 10 Hosts and ProcessName with this IPAddress in the range of +-6h
-//
-// Id: 6da4fb56-d0c2-4fa9-bca1-f856ff2de1bd
-//
-// Entity: IPAddress
-// Input: IPAddress
-// Output: Hosts, ProcessName
-//
-// QueryPeriod: +-6h, change as needed
-//
-// Data Source: Syslog
-//
+// Id: 41146c58-ffc6-47ff-975e-f85013629dfd
+// DisplayName: Most Prevalent Linux Hosts With This IPAddress
+// Description: Top 10 Hosts and ProcessName with this IPAddress (set time range to +-6h when running the query)
+// InputEntityType: Ip
+// InputFields: [Address]
+// OutputEntityTypes: [Host]
+// QueryPeriodBefore: 6h
+// QueryPeriodAfter: 6h
+// DataSource: #Syslog
 // Tactics: #Execution, #Persistence, #Discovery, #Lateral Movement, #Collection
-//
-let GetSysLogEventsWithIP = (suspiciousEventTime:datetime, v_ipAddress:string){
-let v_StartTime = suspiciousEventTime-6h;
-let v_EndTime = suspiciousEventTime+6h;
+
+let GetSysLogEventsWithIP = (v_IP_Address:string){
 Syslog
-| where EventTime between (v_StartTime .. v_EndTime)
-| where HostIP has v_ipAddress
-| summarize min(EventTime), max(EventTime), count() by Computer, HostIP, ProcessName, SeverityLevel
+| where HostIP has v_IP_Address
+| extend info = pack("HostIP", HostIP, "ProcessName", ProcessName, "SeverityLevel", SeverityLevel)
+| summarize min(EventTime), max(EventTime), count(), Host_Aux_info = makeset(info) by Computer
 | top 10 by count_ desc nulls last 
-| project StartTimeUtc = min_EventTime, EndTimeUtc = max_EventTime, Computer, HostIP, ProcessName, SeverityLevel 
+| project StartTimeUtc = min_EventTime, EndTimeUtc = max_EventTime, Computer, Host_Aux_info
+| project-rename Host_UnstructuredName=Computer
 };
-// change datetime value and <ipaddress> value below
-GetSysLogEventsWithIP(datetime('2019-02-06T10:36:07Z'), "<ipaddress>")
+// change <Address> value below
+GetSysLogEventsWithIP('<Address>')

@@ -1,0 +1,48 @@
+// Name: Time Series Anomaly detection for Process execution frequency
+// Description: This query will identify anamalous spike in frequency of executions of sensitive processes which are often leveraged as attack vector. 
+// The query leverages KQL built-in anomaly detection algorithm find large deviations from baseline pattern. 
+// Any sudden increase in execution frequency of sensitice procecesss should be further investigated for presence of malicious activity by threat actor.
+// Tune the values from 1.5 to 3 in series_decompose_anomalies for a far outlier or based on custom threshold value for score.
+//
+// Id: 2c55fe7a-b06f-4029-a5b9-c54a2320d7b8
+//
+// Severity: Medium
+//
+// QueryFrequency: 1h
+//
+// QueryPeriod: 30d
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// DataSource: #SecurityEvent
+//
+// Tactics: #Execution, #InitialAccess
+//
+let starttime = 30d;
+let endtime = 1d;
+let timeframe = 1h;
+let TotalEventsThreshold = 5;
+let ExeList = dynamic(
+["powershell.exe","cmd.exe","wmic.exe","psexec.exe","cacls.exe","rundll.exe"]);
+let TimeSeriesData= 
+SecurityEvent
+| where EventID == "4688" | extend Process = tolower(Process)
+| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+| where Process in (ExeList)
+| project TimeGenerated,Computer, AccountType, Account, Process
+| make-series Total=count() on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by Process;
+let TimeSeriesAlerts=TimeSeriesData
+| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 1.5, -1, 'linefit')
+| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+| where anomalies > 0
+| project Process,TimeGenerated, Total, baseline, anomalies, score
+| where Total > TotalEventsThreshold;
+TimeSeriesAlerts
+| join (
+SecurityEvent
+| where EventID == "4688" | extend Process = tolower(Process)
+| summarize CommandlineCount=count() by bin(TimeGenerated, 1h),Process, CommandLine, Computer, Account
+) on Process, TimeGenerated | extend AnomalyTimeattheHour = TimeGenerated 
+| project AnomalyTimeattheHour, Computer, Account,Process, CommandLine ,CommandlineCount, Total, baseline, anomalies , score 

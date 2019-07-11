@@ -1,28 +1,24 @@
-// Name: User Account Failed logons
-// Description: Failed logons by a given user during the time of or recently after compromise and in the range of +-1h
-//
-// Entity: #User
-// Input: Username, Account
-// Output: Hosts
-//
-// QueryPeriod:  +-1h default, change as needed
-//
-// Data Source: #SecurityEvent
-//
+// Id: 84375346-c3f0-4926-ae48-a156010c67e3
+// DisplayName: User Account Failed logons
+// Description: Failed logons by a given user during the time of or recently after compromise (set time range to +-1h when running the query)
+// InputEntityType: Account
+// InputFields: [Name]
+// OutputEntityTypes: [Host]
+// QueryPeriodBefore: 1h
+// QueryPeriodAfter: 1h
+// DataSource: #SecurityEvent
 // Tactics: #Discovery, #LateralMovement
-//
-let GetAllLogonsForUser = (suspiciousEventTime:datetime, v_User:string){
-//+-1h for any logons
-let v_StartTime = suspiciousEventTime-1h;
-let v_EndTime = suspiciousEventTime+1h;
+
+let GetAllLogonsForUser = (v_Account_Name:string){
 SecurityEvent 
-| where TimeGenerated between (v_StartTime .. v_EndTime)
 | where EventID == 4625
-| where AccountType == "User"
-| where tolower(Account) contains tolower(v_User)
-| summarize min(TimeGenerated), max(TimeGenerated) by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
-| project min_TimeGenerated, max_TimeGenerated, EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
-| top 10 by min_TimeGenerated asc nulls last 
+| where AccountType == 'User'
+| where tolower(Account) contains tolower(v_Account_Name)
+| extend info = pack("EventID", EventID, "Account", Account, "LogonTypeName", LogonTypeName, "SubStatus", SubStatus, "AccountType", AccountType, "WorkstationName", WorkstationName, "IpAddress", IpAddress)
+| summarize min(TimeGenerated), max(TimeGenerated), Host_Aux_info = makeset(info) by Computer
+| project min_TimeGenerated, max_TimeGenerated, Computer, Host_Aux_info
+| project-rename Host_UnstructuredName=Computer
+| top 10 by min_TimeGenerated asc nulls last
 };
-// change datetime value and <username> value below
-GetAllLogonsForUser(datetime('2019-01-20T10:02:51.000'), tolower("<username>"))
+// change <Name> value below
+GetAllLogonsForUser(tolower('<Name>'))

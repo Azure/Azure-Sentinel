@@ -1,0 +1,60 @@
+// Name: Suspect Application Consent
+// Description: This will alert when the "Consent to application" operation occurs by a user that
+// has not done this operation before or rarely does this.
+// This could indicate that permissions to access the listed Azure App were provided to a 
+// malicious actor. 
+// Consent to application, Add service principal and Add OAuth2PermissionGrant should typically
+// be rare events. 
+// This may help detect the Oauth2 attack that can be initiated by this publicly available tool - 
+// https://github.com/fireeye/PwnAuth
+// For further information on AuditLogs please see 
+// https://docs.microsoft.com/en-us/azure/active-directory/reports-monitoring/reference-audit-activities
+//
+// Id: 83ba3057-9ea3-4759-bf6a-933f2e5bc7ee
+//
+// DataSource: #AuditLogs
+//
+// Severity: Medium
+//
+// QueryFrequency: 1d
+//
+// QueryPeriod: 7d
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 3
+//
+// Tactics: #Persistence, #LateralMovement, #Collection
+//
+let current = 1d;
+let auditLookback = 7d;
+// Setting threshold to 3 as a default, change as needed.  
+// Any operation that has been initiated by a user or app more than 3 times in the past 30 days will be excluded
+let threshold = 3;
+// Gather initial data from lookback period, excluding current, adjust current to more than a single day if no results
+let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
+// 2 other operations that can be part of malicious activity in this situation are 
+// "Add OAuth2PermissionGrant" and "Add service principal", extend the filter below to capture these too
+| where OperationName == "Consent to application"
+| extend InitiatedBy= iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
+| extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
+| summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedBy, TargetAppName
+// only including operations by initiated by a user or app that is above the threshold so we see rare along with has not occurred in last 30 days
+| where OperationCount > threshold
+;
+// Gather current period of audit data
+let RecentConsent = AuditLogs | where TimeGenerated >= ago(current)
+| where OperationName == "Consent to application"
+| extend InitiatedBy= iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
+| extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
+| parse TargetResources.[0].modifiedProperties with * "ConsentType: " ConsentType "]" *
+| project TimeGenerated, InitiatedBy, TargetAppName, Category, OperationName, ConsentType , CorrelationId, Type;
+// Exclude previously seen audit activity for "Consent to application" that was seen in the lookback period
+// First for rare InitiatedBy
+let RareConsentBy = RecentConsent | join kind= leftanti AuditTrail on OperationName, InitiatedBy 
+| extend Reason = "Previously unseen user consenting";
+// Second for rare TargetAppName
+let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetAppName 
+| extend Reason = "Previously unseen app granted consent";
+RareConsentBy | union RareConsentApp
+| summarize Reason = makeset(Reason) by InitiatedBy, TargetAppName, Category, OperationName, ConsentType , CorrelationId, Type

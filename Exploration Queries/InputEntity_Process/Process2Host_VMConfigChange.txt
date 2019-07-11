@@ -1,0 +1,46 @@
+// Id: e32a48a9-bf82-4cec-ba94-9ec406a69ef8
+// Name: 10 most recent VM configuration changes based on process
+// Description: Provides the 10 most recent changes to any VM based on the process name provided
+// InputEntityType: Process
+// InputFields: [Process, ServiceFileName]
+// OutputEntityTypes: [Host]
+// QueryPeriodBefore: 1d
+// QueryPeriodAfter: 1d
+// DataSource: ConfigurationChange
+// Tactics: #Persistence, #Execution
+
+let ConfigChange = (v_Process_ImageFile_Name:string, v_Service_FileName:string,  ) {ConfigurationChange | where TimeGenerated >= ago(1d)
+| where ConfigChangeType != "Software" 
+| extend Process = case(ConfigChangeType == "Registry" and ValueData contains ".exe", ValueData,
+ConfigChangeType == "WindowsServices", SvcPath,
+ConfigChangeType == "Files" and (FileSystemPath contains ".exe" or FileSystemPath contains ".bat" or FileSystemPath contains ".cmd"), FileSystemPath,
+ConfigChangeType == "Daemons", SvcPath,
+""
+ )
+// Removing Common processes to improve query performance
+| where Process !contains ":\\Windows\\System32\\svchost.exe" and Process !contains ":\\Windows\\system32\\wbem\\WmiApSrv.exe" 
+and Process !contains ":\\Windows\\CCM\\CcmExec.exe" and Process !contains "Windows Defender Antivirus" 
+and Process !contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\"
+| where Process contains v_Process_ImageFile_Name or v_Service_FileName
+| parse FileContentChecksum with * "Hash=" Hash " " *
+| parse PreviousFileContentChecksum with * "Hash=" Hash " " *
+| extend Changes = case( 
+ConfigChangeType == "Registry" and ChangeCategory == "Modified", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "RegistryKey" , RegistryKey, "ValueName", ValueName, "ValueData", ValueData, "PreviousValueData", PreviousValueData),
+ConfigChangeType == "Registry" and ChangeCategory == "Added", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "RegistryKey" , RegistryKey, "ValueName", ValueName, "ValueData", ValueData),
+ConfigChangeType == "Registry" and ChangeCategory == "Removed", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "RegistryKey" , RegistryKey, "ValueName", ValueName, "PreviousValueData", PreviousValueData),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Modified" and SvcChangeType == "Path", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcChangeType", SvcChangeType, "SvcName", SvcName, "SvcPath", SvcPath, "SvcPreviousPath", SvcPreviousPath),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Modified" and SvcChangeType == "Runlevels", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcChangeType", SvcChangeType, "SvcName", SvcName, "SvcPath", SvcPath, "SvcRunlevels", SvcRunlevels,"SvcPreviousRunlevels", SvcPreviousRunlevels),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Modified" and SvcChangeType == "StartupType", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcChangeType", SvcChangeType, "SvcName", SvcName, "SvcPath", SvcPath, "SvcStartupType", SvcStartupType, "SvcPreviousStartupType", SvcPreviousStartupType),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Modified" and SvcChangeType == "State", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcChangeType", SvcChangeType, "SvcName", SvcName, "SvcPath", SvcPath, "SvcState", SvcState, "SvcPreviousState", SvcPreviousState),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Modified" and SvcChangeType == "State StartupType", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcChangeType", SvcChangeType, "SvcName", SvcName, "SvcPath", SvcPath, "SvcState", SvcState, "SvcPreviousState", SvcPreviousState, "SvcStartupType", SvcStartupType, "SvcPreviousStartupType", SvcPreviousStartupType),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Added", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcName", SvcName, "SvcPath", SvcPath, "SvcState", SvcState, "SvcStartupType", SvcStartupType),
+ConfigChangeType in ("WindowsServices","Daemons") and ChangeCategory == "Removed", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "SvcName", SvcName, "SvcPreviousPath", SvcPreviousPath, "SvcPreviousState", SvcPreviousState, "SvcPreviousStartupType", SvcPreviousStartupType),
+ConfigChangeType == "Files" and ChangeCategory == "Added", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "FileSystemPath", FileSystemPath, "DateCreated", DateCreated, "DateModified", DateModified, "Hash", Hash),
+ConfigChangeType == "Files" and ChangeCategory == "Removed", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "FileSystemPath", FileSystemPath, "DateCreated", PreviousDateCreated, "DateModified", PreviousDateModified, "Hash", Hash),
+ConfigChangeType == "Files" and ChangeCategory == "Modified", pack("ConfigChangeType", ConfigChangeType, "ChangeCategory", ChangeCategory, "FileSystemPath", FileSystemPath, "FieldsChanged", FieldsChanged, "DateCreated", PreviousDateCreated, "DateModified", PreviousDateModified, "Hash", Hash),
+"")
+| extend Host_HostName = tostring(split(Computer, ".")[0]), Host_DnsDomain = strcat_array(array_slice(split(Computer,'.'),1,256),'.')
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Process_Aux_ConfigChangeDetail = makeset(Changes) by Host_HostName, Host_DnsDomain
+| top 10 by StartTimeUtc desc
+};
+ConfigChange('<Process_ImageFile>', '<Service_FileName>')

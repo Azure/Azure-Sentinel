@@ -36,7 +36,7 @@ foreach ($query in $queriesFiles) {
         $description = ""
         $tactics = @()
         $queryText = ($content.Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries) | Where-Object { $_ -notmatch "^\/\/" }) -join "`n"
-        $createdTimeUtc = (git log --format=%aI ''$query'')[-1]
+        $createdTimeUtc = @(git log --format=%aI ''$query'')[-1]
 
         if ($content -match "(?m)Name: (.*)\r\n") {
             $name = $matches[1]
