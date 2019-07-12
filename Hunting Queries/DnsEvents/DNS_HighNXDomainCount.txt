@@ -21,25 +21,28 @@ let nxDomainDnsEvents = Dns
 //
 let firstQT = (nxDomainDnsEvents
 | where TimeGeneratedUtc between (ago(7d)..ago(2d))
-| summarize domainCount = count(Name) by ClientIP, bin(TimeGeneratedUtc, 1d)
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
 | project SearchList = (domainCount), ClientIP
 | summarize percentiles(SearchList, 25) by ClientIP);
 //
 let thirdQT = (nxDomainDnsEvents
 | where TimeGeneratedUtc between (ago(7d)..ago(2d))
-| summarize domainCount = count(Name) by ClientIP, bin(TimeGeneratedUtc, 1d)
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
 | project SearchList = (domainCount), ClientIP
 | summarize percentiles(SearchList, 75) by ClientIP);
 //
 let threshold = (firstQT
 | join thirdQT on ClientIP
-| extend IPthreshold = percentile_SearchList_75 + (1.5*(percentile_SearchList_75 - percentile_SearchList_25))
+| extend IPthreshold = percentile_SearchList_75 + (1.5*exp(3)*(percentile_SearchList_75 - percentile_SearchList_25))
 | project ClientIP, IPthreshold);
 //
 let Tab1 = (
 nxDomainDnsEvents
 | where TimeGeneratedUtc > ago(1d)
-| summarize TotalNXLookups=count(Name) by ClientIP
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| summarize TotalNXLookups=dcount(truncatedDomain) by ClientIP
 | sort by TotalNXLookups desc
 | join ['threshold'] on ClientIP
 | where TotalNXLookups > IPthreshold // Comment this line in order to view results filtered by Global Threshold only. 
@@ -55,36 +58,38 @@ nxDomainDnsEvents
 //
 let thirdQ = toscalar (nxDomainDnsEvents
 | where TimeGeneratedUtc > ago(1d)
-| summarize count(Name) by ClientIP
-| summarize event_count = count() by count_Name 
-| sort by count_Name asc
-| summarize percentilesw(count_Name, event_count, 75)); 
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
+| summarize event_count = count() by domainCount 
+| sort by domainCount asc
+| summarize percentilesw(domainCount, event_count, 75)); 
 //
 let firstQ = toscalar(nxDomainDnsEvents
 | where TimeGeneratedUtc > ago(1d)
-| summarize count(Name) by ClientIP
-| summarize event_count = count() by count_Name
-| sort by count_Name asc
-| summarize perc2 = percentilesw(count_Name, event_count, 25));
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
+| summarize event_count = count() by domainCount
+| sort by domainCount asc
+| summarize perc2 = percentilesw(domainCount, event_count, 25));
 //
 let GlobalThreshold = toscalar(thirdQ + (1.5*exp(3)*(thirdQ - firstQ)));
 //
 let Tab2 = (
 nxDomainDnsEvents
 | where TimeGeneratedUtc > ago(1d)
-| summarize TotalNXLookups = count(Name) by ClientIP
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| summarize TotalNXLookups = dcount(truncatedDomain) by ClientIP
 | sort by TotalNXLookups desc
 | where TotalNXLookups > GlobalThreshold // Comment this line in order to view results filtered by IPThreshold only. 
 | join kind = leftouter (nxDomainDnsEvents
     | where TimeGeneratedUtc > ago(1d)
     | extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
-    | summarize domainCount=count() by truncatedDomain, ClientIP
+    | summarize domainCount=dcount(Name) by truncatedDomain, ClientIP
     | sort by domainCount desc
     | project truncatedDomain= strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
     ) on ClientIP
-| summarize SLDs_TotalLookups = makelist(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
+| summarize SLDs_TotalLookups = makelist(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold//, dcount_sld1, dcount_sld2, dcount_sld3, dcount_sld4, dcount_sld5, dcount_sld6
 | sort by TotalNXLookups desc);
 Tab1
 | join Tab2 on ClientIP
 | project ClientIP, TotalNXLookups, IPthreshold, GlobalThreshold, SLDs_TotalLookups, UniqueSLDsCount
-
