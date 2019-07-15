@@ -45,10 +45,10 @@ nxDomainDnsEvents
 | where TotalNXLookups > IPthreshold 
 | join kind = leftouter (nxDomainDnsEvents
     | where TimeGeneratedUtc > ago(1d)
-    | summarize domainCount=count() by truncatedDomain, ClientIP
+    | summarize domainCount=dcount(Name) by truncatedDomain, ClientIP
     | project SearchList = strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
     ) on ClientIP
-| summarize SLDs_TotalLookups = makelist(SearchList) by ClientIP, TotalNXLookups, IPthreshold
+| summarize SLDs_DistinctLookups = makelist(SearchList) by ClientIP, TotalNXLookups, IPthreshold
 | sort by TotalNXLookups desc);
 //
 let quartileFunctionForGlobalThreshold = view (mypercentile:long, startTimeSpan:timespan) {
@@ -56,6 +56,7 @@ let quartileFunctionForGlobalThreshold = view (mypercentile:long, startTimeSpan:
 | where TimeGeneratedUtc > ago(startTimeSpan)
 | summarize domainCount = dcount(truncatedDomain) by ClientIP
 | summarize event_count = count() by domainCount
+| sort by domainCount asc
 | summarize perc2 = percentilesw(domainCount, event_count, mypercentile));
 };
 let firstQ = toscalar(quartileFunctionForGlobalThreshold(25, 1d));
@@ -74,8 +75,8 @@ nxDomainDnsEvents
     | summarize domainCount=dcount(Name) by truncatedDomain, ClientIP
     | project truncatedDomain= strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
     ) on ClientIP
-| summarize SLDs_TotalLookups = makelist(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
+| summarize SLDs_DistinctLookups = makelist(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
 | sort by TotalNXLookups desc);
 FilterOnIPThreshold_MainTable
 | join FilterOnGlobalThreshold_MainTable on ClientIP
-| project ClientIP, TotalNXLookups, IPthreshold, GlobalThreshold, SLDs_TotalLookups, UniqueSLDsCount
+| project ClientIP, TotalNXLookups, IPthreshold, GlobalThreshold, SLDs_DistinctLookups, UniqueSLDsCount
