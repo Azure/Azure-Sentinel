@@ -1,6 +1,7 @@
 // Name: DNS high NXDomain count
 // Id:543e1ec6-ee5e-4368-aaa6-405f0551ba5c
-// 
+// Author: Vani Asawa
+//
 // Description: Clients with a high NXDomain count could be indicative of a DGA (cycling through possible C2 domains
 // where most C2s are not live). 
 //
@@ -10,7 +11,7 @@
 //
 // NXDomain events, with some likely uninteresting records filtered out
 //
-let nxDomainDnsEvents = DnsEvents
+let nxDomainDnsEvents = Dns
 | where ResultCode == "3" 
 | where QueryType in ("A", "AAAA")
 | where ClientIP != "127.0.0.1"
@@ -20,24 +21,20 @@ let nxDomainDnsEvents = DnsEvents
 | extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
 | where mytld !in ("arris","ati","virtusa","unknowndomain","onion","corp","domain","local","localdomain","host","home","gateway","lan","services","hub","domain.name","WirelessAP","Digicom-ADSL","OpenDNS","dlinkrouter","Dlink","ASUS","device","router","Belkin","DHCP","Cisco");
 //
-let firstQT = (nxDomainDnsEvents
-| where TimeGeneratedUtc between (ago(7d)..ago(2d))
+let quartileFunction = view (mypercentile:long, startTimeSpan:timespan, endTimeSpan:timespan) {
+(nxDomainDnsEvents
+| where TimeGeneratedUtc between (ago(startTimeSpan)..ago(endTimeSpan))
+| extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
 | summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
 | project SearchList = (domainCount), ClientIP
-| summarize percentiles(SearchList, 25) by ClientIP);
-//
-let thirdQT = (nxDomainDnsEvents
-| where TimeGeneratedUtc between (ago(7d)..ago(2d))
-| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
-| project SearchList = (domainCount), ClientIP
-| summarize percentiles(SearchList, 75) by ClientIP);
-//
-// Could be adjusted for based on the skewness of the IPthreshold distribution per IP - https://wis.kuleuven.be/stat/robust/papers/2008/outlierdetectionskeweddata-revision.pdf
+| summarize qPercentiles = percentiles(SearchList, mypercentile) by ClientIP);
+};
+let firstQT = quartileFunction(25, 7d, 2d) | project-rename percentile_SearchList_25 = qPercentiles;
+let thirdQT = quartileFunction(75, 7d, 2d) | project-rename percentile_SearchList_75 = qPercentiles;
 let threshold = (firstQT
 | join thirdQT on ClientIP
 | extend IPthreshold = percentile_SearchList_75 + (1.5*exp(3)*(percentile_SearchList_75 - percentile_SearchList_25))
 | project ClientIP, IPthreshold);
-//
 let Tab1 = (
 nxDomainDnsEvents
 | where TimeGeneratedUtc > ago(1d)
@@ -55,23 +52,17 @@ nxDomainDnsEvents
 | summarize SLDs_TotalLookups = makelist(SearchList) by ClientIP, TotalNXLookups, IPthreshold
 | sort by TotalNXLookups desc);
 //
-let thirdQ = toscalar (nxDomainDnsEvents
-| where TimeGeneratedUtc > ago(1d)
-| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
-| summarize event_count = count() by domainCount 
-| sort by domainCount asc
-| summarize percentilesw(domainCount, event_count, 75)); 
-//
-let firstQ = toscalar(nxDomainDnsEvents
-| where TimeGeneratedUtc > ago(1d)
-| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, 1d)
+let quartileFunction2 = view (mypercentile:long, startTimeSpan:timespan) {
+(nxDomainDnsEvents
+| where TimeGeneratedUtc > ago(startTimeSpan)
+| summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGeneratedUtc, startTimeSpan)
 | summarize event_count = count() by domainCount
 | sort by domainCount asc
-| summarize perc2 = percentilesw(domainCount, event_count, 25));
-//
-// https://wis.kuleuven.be/stat/robust/papers/2008/outlierdetectionskeweddata-revision.pdf
+| summarize perc2 = percentilesw(domainCount, event_count, mypercentile));
+};
+let firstQ = toscalar(quartileFunction2(25, 1d));
+let thirdQ = toscalar(quartileFunction2(75, 1d));
 let GlobalThreshold = toscalar(thirdQ + (1.5*exp(3)*(thirdQ - firstQ)));
-//
 let Tab2 = (
 nxDomainDnsEvents
 | where TimeGeneratedUtc > ago(1d)
