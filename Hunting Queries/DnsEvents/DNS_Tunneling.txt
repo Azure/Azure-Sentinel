@@ -1,0 +1,50 @@
+// Name: DNS Tunneling
+// Author: Vani Asawa
+//
+// Description: 
+// Searches for second levels domains (slds) within an IP that might be impacted by tunneling, based on mathematically computed subdomain thresholds
+//
+// Data Source: #DnsEvents
+//
+//
+let nxDomainDnsEvents = DnsEvents
+| where QueryType in ("A", "AAAA")
+| where ClientIP != "127.0.0.1"
+| where Name !contains "/"
+| where Name contains "."
+| extend mytld = tostring(split(Name, '.')[-1])
+| where mytld !in ("arris","ati","virtusa","unknowndomain","onion","corp","domain","local","localdomain","host","home","gateway","lan","services","hub","domain.name","WirelessAP","Digicom-ADSL","OpenDNS","dlinkrouter","Dlink","ASUS","device","router","Belkin","DHCP","Cisco")
+| extend sld = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])))
+| where Computer !has sld;
+//
+let DnsNumberOfSubdomains = (
+nxDomainDnsEvents
+| where TimeGeneratedUtc > ago(1d)
+| summarize SubdomainCountperSLDperIP = dcount(Name) by sld, ClientIP
+| where SubdomainCountperSLDperIP > 10
+| project sld, SubdomainCount = SubdomainCountperSLDperIP, ClientIP);
+//
+let quartileFunctionperDNSperIP = view (mypercentile:long, startTimeSpan:timespan, endTimeSpan:timespan) {
+(DnsNumberOfSubdomains
+| join kind = inner(nxDomainDnsEvents) on ClientIP, sld
+| where TimeGeneratedUtc between (ago(startTimeSpan)..ago(endTimeSpan))
+| summarize subdomainperSLDCountperDay = dcount(Name) by sld, ClientIP, bin(TimeGeneratedUtc, 1d), SubdomainCount
+| project Countlist = subdomainperSLDCountperDay, ClientIP, sld, SubdomainCount
+| summarize qPercentiles = percentiles(Countlist, mypercentile) by ClientIP, sld, SubdomainCount);
+};
+let firstQuartileperDNSperIP = quartileFunctionperDNSperIP(25, 7d, 2d) | project-rename percentile_SearchList_25 = qPercentiles;
+let thirdQuartileperDNSperIP = quartileFunctionperDNSperIP(75, 7d, 2d) | project-rename percentile_SearchList_75 = qPercentiles;
+//
+// The IP threshold could be adjusted for based on the skewness of the IPthreshold distribution per IP - https://wis.kuleuven.be/stat/robust/papers/2008/outlierdetectionskeweddata-revision.pdf
+let thresholdperDNSperIP = (firstQuartileperDNSperIP
+| join thirdQuartileperDNSperIP on ClientIP, sld
+| extend sldperIPthreshold = percentile_SearchList_75 + (1.5*exp(3)*(percentile_SearchList_75 - percentile_SearchList_25))
+| project ClientIP, sld, sldperIPthreshold, SubdomainCount);
+//
+thresholdperDNSperIP
+| where SubdomainCount > sldperIPthreshold
+| join kind = inner (nxDomainDnsEvents
+    | where TimeGeneratedUtc > ago(1d)
+    | summarize make_list(Name, 100) by sld, ClientIP) on sld, ClientIP
+| project ClientIP, sld, sldperIPthreshold, SubdomainCount, list_Name
+ 
