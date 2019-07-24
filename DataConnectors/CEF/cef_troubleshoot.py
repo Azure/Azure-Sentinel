@@ -1,4 +1,31 @@
 #! /usr/local/bin/python3
+# ----------------------------------------------------------------------------
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# ----------------------------------------------------------------------------
+# This script is used to troubleshoot the process of sending CEF messages to the
+# workspace.
+# In this script we check the configuration of the daemon and the OMS linux agent.
+# We send mock data to validate correctness of the pipeline
+# Supported OS:
+#   64-bit
+#       CentOS 6 and 7
+#       Amazon Linux 2017.09
+#       Oracle Linux 6 and 7
+#       Red Hat Enterprise Linux Server 6 and 7
+#       Debian GNU/Linux 8 and 9
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       SUSE Linux Enterprise Server 12
+#   32-bit
+#       CentOS 6
+#       Oracle Linux 6
+#       Red Hat Enterprise Linux Server 6
+#       Debian GNU/Linux 8 and 9
+#       Ubuntu Linux 14.04 LTS and 16.04 LTS
+# For more information please check the OMS-Agent-for-Linux documentation.
+#
+# Daemon versions:
+#   Syslog-ng: 2.1 - 3.22.1
+#   Rsyslog: v8
 import sys
 import select
 import subprocess
@@ -570,6 +597,7 @@ def handle_rsyslog(workspace_id):
 
 def main():
     print_notice("Note this script should be run in elevated privileges")
+    print_notice("Please validate you are sending CEF messages to agent machine.")
     if len(sys.argv) != 2:
         print_error("The installation script is expecting 1 arguments:")
         print_error("\t1) workspace id")
