@@ -1,4 +1,29 @@
 #! /usr/local/bin/python3
+# ----------------------------------------------------------------------------
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# ----------------------------------------------------------------------------
+# This script is used to install CEF agent on a linux machine an configure the
+# syslog daemon on the linux machine.
+# Supported OS:
+#   64-bit
+#       CentOS 6 and 7
+#       Amazon Linux 2017.09
+#       Oracle Linux 6 and 7
+#       Red Hat Enterprise Linux Server 6 and 7
+#       Debian GNU/Linux 8 and 9
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       SUSE Linux Enterprise Server 12
+#   32-bit
+#       CentOS 6
+#       Oracle Linux 6
+#       Red Hat Enterprise Linux Server 6
+#       Debian GNU/Linux 8 and 9
+#       Ubuntu Linux 14.04 LTS and 16.04 LTS
+# For more information please check the OMS-Agent-for-Linux documentation.
+#
+# Daemon versions:
+#   Syslog-ng: 2.1 - 3.22.1
+#   Rsyslog: v8
 import subprocess
 import time
 import sys
