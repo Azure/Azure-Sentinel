@@ -1,0 +1,55 @@
+// Name: Failed Login Attempt by Expired account
+// Description: This query looks at Account Logon events found through Windows Event Id's as well as SigninLogs to discover login attempts by accounts that have expired. 
+// 
+// Id: 562900b1-39c4-4baf-a050-9cad1641db35
+// 
+// DataConnector: #SecurityEvents #AzureActiveDirectory; DataTypes: #SecurityEvent  #SigninLogs
+//
+// Tactics: #Discovery
+(union isfuzzy=true
+(SecurityEvent
+| where EventID == 4625
+//4625: An account failed to log on
+| where AccountType == 'User' 
+| where SubStatus == '0xc0000193' 
+| extend Reason = 
+case
+( SubStatus == '0xc0000193', 'Windows EventID (4625) - Account has expired', "Unknown")
+| project Account,  Reason , TimeGenerated
+),
+(
+SecurityEvent
+| where EventID == 4769
+//4769: A Kerberos service ticket was requested ( Kerberos Auth)
+| parse EventData with * 'Status">' Status "<" *
+| parse EventData with * 'TargetUserName">' TargetUserName "<" *
+| where Status == '0x12'
+| where TargetUserName !has "$"  and isnotempty(TargetUserName)
+| extend Reason = 
+case(
+Status == '0x12', 'Windows EventID (4769) - Account disabled, expired, locked out',
+'Unknown'), Account = TargetUserName 
+| project Account, Reason , TimeGenerated
+),
+(
+SecurityEvent
+| where EventID == 4776 
+// 4776: The domain controller attempted to validate the credentials for an account ( NTLM Auth)
+| where Status == "0xc0000193"
+| extend Reason = 
+case(
+ErrorCode == '0xc0000193', 'Windows EventID (4776) - Account has expired',
+'Unknown'), Account = TargetAccount 
+| project Account,  Reason , TimeGenerated 
+) ,
+(
+SigninLogs
+| where ResultType == "50057" 
+| extend Reason = 
+case(
+ResultType == '50057', 'SigninLogs( Result Code- 50057) - User account is disabled. The account has been disabled by an administrator.',
+'Unknown'), Account = UserPrincipalName 
+| project Account, Reason , TimeGenerated
+) )
+| summarize StartTimeUtc = min(TimeGenerated), EndTImeUtc = max(TimeGenerated), count() by Account, Reason
+| order by count_ desc 
