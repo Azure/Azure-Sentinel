@@ -4,34 +4,34 @@
 # license information.
 # --------------------------------------------------------------------------
 """
-cryto_utility module:
-This module provides encryption and decryption functionalities
+obfuscation_utility module:
+This module provides obfuscation functionalities
 """
 
 from cryptography.fernet import Fernet
 
 
-class CryptoUtility():
-    """ This class provides utility methods to encrypt and decrypt """
-    def __init__(self, key):
-        self.key = key
+class ObfuscationUtility():
+    """ This class provides utility methods for obfuscation """
+    def __init__(self, seed):
+        self.seed = seed
 
     @staticmethod
-    def generate_key():
-        """ Generate key """
+    def generate_seed():
+        """ Generate seed """
 
         return Fernet.generate_key()
 
-    def encrypt_text(self, text):
-        """ Encrypt input text using key """
+    def obfuscate_text(self, text):
+        """ Obfuscate input text using key """
 
-        fernet = Fernet(self.key)
+        fernet = Fernet(self.seed)
         en_text = fernet.encrypt(text)
         return en_text
 
-    def decrypt_text(self, en_text):
-        """ Decrypt input text using key """
+    def deobfuscate_text(self, en_text):
+        """ Deobfuscate input text using key """
 
-        fernet = Fernet(self.key)
+        fernet = Fernet(self.seed)
         re_text = fernet.decrypt(en_text)
         return re_text.decode('utf-8')
