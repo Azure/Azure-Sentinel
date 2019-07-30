@@ -3,5 +3,5 @@ SentinelAnomalyLookup: This package is developed for Azure Sentinel Anomaly look
 """
 
 # __init__.py
-from .anomaly_lookup import *
-from .anomaly_lookup_view_helper import *
+from .anomaly_lookup_view_helper import AnomalyLookupViewHelper
+from .anomaly_finder import AnomalyQueries, AnomalyFinder
