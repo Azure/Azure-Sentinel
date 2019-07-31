@@ -106,7 +106,7 @@ class AnomalyFinder():
                 )
 
             query = query[:-2] # drop the last or
-            query += " | take 1000" # limit the output size
+            query += " | take 1000; " # limit the output size
             query = query.replace("\\", "\\\\")
 
             queries += query
