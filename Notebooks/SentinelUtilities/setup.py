@@ -15,7 +15,7 @@ with open("LICENSE.txt", "r") as fh:
 
 setuptools.setup(
     name="Azure-Sentinel-Utilities",
-    version="0.3.1",
+    version="0.3.2",
     author="Azure Sentinel Notebooks Devs",
     author_email="zhzhao@microsoft.com",
     description="AZURE SENTINEL NOTEBOOKS PYTHON TOOLS: \
