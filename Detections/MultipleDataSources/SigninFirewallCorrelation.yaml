@@ -1,37 +1,37 @@
-// Name: SigninFirewallCorrelation
-//
-// Id: 157c0cfc-d76d-463b-8755-c781608cdc1a
-//
-// Description:
-// Correlate IPs blocked by a firewall appliance with successful Azure Active Directory signins. 
-// Because the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect
-// and could indicate compromise of the password for that user account.
-//
-// Severity: Medium
-//
-// QueryFrequency: 24h
-//
-// QueryPeriod: 24h
-//
-// AlertTriggerOperator: gt
-//
-// AlertTriggerThreshold: 0
-//
-// DataSource: #CommonSecurityLog, #SigninLogs
-//
-// Tactics: #InitialAccess
-//
-let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.'; 
-CommonSecurityLog
-| where DeviceVendor == "Cisco"
-| where DeviceAction == "denied"
-| extend SourceIPType = iff(SourceIP matches regex PrivateIPregex,"private" ,"public" )
-| where SourceIPType == "public"
-| summarize count() by SourceIP
-| join (
-    // Successful signins from IPs blocked by the firewall solution are suspect
-    // Include fully successful sign-ins, but also ones that failed only at MFA stage
-    // as that supposes the password was sucessfully guessed.
-   SigninLogs
-   | where ResultType in ("0", "50574", "50576") 
-) on $left.SourceIP = $right.IPAddress;
+﻿id: 157c0cfc-d76d-463b-8755-c781608cdc1a
+name: SigninFirewallCorrelation
+description: |
+  Correlate IPs blocked by a firewall appliance with successful Azure Active Directory signins. 
+  Because the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect
+  and could indicate compromise of the password for that user account.
+severity: Medium
+requiredDataConnectors:
+  - dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+     - SigninLogs
+queryFrequency: 24h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: |
+
+  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.'; 
+  CommonSecurityLog
+  | where DeviceVendor == "Cisco"
+  | where DeviceAction == "denied"
+  | extend SourceIPType = iff(SourceIP matches regex PrivateIPregex,"private" ,"public" )
+  | where SourceIPType == "public"
+  | summarize count() by SourceIP
+  | join (
+      // Successful signins from IPs blocked by the firewall solution are suspect
+      // Include fully successful sign-ins, but also ones that failed only at MFA stage
+      // as that supposes the password was sucessfully guessed.
+    SigninLogs
+    | where ResultType in ("0", "50574", "50576") 
+  ) on $left.SourceIP = $right.IPAddress;
+
+

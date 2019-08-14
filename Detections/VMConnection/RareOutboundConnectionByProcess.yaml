@@ -1,54 +1,55 @@
-// Name: Rare/New Outbound connections from VMs by process and location
-// Description: This identifies if there is unusual connections to an unexpected remote location from a VM
-// when compared with the last 30 days.
-// This may indicate connection to a C2 or data exfiltration from the associated VM.
-// It is recommended that you understand what the associated process is and whether or not this is expected.
-//
-// Id: 1c408090-0320-44d5-aba8-e55500c2cfad
-//
-// Severity: Low
-//
-// QueryFrequency: 1h
-//
-// QueryPeriod: 30d
-//
-// AlertTriggerOperator: gt
-//
-// AlertTriggerThreshold: 5
-//
-// DataSource: #VMConnection
-//
-// Tactics:  #CommandAndControl, #InitialAccess, #Exfiltration, #Discover, #Collection
-//
-let CountryCount = VMConnection 
-| where TimeGenerated < ago(1h) and TimeGenerated >= ago(30d) 
-| where isnotempty(RemoteCountry)
-| where Direction == "outbound" 
-| summarize count() by RemoteCountry 
-| where count_ > 5; 
-let Full = VMConnection
-| where TimeGenerated >= ago(1h) 
-| where isnotempty(RemoteCountry) 
-| where Direction == "outbound" 
-| summarize min(TimeGenerated), max(TimeGenerated), sum(BytesSent), sum(BytesReceived) 
-  by Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, Protocol, RemoteCountry, MaliciousIp;
-let Today = VMConnection 
-| where TimeGenerated >= ago(1h) 
-| where isnotempty(RemoteCountry) 
-| where Direction == "outbound" 
-| summarize count() by ProcessName, SourceIp, DestinationIp, RemoteCountry;
-let lastweek = VMConnection 
-| where TimeGenerated < ago(1h) and TimeGenerated >= ago(7d) 
-| where isnotempty(RemoteCountry)  
-| where Direction == "outbound" 
-| summarize SourceIpCount = count() by ProcessName, SourceIp, DestinationIp, RemoteCountry
-| where SourceIpCount > 7 ;
-let New = Today | join kind= leftanti (
-   lastweek 
-) on ProcessName, SourceIp, DestinationIp, RemoteCountry;
-let RemoveCommonCountry = New | join kind= leftanti (
-   CountryCount 
-) on RemoteCountry;
-RemoveCommonCountry | join kind= innerunique (
-    Full
-) on RemoteCountry
+﻿id: 1c408090-0320-44d5-aba8-e55500c2cfad
+name: Rare/New Outbound connections from VMs by process and location
+description: |
+  This identifies if there is unusual connections to an unexpected remote location from a VM
+  when compared with the last 30 days.
+  This may indicate connection to a C2 or data exfiltration from the associated VM.
+  It is recommended that you understand what the associated process is and whether or not this is expected.
+severity: Low
+requiredDataConnectors:
+  - dataTypes:
+      - VMConnection
+queryFrequency: 1h
+queryPeriod: 30d
+triggerOperator: gt
+triggerThreshold: 5
+tactics:
+  - CommandAndControl
+  - InitialAccess
+  - Exfiltration
+  - Discover
+  - Collection
+query: |
+
+  let CountryCount = VMConnection 
+  | where TimeGenerated < ago(1h) and TimeGenerated >= ago(30d) 
+  | where isnotempty(RemoteCountry)
+  | where Direction == "outbound" 
+  | summarize count() by RemoteCountry 
+  | where count_ > 5; 
+  let Full = VMConnection
+  | where TimeGenerated >= ago(1h) 
+  | where isnotempty(RemoteCountry) 
+  | where Direction == "outbound" 
+  | summarize min(TimeGenerated), max(TimeGenerated), sum(BytesSent), sum(BytesReceived) 
+    by Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, Protocol, RemoteCountry, MaliciousIp;
+  let Today = VMConnection 
+  | where TimeGenerated >= ago(1h) 
+  | where isnotempty(RemoteCountry) 
+  | where Direction == "outbound" 
+  | summarize count() by ProcessName, SourceIp, DestinationIp, RemoteCountry;
+  let lastweek = VMConnection 
+  | where TimeGenerated < ago(1h) and TimeGenerated >= ago(7d) 
+  | where isnotempty(RemoteCountry)  
+  | where Direction == "outbound" 
+  | summarize SourceIpCount = count() by ProcessName, SourceIp, DestinationIp, RemoteCountry
+  | where SourceIpCount > 7 ;
+  let New = Today | join kind= leftanti (
+    lastweek 
+  ) on ProcessName, SourceIp, DestinationIp, RemoteCountry;
+  let RemoveCommonCountry = New | join kind= leftanti (
+    CountryCount 
+  ) on RemoteCountry;
+  RemoveCommonCountry | join kind= innerunique (
+      Full
+  ) on RemoteCountry

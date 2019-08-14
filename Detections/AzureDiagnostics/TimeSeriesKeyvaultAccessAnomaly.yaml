@@ -1,51 +1,48 @@
-// Name: Key vault access TimeSeries anomaly
-//
-// Id: 0914adab-90b5-47a3-a79f-7cdcac843aa7
-//
-// Description: This query will identify anamalous keyvault access. 
-// The query leverages KQL built-in anomaly detection algorithm find large deviations from baseline keyvault access pattern. 
-// Any sudden increase in count of keyvault access can be an indication of adversary dumping credential via automated ways.
-//
-// Severity: Low
-//
-// QueryFrequency: 1h
-//
-// QueryPeriod: 30d
-//
-// AlertTriggerOperator: gt
-//
-// AlertTriggerThreshold: 0
-//
-// DataSource: #AzureDiagnostics
-//
-// Tactics: #CredentialAccess
-//
-let starttime =30d;
-let endtime = 10m;
-let timeframe = 1h;
-let scorethreshold = 1.5;
-let OperationList = dynamic(
-["SecretGet", "KeyGet", "VaultGet"]);
-let TimeSeriesData = AzureDiagnostics
-| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-| where ResourceType == "VAULTS" and ResultType == "Success"
-| where OperationName in (OperationList) 
-| project TimeGenerated, OperationName, Resource 
-| make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Resource;
-//Filter anomolies against TimeSeriesData
-let TimeSeriesAlerts = TimeSeriesData
-| extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')
-| mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
-| where anomalies > 0 | extend AnomalyTimeattheHour = TimeGenerated
-| project Resource ,AnomalyTimeattheHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
-// Join against base logs to retrive records associated with the hour of anomoly
-TimeSeriesAlerts
-| join (
-AzureDiagnostics
-| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-| where ResourceType == "VAULTS" and ResultType == "Success"
-| where OperationName in (OperationList)  
-| summarize PerOperationCount=count() by bin(TimeGenerated,1h), Resource, OperationName , id_s, CallerIPAddress ,identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s,
-requestUri_s, clientInfo_s     
-) on Resource, TimeGenerated 
-| project AnomalyTimeattheHour , Resource , HourlyCount, baseline , anomalies , score , OperationName, id_s , identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s , requestUri_s , clientInfo_s,  PerOperationCount
+﻿id: 0914adab-90b5-47a3-a79f-7cdcac843aa7
+name: Key vault access TimeSeries anomaly
+description: |
+  This query will identify anamalous keyvault access. 
+  The query leverages KQL built-in anomaly detection algorithm find large deviations from baseline keyvault access pattern. 
+  Any sudden increase in count of keyvault access can be an indication of adversary dumping credential via automated ways.
+severity: Low
+requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 30d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+query: |
+
+  let starttime =30d;
+  let endtime = 10m;
+  let timeframe = 1h;
+  let scorethreshold = 1.5;
+  let OperationList = dynamic(
+  ["SecretGet", "KeyGet", "VaultGet"]);
+  let TimeSeriesData = AzureDiagnostics
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where ResourceType == "VAULTS" and ResultType == "Success"
+  | where OperationName in (OperationList) 
+  | project TimeGenerated, OperationName, Resource 
+  | make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Resource;
+  //Filter anomolies against TimeSeriesData
+  let TimeSeriesAlerts = TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')
+  | mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0 | extend AnomalyTimeattheHour = TimeGenerated
+  | project Resource ,AnomalyTimeattheHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
+  // Join against base logs to retrive records associated with the hour of anomoly
+  TimeSeriesAlerts
+  | join (
+  AzureDiagnostics
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where ResourceType == "VAULTS" and ResultType == "Success"
+  | where OperationName in (OperationList)  
+  | summarize PerOperationCount=count() by bin(TimeGenerated,1h), Resource, OperationName , id_s, CallerIPAddress ,identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s,
+  requestUri_s, clientInfo_s     
+  ) on Resource, TimeGenerated 
+  | project AnomalyTimeattheHour , Resource , HourlyCount, baseline , anomalies , score , OperationName, id_s , identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s , requestUri_s , clientInfo_s,  PerOperationCount
