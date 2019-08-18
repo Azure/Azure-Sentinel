@@ -1,44 +1,42 @@
-// Name: SharePoint downloads from previously unseen IP address.
-//
-// Id: 4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7
-//
-// Description: alerts where the volume of documents uploaded to or downloaded from Sharepoint by new IP addresses
-// exceeds a threshold - default value of threshold in query below is 100. 
-//
-// DataSource: #OfficeActivity
-//
-// Severity: Medium
-//
-// QueryFrequency: 24
-//
-// QueryPeriod: 24
-//
-// AlertTriggerOperator: gt
-//
-// AlertTriggerThreshold: 0
-//
-// Tactics: #Exfiltration
-//
-let historicalActivity=
-OfficeActivity
-| where  RecordType == "SharePointFileOperation"
-| where Operation in ("FileDownloaded", "FileUploaded")
-| where TimeGenerated between(ago(30d)..ago(7d))
-| summarize historicalCount=count() by ClientIP;
-let recentActivity = OfficeActivity
-| where  RecordType == "SharePointFileOperation"
-| where Operation in ("FileDownloaded", "FileUploaded")
-| where TimeGenerated > ago(1d)
-| summarize recentCount=count() by ClientIP;
-recentActivity | join kind= leftanti (
-      historicalActivity
-) on ClientIP
-// More than 100 downloads/uploads from a new IP
-| where recentCount > 100
-| join kind = rightsemi 
-(OfficeActivity 
-| where TimeGenerated >= ago(1d) 
-| where RecordType == "SharePointFileOperation" | where Operation in ("FileDownloaded", "FileUploaded"))
-on ClientIP
-| summarize count() by RecordType, Operation, UserType, UserId, OfficeWorkload, Site_Url
-| order by Operation, UserId asc
+﻿id: 4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7
+name: SharePoint downloads from previously unseen IP address.
+description: |
+  alerts where the volume of documents uploaded to or downloaded from Sharepoint by new IP addresses
+  exceeds a threshold - default value of threshold in query below is 100.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 24d
+queryPeriod: 24d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+query: |
+
+  let historicalActivity=
+  OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated between(ago(30d)..ago(7d))
+  | summarize historicalCount=count() by ClientIP;
+  let recentActivity = OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated > ago(1d)
+  | summarize recentCount=count() by ClientIP;
+  recentActivity | join kind= leftanti (
+        historicalActivity
+  ) on ClientIP
+  // More than 100 downloads/uploads from a new IP
+  | where recentCount > 100
+  | join kind = rightsemi 
+  (OfficeActivity 
+  | where TimeGenerated >= ago(1d) 
+  | where RecordType == "SharePointFileOperation" | where Operation in ("FileDownloaded", "FileUploaded"))
+  on ClientIP
+  | summarize count() by RecordType, Operation, UserType, UserId, OfficeWorkload, Site_Url
+  | order by Operation, UserId asc
+
