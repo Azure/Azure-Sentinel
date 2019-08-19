@@ -1,0 +1,48 @@
+id:  1ce5e766-26ab-4616-b7c8-3b33ae321e80
+name: IP with multiple failed host login attempts and successful AAD login.
+description: |
+	This query looks for IP addresses with multiple failed host logins via remote protocols, and within the same timeframe a successful login Azure AD.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+     - SigninLogs
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog 
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  
+query: |
+
+	let signin_threshold = 5; 
+	let win_fails = 
+	SecurityEvent
+	| where TimeGenerated >= ago(1d)
+	| where EventID == 4625
+	| where LogonType == 10 or LogonType == 7 or LogonType == 3
+	| where IpAddress != "-"
+	| summarize count() by IpAddress
+	| where count_ > signin_threshold
+	| summarize makelist(IpAddress);
+	let linux_fails = 
+	Syslog
+	| where TimeGenerated > ago(1d)
+	| where Facility contains 'auth' and ProcessName != 'sudo'
+	| extend SourceIP = extract("(([0-9]|[0-9][0-9]|[0-9][0-9][0-9])\\.([0-9]|[0-9][0-9]|[0-9][0-9][0-9])\\.([0-9]|[0-9][0-9]|[0-9][0-9][0-9])\\.([0-9]|[0-9][0-9]|[0-9][0-9][0-9]))",1,SyslogMessage)
+	| where SourceIP != ""
+	| summarize count() by SourceIP
+	| where count_ > signin_threshold
+	| summarize makelist(SourceIP);
+	SigninLogs
+	| where TimeGenerated > ago(1d)
+	| where ResultType != "0"
+	| where IPAddress in (win_fails) or IPAddress in (linux_fails)
+	| extend Reason=  "Multiple failed host logins from IP address"
