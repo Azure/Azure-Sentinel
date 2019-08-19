@@ -1,0 +1,35 @@
+id: 910124df-913c-47e3-a7cd-29e1643fa55e
+name: IP with multiple failed AWS console logins successfully logs in to AAD.
+description: |
+	This query looks for IP addresses with multiple failed login attempts to the AWS console with a successful Azure AD login within the same timeframe.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+     - SigninLogs
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  
+query: |
+
+	let  signin_threshold = 5; 
+	let aws_fails = AWSCloudTrail
+	| where TimeGenerated >= ago(1d)
+	| where EventName == "ConsoleLogin"
+	| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin) 
+	| where LoginResult == "Success"
+	| summarize count() by SourceIpAddress
+	| where count_ >  signin_threshold
+	| summarize makelist(SourceIpAddress);
+	SigninLogs
+	| where TimeGenerated >= ago(1d)
+	| where ResultType !in ("0", "50125", "50140")
+	| where IPAddress in (aws_fails) 
+	| extend Reason=  "Multiple failed AWS Console logins from IP address"
