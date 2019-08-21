@@ -14,7 +14,7 @@
 // Provide customLimit value with default above domainLimit value so it will not block unless changed
 let customLimit = 11;
 let domainLimit = 10;
-let lookback = 30d;
+let lookback = 14d;
 let domainLookback = union isfuzzy=true
 (AuditLogs
 | where TimeGenerated >= ago(lookback)
@@ -30,6 +30,7 @@ InitiatedBy.user.userPrincipalName))
 | where isnotempty(RareDomain) 
 | summarize RareDomainCount = count() by Type, RareDomain
 | where RareDomainCount <= domainLimit
+| extend AccountCustomEntity = UserPrincipalName
 // remove comment from below if you would like to have a lower limit for RareDomainCount specific to AuditLog
 //| where RareDomainCount <= customLimit
 ),
@@ -40,6 +41,7 @@ InitiatedBy.user.userPrincipalName))
 | extend RareDomain = toupper(tostring(split(UserPrincipalName, "@")[-1]))
 | summarize RareDomainCount = count() by Type, RareDomain
 | where RareDomainCount <= domainLimit
+| extend AccountCustomEntity = UserPrincipalName
 // remove comment from below if you would like to have a lower limit for RareDomainCount specific to OfficeActivity
 //| where RareDomainCount <= customLimit
 ),
@@ -60,6 +62,7 @@ let AuditLogsRef = domainLookback | join (
    | extend RareDomain = toupper(tostring(split(UserPrincipalName, "@")[-1]))
    | where isnotempty(RareDomain) 
    | summarize UPNRefCount = count() by TimeGenerated, Type, RareDomain, UserPrincipalName, OperationName, Category, Result
+   | extend AccountCustomEntity = UserPrincipalName
 ) on Type, RareDomain;
 let OfficeActivityRef = domainLookback | join (
     OfficeActivity
@@ -68,6 +71,7 @@ let OfficeActivityRef = domainLookback | join (
     | where UserPrincipalName has "@" or UserPrincipalName startswith "NT AUTHORITY"
     | extend RareDomain = toupper(tostring(split(UserPrincipalName, "@")[-1]))
     | summarize UPNRefCount = count() by TimeGenerated, Type, RareDomain, UserPrincipalName, OperationName = Operation, Category = OfficeWorkload, Result = ResultStatus
+    | extend AccountCustomEntity = UserPrincipalName
 ) on Type, RareDomain;
 let SigninLogsRef = domainLookback | join (
     SigninLogs
@@ -76,11 +80,10 @@ let SigninLogsRef = domainLookback | join (
     | where UserPrincipalName has "@" or UserPrincipalName startswith "NT AUTHORITY"
     | extend RareDomain = toupper(tostring(split(UserPrincipalName, "@")[-1]))
     | summarize UPNRefCount = count() by TimeGenerated, Type, RareDomain, UserPrincipalName, OperationName, Category = AppDisplayName, Result = ResultType
+    | extend AccountCustomEntity = UserPrincipalName
 ) on Type, RareDomain;
 let Results = union isfuzzy=true
 AuditLogsRef,OfficeActivityRef,SigninLogsRef;
 Results | project TimeGenerated, Type, RareDomain, UserPrincipalName, OperationName, Category, Result, UPNRefCount 
 | extend AccountCustomEntity = UserPrincipalName
-| extend TimestampCustomEntity = TimeGenerated
 | order by TimeGenerated asc 
-
