@@ -1,8 +1,9 @@
 id:  8ee967a2-a645-4832-85f4-72b635bcb3a6
-name: IP with multiple failed AAD login attempts and successful remote login to host.
+name: IP with multiple failed Azure AD login attempts and successful remote login to host.
 description: |
-	This query looks for IP addresses with multiple failed logins to Azure AD and
-	within the same timeframe a successful login to a host via a remote protocol such as RDP or SSH.
+	This query creates a list of IP addresses with multiple failed logins to Azure
+	AD above our set threshold. It then looks for successful remote logins to hosts 
+	in environment from these IP addresses within the same timeframe.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -20,10 +21,15 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
-  
-query: |
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+  - T1110
 
-	let signin_threshold = 5; 
+query: |
+	//Adjust this threshold to fit the environment
+	let signin_threshold = 5;
+	//Make a list of all IPs with failed signins to AAD above our threshold
 	let suspicious_signins =
 	SigninLogs
 	| where TimeGenerated >= ago(1d)
@@ -31,6 +37,7 @@ query: |
 	| summarize count() by IPAddress
 	| where count_ > signin_threshold
 	| summarize makelist(IPAddress);
+	//See if any of these IPs have sucessfull logged into *nix hosts
 	let linux_logons =
 	Syslog
 	| where TimeGenerated >= ago(1d)
@@ -39,13 +46,17 @@ query: |
 	| where SyslogMessage has_any (suspicious_signins)
 	| extend Reason = "Multiple failed AAD logins from IP address"
 	| project TimeGenerated, Computer, HostIP, SyslogMessage, Facility, ProcessName, Reason;
+	//See if any of these IPs have sucessfull logged into Windows hosts
 	let win_logons =
 	SecurityEvent
 	| where TimeGenerated >= ago(1d)
 	| where EventID == 4624
 	| where LogonType == 10 or LogonType == 7 or LogonType == 3
-	| where IpAddress != "-"
+	| where IpAddress != "-" and IpAddress != "127.0.0.1"
 	| where IpAddress in (suspicious_signins)
 	| extend Reason = "Multiple failed AAD logins from IP address"
+	| extend AccountCustomEntity = Account
 	| project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress,  LogonTypeName, TargetUserSid, Reason;
 	union isfuzzy=true linux_logons,win_logons
+	| extend AccountCustomEntity = Account
+	| extend IPCustomEntity = iif(IpAddress != "", IpAddress, 
