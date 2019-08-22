@@ -1,32 +1,34 @@
 ﻿id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
-name: Granting permissions to account - detection variant
+name: Suspicious granting of permissions to an account
 description: |
-  looks for IPs from which users grant access to others on azure resources. A new 
-  source IP address for such activity results in an alert being generated.
+  'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
       - AzureActivity
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Persistence
   - PrivilegeEscalation
+relevantTechniques:
+  - T1098
 query: |
 
   let createRoleAssignmentActivity = AzureActivity
   | where OperationName == "Create role assignment"
   | where ActivityStatus == "Succeeded"
-  | project TimeGenerated, EventSubmissionTimestamp, Caller, CallerIpAddress, SubscriptionId, ResourceId;
+  | project TimeGenerated, EventSubmissionTimestamp, Caller, CallerIpAddress, SubscriptionId, ResourceId, OperationName;
   // The number of operations below which an IP address is considered an unusual source of role assignment operations
   let alertOperationThreshold = 5;
   createRoleAssignmentActivity 
-  | where TimeGenerated >= ago(30d)
+  | where TimeGenerated >= ago(14d)
   | summarize count() by CallerIpAddress
   | where count_ <= alertOperationThreshold
   | join kind = rightsemi ( createRoleAssignmentActivity
   | where TimeGenerated >= ago(1d)
   ) on CallerIpAddress
+  | extend AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress

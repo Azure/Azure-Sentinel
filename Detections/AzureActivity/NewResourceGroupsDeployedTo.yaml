@@ -1,32 +1,35 @@
 ﻿id: 9fb57e58-3ed8-4b89-afcf-c8e786508b1c
-name: Common deployed resources
+name: Suspicious Resource deployment
 description: |
-  this query looks for common deployed resources (resource name and resource groups). Alerts is
-  generated for new ResourceGroups first seen associated with deployment operations.
+  'Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen Caller.'
 severity: Low
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
       - AzureActivity
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Exe cution
+  - Impact
+relevantTechniques:
+  - T1496
 query: |
 
   AzureActivity
-  | where TimeGenerated between (ago(7d).. ago(1d))
-  | where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment" 
-  | where ActivityStatus == "Succeeded" 
-  | project Resource, ResourceGroup 
+  | where TimeGenerated between (ago(7d) .. ago(1d))
+  | where OperationName =~ "Create or Update Virtual Machine" or OperationName =~ "Create Deployment" 
+  | where ActivityStatus =~ "Succeeded" 
+  | project Resource, ResourceGroup, Caller, OperationName 
   | evaluate basket()
   | join kind=rightantisemi (
   AzureActivity
   | where TimeGenerated >ago(1d)
-  | where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment" 
-  | where ActivityStatus == "Succeeded" 
-  | project Resource, ResourceGroup 
+  | where OperationName =~ "Create or Update Virtual Machine" or OperationName =~ "Create Deployment" 
+  | where ActivityStatus =~ "Succeeded" 
+  | project Resource, ResourceGroup, Caller, OperationName 
   ) on ResourceGroup 
-
+  | summarize CreateCount = count() by Caller, Resource, ResourceGroup, OperationName
+  | extend AccountCustomEntity = Caller 
+  | sort by CreateCount desc nulls last 
