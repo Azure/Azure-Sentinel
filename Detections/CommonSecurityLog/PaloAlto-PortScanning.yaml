@@ -1,12 +1,11 @@
 ﻿id: 5b72f527-e3f6-4a00-9908-8e4fee14da9f
-name: Possible Internal to External PortScanning based on Palo Alto designation of "incomplete application protocol"
+name: Palo Alto - Possible Internal to External PortScanning
 description: |
-  This query gathers network information such as Source and Destination Ports and IPAddresses as well as ApplicationProtocol from Palo Alto Network devices. 
-  The Alert returns a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which 
-  results in an "ApplicationProtocol = incomplete" designation.
-  The server resets coupled with an "Incomplete" ApplicationProtocol designation can be an indication of internal to external port scanning or probing attack. 
-  https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK
-  https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK
+  'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which 
+  results in an "ApplicationProtocol = incomplete" designation. The server resets coupled with an "Incomplete" ApplicationProtocol designation can be an indication 
+  of internal to external port scanning or probing attack. 
+  References: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and
+  https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'
 severity: Low
 requiredDataConnectors:
   - connectorId: PaloAltoNetworks
@@ -18,6 +17,8 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Discovery
+relevantTechniques:
+  - T1046
 query: |
 
   let timeframe = 1h;
@@ -30,15 +31,19 @@ query: |
   // filter out IANA ephemeral or negotiated ports as per https://en.wikipedia.org/wiki/Ephemeral_port
   | where DestinationPort !between (toint(49512) .. toint(65535)) 
   | where Computer != "" 
-  | where DestinationIP !startswith "10." 
-  // *** Note: | where DestinationIP startswith "10."  // for reverse (internal is resetting the connection)
-  // Filter out any graceful reset reasons AGED OUT Occurs when a TCP session closes with a FIN due to aging out. TCP FIN Occurs when a TCP FIN is used to gracefully close half or both sides of a connection.
+  | where DestinationIP !startswith "10."
+  // Filter out any graceful reset reasons of AGED OUT which occurs when a TCP session closes with a FIN due to aging out. 
   | where AdditionalExtensions !has "reason=aged-out" 
+  // Filter out any TCP FIN which occurs when a TCP FIN is used to gracefully close half or both sides of a connection.
   | where AdditionalExtensions !has "reason=tcp-fin" 
-  // Unremark one of the following to trigger on specific TCP reset reasons-  See Palo Alto article - https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK
-  // | where AdditionalExtensions has "reason=tcp-rst-from-server"  // TCP RST-server - Occurs when the server sends a TCP reset to the client
-  // | where AdditionalExtensions has "reason=tcp-rst-from-client"  // TCP RST-client - Occurs when the client sends a TCP reset to the server
+  // Uncomment one of the following where clauses to trigger on specific TCP reset reasons
+  // See Palo Alto article for details - https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK
+  // TCP RST-server - Occurs when the server sends a TCP reset to the client
+  // | where AdditionalExtensions has "reason=tcp-rst-from-server"  
+  // TCP RST-client - Occurs when the client sends a TCP reset to the server
+  // | where AdditionalExtensions has "reason=tcp-rst-from-client"  
   | extend reason = tostring(split(AdditionalExtensions, ";")[3])
   | summarize count() by SourceIP, ApplicationProtocol, reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction, DestinationIP
   | where count_ >= 10
-  | summarize makeset(DestinationIP), totalcount = sum(count_)  by SourceIP, ApplicationProtocol, reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction
+  | summarize makeset(DestinationIP), totalcount = sum(count_) by SourceIP, ApplicationProtocol, reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction
+  | extend IPCustomEntity = SourceIP

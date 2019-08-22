@@ -1,6 +1,6 @@
 ﻿id: b3285f15-03b8-4468-8a92-1377ca377c46
-name: Threat Intel detection on IP in last 6 hours not seen in previous 30 days
-description: These are new TI detections on a given IP and should be reviewed to determine if they are a threat
+name: Rare Threat Intel detection on IP
+description: Identifies new TI detections on a given IP from the last 6 hours not seen in previous 14 days.
 severity: Low
 requiredDataConnectors:
   - dataTypes:
@@ -27,21 +27,21 @@ query: |
   | where tolower(SimplifiedDeviceAction) !in ('deny', 'drop', 'block', 'reset-server', 'reset-both', 'reset-server')
   | where isnotempty(MaliciousIP)
   | where Message !contains "timed out"
-  | summarize todayCount = count() by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message
+  | summarize SourceIPGroup = makeset(SourceIP), todayCount = count() by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message
   ;
-  let prev30d = CommonSecurityLog
-  | where TimeGenerated between (ago(30d) .. ago(6h))
+  let prev14d = CommonSecurityLog
+  | where TimeGenerated between (ago(14d) .. ago(6h))
   | where tolower(SimplifiedDeviceAction) !in ('deny', 'drop', 'block', 'reset-server', 'reset-both', 'reset-server')
   | where isnotempty(MaliciousIP)
   | where Message !contains "timed out"
-  | summarize by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message;
+  | summarize SourceIPGroup = makeset(SourceIP) by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message;
   let newToday = last1d | join kind= leftanti (
-    prev30d 
+    prev14d 
   ) on DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message
   ;
   last1dfull | join (
     newToday 
   ) on DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message 
-  | summarize makeset(Message), sum(todayCount)  by DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, IndicatorThreatType, ThreatConfidence, MaliciousIPCountry
-  | project DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, IndicatorThreatType, set_Message, FailureMessageCount = arraylength(set_Message), ThreatConfidence, MaliciousIPCountry, sum_todayCount 
-
+  | summarize makeset(Message), sum(todayCount) by SourceIPGroup, DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, IndicatorThreatType, ThreatConfidence, MaliciousIPCountry
+  | project SourceIPGroup, DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, IndicatorThreatType, set_Message, FailureMessageCount = arraylength(set_Message), ThreatConfidence, MaliciousIPCountry, sum_todayCount 
+  | 

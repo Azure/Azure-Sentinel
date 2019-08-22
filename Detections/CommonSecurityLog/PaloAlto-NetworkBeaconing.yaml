@@ -1,23 +1,25 @@
 ﻿id: f0be259a-34ac-4946-aa15-ca2b115d5feb
-name: Detect beaconing based on repetitive time intervals seen in Palo Alto Network traffic Logs
+name: Palo Alto - Potential Beaconing detected
 description: |
-  This query will identify beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns. 
-  The query leverags various KQL functions to calculate time delta and then compare it with total events observed in a day to find percentage of beaconing. 
-  results of such beaconing patterns to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.
-  Reference Blog about creating dataset to identify network beaconing via repetitive time intervals seen against total traffic between same source-destination pair.
-  http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/
-severity:
+  'Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns. 
+  The query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing. 
+  This outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.
+  Reference Blog:
+  http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/'
+severity: Low
 requiredDataConnectors:
   - connectorId: PaloAltoNetworks
     dataTypes:
       - CommonSecurityLog
-queryFrequency:
-queryPeriod:
-triggerOperator:
-triggerThreshold: 
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
 tactics:
-  - Exfiltration
-  - C2
+  - CommandAndControl
+relevantTechniques:
+  - T1043
+  - T1065
 query: |
 
   let starttime = 2d;
@@ -27,11 +29,11 @@ query: |
   let PercentBeaconThreshold = 80;
   let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
   CommonSecurityLog
-  | where DeviceVendor =="Palo Alto Networks" and Activity  == "TRAFFIC"
+  | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC"
   | where TimeGenerated between (ago(starttime)..ago(endtime))
   | extend DestinationIPType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
-  | where DestinationIPType =="public"
-  | project TimeGenerated , SourceIP , SourcePort , DestinationIP, DestinationPort, ReceivedBytes, SentBytes
+  | where DestinationIPType == "public"
+  | project TimeGenerated , SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
   | sort by SourceIP asc,TimeGenerated asc, DestinationIP asc, DestinationPort asc
   | serialize
   | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)
@@ -39,9 +41,10 @@ query: |
   | where SourceIP == nextSourceIP
   //Whitelisting criteria/ threshold criteria
   | where TimeDeltainSeconds > TimeDeltaThreshold 
-  | project TimeGenerated, TimeDeltainSeconds, SourceIP, SourcePort,DestinationIP,DestinationPort, ReceivedBytes, SentBytes
+  | project TimeGenerated, TimeDeltainSeconds, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
   | summarize count(), sum(ReceivedBytes), sum(SentBytes), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), SourceIP, DestinationIP, DestinationPort
-  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds)=arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes=sum(sum_SentBytes),TotalReceivedBytes=sum(sum_ReceivedBytes) by bin(TimeGenerated, 1h), SourceIP, DestinationIP, DestinationPort
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes) by bin(TimeGenerated, 1h), SourceIP, DestinationIP, DestinationPort
   | where TotalEvents > TotalEventsThreshold 
   | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
   | where BeaconPercent > PercentBeaconThreshold
+  | extend IPCustomEntity = DestinationIP
