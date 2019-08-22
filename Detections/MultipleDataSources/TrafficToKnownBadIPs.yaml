@@ -1,11 +1,11 @@
 ﻿id: 32eaeb35-71fd-48c5-affd-cbdf357e82bf
 name: Traffic to known bad IPs
 description: |
-  Microsoft tracks a significant number of threat actors/malware/botnets etc so as to protect its products and services.
-  The query shows traffic to known malicious IPs associated with various spam campaigns, botnets , virus etc. 
+  'Microsoft tracks a significant number of threat actors, malware, botnets etc. to protect its products and services.
+  The query shows traffic to known malicious IPs associated with various spam campaigns, botnets, virus and so on.
   Examining traffic to these known malicious IPs is a potential avenue to discover attacks in your environment.
-  Data feeds used -  W3CIISLog , DnsEvents , WindowsFirewall, WireData , CommonSecurityLog
-  Union has been done  using Fuzzy logic so that even if at least one data feed from above is available the query would execute
+  Data feeds used -  W3CIISLog, DnsEvents, WindowsFirewall, WireData, CommonSecurityLog
+  The Union has been done using Fuzzy logic so that even if at least one data feed from above is available the query will execute'
 severity: Medium
 requiredDataConnectors:
   - connectorId: DNS
@@ -18,35 +18,36 @@ requiredDataConnectors:
     - CommonSecurityLog
     - W3CIISLog
     - WireData  
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
-  - C2
-  - Exfiltration
+  - CommandAndControl
+  - Execution
+relevantTechniques:
+  - T1189
+  - T1071
+  - T1203
 query: |
 
+  let endtime = 1d;
   union 
   (union isfuzzy=true
-  (W3CIISLog | extend Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),
-  (DnsEvents | extend Country= RemoteIPCountry, Latitude = RemoteIPLatitude, Longitude = RemoteIPLongitude | extend Computer = ClientIP),
-  (WireData | where Direction != 'Outbound' | extend Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),
-  (WindowsFirewall | where CommunicationDirection != 'SEND' | extend Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),
-  (CommonSecurityLog | where CommunicationDirection != 'Outbound' | extend Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription)
+  (W3CIISLog | where TimeGenerated >= ago(endtime) | extend ClientIP = cIP, Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),
+  (DnsEvents | where TimeGenerated >= ago(endtime) | extend Country= RemoteIPCountry, Latitude = RemoteIPLatitude, Longitude = RemoteIPLongitude),
+  (WireData | where TimeGenerated >= ago(endtime)  | where Direction != 'Outbound' | extend ClientIP = LocalIP, Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),
+  (WindowsFirewall | where TimeGenerated >= ago(endtime) | where CommunicationDirection != 'SEND' | extend ClientIP = SourceIP, Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),
+  (CommonSecurityLog | where TimeGenerated >= ago(endtime) | where CommunicationDirection != 'Outbound' | extend ClientIP = SourceIP, Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription)
   | where isnotempty(MaliciousIP) and isnotempty(Country) and isnotempty(Latitude) and isnotempty(Longitude) | extend TrafficDirection="InboundOrUnknown"),
   (union isfuzzy=true
-  (WireData | where Direction == 'Outbound' | extend Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),
-  (WindowsFirewall | where CommunicationDirection == 'SEND' | extend Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),
-  (CommonSecurityLog | where CommunicationDirection == 'Outbound' | extend Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription)
+  (WireData | where TimeGenerated >= ago(endtime) | where Direction == 'Outbound' | extend ClientIP = LocalIP, Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),
+  (WindowsFirewall | where TimeGenerated >= ago(endtime) | where CommunicationDirection == 'SEND' | extend ClientIP = SourceIP, Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),
+  (CommonSecurityLog | where TimeGenerated >= ago(endtime) | where CommunicationDirection == 'Outbound' | extend ClientIP = SourceIP, Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription)
   | where isnotempty(MaliciousIP) and isnotempty(Country) and isnotempty(Latitude) and isnotempty(Longitude) | extend TrafficDirection="Outbound")
-  | project TimeGenerated, IndicatorThreatType, Confidence, Severity, Computer, ProcessName, SentBytes, ReceivedBytes, TenantId, ReportReferenceLink, Type
-  //, LocalIP, LocalPortNumber, RemoteIP, RemotePortNumber, Direction
-  // Uncomment this to get more detailed breakdown -- but may massively increase number of rows in result set
-  //, MaliciousIP , Malcious_Domain = Name
+  | summarize max(TimeGenerated), min(TimeGenerated) by IndicatorThreatType, Confidence, Severity, ClientIP, ProcessName, SentBytes, ReceivedBytes, TenantId, ReportReferenceLink, Type
   | parse kind = regex ReportReferenceLink with "tags=((webbot\\+)|(controller\\+)|(bot\\+))?" Family:string '&languageCode' *
-  | summarize makeset(Computer) by IndicatorThreatType, Severity, Family, Type, ReportReferenceLink 
-  // Uncomment this to get more detailed breakdown -- but may massively increase number of rows in result set
-  //, MaliciousIP , Malicious_Domain 
+  | summarize count() by ClientIP, IndicatorThreatType, Severity, Family, Type, ReportReferenceLink
+  | extend IPCustomEntity = ClientIP
 
