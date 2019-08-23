@@ -1,28 +1,33 @@
 ﻿id: 1572e66b-20a7-4012-9ec4-77ec4b101bc8
-name: Detect potential Kerberoasting
+name: Potential Kerberoasting
 description: |
-  A service principal name (SPN) is used to uniquely identify a service instance in Windows environment. Each SPN is usually associated with a service account.
+  'A service principal name (SPN) is used to uniquely identify a service instance in Windows environment. Each SPN is usually associated with a service account.
   A lot of organizations use service accounts with weak passwords in their environment. An attacker can try requesting Kerberos ticket-granting service (TGS) service tickets
   for any SPN from a domain controller (DC) which contains a hash of the Service account.
   This can then be used for offline cracking. This hunting query looks for accounts that are generating excessive requests to different resources within a small window of time the last hour out of the previous 24 hours
-  Normal users wouldnt make unusually large number of request within a small time window. This is based of 4769 events which can be very noisy so environment based tweaking might be needed.
+  Normal users wouldnt make unusually large number of request within a small time window. This is based of 4769 events which can be very noisy so environment based tweaking might be needed.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
 queryFrequency: 1h
-queryPeriod: 24h
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Discovery
-  - CredentialHarvesting
+  - CredentialAccess
+relevantTechniques:
+  - T1208
 query: |
 
+  let starttime = 1d;
+  let endtime = 1h;
+  let prev23hThreshold = 4;
+  let prev1hThreshold = 15;
   let Kerbevent =
   SecurityEvent
-  | where TimeGenerated >= ago(24h)
+  | where TimeGenerated >= ago(starttime)
   | where EventID == "4769"
   | parse EventData with * 'TicketEncryptionType">' TicketEncryptionType "<" *
   | parse EventData with * 'IpAddress">::ffff:' Cl_IPAddress "<" *
@@ -39,17 +44,19 @@ query: |
   | where ServiceName !contains "$" and ServiceName !contains "krbtgt" 
   | where TargetUserName !contains ServiceName;
   let Kerbevent23h = Kerbevent
-  | where TimeGenerated >= ago(24h) and TimeGenerated < ago(1h)
-  | summarize ServiceNameCountPrev23h = dcount(ServiceName), ServiceNameSet23h = makeset(ServiceName) by TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status
-  | where ServiceNameCountPrev23h < 4;
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
+  | summarize ServiceNameCountPrev23h = dcount(ServiceName), ServiceNameSet23h = makeset(ServiceName) by Computer, TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status
+  | where ServiceNameCountPrev23h < prev23hThreshold;
   let Kerbevent1h = 
   Kerbevent
-  | where TimeGenerated >= ago(1h)
-  | summarize min(TimeGenerated), max(TimeGenerated), ServiceNameCountPrev1h = dcount(ServiceName), ServiceNameSet1h = makeset(ServiceName) by TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status;
+  | where TimeGenerated >= ago(endtime)
+  | summarize min(TimeGenerated), max(TimeGenerated), ServiceNameCountPrev1h = dcount(ServiceName), ServiceNameSet1h = makeset(ServiceName) by Computer, TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status;
   Kerbevent1h 
   | join kind=leftanti
   (
   Kerbevent23h
   ) on TargetUserName
-  | where ServiceNameCountPrev1h > 15  // Taking an example threshold value above which we would prefer the query to get results based on testing in a few environment. Can be different for different environment
-  | project min_TimeGenerated, max_TimeGenerated, TargetUserName, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status, ServiceNameCountPrev1h, ServiceNameSet1h
+  // Taking an example threshold value above which we would prefer the query to get results based on testing in a few environment. Can be different for different environment.
+  | where ServiceNameCountPrev1h > prev1hThreshold
+  | project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, TargetUserName, Computer, Cl_IPAddress, TicketOptions, TicketEncryptionType, Status, ServiceNameCountPrev1h, ServiceNameSet1h
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = TargetUserName, HostCustomEntity = Computer

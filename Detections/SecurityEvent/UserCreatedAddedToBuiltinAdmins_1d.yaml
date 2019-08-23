@@ -1,6 +1,8 @@
 ﻿id: aa1eff90-29d4-49dc-a3ea-b65199f516db
-name: New User created and then added to builtin\administrators group
-description: User account was created and then added to the builtin Administrators group in the same day
+name: New User created and added to the builtin administrators group
+description: |
+  'Identifies when a user account was created and then added to the builtin Administrators group in the same day.
+  This should be monitored closely and all additions reviewed.'
 severity: Low
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -12,9 +14,10 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Persistence
-  - Discovery
-  - LateralMovement
-  - Collection
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
 query: |
 
   let timeframe = 1d;
@@ -22,7 +25,8 @@ query: |
   | where TimeGenerated > ago(timeframe) 
   | where EventID == 4720
   | where AccountType == "User"
-  | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), CreatedUser = tolower(TargetUserName), Domain = toupper(TargetDomainName), CreatedUserSid = TargetSid, AccountUsedToCreateUser = SubjectUserName
+  | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), 
+  CreatedUser = tolower(TargetUserName), Domain = toupper(TargetDomainName), CreatedUserSid = TargetSid, AccountUsedToCreateUser = SubjectUserName
   |join (
   SecurityEvent 
   | where TimeGenerated > ago(timeframe) 
@@ -31,9 +35,12 @@ query: |
   | where EventID == 4732
   //TargetSid is the builin Admins group: S-1-5-32-544
   | where TargetSid == "S-1-5-32-544"
-  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = TargetUserName, Domain = toupper(TargetDomainName), GroupSid = TargetSid, UserAdded = SubjectUserName, UserAddedSid = SubjectUserSid, CreatedUser = tolower(SubjectUserName), CreatedUserSid = MemberSid
+  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = TargetUserName, 
+  Domain = toupper(TargetDomainName), GroupSid = TargetSid, UserAdded = SubjectUserName, UserAddedSid = SubjectUserSid, CreatedUser = tolower(SubjectUserName), 
+  CreatedUserSid = MemberSid
   )
   on CreatedUserSid
   //Create User first, then the add to the group.
-  | project Computer, CreatedUserTime, CreatedUserEventID, CreatedUserActivity, CreatedUser, CreatedUserSid, Domain, GroupAddTime, GroupAddEventID, GroupAddActivity, AccountUsedToCreateUser, GroupName, GroupSid, UserAdded, UserAddedSid 
-
+  | project Computer, CreatedUserTime, CreatedUserEventID, CreatedUserActivity, CreatedUser, CreatedUserSid, Domain, GroupAddTime, GroupAddEventID, 
+  GroupAddActivity, AccountUsedToCreateUser, GroupName, GroupSid, UserAdded, UserAddedSid 
+  | extend timestamp = CreatedUserTime, AccountCustomEntity = CreatedUser, HostCustomEntity = Computer
