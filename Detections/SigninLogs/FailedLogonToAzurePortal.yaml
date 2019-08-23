@@ -1,27 +1,30 @@
 ﻿id: 223db5c1-1bf8-47d8-8806-bed401b356a4
 name: Failed login attempts to Azure Portal
 description: |
-  'This query over Azure AD sign-in activity highlights failed login attempts to Azure Portal 
-  We want to exclude success and other non-failure results:
+  'Identifies failed login attempts in the Azure Active Directory Signin logs to the Azure Portal.  Multiple failed logon 
+  attempts could indicate a potential brute force attack.  We exclude the following success and non-failure results:
+  References: https://docs.microsoft.com/en-us/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
   0 - successful logon
   50125 - Sign-in was interrupted due to a password reset or password registration entry.
-  50140 - This error occurred due to 'Keep me signed in' interrupt when the user was signing-in'
+  50140 - This error occurred due to 'Keep me signed in' interrupt when the user was signing-in.'
 severity: Low
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1110
 query: |
 
-  let timeRange = ago(24h);
+  let timeRange = 1d;
   SigninLogs
-  | where TimeGenerated >= timeRange 
+  | where TimeGenerated >= ago(timeRange)
   | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
   | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
@@ -29,6 +32,5 @@ query: |
   // Exclude non-failure types
   | where ResultType !in ("0", "50125", "50140")
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makeset(IPAddress), makeset(OS), makeset(Browser), makeset(City), AttemptCount = count(TimeGenerated) by UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State
-  | project StartTimeUtc, EndTimeUtc, UserDisplayName, UserPrincipalName, AppDisplayName, AttemptCount, DistinctIPCount = arraylength(set_IPAddress), set_IPAddress, ResultType, ResultDescription, StatusCode, StatusDetails, set_OS, set_Browser, Location, State, set_City 
-
-
+  | project StartTimeUtc, EndTimeUtc, UserDisplayName, UserPrincipalName, AppDisplayName, AttemptCount, DistinctIPCount = arraylength(set_IPAddress), set_IPAddress, ResultType, ResultDescription, StatusCode, StatusDetails, set_OS, set_Browser, Location, State, set_City
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName
