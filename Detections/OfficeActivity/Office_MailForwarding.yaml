@@ -1,0 +1,36 @@
+﻿id: 871ba14c-88ef-48aa-ad38-810f26760ca3
+name: Multiple users email forwarded to same destination
+description: |
+  'Identifies when multiple user mailboxes are configured to forward to the same destination. 
+  This could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+
+  let timeframe = 7d
+  OfficeActivity
+  | where TimeGenerated >= ago(timeframe)
+  | where Operation =~ "Set-Mailbox"
+  | where Parameters contains "ForwardingSmtpAddress"
+  | extend parsed = parse_json(Parameters)
+  | extend parameterName = parsed[1].Name, fwdingDestination = tostring(parsed[1].Value)
+  | where isnotempty(fwdingDestination)
+  | summarize TimeGenerated=max(TimeGenerated) by UserId, fwdingDestination
+  | summarize TimeGenerated=max(TimeGenerated), userCount = dcount(UserId), UserId = makelist(UserId) by fwdingDestination
+  | where userCount > 1
+  | mvexpand UserId
+  | extend AccountCustomEntity = UserId
+

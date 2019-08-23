@@ -1,10 +1,9 @@
 ﻿id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
 name: Office Policy Tampering
 description: |
-  This will help you determine if any tampering is done to either auditlog, 
-  ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. 
-  Adversary may use this technique to evade detection or avoid other policy based defenses.
-  https://docs.microsoft.com/en-us/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps
+  'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. 
+  An adversary may use this technique to evade detection or avoid other policy based defenses.
+  References: https://docs.microsoft.com/en-us/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Office365
@@ -15,17 +14,21 @@ queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
+  - Persistence
   - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1089
 query: |
 
   let timeframe = 1d;
   OfficeActivity
   | where TimeGenerated >= ago(timeframe)
-  | where RecordType=="ExchangeAdmin"
-  | where UserType in ("Admin","DcAdmin") 
+  | where RecordType =~ "ExchangeAdmin"
+  | where UserType in~ ("Admin","DcAdmin") 
   // Only admin or global-admin can disable/remove policy
   | where Operation startswith "Remove-" or Operation startswith "Disable-"
   | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" 
     or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
-  | summarize min(TimeGenerated), max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ResultStatus, Parameters
-
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters
+  | extend AccountCustomEntity = UserId, IPCustomEntity = ClientIP

@@ -1,0 +1,48 @@
+﻿id: 5dd76a87-9f87-4576-bab3-268b0e2b338b
+name: SharePointFileOperation via devices with previously unseen user agents
+description: |
+  'Identifies when the number of documents downloaded from device(s) associated
+  with a previously unseen user agent exceeds a threshold (default is 10).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let threshold = 10;
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let historicalActivity =
+  OfficeActivity
+  | where TimeGenerated between(ago(14d)..ago(1d))
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | summarize historicalCount = count() by UserAgent;
+  let recentActivity = OfficeActivity
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated > ago(1d)
+  | summarize recentCount = count() by UserAgent;
+  recentActivity | join kind = leftanti (historicalActivity) on UserAgent
+  | project RecordType = szSharePointFileOperation, UserAgent, recentCount
+  | order by recentCount asc, UserAgent
+  // More than 10 downloads/uploads from a new user agent
+  | where recentCount > threshold
+  | join kind = rightsemi 
+  (OfficeActivity 
+  | where TimeGenerated >= ago(1d) 
+  | where RecordType =~ szSharePointFileOperation 
+  | where Operation in~ ("FileDownloaded", "FileUploaded"))
+  on UserAgent
+  | summarize count() by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url
+  | extend AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+  | order by UserAgent asc, Operation asc, UserId asc
+
