@@ -26,10 +26,15 @@ query: |
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
   | join (
-    OfficeActivity
+   OfficeActivity
     | where TimeGenerated >= ago(dt_lookBack)
-    | extend Url = tostring(parse_json(ModifiedProperties)[12].NewValue) 
+    | extend Url = iif(OfficeWorkload == "AzureActiveDirectory",extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,ModifiedProperties),tostring(parse_json(ModifiedProperties)[12].NewValue))
+    | where isnotempty(Url)
+    | extend Url = split(Url, ';')[0]
     | extend Office_TimeGenerated = TimeGenerated
+    | extend User = iif(UserId != "", UserId, iif(Actor != '', tostring(parse_json(Actor)[0].ID), tostring(parse_json(Parameters)[0].Vlaue))) 
+    | project Operation, UserType, OfficeWorkload, Parameters, Office_TimeGenerated, Url, User
+    | extend timestamp = Office_TimeGenerated, AccountCustomEntity = User
   ) on Url
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, UserType, OfficeWorkload, Parameters, Office_TimeGenerated, Url
