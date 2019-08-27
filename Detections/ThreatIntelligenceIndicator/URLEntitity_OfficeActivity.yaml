@@ -1,0 +1,35 @@
+id: 36a9c9e5-3dc1-4ed9-afaa-1d13617bfc2b
+name: TI map URL entity to OfficeActivity data
+description: |
+  'Identifies a match in OfficeActivity data from any URL IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: ThreatIntelligence
+	dataTypes:
+	  - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+	let dt_lookBack = 1h;
+	let ioc_lookBack = 14d;
+	ThreatIntelligenceIndicator
+	| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+	| where Active == true
+	// Picking up only IOC's that contain the entities we want
+	| where isnotempty(Url)
+	| join (
+	   	OfficeActivity
+		| where TimeGenerated >= ago(dt_lookBack)
+		| extend Url = tostring(parse_json(ModifiedProperties)[12].NewValue) 
+		| extend Office_TimeGenerated = TimeGenerated
+	) on Url
+	| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+	| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, UserType, OfficeWorkload, Parameters, Office_TimeGenerated, Url
+	| extend timestamp = Office_TimeGenerated, AccountCustomEntity = tostring(parse_json(Parameters)[0].Value)

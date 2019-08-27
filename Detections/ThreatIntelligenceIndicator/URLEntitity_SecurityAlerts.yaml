@@ -1,0 +1,40 @@
+id: f30a47c1-65fb-42b1-a7f4-00941c12550b
+name: TI map URL entity to SecurityAlert data
+description: |
+  'Identifies a match in SecurityAlert data from any URL IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId:
+    dataTypes:
+      - SecurityAlert
+  - connectorId: ThreatIntelligence
+	dataTypes:
+	  - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+    let dt_lookBack = 1h;
+	let ioc_lookBack = 14d;
+	ThreatIntelligenceIndicator
+	| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+	| where Active == true
+	// Picking up only IOC's that contain the entities we want
+	| where isnotempty(Url)
+	| join (   
+		SecurityAlert 
+		| where TimeGenerated >= ago(dt_lookBack)
+		// Extract URL from JSON data
+		| extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,Entities)
+		// We only want alerts that actually contain URL data
+		| where isnotempty(Url)
+		// Extract hostname from JSON data for entity mapping
+		| extend Compromised_Host = tostring(parse_json(ExtendedProperties).["Compromised Host"])
+	    | extend Alert_TimeGenerated = TimeGenerated
+	) on Url
+	| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+	| project LatestIndicatorTime, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Alert_TimeGenerated, AlertName, AlertSeverity, Description, Url, Compromised_Host
+    | extend timestamp = Alert_TimeGenerated, HostCustomEntity = Compromised_Host
