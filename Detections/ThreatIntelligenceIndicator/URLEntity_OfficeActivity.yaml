@@ -26,11 +26,17 @@ query: |
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
   | join (
-    OfficeActivity
+   OfficeActivity
     | where TimeGenerated >= ago(dt_lookBack)
-    | extend Url = tostring(parse_json(ModifiedProperties)[12].NewValue) 
+    //Extract the Url from a number of potential fields
+    | extend Url = iif(OfficeWorkload == "AzureActiveDirectory",extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,ModifiedProperties),tostring(parse_json(ModifiedProperties)[12].NewValue))
+    | where isnotempty(Url)
+    // Ensure we get a clean URL
+    | extend Url = tostring(split(Url, ';')[0])
     | extend Office_TimeGenerated = TimeGenerated
+    // Project a single user identity that we can use for entity mapping
+    | extend User = iif(isnotempty(UserId), UserId, iif(isnotempty(Actor), tostring(parse_json(Actor)[0].ID), tostring(parse_json(Parameters)[0].Vlaue))) 
   ) on Url
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, UserType, OfficeWorkload, Parameters, Office_TimeGenerated, Url
-  | extend timestamp = Office_TimeGenerated, AccountCustomEntity = tostring(parse_json(Parameters)[0].Value)
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, UserType, OfficeWorkload, Parameters, Office_TimeGenerated, Url, User
+  | extend timestamp = Office_TimeGenerated, AccountCustomEntity = User
