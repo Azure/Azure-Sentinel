@@ -1,30 +1,34 @@
 ﻿id: bfb1c90f-8006-4325-98be-c7fffbc254d6
-name: Distributed Password cracking attempts.
+name: Distributed Password cracking attempts
 description: |
-  This query over Azure AD sign-in activity highlights distributed password cracking attempt.
-  The premise is simple wherein the query looks for unusually high number of failed password attempts coming
-  from multiple location for a user account.
+  'Identifies distributed password cracking attempts from the Azure Active Directory Signin logs.
+  The query looks for unusually high number of failed password attempts coming from multiple locations for a user account.
+  References: https://docs.microsoft.com/en-us/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
   50053   Account is locked because the user tried to sign in too many times with an incorrect user ID or password.
   50055   Invalid password, entered expired password.
   50056   Invalid or null password - Password does not exist in store for this user.
-  50126   Invalid username or password, or invalid on-premises username or password.
+  50126   Invalid username or password, or invalid on-premises username or password.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1110
 query: |
 
-  let timeRange = ago(24h);
+  let timeRange = 1d;
+  let s_threshold = 30;
+  let l_threshold = 3;
   SigninLogs
-  | where TimeGenerated >= timeRange
-  | where OperationName == "Sign-in activity"
+  | where TimeGenerated >= ago(timeRange)
+  | where OperationName =~ "Sign-in activity"
   // Error codes that we want to look at as they are related to the use of incorrect password.
   | where ResultType in ("50126", "50053" , "50055", "50056")
   | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
@@ -32,7 +36,7 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), SigninCount=count(), LocationCount=dcount(LocationString) by UserPrincipalName, IPAddress, LocationString, AppDisplayName, ResultDescription, tostring(Browser), tostring(OS)
   | project StartTimeUtc, EndTimeUtc, SigninCount, LocationCount, UserPrincipalName, IPAddress, LocationString, AppDisplayName, ResultDescription, Browser, OS
   // Setting a generic threshold - Can be different for different environment
-  | where SigninCount > 30                                     
+  | where SigninCount > s_threshold                                     
   // Setting a generic threshold for location  - Can be different for different environment
-  | where LocationCount >=  3
-
+  | where LocationCount >= l_threshold
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
