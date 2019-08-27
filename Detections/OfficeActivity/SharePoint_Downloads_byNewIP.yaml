@@ -1,0 +1,47 @@
+﻿id: 4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7
+name: SharePointFileOperation via previously unseen IPs
+description: |
+  'Identifies when the volume of documents uploaded to or downloaded from Sharepoint by new IP addresses
+  exceeds a threshold (default is 100).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let threshold = 100;
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let historicalActivity =
+  OfficeActivity
+  | where TimeGenerated between(ago(14d)..ago(1d))
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ ("FileDownloaded", "FileUploaded")
+  | summarize historicalCount = count() by ClientIP;
+  let recentActivity = OfficeActivity
+  | where TimeGenerated > ago(1d)
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ ("FileDownloaded", "FileUploaded")
+  | summarize recentCount = count() by ClientIP;
+  recentActivity | join kind= leftanti ( historicalActivity ) on ClientIP
+  // More than 100 downloads/uploads from a new IP
+  | where recentCount > threshold
+  | join kind = rightsemi 
+  (OfficeActivity 
+  | where TimeGenerated >= ago(1d) 
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ ("FileDownloaded", "FileUploaded")
+  )
+  on ClientIP
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by RecordType, Operation, UserType, UserId, ClientIP, OfficeWorkload, Site_Url
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP 
+  | order by Operation, UserId asc
+

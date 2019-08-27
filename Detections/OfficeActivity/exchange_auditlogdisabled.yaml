@@ -1,8 +1,8 @@
 ﻿id: 194dd92e-d6e7-4249-85a5-273350a7f5ce
 name: Exchange AuditLog Disabled
 description: |
-  This will help you determine if exchange audit logging is disabled which may be an attempt
-  to evade detection or avoid other defenses by an adversary.
+  'Identifies when the exchange audit logging has been disabled which may be an adversary attempt
+  to evade detection or avoid other defenses.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Office365
@@ -14,16 +14,17 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - DefenseEvasion
+relevantTechniques:
+  - T1089
 query: |
 
   let timeframe = 1d;
   OfficeActivity
   | where TimeGenerated >= ago(timeframe)
-  | where UserType in ("Admin","DcAdmin") 
+  | where UserType in~ ("Admin","DcAdmin") 
   // Only admin or global-admin can disable audit logging
-  | where Operation == "Set-AdminAuditLogConfig" 
-  | extend AdminAuditLogEnabledValue= 
-    tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(Parameters),3,3)))[0])).Value)
-  | where AdminAuditLogEnabledValue == "False" 
-  | summarize min(TimeGenerated), max(TimeGenerated), OperationCount = count()
-    by Operation, UserType, UserId, ResultStatus, Parameters, AdminAuditLogEnabledValue
+  | where Operation =~ "Set-AdminAuditLogConfig" 
+  | extend AdminAuditLogEnabledValue = tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(Parameters),3,3)))[0])).Value)
+  | where AdminAuditLogEnabledValue =~ "False" 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP 
