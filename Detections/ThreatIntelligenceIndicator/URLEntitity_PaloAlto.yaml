@@ -8,33 +8,34 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: ThreatIntelligence
-	dataTypes:
-	  - ThreatIntelligenceIndicator
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Impact
-query: |	
-	let dt_lookBack = 1h;
-	let ioc_lookBack = 14d;
-	ThreatIntelligenceIndicator
-	| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-	| where Active == true
-	// Picking up only IOC's that contain the entities we want
-	| where isnotempty(Url)
-	| join (
-	    CommonSecurityLog
-		| where TimeGenerated >= ago(dt_lookBack)
-		// Select on Palo Alto logs
-		| where DeviceVendor == "Palo Alto Networks"
-		| where DeviceEventClassID == 'url'		 
-		//Select logs where URL data is populated
-		| extend Url = columnifexists('RequestURL', "None")
-	    | where Url != "None" and isnotempty(Url)
-		| extend CSL_TimeGenerated = TimeGenerated
-	) on Url
-	| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-	| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, CSL_TimeGenerated, Url
-	| extend timestamp = CSL_TimeGenerated, IPCustomEntity = SourceIP
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  | join (
+    CommonSecurityLog
+    | where TimeGenerated >= ago(dt_lookBack)
+    // Select on Palo Alto logs
+    | where DeviceVendor == "Palo Alto Networks"
+    | where DeviceEventClassID == 'url'		 
+    //Select logs where URL data is populated
+    | extend Url = columnifexists('RequestURL', "None")
+    | where Url != "None" and isnotempty(Url)
+    | extend CSL_TimeGenerated = TimeGenerated
+  ) on Url
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, CSL_TimeGenerated, Url
+  | extend timestamp = CSL_TimeGenerated, IPCustomEntity = SourceIP 
