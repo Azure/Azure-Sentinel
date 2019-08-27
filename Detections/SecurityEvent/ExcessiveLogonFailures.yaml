@@ -1,6 +1,7 @@
 ﻿id: 2391ce61-8c8d-41ac-9723-d945b2e90720
-name: Excessive logon failures
-description: User has over 50 logon failures today and at least 25% of the count of logon failures previous 7 days
+name: Excessive Windows logon failures
+description: |
+  'User has over 50 Windows logon failures today and at least 25% of the count of logon failures previous 7 days'
 severity: Low
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -11,8 +12,9 @@ queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - LateralMovement
-  - Probing
+  - CredentialAccess
+relevantTechniques:
+  - T1110
 query: |
 
   let timeframe = 7d;
@@ -20,16 +22,15 @@ query: |
   let countlimit = 50;
   SecurityEvent
   | where TimeGenerated >= ago(1d)
-  | where EventID == 4625
-  | where AccountType == "User"
-  | summarize CountToday = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
+  | where EventID == 4625 and AccountType =~ "User"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
   | join (
       SecurityEvent 
       | where TimeGenerated >= ago(timeframe)
-      | where EventID == 4625
-      | where AccountType == "User"
+      | where EventID == 4625 and AccountType =~ "User"
       | summarize CountLast7day = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
   ) on EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
   | where CountToday >= CountLast7day*threshold and CountToday >= countlimit
-  | project EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress, CountToday, CountLast7day, Avg7Day = CountLast7day/7
-
+  | project StartTimeUtc, EndTimeUtc, EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress, CountToday, CountLast7day, Avg7Day = CountLast7day/7
+  | order by CountToday desc nulls last 
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer

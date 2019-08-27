@@ -1,40 +1,43 @@
 ﻿id: d6190dde-8fd2-456a-ac5b-0a32400b0464
-name: Process executed from binary hidden in Base64 encoded file.
+name: Process executed from binary hidden in Base64 encoded file
 description: |
-  Encoding malicious software is a technique to obfuscate files from detection.
-      The first ProcessCommandLine component is looking for Python decoding base64
-      The second ProcesssCommandLine component is looking for the Bash/sh commandline base64 decoding tool
-      The third one is looking for Ruby decoding base64
+  'Encoding malicious software is a technique to obfuscate files from detection. 
+  The first ProcessCommandLine component is looking for Python decoding base64. 
+  The second ProcesssCommandLine component is looking for the Bash/sh commandline base64 decoding tool.
+  The third one is looking for Ruby decoding base64.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
   - Execution
   - DefenseEvasion
+relevantTechniques:
+  - T1059
+  - T1027
+  - T1140
 query: |
 
+  let timeframe = 1d;
   let ProcessCreationEvents=() {
   let processEvents=SecurityEvent
   | where EventID==4688
-  | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,AccountDomain=SubjectDomainName,
-  FileName=tostring(split(NewProcessName, '\\')[-1]), // convert SecurityEvents raw schema to get FileName & CommandLine 
-  ProcessCommandLine = CommandLine, 
-  FolderPath = "",
-  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
-  processEvents ;
+  | project  TimeGenerated, ComputerName = Computer, AccountName = SubjectUserName, AccountDomain = SubjectDomainName,
+  // convert SecurityEvents raw schema to get FileName & CommandLine
+  FileName = tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, FolderPath = "",
+  InitiatingProcessFileName = ParentProcessName, InitiatingProcessCommandLine = "",InitiatingProcessParentFileName = "";
+  processEvents;
   };
   ProcessCreationEvents 
-  | where TimeGenerated > ago(1d) 
+  | where TimeGenerated > ago(timeframe) 
   | where ProcessCommandLine contains ".decode('base64')"
           or ProcessCommandLine contains "base64 --decode"
           or ProcessCommandLine contains ".decode64(" 
-  | project TimeGenerated , ComputerName , FileName , ProcessCommandLine , InitiatingProcessCommandLine 
-  | top 100 by TimeGenerated
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by ComputerName, AccountName, AccountDomain, FileName, ProcessCommandLine, InitiatingProcessFileName, InitiatingProcessCommandLine 
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = AccountName, HostCustomEntity = ComputerName
 
