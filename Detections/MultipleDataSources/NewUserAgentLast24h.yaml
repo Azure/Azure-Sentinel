@@ -1,8 +1,8 @@
 ﻿id: b725d62c-eb77-42ff-96f6-bdc6745fc6e0
 name: New UserAgent observed in last 24 hours
 description: |
-  Shows new UserAgent observed in the last 24 hours versus the previous 30 days. These new UserAgent could be benign. 
-  However, in normally stable environments, these new UserAgent could provide a starting point for investigating malicious activity.
+  'Identifies new UserAgents observed in the last 24 hours versus the previous 14 days. These new UserAgents could be benign. 
+  However, in normally stable environments, these new UserAgents could provide a starting point for investigating malicious activity.'
 severity: Low
 requiredDataConnectors:
   - connectorId: AWS
@@ -17,24 +17,29 @@ requiredDataConnectors:
   - dataTypes:
     - W3CIISLog
 queryFrequency: 1d
-queryPeriod: 30d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
-  - Discovery
+  - CommandAndControl
+  - Execution
+relevantTechniques:
+  - T1189
+  - T1071
+  - T1203
 query: |
 
   let UserAgentAll =
   (union isfuzzy=true
   (OfficeActivity
-  | where TimeGenerated >= ago(30d) 
+  | where TimeGenerated >= ago(14d) 
   | extend UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))
   | extend SourceIP = ClientIP
   ),
   (
   AzureDiagnostics
-  | where TimeGenerated >= ago(30d) 
+  | where TimeGenerated >= ago(14d) 
   | extend UserAgent = replace(@'\+', @' ', userAgent_s)
   | where isnotempty(UserAgent)
   | parse msg_s with * 'HTTPS request from' SourceIP ':' * 
@@ -42,24 +47,24 @@ query: |
   ),
   (
   W3CIISLog
-  | where TimeGenerated >= ago(30d) 
+  | where TimeGenerated >= ago(14d) 
   | where UserAgent = csUserAgent
   | where SourceIP = cIP
   ),
   (
   AWSCloudTrail
-  | where TimeGenerated >= ago(30d) 
+  | where TimeGenerated >= ago(14d) 
   | where UserAgent = UserAgent
   | where SourceIP = SourceIpAddress
   ));
   UserAgentAll
   | where TimeGenerated < ago(1d)
-  | summarize IP =dcount(SourceIP) by tostring(UserAgent)
+  | summarize IP = dcount(SourceIP) by tostring(UserAgent)
   | join kind=rightanti
   (
   UserAgentAll
   | where TimeGenerated >= ago(1d) 
-  | summarize IP =dcount(SourceIP) by tostring(UserAgent), SourceIP 
+  | summarize IP = dcount(SourceIP) by tostring(UserAgent), SourceIP 
   ) on UserAgent 
-  | project  UserAgent , SourceIP
-
+  | project UserAgent, SourceIP
+  | extend IPCustomEntity = SourceIP

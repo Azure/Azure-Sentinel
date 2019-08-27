@@ -1,29 +1,38 @@
-// Name: Example showing how to query for domain IOCs across multiple data sources
-// Description: This query looks for exact match domain name of a few IOCs related to Strontium group that was touched in
-// in https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/
-//  
-// Id: 074ce265-f684-41cd-af07-613c5f3e6d0d
-//
-// Severity: High
-//
-// QueryFrequency: 1d
-//
-// QueryPeriod: 7d
-//
-// AlertTriggerOperator: gt
-//
-// AlertTriggerThreshold: 0
-//
-// DataSource: #CommonSecurityLog, #DnsEvents, #VMConnection  DataTypes: #VMConnection, #DnsEvents
-//
-// Tactics: #CommandAndControl
-//
-let DomainNames = dynamic(["irf.services","microsoft-onthehub.com","msofficelab.com","com-mailbox.com","my-sharefile.com","my-sharepoints.com",
-"accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net",
-"onedrive-sharedfile.com","onedrv-live.com","transparencyinternational-my-sharepoint.com","transparencyinternational-my-sharepoints.com","soros-my-sharepoint.com"]);
-(union isfuzzy=true
-(CommonSecurityLog | where TimeGenerated  >= ago(7d) | parse Message with * '(' DNSName ')' * ),
-(DnsEvents | where TimeGenerated  >= ago(7d) | project-rename DNSName = Name),
-(VMConnection | where TimeGenerated  >= ago(7d) | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *) )
-| where isnotempty(DNSName)
-| where DNSName  in~ (DomainNames)
+id: 074ce265-f684-41cd-af07-613c5f3e6d0d
+name: Known Strontium group domains
+description: |
+  'Matches domain name IOCs related to Strontium group activity with CommonSecurityLog, DnsEvents and VMConnection dataTypes.
+  References: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'
+severity: High
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1043
+query: |
+
+  let DomainNames = dynamic(["irf.services","microsoft-onthehub.com","msofficelab.com","com-mailbox.com","my-sharefile.com","my-sharepoints.com",
+  "accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net",
+  "onedrive-sharedfile.com","onedrv-live.com","transparencyinternational-my-sharepoint.com","transparencyinternational-my-sharepoints.com","soros-my-sharepoint.com"]);
+  (union isfuzzy=true
+  (CommonSecurityLog | where TimeGenerated >= ago(1d) | parse Message with * '(' DNSName ')' * ),
+  (DnsEvents | where TimeGenerated >= ago(1d) | extend SourceIP = ClientIP | project-rename DNSName = Name),
+  (VMConnection | where TimeGenerated >= ago(1d) | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *) )
+  | where isnotempty(DNSName)
+  | where DNSName in~ (DomainNames)
+  | extend IPCustomEntity = SourceIP
