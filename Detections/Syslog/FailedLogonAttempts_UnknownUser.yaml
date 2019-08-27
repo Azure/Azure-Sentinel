@@ -1,41 +1,40 @@
 ﻿id: e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
 name: Failed Logon Attempts
 description: |
-  This query uses the Syslog, authpriv logs to show when there are failed logon attempts from unknown users.
-  In this case, the unknown user means the account that tried to log in isn't provisioned on the machine. A 
-  few hits could indicate someone attempting to access a machine they aren't authorized on. If there are a lot
-  of hits, especially from outside your network, it could indicate a brute force attack. The query looks at 
-  the last seven (7) days by default.
+  'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in 
+  isn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. 
+  If there are many of hits, especially from outside your network, it could indicate a brute force attack. 
+  Default threshold for logon attempts is 6.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Syslog
     dataTypes: 
       - Syslog
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
-  - Discovery
-  - LateralMovement
+  - CredentialAccess
+relevantTechniques:
+  - T1110
 query: |
 
-  // Change startdate below if you want a different timespan
-  let startdate = ago(1d);
+  let startdate = 1d;
+  let threshold = 6;
   // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.
   // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages
   // are aggregated.
   let authfail = Syslog     
   | where Facility == "authpriv"   // looks at authpriv messages
-  | where TimeGenerated >= startdate
+  | where TimeGenerated >= ago(startdate)
   | where SyslogMessage contains "authentication failure" and SyslogMessage contains " uid=0"
   | parse SyslogMessage with * "rhost=" ExternalIP
   | project TimeGenerated, Computer, ProcessName, HostIP, ExternalIP, ProcessID;  
   // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. 
   let userfail = Syslog 
   | where Facility == "authpriv" 
-  | where TimeGenerated >= startdate
+  | where TimeGenerated >= ago(startdate)
   | where SyslogMessage contains "user unknown"
   | project TimeGenerated, Computer, HostIP, ProcessID;
   // Join the two log messages above
@@ -54,14 +53,12 @@ query: |
   | project ExternalIP, Computer, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt;
   // Count the number of failed logon attempts by External IP and internal machine
   let totalfails = userauthfail
-  | summarize count(TimeGenerated) by ExternalIP, Computer, HostIP
-  | project ExternalIP, Computer, HostIP, TotalLogonAttempts = count_TimeGenerated;
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TotalLogonAttempts = count() by ExternalIP, Computer, HostIP
+  | project StartTimeUtc, EndTimeUtc, ExternalIP, Computer, HostIP, TotalLogonAttempts;
   // Combine total attempts with timing data from above
   let finalfails = totalfails | join (faildates) on Computer, ExternalIP
-  | project SourceAddress = ExternalIP, DestinationHost = Computer, DestinationIP = HostIP, TotalLogonAttempts, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts
-  // Sort by Computer name
-  | order by DestinationHost asc nulls last ;
-  // Output table
-  finalfails | where TotalLogonAttempts >= 6
-
-
+  | project StartTimeUtc, EndTimeUtc, SourceAddress = ExternalIP, DestinationHost = Computer, DestinationIP = HostIP, TotalLogonAttempts, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts
+  | order by DestinationHost asc nulls last;
+  finalfails 
+  | where TotalLogonAttempts >= threshold
+  | extend timestamp = StartTimeUtc, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationIP
