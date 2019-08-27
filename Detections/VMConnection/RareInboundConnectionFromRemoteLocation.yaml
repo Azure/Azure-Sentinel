@@ -1,63 +1,80 @@
 ﻿id: da5cc1d8-5d03-4444-9125-17fca6f916d5
-name: Rare/new inbound connections from rare/new Locations
+name: Rare inbound connections from Rare Locations
 description: |
-  This identifies if there is unusual connections inbound from unexpected remote locations to a VM 
-  when compared with the last 30 days.
-  This may indicate connection to a C2 or data exfiltration from the associated VM.
-  It is recommended that you review the associated process and whether or not this behaviour is expected.
+  'Identifies if there is unusual connections inbound from unexpected remote locations to a VM when compared with the last 14 days.
+  This may indicate connection to a CommandAndControl server or data exfiltration from the associated VM.
+  It is recommended that you review the associated process and whether or not this behaviour is expected.'
 severity: Low
 requiredDataConnectors:
   - dataTypes:
       - VMConnection
-queryFrequency: 1h
-queryPeriod: 30d
+queryFrequency: 1d
+queryPeriod: 14d
 triggerOperator: gt
-triggerThreshold: 5
+triggerThreshold: 0
 tactics:
   - CommandAndControl
-  - InitialAccess
   - Exfiltration
-  - Discover
-  - Collection
+relevantTechniques:
+  - T1105
+  - T1048
 query: |
 
+  let f_lookBack = 14d;
+  let s_lookBack = 7d;
+  let endtime = 1d;
+  let countryThreshold = 5;
+  let ipBlockThreshold = 7;
+  // gather a list of common countries connections come from for previous 14d and include only above countryThreshold
   let CountryCount = VMConnection 
-  | where TimeGenerated < ago(1h) and TimeGenerated >= ago(30d) 
+  | where TimeGenerated >= ago(f_lookBack) and TimeGenerated < ago(endtime)
   | where isnotempty(RemoteCountry)
-  | where Direction == "inbound" 
-  | summarize count() by RemoteCountry | where count_ > 5; 
-  let Full = VMConnection
-  | where TimeGenerated >= ago(1h) 
+  | where Direction =~ "inbound" 
+  | summarize count() by RemoteCountry 
+  | where count_ > countryThreshold; 
+  // gather the connections for Today with all details
+  let FullData = VMConnection
+  | where TimeGenerated >= ago(endtime) 
   | where isnotempty(RemoteCountry) 
-  | where Direction == "inbound" 
-  | summarize min(TimeGenerated), max(TimeGenerated), sum(BytesSent), sum(BytesReceived)  
+  | where Direction =~ "inbound"
+  // exclude internal to internal 
+  | where SourceIp !startswith "192.168." and DestinationIp !startswith "192.168."  
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), sum(BytesSent), sum(BytesReceived)  
     by Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, Protocol, 
     RemoteCountry, MaliciousIp, IndicatorThreatType, Confidence, ReportReferenceLink;
+  // build IP blocks from Today
   let Today = 
   VMConnection 
-  | where TimeGenerated >= ago(1h) 
+  | where TimeGenerated >= ago(endtime) 
   | where isnotempty(RemoteCountry) 
-  | where Direction == "inbound" 
+  | where Direction =~ "inbound"
+  // exclude internal to internal 
   | where SourceIp !startswith "192.168." and DestinationIp !startswith "192.168." 
-  | extend SourceIpBlock = trim_end(@"\.[0-9]*",SourceIp), DestIpBlock = trim_end(@"\.[0-9]*",DestinationIp) 
-  | summarize countToday=count() by SourceIpBlock, SourceIp, DestinationIp, DestIpBlock, RemoteCountry
-  ;
+  | extend SourceIpBlock = trim_end(@"\.[0-9]*", SourceIp), DestIpBlock = trim_end(@"\.[0-9]*", DestinationIp) 
+  | summarize countToday = count() by SourceIpBlock, SourceIp, DestinationIp, DestIpBlock, RemoteCountry;
+  // build IP blocks from last week and include only above ipBlockThreshold
   let lastWeek = 
   VMConnection 
-  | where TimeGenerated < ago(1h) and TimeGenerated >= ago(7d) 
+  | where TimeGenerated >= ago(s_lookBack) and TimeGenerated < ago(endtime)
   | where isnotempty(RemoteCountry) 
-  | where Direction == "inbound"
-  | extend SourceIpBlock = trim_end(@"\.[0-9]*",SourceIp), DestIpBlock = trim_end(@"\.[0-9]*",DestinationIp) 
+  | where Direction =~ "inbound"
+  // exclude internal to internal 
+  | where SourceIp !startswith "192.168." and DestinationIp !startswith "192.168." 
+  | extend SourceIpBlock = trim_end(@"\.[0-9]*", SourceIp), DestIpBlock = trim_end(@"\.[0-9]*", DestinationIp) 
   | summarize SourceIpBlockCount = count() by SourceIpBlock, DestIpBlock, RemoteCountry
-  | where SourceIpBlockCount > 7
-  ;
+  | where SourceIpBlockCount > ipBlockThreshold;
+  // exclude connections from last week that come from the same IP block
   let New = Today | join kind= leftanti (
     lastWeek
   ) on RemoteCountry, SourceIpBlock, DestIpBlock
   | project RemoteCountry, SourceIp, DestinationIp, countToday;
+  // exclude countries above the countryThreshold
   let RemoveCommonCountry = New | join kind= leftanti (
     CountryCount 
   ) on RemoteCountry;
+  // join back to FullData to indicate new or rare IP and Country combinations
   RemoveCommonCountry 
-  | join kind= innerunique (Full) on RemoteCountry
-
+  | join kind= innerunique (FullData) on RemoteCountry, SourceIp, DestinationIp
+  | project StartTimeUtc, EndTimeUtc, RemoteCountry, Computer, SourceIp, DestinationIp, Direction, ProcessName, DestinationPort, Protocol, countToday, sum_BytesSent, sum_BytesReceived
+  | order by countToday desc nulls last 
+  | extend timestamp = StartTimeUtc, HostCustomEntity = Computer, IPCustomEntity = SourceIp

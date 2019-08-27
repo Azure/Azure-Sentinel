@@ -1,32 +1,31 @@
 ﻿id: f845881e-2500-44dc-8ed7-b372af3e1e25
 name: Suspect User Agent connection attempt
-description: Connection attempts (success or fail) from clients with very short or very long User Agent strings and with less than 100 connection attempts
+description: |
+  'Identifies connection attempts (success or fail) from clients with very short or very long User Agent strings and with less than 100 connection attempts'
 severity: Low
 requiredDataConnectors:
   - dataTypes:
       - W3CIISLog
-queryFrequency: 24h
-queryPeriod: 24h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
-  - Discovery
+relevantTechniques:
+  - T1190
 query: |
 
-  W3CIISLog | where TimeGenerated >= ago(1d)
-  // The below line can be used to exclude local IPs if these create noise
-  //| where cIP !startswith "192.168." and cIP != "::1"
-  | where isnotempty(csUserAgent) and csUserAgent !in~ ("-", "MSRPC") and (string_size(csUserAgent) <= 5 or string_size(csUserAgent) >= 1000)
+  let timeFrame = 1d;
+  let short_uaLength = 5;
+  let long_uaLength = 1000;
+  let c_threshold = 100;
+  W3CIISLog 
+  | where TimeGenerated >= ago(timeFrame)
+  // Exclude local IPs as these create noise
+  | where cIP !startswith "192.168." and cIP != "::1"
+  | where isnotempty(csUserAgent) and csUserAgent !in~ ("-", "MSRPC") and (string_size(csUserAgent) <= short_uaLength or string_size(csUserAgent) >= long_uaLength)
   | extend csUserAgent_size = string_size(csUserAgent)
-  | project TimeGenerated, sSiteName, sPort, csUserAgent, csUserAgent_size, csUserName , csMethod, csUriStem, sIP, cIP, scStatus, scSubStatus, scWin32Status, RemoteIPCountry, MaliciousIP
-  | join (
-      W3CIISLog | where TimeGenerated >= ago(1d) 
-      //| where cIP !startswith "192.168." and cIP != "::1"
-      | where isnotempty(csUserAgent) and csUserAgent !in~ ("-", "MSRPC") 
-      | extend csUserAgent_size = string_size(csUserAgent)
-      | summarize csUserAgent_count = count() by bin(csUserAgent_size, 1)
-      | where csUserAgent_count <= 100
-      ) on csUserAgent_size 
-  | project TimeGenerated, sSiteName, sPort, sIP, cIP, csUserAgent, csUserAgent_size, csUserAgent_count, csUserName , csMethod, csUriStem, scStatus, scSubStatus, scWin32Status, RemoteIPCountry, MaliciousIP
-
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ConnectionCount = count() by Computer, sSiteName, sPort, csUserAgent, csUserAgent_size, csUserName , csMethod, csUriStem, sIP, cIP, scStatus, scSubStatus, scWin32Status, RemoteIPCountry, MaliciousIP
+  | where ConnectionCount < c_threshold
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = csUserName, HostCustomEntity = Computer, IPCustomEntity = cIP

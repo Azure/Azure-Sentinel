@@ -1,35 +1,36 @@
 ﻿id: 19e01883-15d8-4eb6-a7a5-3276cd668388
-name: Large number of failed attempts from same client IP
+name: High count of failed attempts from same client IP
 description: |
-  'This query shows when 50 or more failed attempts from a given client IP in 1 minute occurring on a given server
-  This could be indicative of attempted probing.  This could also simply indicate a misconfigured service or device.
-
-   Recommendations: Validate that these are expected connections from the given Client IP.  If the client IP is not recognized, potentially block these connections at the edge device.
-   If these are expected connections, verify the credentials are properly configured on the system, service, application or device that is associated with the client IP.
-
-  Status code mappings for your convenience, also inline if the mapping is not available
-  IIS status code mapping - https://support.microsoft.com/en-us/help/943891/the-http-status-code-in-iis-7-0-iis-7-5-and-iis-8-0
-  Win32 Status code mapping - https://msdn.microsoft.com/en-us/library/cc231199.aspx'
+  'Identifies when 20 or more failed attempts from a given client IP in 1 minute occur on the IIS server.
+  This could be indicative of an attempted brute force. This could also simply indicate a misconfigured service or device.
+  Recommendations: Validate that these are expected connections from the given Client IP.  If the client IP is not recognized, 
+  potentially block these connections at the edge device.
+  If these are expected connections, verify the credentials are properly configured on the system, service, application or device 
+  that is associated with the client IP.
+  References:
+  IIS status code mapping: https://support.microsoft.com/en-us/help/943891/the-http-status-code-in-iis-7-0-iis-7-5-and-iis-8-0
+  Win32 Status code mapping: https://msdn.microsoft.com/en-us/library/cc231199.aspx'
 severity: Medium
 requiredDataConnectors:
   - dataTypes:
       - W3CIISLog
-queryFrequency: 10m
-queryPeriod: 1m
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
-triggerThreshold: 50
+triggerThreshold: 0
 tactics:
-  - Discovery
-  - PrivilegeEscalation
+  - CredentialAccess
+relevantTechniques:
+  - T1110
 query: |
 
-  let timeFrame = ago(10m);
+  let timeFrame = 1d;
+  let timeBin = 1m;
+  let failedThreshold = 20;
   W3CIISLog
-  | where TimeGenerated >= timeFrame
+  | where TimeGenerated >= ago(timeFrame)
   | where scStatus in ("401","403")
   | where csUserName != "-"
-  | summarize makeset(sSiteName) , makeset(sPort), FailedConnectionCount = count() by bin(TimeGenerated, 1m), Computer, sIP, cIP, csMethod, scStatus, scSubStatus, scWin32Status
-  | extend sPortCount = arraylength(set_sPort)
   | extend scStatusFull = strcat(scStatus, ".",scSubStatus) 
   // Map common IIS codes
   | extend scStatusFull_Friendly = case(
@@ -46,7 +47,9 @@ query: |
   | extend scWin32Status_Hex = tohex(tolong(scWin32Status)) 
   // Map common win32 codes
   | extend scWin32Status_Friendly = case(
-  scWin32Status_Hex =~ "52e", "Logon failure: Unknown user name or bad password.", 
+  scWin32Status_Hex =~ "775", "The referenced account is currently locked out and cannot be logged on to.",
+  scWin32Status_Hex =~ "52e", "Logon failure: Unknown user name or bad password.",
+  scWin32Status_Hex =~ "532", "Logon failure: The specified account password has expired.",
   scWin32Status_Hex =~ "533", "Logon failure: Account currently disabled.", 
   scWin32Status_Hex =~ "2ee2", "The request has timed out.", 
   scWin32Status_Hex =~ "0", "The operation completed successfully.", 
@@ -58,7 +61,11 @@ query: |
   scWin32Status_Hex =~ "8009030e", "SEC_E_NO_CREDENTIALS", 
   scWin32Status_Hex =~ "8009030C", "SEC_E_LOGON_DENIED", 
   "See - https://msdn.microsoft.com/en-us/library/cc231199.aspx")
-  | summarize makeset(csMethod), makeset(scStatus), makeset(scSubStatus), makeset(scWin32Status), makeset(scStatusFull), makeset(scStatusFull_Friendly), makeset(scWin32Status_Hex), makeset(scWin32Status_Friendly), sum(FailedConnectionCount) by TimeGenerated, Computer, tostring(set_sSiteName), sIP, cIP, tostring(set_sPort), sPortCount
-  | where sum_FailedConnectionCount >= 50
-  | project TimeGenerated, Computer, set_sSiteName, sIP, cIP, set_csMethod, set_scStatus, set_scSubStatu
-
+  // decode URI when available
+  | extend decodedUriQuery = url_decode(csUriQuery)
+  // Count of failed attempts from same client IP
+  | summarize makeset(decodedUriQuery), makeset(csUserName), makeset(sSiteName), makeset(sPort), makeset(csUserAgent), makeset(csMethod), makeset(csUriQuery), makeset(scStatusFull), makeset(scStatusFull_Friendly), makeset(scWin32Status_Hex), makeset(scWin32Status_Friendly), FailedConnectionsCount = count() by bin(TimeGenerated, timeBin), cIP, Computer, sIP
+  | where FailedConnectionsCount >= failedThreshold
+  | project TimeGenerated, cIP, set_csUserName, set_decodedUriQuery, Computer, set_sSiteName, sIP, set_sPort, set_csUserAgent, set_csMethod, set_scStatusFull, set_scStatusFull_Friendly, set_scWin32Status_Hex, set_scWin32Status_Friendly, FailedConnectionsCount
+  | order by FailedConnectionsCount
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = cIP

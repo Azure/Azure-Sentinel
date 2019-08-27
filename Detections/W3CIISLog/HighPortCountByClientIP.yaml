@@ -1,29 +1,31 @@
 ﻿id: 44a555d8-ecee-4a25-95ce-055879b4b14b
-name: Large number of attempts by a given client IP on many ports
+name: High count of connections by client IP on many ports
 description: |
-  This query shows when 30 or more ports are used for a given client IP in 10 minutes occurring on a given server
-  This could be indicative of attempted scanning.  This could also simply indicate a misconfigured service or device.
-
-  Status code mappings for your convenience, also inline if the mapping is not available
+  'Identifies when 30 or more ports are used for a given client IP in 10 minutes occurring on the IIS server.
+  This could be indicative of attempted port scanning or exploit attempt at internet facing web applications.  
+  This could also simply indicate a misconfigured service or device.
+  References:
   IIS status code mapping - https://support.microsoft.com/en-us/help/943891/the-http-status-code-in-iis-7-0-iis-7-5-and-iis-8-0
-  Win32 Status code mapping - https://msdn.microsoft.com/en-us/library/cc231199.aspx
+  Win32 Status code mapping - https://msdn.microsoft.com/en-us/library/cc231199.aspx'
 severity: Medium
 requiredDataConnectors:
   - dataTypes:
       - W3CIISLog
-queryFrequency: 10m
-queryPeriod: 10m
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
-triggerThreshold: 30
+triggerThreshold: 0
 tactics:
-  - Discovery
-  - PrivilegeEscalation
+  - InitialAccess
+relevantTechniques:
+  - T1190
 query: |
 
-  let timeFrame = ago(10m);
+  let timeFrame = 1d;
+  let timeBin = 10m;
+  let portThreshold = 30;
   W3CIISLog
-  | where TimeGenerated >= timeFrame
-  | summarize FailStartTimeUtc = min(TimeGenerated), FailEndTimeUtc = max(TimeGenerated), makeset(sSiteName) , makeset(csMethod), ConnectionCount = count() by Computer, sIP, cIP, sPort, scStatus, scSubStatus, scWin32Status
+  | where TimeGenerated >= ago(timeFrame)
   | extend scStatusFull = strcat(scStatus, ".",scSubStatus) 
   // Map common IIS codes
   | extend scStatusFull_Friendly = case(
@@ -40,7 +42,9 @@ query: |
   | extend scWin32Status_Hex = tohex(tolong(scWin32Status)) 
   // Map common win32 codes
   | extend scWin32Status_Friendly = case(
-  scWin32Status_Hex =~ "52e", "Logon failure: Unknown user name or bad password.", 
+  scWin32Status_Hex =~ "775", "The referenced account is currently locked out and cannot be logged on to.",
+  scWin32Status_Hex =~ "52e", "Logon failure: Unknown user name or bad password.",
+  scWin32Status_Hex =~ "532", "Logon failure: The specified account password has expired.",
   scWin32Status_Hex =~ "533", "Logon failure: Account currently disabled.", 
   scWin32Status_Hex =~ "2ee2", "The request has timed out.", 
   scWin32Status_Hex =~ "0", "The operation completed successfully.", 
@@ -52,8 +56,12 @@ query: |
   scWin32Status_Hex =~ "8009030e", "SEC_E_NO_CREDENTIALS", 
   scWin32Status_Hex =~ "8009030C", "SEC_E_LOGON_DENIED", 
   "See - https://msdn.microsoft.com/en-us/library/cc231199.aspx")
-  | summarize FailStartTimeUtc = min(FailStartTimeUtc), FailEndTimeUtc = max(FailEndTimeUtc), set_sSiteName = makeset(set_sSiteName) , makeset(sPort) , set_csMethod = makeset(set_csMethod), makeset(scStatus), makeset(scSubStatus), makeset(scWin32Status), makeset(scStatusFull), makeset(scStatusFull_Friendly), makeset(scWin32Status_Hex), makeset(scWin32Status_Friendly), sum(ConnectionCount) by Computer, sIP, cIP
-  | extend sPortCount = arraylength(set_sPort)
-  | where sPortCount >= 30
-  | project FailStartTimeUtc, FailEndTimeUtc, Computer, set_sSiteName, sIP, cIP, set_csMethod, set_scStat
-
+  // decode URI when available
+  | extend decodedUriQuery = url_decode(csUriQuery)
+  // Count of attempts by client IP on many ports
+  | summarize makeset(sPort), makeset(decodedUriQuery), makeset(csUserName), makeset(sSiteName), makeset(sPort), makeset(csUserAgent), makeset(csMethod), makeset(csUriQuery), makeset(scStatusFull), makeset(scStatusFull_Friendly), makeset(scWin32Status_Hex), makeset(scWin32Status_Friendly), ConnectionsCount = count() by bin(TimeGenerated, timeBin), cIP, Computer, sIP
+  | extend portCount = arraylength(set_sPort)
+  | where portCount >= portThreshold
+  | project TimeGenerated, cIP, set_sPort, set_csUserName, set_decodedUriQuery, Computer, set_sSiteName, sIP, set_csUserAgent, set_csMethod, set_scStatusFull, set_scStatusFull_Friendly, set_scWin32Status_Hex, set_scWin32Status_Friendly, ConnectionsCount, portCount
+  | order by portCount
+  | extend timestamp = TimeGenerated, IPCustomEntity = cIP
