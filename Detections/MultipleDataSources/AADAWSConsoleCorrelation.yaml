@@ -1,8 +1,8 @@
 id: 643c2025-9604-47c5-833f-7b4b9378a1f5
 name: Failed AzureAD logons but success logon to AWS Console
 description: |
-	'Identifies a list of IP addresses with a minimum number(defualt of 5) of failed logon attempts to Azure Active Directory.
-	Uses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'
+  'Identifies a list of IP addresses with a minimum number(defualt of 5) of failed logon attempts to Azure Active Directory.
+  Uses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -23,27 +23,27 @@ relevantTechniques:
   - T1110
 query: |
 
-	//Adjust this threshold to fit your environment
-	let signin_threshold = 5; 
-	//Make a list of IPs with AAD signin failures above our threshold
-	let suspicious_signins = 
-	SigninLogs
-	| where TimeGenerated >= ago(1d)
-	| where ResultType !in ("0", "50125", "50140")
-	| where IPAddress != "127.0.0.1"
-	| summarize count() by IPAddress
-	| where count_ >  signin_threshold
-	| summarize makelist(IPAddress);
-	//See if any of those IPs have sucessfully logged into the AWS console
-	AWSCloudTrail
-	| where TimeGenerated > ago(1d)
-	| where EventName == "ConsoleLogin"
-	| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin) 
-	| where LoginResult == "Success"
-	| where SourceIpAddress in (suspicious_signins)
-	| extend Reason = "Multiple failed AAD logins from IP address"
-	| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)
-	| extend User = iif(UserIdentityUserName == "", UserIdentityType, UserIdentityUserName) 
-	| project TimeGenerated, Reason, LoginResult, EventTypeName, UserIdentityType, User, AWSRegion, SourceIpAddress, UserAgent, MFAUsed
-	| extend AccountCustomEntity = User
-	| extend IPCustomEntity = SourceIpAddress
+  //Adjust this threshold to fit your environment
+  let signin_threshold = 5; 
+  //Make a list of IPs with AAD signin failures above our threshold
+  let suspicious_signins = 
+  SigninLogs
+  | where TimeGenerated >= ago(1d)
+  | where ResultType !in ("0", "50125", "50140")
+  | where IPAddress != "127.0.0.1"
+  | summarize count() by IPAddress
+  | where count_ >  signin_threshold
+  | summarize makelist(IPAddress);
+  //See if any of those IPs have sucessfully logged into the AWS console
+  AWSCloudTrail
+  | where TimeGenerated > ago(1d)
+  | where EventName == "ConsoleLogin"
+  | extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin) 
+  | where LoginResult == "Success"
+  | where SourceIpAddress in (suspicious_signins)
+  | extend Reason = "Multiple failed AAD logins from IP address"
+  | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)
+  | extend User = iif(UserIdentityUserName == "", UserIdentityType, UserIdentityUserName) 
+  | project TimeGenerated, Reason, LoginResult, EventTypeName, UserIdentityType, User, AWSRegion, SourceIpAddress, UserAgent, MFAUsed
+  | extend AccountCustomEntity = User
+  | extend IPCustomEntity = SourceIpAddress
