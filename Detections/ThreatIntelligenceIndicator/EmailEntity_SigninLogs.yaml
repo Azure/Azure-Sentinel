@@ -1,0 +1,43 @@
+id: 30fa312c-31eb-43d8-b0cc-bcbdfb360822
+name: TI map Email entity to SigninLogs
+description: |
+  'Identifies a match in SigninLogs table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  //Filtering the table for Email related IOCs
+  | where isnotempty(EmailRecipient)
+  | join (
+      SigninLogs | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserPrincipalName)
+      //Normalizing the column to lower case for exact match with EmailRecipient column
+      | extend UserPrincipalName = tolower(UserPrincipalName)
+      | where UserPrincipalName matches regex emailregex
+      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+      | extend Region = tostring(LocationDetails["countryOrRegion"]), State = tostring(LocationDetails["state"]), City = tostring(LocationDetails["city"])
+      // renaming timestamp column so it is clear the log this came from SigninLogs table
+      | extend SigninLogs_TimeGenerated = TimeGenerated
+  )
+  on $left.EmailRecipient == $right.UserPrincipalName
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SigninLogs_TimeGenerated, 
+  EmailSenderName,EmailSourceDomain,EmailSourceIpAddress,EmailSubject,FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP
+  | extend timestamp = SigninLogs_TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
