@@ -1,23 +1,44 @@
 ﻿id: 06a9b845-6a95-4432-a78b-83919b28c375
-name: Time Series Anomaly detection for Total volume in network logs- MultiVendor
+name: Time Series Anomaly detection for Total volume in network logs
 description: |
-  This query will identify anamalous spike in network traffic logs as compared to baseline or normal historical pattern. 
-  The query leverages KQL built-in anomaly detection algorithm find large deviations from baseline pattern. 
-  Any sudden increase in network traffic volume may be an indication of data exfiltration attempts and should be investigated.
-  Adjust score threshold value to find the far outlier than baseline. Higher the score, far it is from baseline value
+  'Identifies anamalous spikes in network traffic logs as compared to baseline or normal historical patterns. 
+  The query leverages a KQL built-in anomaly detection algorithm to find large deviations from baseline patterns. 
+  Sudden increases in network traffic volume may be an indication of data exfiltration attempts and should be investigated.
+  The higher the score, the further it is from the baseline value.'
 severity: Medium
 requiredDataConnectors:
-  - dataTypes:
+  - connectorId: Barracuda
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Checkpoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
       - CommonSecurityLog
 queryFrequency: 1h
-queryPeriod: 30d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 3
 tactics:
   - Exfiltration
+relevantTechniques:
+  - T1030
 query: |
 
-  let starttime = 30d;
+  let starttime = 14d;
   let endtime = 1d;
   let timeframe = 1h;
   let scorethreshold = 3;
@@ -40,4 +61,5 @@ query: |
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | summarize HourlyCount=count(), ListOfDestPorts=makelist(DestinationPort)  by SourceIP, DestinationIP,DestinationPort, DeviceVendor , bin(TimeGenerated,1h)
   ) on TimeGenerated, DeviceVendor | extend PercentTotal = round((HourlyCount / Total) * 100, 3) | sort by score desc 
-  | project DeviceVendor, TimeGenerated , SourceIP, DestinationIP, ListOfDestPorts,HourlyCount, PercentTotal, Total, baseline , score , anomalies  
+  | project DeviceVendor ,TimeGenerated, SourceIP, DestinationIP, ListOfDestPorts, HourlyCount, PercentTotal, Total, baseline, score, anomalies
+  | extend IPCustomEntity = DestinationIP
