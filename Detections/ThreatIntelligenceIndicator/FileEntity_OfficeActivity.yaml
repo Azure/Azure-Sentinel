@@ -1,0 +1,35 @@
+id: 410da56d-4a63-4d22-b68c-9fb1a303be6d 
+name: TI map File entity to OfficeActivity Event
+description: |
+  'Identifies a match in OfficeActivity Event data from any FileName IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileName)
+  |  join (
+  OfficeActivity| where TimeGenerated >= ago(dt_lookBack)
+        | where isnotempty(SourceFileName)
+        | extend OfficeActivity_TimeGenerated = TimeGenerated
+  )
+  on $left.FileName == $right.SourceFileName
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, OfficeActivity_TimeGenerated, TI_FileEntity = FileName, UserId, ClientIP , OfficeObjectId
+  | extend timestamp = OfficeActivity_TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP

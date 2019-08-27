@@ -1,0 +1,36 @@
+id: 689a9475-440b-4e69-8ab1-a5e241685f39 
+name: TI map File entity to WireData Event
+description: |
+  'Identifies a match in WireData Event data from any FileName IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: WireData 
+    dataTypes:
+      - WireData
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileName)
+  |  join (
+   WireData | where TimeGenerated >= ago(dt_lookBack)
+            | where isnotempty(ProcessName)
+            | extend Process =reverse(substring(reverse(ProcessName), 0, indexof(reverse(ProcessName), "\\")))
+        | extend WireData_TimeGenerated = TimeGenerated
+  )
+  on $left.FileName == $right.Process
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, WireData_TimeGenerated, TI_FileEntity = FileName, Computer , LocalIP , RemoteIP , LocalPortNumber , RemotePortNumber
+  | extend timestamp = WireData_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = LocalIP
