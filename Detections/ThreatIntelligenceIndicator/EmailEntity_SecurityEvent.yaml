@@ -1,0 +1,41 @@
+id: 2fc5d810-c9cc-491a-b564-841427ae0e50
+name: TI map Email entity to SecurityEvent
+description: |
+  'Identifies a match in SecurityEvent table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  //Filtering the table for Email related IOCs
+  | where isnotempty(EmailRecipient)
+  | join (
+      SecurityEvent | where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)
+      //Normalizing the column to lower case for exact match with EmailRecipient column
+      | extend TargetUserName = tolower(TargetUserName)
+      // renaming timestamp column so it is clear the log this came from SecurityEvent table
+      | extend SecurityEvent_TimeGenerated = TimeGenerated
+  )
+  on $left.EmailRecipient == $right.TargetUserName
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SecurityEvent_TimeGenerated, 
+  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, Activity, IpAddress, AccountType, 
+  LogonTypeName, LogonProcessName, Status, SubStatus 
+  | extend timestamp = SecurityEvent_TimeGenerated, AccountCustomEntity = TargetUserName, IPCustomEntity = IpAddress, HostCustomEntity = Computer

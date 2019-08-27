@@ -1,0 +1,38 @@
+id: a2e36ce0-da4d-4b6e-88c6-4e40161c5bfc
+name: TI map Email entity to OfficeActivity. 
+description: |
+  'Identifies a match in OfficeActivity table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  //Filtering the table for Email related IOCs
+  | where isnotempty(EmailRecipient)
+  | join (   
+      OfficeActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserId)
+      | where UserId matches regex emailregex
+      | extend OfficeActivity_TimeGenerated = TimeGenerated
+  )
+  on $left.EmailRecipient == $right.UserId
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, OfficeActivity_TimeGenerated, 
+  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload, Parameters
+  | extend timestamp = OfficeActivity_TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
