@@ -17,21 +17,22 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-    let dt_lookBack = 1h;
-    let ioc_lookBack = 14d;
-    ThreatIntelligenceIndicator
-	| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-	| where Active == true
-	// Picking up only IOC's that contain the entities we want
-	| where isnotempty(Url)
-	| join (
-	    Syslog
-		| where TimeGenerated >= ago(dt_lookBack)
-        // Extract URL from the Syslog message but only take messages that include URLs
-		| extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,SyslogMessage)
-        | where isnotempty(Url)
-		| extend Syslog_TimeGenerated = TimeGenerated
-	) on Url
-	| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-	| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Syslog_TimeGenerated, SyslogMessage, Computer, ProcessName, Url, HostIP
-    | extend timestamp = Syslog_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity =HostIP
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  | join (
+    Syslog
+    | where TimeGenerated >= ago(dt_lookBack)
+    // Extract URL from the Syslog message but only take messages that include URLs
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,SyslogMessage)
+    | where isnotempty(Url)
+    | extend Syslog_TimeGenerated = TimeGenerated
+  ) on Url
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Syslog_TimeGenerated, SyslogMessage, Computer, ProcessName, Url, HostIP
+  | extend timestamp = Syslog_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP
