@@ -1,0 +1,36 @@
+id: 18f7de84-de55-4983-aca3-a18bc846b4e0 
+name: TI map File entity to Syslog Event
+description: |
+  'Identifies a match in Syslog Event data from any FileName IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileName)
+  | extend TI_ProcessEntity = tostring(split(FileName, ".")[-2])
+  |  join (
+       Syslog | where TimeGenerated >= ago(dt_lookBack)
+       | where isnotempty(ProcessName)
+       | extend Syslog_TimeGenerated = TimeGenerated
+  )
+  on $left.TI_ProcessEntity == $right.ProcessName
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Syslog_TimeGenerated, FileName, Computer, HostIP, SyslogMessage  
+  | extend timestamp = Syslog_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP

@@ -1,0 +1,36 @@
+id: 233441b9-cc92-4c9b-87fa-73b855fcd4b8
+name: TI map File entity to Security Event
+description: |
+  'Identifies a match in Security Event data from any FileName IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvent
+    dataTypes:
+      - SecurityEvent
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileName)
+  |  join (
+    SecurityEvent | where TimeGenerated >= ago(dt_lookBack)
+        | where EventID in ("4688","8002","4648","4673")
+                   | where isnotempty(Process)
+        | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID
+  )
+  on $left.FileName == $right.Process
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SecurityEvent_TimeGenerated, FileName, Computer, IpAddress, Account, Event, Activity  
+  | extend timestamp = SecurityEvent_TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
