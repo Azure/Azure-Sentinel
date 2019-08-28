@@ -1,0 +1,58 @@
+id: 87890d78-3e05-43ec-9ab9-ba32f4e01250
+name: TI map Domain entity to SecurityAlert.
+description: |
+  'Identifies a match in SecurityAlert table from any Domain IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId:
+    dataTypes:
+      - SecurityAlert
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+    let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    //Create a list of TLDs in our threat feed for later validation
+    let list_tlds = ThreatIntelligenceIndicator
+    | where TimeGenerated > ago(ioc_lookBack)
+    | where ExternalIndicatorId startswith 'domain'
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | summarize makelist(tld);
+    ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | where Active == true
+    // Picking up only IOC's that contain the entities we want
+    | where ExternalIndicatorId startswith 'domain'
+    | join (
+        SecurityAlert
+        | where TimeGenerated > ago(dt_lookBack)
+        //Extract domain patterns from message
+        | extend domain = extract("(([a-z0-9]+(-[a-z0-9]+)*\\.)+[a-z]{2,})", 1, tolower(Entities))
+        | where isnotempty(domain)
+        | extend parts = split(domain, '.')
+        //Split out the TLD
+        | extend tld = parts[(array_length(parts)-1)]
+        //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
+        | where tld in~ (list_tlds)
+        // Converting Entities into dynamic data type and use mv-expand to unpack the array
+        | extend EntitiesDynamicArray = parse_json(Entities) | mv-expand EntitiesDynamicArray
+        // Parsing relevant entity column extract hostname and IP address
+        | extend EntityType = tostring(parse_json(EntitiesDynamicArray).Type), EntityAddress = tostring(EntitiesDynamicArray.Address), EntityHostName = tostring(EntitiesDynamicArray.HostName)
+        | extend HostName = iif(EntityType == 'host', EntityHostName, '')
+        | extend IP_addr = iif(EntityType == 'ip', EntityAddress, '')
+        | extend Alert_TimeGenerated = TimeGenerated
+        | extend Alert_Description = Description
+    ) on $left.DomainName==$right.domain
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Alert_TimeGenerated, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr
+    | extend timestamp = Alert_TimeGenerated, HostCustomEntity = HostName, IPCustomEntity = IP_addr
