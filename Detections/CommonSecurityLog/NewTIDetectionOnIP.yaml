@@ -25,7 +25,7 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
 queryFrequency: 6h
-queryPeriod: 30d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -34,33 +34,33 @@ tactics:
 query: |
 
   let timeframe = 6h;
-  let last1dfull =
+  let lastTimeframeFull =
   CommonSecurityLog
   | where TimeGenerated >= ago(timeframe)
   | where tolower(SimplifiedDeviceAction) !in ('deny', 'drop', 'block', 'reset-server', 'reset-both', 'reset-server')
   | where isnotempty(MaliciousIP)
   | where Message !contains "timed out";
-  let last1d = 
+  let lastTimeframe = 
   CommonSecurityLog
   | where TimeGenerated >= ago(timeframe)
   | where tolower(SimplifiedDeviceAction) !in ('deny', 'drop', 'block', 'reset-server', 'reset-both', 'reset-server')
   | where isnotempty(MaliciousIP)
   | where Message !contains "timed out"
-  | summarize SourceIPGroup = makeset(SourceIP), todayCount = count() by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message
+  | summarize SourceIPGroup = tostring(makeset(SourceIP)), todayCount = count() by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message
   ;
   let prev14d = CommonSecurityLog
-  | where TimeGenerated between (ago(14d) .. ago(6h))
+  | where TimeGenerated between (ago(14d) .. ago(timeframe))
   | where tolower(SimplifiedDeviceAction) !in ('deny', 'drop', 'block', 'reset-server', 'reset-both', 'reset-server')
   | where isnotempty(MaliciousIP)
   | where Message !contains "timed out"
-  | summarize SourceIPGroup = makeset(SourceIP) by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message;
-  let newToday = last1d | join kind= leftanti (
+  | summarize SourceIPGroup = tostring(makeset(SourceIP)) by DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message;
+  let new = lastTimeframe | join kind= leftanti (
     prev14d 
   ) on DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message
   ;
-  last1dfull | join (
-    newToday 
+  lastTimeframeFull | join (
+    new 
   ) on DeviceVendor, DeviceProduct, DeviceName, ThreatConfidence, MaliciousIP, IndicatorThreatType, Message 
   | summarize makeset(Message), sum(todayCount) by SourceIPGroup, DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, IndicatorThreatType, ThreatConfidence, MaliciousIPCountry
   | project SourceIPGroup, DeviceVendor, DeviceProduct, DeviceName, MaliciousIP, IndicatorThreatType, set_Message, FailureMessageCount = arraylength(set_Message), ThreatConfidence, MaliciousIPCountry, sum_todayCount 
-  | 
+
