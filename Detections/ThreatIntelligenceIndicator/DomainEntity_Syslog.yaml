@@ -1,0 +1,51 @@
+id: 532f62c1-fba6-4baa-bbb6-4a32a4ef32fa
+name: TI map Domain entity to Syslog.
+description: |
+  'Identifies a match in Syslog table from any Domain IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+    let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    //Create a list of TLDs in our threat feed for later validation
+    let list_tlds = ThreatIntelligenceIndicator
+    | where TimeGenerated > ago(ioc_lookBack)
+    | where ExternalIndicatorId startswith 'domain'
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | summarize makelist(tld);
+    ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | where Active == true
+    // Picking up only IOC's that contain the entities we want
+    | where ExternalIndicatorId startswith 'domain'
+    | join (
+        Syslog
+        | where TimeGenerated > ago(dt_lookBack)
+        //Extract domain patterns from syslog message
+        | extend domain = extract("(([a-z0-9]+(-[a-z0-9]+)*\\.)+[a-z]{2,})",1, tolower(SyslogMessage))
+        | where isnotempty(domain)
+        | extend parts = split(domain, '.')
+        //Split out the TLD
+        | extend tld = parts[(array_length(parts)-1)]
+        //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
+        | where tld in~ (list_tlds)
+        | extend Syslog_TimeGenerated = TimeGenerated
+    ) on $left.DomainName==$right.domain
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Syslog_TimeGenerated, SyslogMessage, Computer, ProcessName, domain, HostIP
+    | extend timestamp = Syslog_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity =HostIP
