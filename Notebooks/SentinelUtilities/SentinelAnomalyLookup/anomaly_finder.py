@@ -14,7 +14,7 @@ import pandas as pd
 from pandas.io.json import json_normalize
 from azure.loganalytics.models import QueryBody
 
-from SentinelUtils.crypto_utility import CryptoUtility
+from SentinelUtils.obfuscation_utility import ObfuscationUtility
 from SentinelLog.log import Log
 from .anomaly_lookup_view_helper import AnomalyLookupViewHelper
 
@@ -42,8 +42,8 @@ class AnomalyQueries(): # pylint: disable=too-few-public-methods
         """ get KQL """
 
         en_query = AnomalyQueries.QUERIES[name]
-        crypto = CryptoUtility(AnomalyQueries.KEY)
-        query = crypto.decrypt_text(en_query)
+        obfuscate = ObfuscationUtility(AnomalyQueries.KEY)
+        query = obfuscate.deobfuscate_text(en_query)
         return query
 
 
