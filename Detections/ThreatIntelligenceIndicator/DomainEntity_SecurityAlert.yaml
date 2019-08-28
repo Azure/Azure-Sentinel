@@ -36,7 +36,7 @@ query: |
     | join (
         SecurityAlert
         | where TimeGenerated > ago(dt_lookBack)
-        //Extract domain patterns from syslog message
+        //Extract domain patterns from message
         | extend domain = extract("(([a-z0-9]+(-[a-z0-9]+)*\\.)+[a-z]{2,})", 1, tolower(Entities))
         | where isnotempty(domain)
         | extend parts = split(domain, '.')
@@ -44,9 +44,15 @@ query: |
         | extend tld = parts[(array_length(parts)-1)]
         //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
         | where tld in~ (list_tlds)
+        // Converting Entities into dynamic data type and use mv-expand to unpack the array
+        | extend EntitiesDynamicArray = parse_json(Entities) | mv-expand EntitiesDynamicArray
+        // Parsing relevant entity column extract hostname and IP address
+        | extend EntityType = tostring(parse_json(EntitiesDynamicArray).Type), EntityAddress = tostring(EntitiesDynamicArray.Address), EntityHostName = tostring(EntitiesDynamicArray.HostName)
+        | extend HostName = iif(EntityType == 'host', EntityHostName, '')
+        | extend IP_addr = iif(EntityType == 'ip', EntityAddress, '')
         | extend Alert_TimeGenerated = TimeGenerated
         | extend Alert_Description = Description
     ) on $left.DomainName==$right.domain
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Alert_TimeGenerated, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel
-    | extend timestamp = Alert_TimeGenerated
+    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Alert_TimeGenerated, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr
+    | extend timestamp = Alert_TimeGenerated, HostCustomEntity = HostName, IPCustomEntity = IP_addr
