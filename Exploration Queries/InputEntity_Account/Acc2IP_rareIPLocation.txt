@@ -9,35 +9,32 @@
 // DataConnector: #AzureActiveDirectory; DataTypes: #SigninLogs
 // Tactics: #CredentialAccess, #Collection
 
-let IPsFromRareLocations = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AadUserId:string){
+let IPsFromRareLocations = (v_Account_Name:string, v_Account_AadUserId:string){
 	let LocationPrevalence = 
 		SigninLogs
+        | extend v_Account_Name = case(
+        v_Account_Name has "@", tostring(split(v_Account_Name, "@")[0]),
+        v_Account_Name has "\\", tostring(split(v_Account_Name, "\\")[1]),
+        v_Account_Name
+        )
 		| parse UserPrincipalName with Account_Name "@" Account_UPNSuffix
 		| project-rename Account_AadUserId = UserId 
-		| where ((Account_Name != "" and Account_Name == v_Account_Name and Account_UPNSuffix == v_Account_UPNSuffix) or
-				(Account_AadUserId != "" and Account_AadUserId == v_Account_AadUserId)
+		| where ((isnotempty(Account_Name) and Account_Name == v_Account_Name) or
+				(isnotempty(Account_AadUserId) and Account_AadUserId == v_Account_AadUserId)
 				)
-		| summarize LocationCount = count() by Location
-		| extend Joiner =1;
-	let TotalActivity = 
+		| summarize LocationCount = count() by Location, UserPrincipalName, IPAddress
+        ;
 		LocationPrevalence
-		| summarize totalActivity = sum(LocationCount)
-		| extend Joiner =1;
-	let RareLocations = 
-		LocationPrevalence
-		| join TotalActivity on Joiner
-		| extend likelyhood = 100*LocationCount/totalActivity
-		| where likelyhood < 10
-		| summarize makeset(Location);
-	SigninLogs
-		| parse UserPrincipalName with Account_Name "@" Account_UPNSuffix
-		| project-rename Account_AadUserId = UserId 
-		| where ((v_Account_Name != "" and Account_Name == v_Account_Name and Account_UPNSuffix == v_Account_UPNSuffix) or
-				(v_Account_AadUserId != "" and Account_AadUserId == v_Account_AadUserId)
-				)
-		| where Location in (RareLocations)
-		| summarize Count = count() by IPAddress, Location
-		| top 10 by Count asc nulls last
-		| project-rename IP_Address = IPAddress, IP_Location = Location
+		| summarize makeset(IPAddress), makeset(Location), makeset(LocationCount) , totalActivity = sum(LocationCount) by UserPrincipalName
+        | mvexpand Location = set_Location, LocationCount = set_LocationCount, IPAddress = set_IPAddress
+        | extend percentOfActivity = 100*LocationCount/totalActivity
+        | where percentOfActivity < 10
+        | project UserPrincipalName, IPAddress, Location, toint(LocationCount), percentOfActivity
+        | top 10 by LocationCount asc nulls last
+        | extend Account_Aux_info = pack("LocationCount", LocationCount, "PercentOfActivity", percentOfActivity)
+        | parse UserPrincipalName with Account_NTDomain "\\" *
+	    | extend Account_Name = extract(@"^([^\\]*\\)?([^@]+)(@.*)?$", 2, UserPrincipalName),  
+		Account_UPNSuffix = extract(@"^([^\\]*\\)?([^@]+)(@(.*))?$", 4, UserPrincipalName)
+        | project Account_Name, Account_NTDomain, Account_UPNSuffix, IP_Address = IPAddress, IP_Location = Location, Account_Aux_info
 };
-IPsFromRareLocations('<Name>', '<UPNSuffix>', '<AadUserId>')
+IPsFromRareLocations('<Name>', '<AadUserId>')
