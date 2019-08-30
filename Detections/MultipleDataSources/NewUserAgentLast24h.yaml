@@ -30,41 +30,42 @@ relevantTechniques:
   - T1203
 query: |
 
+  let starttime = 14d;
+  let endtime = 1d;
   let UserAgentAll =
   (union isfuzzy=true
   (OfficeActivity
-  | where TimeGenerated >= ago(14d) 
+  | where TimeGenerated >= ago(starttime) 
   | extend UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))
-  | extend SourceIP = ClientIP
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP = ClientIP, Account = UserId, Type
   ),
   (
   AzureDiagnostics
-  | where TimeGenerated >= ago(14d) 
+  | where TimeGenerated >= ago(starttime) 
   | extend UserAgent = replace(@'\+', @' ', userAgent_s)
   | where isnotempty(UserAgent)
   | parse msg_s with * 'HTTPS request from' SourceIP ':' * 
   | where isnotempty(SourceIP)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent, SourceIP, Type
   ),
   (
   W3CIISLog
-  | where TimeGenerated >= ago(14d) 
-  | where UserAgent = csUserAgent
-  | where SourceIP = cIP
+  | where TimeGenerated >= ago(starttime) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type
   ),
   (
   AWSCloudTrail
-  | where TimeGenerated >= ago(14d) 
-  | where UserAgent = UserAgent
-  | where SourceIP = SourceIpAddress
+  | where TimeGenerated >= ago(starttime) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type
   ));
   UserAgentAll
-  | where TimeGenerated < ago(1d)
-  | summarize IP = dcount(SourceIP) by tostring(UserAgent)
+  | where StartTimeUtc < ago(endtime)
+  | summarize IP = dcount(SourceIP) by tostring(UserAgent), Account, Type
   | join kind=rightanti
   (
   UserAgentAll
-  | where TimeGenerated >= ago(1d) 
-  | summarize IP = dcount(SourceIP) by tostring(UserAgent), SourceIP 
-  ) on UserAgent 
-  | project UserAgent, SourceIP
-  | extend IPCustomEntity = SourceIP
+  | where StartTimeUtc >= ago(endtime) 
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), IP = dcount(SourceIP) by tostring(UserAgent), SourceIP, Account, Type
+  ) on UserAgent, Account, Type
+  //| project UserAgent, SourceIP
+  | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, AccountCustomEntity = Account
