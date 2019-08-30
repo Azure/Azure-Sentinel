@@ -33,26 +33,30 @@ query: |
   // 2 other operations that can be part of malicious activity in this situation are 
   // "Add OAuth2PermissionGrant" and "Add service principal", extend the filter below to capture these too
   | where OperationName == "Consent to application"
-  | extend InitiatedBy= iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
-  | extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
-  | summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedBy, TargetAppName
+  | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+  tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
+  | summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedBy, TargetResourceName
   // only including operations by initiated by a user or app that is above the threshold so we produce only rare and has not occurred in last 7 days
   | where OperationCount > threshold
   ;
   // Gather current period of audit data
   let RecentConsent = AuditLogs | where TimeGenerated >= ago(current)
   | where OperationName == "Consent to application"
-  | extend InitiatedBy= iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
-  | extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
+  | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
+  tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+  tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
   | parse TargetResources.[0].modifiedProperties with * "ConsentType: " ConsentType "]" *
-  | project TimeGenerated, InitiatedBy, TargetAppName, Category, OperationName, ConsentType , CorrelationId, Type;
+  | project TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType , CorrelationId, Type;
   // Exclude previously seen audit activity for "Consent to application" that was seen in the lookback period
   // First for rare InitiatedBy
   let RareConsentBy = RecentConsent | join kind= leftanti AuditTrail on OperationName, InitiatedBy 
   | extend Reason = "Previously unseen user consenting";
-  // Second for rare TargetAppName
-  let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetAppName 
+  // Second for rare TargetResourceName
+  let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetResourceName
   | extend Reason = "Previously unseen app granted consent";
   RareConsentBy | union RareConsentApp
-  | summarize Reason = makeset(Reason) by InitiatedBy, TargetAppName, Category, OperationName, ConsentType, CorrelationId, Type
-  | extend AccountCustomEntity = InitiatedBy
+  | summarize Reason = makeset(Reason) by TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, CorrelationId, Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatedBy, HostCustomEntity = TargetResourceName, IPCustomEntity = IpAddress

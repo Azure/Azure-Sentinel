@@ -51,11 +51,12 @@ query: |
   | extend prevCurrentAvgRatePerSec = toint(split(tostring(CurrentAvgRate[1])," ")[0])
   | extend prevMaxConfiguredAvgRate = toint(CurrentAvgRate[2])
   | extend prevCumulativeTotal = toint(split(tostring(split(tostring(splitMessage[1]),"  ")[2]),"is ")[1])
-  | summarize prev6hCumTotal = sum(prevCumulativeTotal), prev6hAvgRatePerSec = avg(prevCurrentAvgRatePerSec), prev6hAvgBurstRatePerSec = avg(prevCurrentBurstRatePerSec)  by DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate;
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), prev6hCumTotal = sum(prevCumulativeTotal), prev6hAvgRatePerSec = avg(prevCurrentAvgRatePerSec), prev6hAvgBurstRatePerSec = avg(prevCurrentBurstRatePerSec) 
+  by DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate;
   last1h | join (
     prev6h 
   ) on DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate
-  | project DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate, last1hCumTotal, prev6hCumTotal, prev6hAvgCumTotal = prev6hCumTotal/6, last1hAvgRatePerSec, prev6hAvgRatePerSec, last1hAvgBurstRatePerSec, prev6hAvgBurstRatePerSec
+  | project StartTimeUtc, EndTimeUtc, DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate, last1hCumTotal, prev6hCumTotal, prev6hAvgCumTotal = prev6hCumTotal/6, last1hAvgRatePerSec, prev6hAvgRatePerSec, last1hAvgBurstRatePerSec, prev6hAvgBurstRatePerSec
   // Select only events that indicate a doubling of the expected rate in the last hour over the previous 6 hours
   | where last1hCumTotal > 2*prev6hAvgCumTotal or last1hAvgRatePerSec > 2*prev6hAvgRatePerSec or last1hAvgBurstRatePerSec > 2*prev6hAvgBurstRatePerSec
-  | extend IPCustomEntity = SourceIP
+  | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName
