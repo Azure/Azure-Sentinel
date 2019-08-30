@@ -1,0 +1,35 @@
+id: 57a1cdba-b058-46e2-ad25-c82dd168c4e
+name: TI map File Hash to CommonSecurityLog Event
+description: |
+  'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CommonSecurityLog
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileHashValue)
+  |  join (
+     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+     | where isnotempty(FileHash)
+     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  )
+  on $left.FileHashValue == $right.FileHash
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort 
+  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP
