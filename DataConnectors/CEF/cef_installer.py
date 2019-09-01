@@ -44,6 +44,20 @@ rsyslog_module_udp_content = "# provides UDP syslog reception\nmodule(load=\"imu
 rsyslog_module_tcp_content = "# provides TCP syslog reception\nmodule(load=\"imtcp\")\ninput(type=\"imtcp\" port=\"" + daemon_default_incoming_port + "\")\n"
 rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imudp\n$UDPServerRun " + daemon_default_incoming_port + "\n"
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
+oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
+
+
+def replace_files():
+    download_command = subprocess.Popen(["sudo", "wget", "-O", "/opt/microsoft/omsagent/plugin/filter_syslog_security.rb", "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/source/code/plugins/filter_syslog_security.rb"], stdout=subprocess.PIPE)
+    o, e = download_command.communicate()
+    time.sleep(3)
+    if e is not None:
+        handle_error(e, error_response_str="Error: could not change omsagent files.")
+    download_command = subprocess.Popen(["sudo", "wget", "-O", "/opt/microsoft/omsagent/plugin/security_lib.rb", "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/source/code/plugins/security_lib.rb"], stdout=subprocess.PIPE)
+    o, e = download_command.communicate()
+    time.sleep(3)
+    if e is not None:
+        handle_error(e, error_response_str="Error: could not change omsagent files.")
 
 
 def print_error(input_str):
@@ -499,6 +513,7 @@ def main():
         set_syslog_ng_configuration()
         restart_syslog_ng()
     restart_omsagent(workspace_id=workspace_id)
+    replace_files()
     print_ok("Installation completed")
 
 
