@@ -513,7 +513,7 @@ def main():
         set_syslog_ng_configuration()
         restart_syslog_ng()
     restart_omsagent(workspace_id=workspace_id)
-	replace_files()
+    replace_files()
     print_ok("Installation completed")
 
 
