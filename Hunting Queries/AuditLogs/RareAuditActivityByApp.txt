@@ -11,30 +11,33 @@
 let current = 1d;
 let auditLookback = 14d;
 let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current) 
-| extend InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| extend InitiatedByApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
 | where isnotempty(InitiatedByApp)
 | extend ModProps = TargetResources.[0].modifiedProperties
+| extend IpAddress = tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)
 | extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
 | mvexpand ModProps
 | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
 | where isnotempty(newValue) and newValue != "\"\""
-| summarize  by OperationName, InitiatedByApp,UserPrincipalName,PropertyName, newValue;
+| summarize  by OperationName, InitiatedByApp, UserPrincipalName, IpAddress, TargetResourceName, PropertyName, newValue;
 let AccountMods = AuditLogs | where TimeGenerated >= ago(current)
-| extend ModProps = TargetResources.[0].modifiedProperties
-| extend InitiatedByApp = tostring(InitiatedBy.app.displayName)
+| extend InitiatedByApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
 | where isnotempty(InitiatedByApp)
+| extend ModProps = TargetResources.[0].modifiedProperties
+| extend IpAddress = tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)
 | extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+| extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
 | mvexpand ModProps
 | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
 | where isnotempty(newValue) and newValue != "\"\""
 | where PropertyName != "TargetId.UserType"
 | extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId) 
-| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByApp, UserPrincipalName, Category, OperationName, PropertyName, newValue;
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByApp, UserPrincipalName, IpAddress, TargetResourceName, Category, OperationName, PropertyName, newValue;
 let RareAudits = AccountMods | join kind= leftanti (
    AuditTrail 
 ) on OperationName, InitiatedByApp, UserPrincipalName, PropertyName, newValue;
 RareAudits
-| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc),Activity = make_set(Activity) by InitiatedByApp, OperationName, UserPrincipalName
+| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc),Activity = make_set(Activity) by InitiatedByApp, OperationName, UserPrincipalName, IpAddress, TargetResourceName
 | order by UserPrincipalName asc, StartTimeUtc asc
-| extend AccountCustomEntity = UserPrincipalName
-| extend timestamp = StartTimeUtc
+| extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, HostCustomEntity = TargetResourceName, IPCustomEntity = IpAddress

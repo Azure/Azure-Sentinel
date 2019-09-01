@@ -23,26 +23,35 @@ let threshold = 3;
 let auditLogEvents = view (startTimeSpan:timespan)  {
     AuditLogs | where TimeGenerated >= ago(auditLookback)
     | extend ModProps = TargetResources.[0].modifiedProperties
-    | extend InitiatedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), tostring(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.app.displayName))
-    | extend TargetAppName = tolower(tostring(TargetResources.[0].displayName))
+    | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
+    tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+    | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+    | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
     | mvexpand ModProps
     | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue));
 };
 // Get just the InitiatedBy and CorrleationId so we can look at associated audit activity
 // 2 other operations that can be part of malicious activity in this situation are 
 // "Add OAuth2PermissionGrant" and "Add service principal", replace the below if you are interested in those as starting points for OperationName
-let HistoricalConsent = auditLogEvents(30d)  | where OperationName == "Consent to application"
-| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Type, InitiatedBy, TargetAppName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
+let HistoricalConsent = auditLogEvents(30d)  
+| where OperationName == "Consent to application"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+by Type, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
 // Remove comment below to only include operations initiated by a user or app that is above the threshold for the last 30 days
 //| where OperationCount > threshold
 ;
-let Correlate = HistoricalConsent | summarize by InitiatedBy, CorrelationId;
+let Correlate = HistoricalConsent 
+| summarize by InitiatedBy, CorrelationId;
 // 2 other operations that can be part of malicious activity in this situation are 
 // "Add OAuth2PermissionGrant" and "Add service principal", replace the below if you changed the starting OperationName above
-let allOtherEvents = auditLogEvents(30d) | where OperationName != "Consent to application";
+let allOtherEvents = auditLogEvents(30d) 
+| where OperationName != "Consent to application";
 // Gather associated activity based on audit activity for "Consent to application" and InitiatedBy and CorrleationId
-let CorrelatedEvents = Correlate | join allOtherEvents on InitiatedBy, CorrelationId
-| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Type, InitiatedBy, TargetAppName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
+let CorrelatedEvents = Correlate 
+| join allOtherEvents on InitiatedBy, CorrelationId
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) 
+by Type, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
 ;
 // Union the results
 let Results = union isfuzzy=true HistoricalConsent,CorrelatedEvents;
@@ -50,6 +59,6 @@ let Results = union isfuzzy=true HistoricalConsent,CorrelatedEvents;
 Results
 | extend newValue = split(newValue, ";")
 | extend PropertyUpdate = pack(PropertyName, newValue, "Id", Id)
-| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) by InitiatedBy, TargetAppName, OperationName, CorrelationId
-| extend AccountCustomEntity = InitiatedBy
-| extend timestamp = StartTimeUtc
+| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) 
+by InitiatedBy, IpAddress, TargetResourceName, OperationName, CorrelationId
+| extend timestamp = StartTimeUtc, AccountCustomEntity = InitiatedBy, HostCustomEntity = TargetResourceName, IPCustomEntity = IpAddress
