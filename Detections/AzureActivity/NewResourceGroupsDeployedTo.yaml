@@ -21,15 +21,15 @@ query: |
   | where TimeGenerated between (ago(7d) .. ago(1d))
   | where OperationName =~ "Create or Update Virtual Machine" or OperationName =~ "Create Deployment" 
   | where ActivityStatus =~ "Succeeded" 
-  | project Resource, ResourceGroup, Caller, OperationName 
+  | project Resource, ResourceGroup, Caller, OperationName, CallerIpAddress
   | evaluate basket()
   | join kind=rightantisemi (
   AzureActivity
   | where TimeGenerated >ago(1d)
   | where OperationName =~ "Create or Update Virtual Machine" or OperationName =~ "Create Deployment" 
   | where ActivityStatus =~ "Succeeded" 
-  | project Resource, ResourceGroup, Caller, OperationName 
+  | project TimeGenerated, Resource, ResourceGroup, Caller, OperationName, CallerIpAddress 
   ) on ResourceGroup 
-  | summarize CreateCount = count() by Caller, Resource, ResourceGroup, OperationName
-  | extend AccountCustomEntity = Caller 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CreateCount = count() by Caller, CallerIpAddress, Resource, ResourceGroup, OperationName
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
   | sort by CreateCount desc nulls last 

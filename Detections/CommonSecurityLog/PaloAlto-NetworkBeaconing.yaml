@@ -33,7 +33,7 @@ query: |
   | where TimeGenerated between (ago(starttime)..ago(endtime))
   | extend DestinationIPType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
   | where DestinationIPType == "public"
-  | project TimeGenerated , SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
+  | project TimeGenerated, DeviceName, SourceUserID, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
   | sort by SourceIP asc,TimeGenerated asc, DestinationIP asc, DestinationPort asc
   | serialize
   | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)
@@ -41,10 +41,12 @@ query: |
   | where SourceIP == nextSourceIP
   //Whitelisting criteria/ threshold criteria
   | where TimeDeltainSeconds > TimeDeltaThreshold 
-  | project TimeGenerated, TimeDeltainSeconds, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
-  | summarize count(), sum(ReceivedBytes), sum(SentBytes), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), SourceIP, DestinationIP, DestinationPort
-  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes) by bin(TimeGenerated, 1h), SourceIP, DestinationIP, DestinationPort
+  | project TimeGenerated, TimeDeltainSeconds, DeviceName, SourceUserID, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
+  | summarize count(), sum(ReceivedBytes), sum(SentBytes), make_list(TimeDeltainSeconds) 
+  by TimeDeltainSeconds, bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes) 
+  by bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort
   | where TotalEvents > TotalEventsThreshold 
   | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
   | where BeaconPercent > PercentBeaconThreshold
-  | extend IPCustomEntity = DestinationIP
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName 
