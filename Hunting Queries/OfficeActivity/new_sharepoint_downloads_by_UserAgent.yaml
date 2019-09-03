@@ -1,0 +1,33 @@
+id: f2367171-1514-4c67-88ef-27434b6a1093
+name: SharePointFileOperation via devices with previously unseen user agents
+description: |
+  'Tracking via user agent is one way to differentiate between types of connecting device. 
+  In homogeneous enterprise environments the user agent associated with an attacker device may stand out as unusual.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let starttime = 14d;
+  let endtime = 1d;
+  let historicalActivity=
+  OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated between(ago(starttime)..ago(endtime))
+  | summarize historicalCount=count() by UserAgent, RecordType;
+  let recentActivity = OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated > ago(endtime) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), recentCount=count() by UserAgent, RecordType;
+  recentActivity | join kind = leftanti (
+     historicalActivity 
+  ) on UserAgent, RecordType
+  | order by recentCount asc, UserAgent
+  | extend timestamp = StartTimeUtc

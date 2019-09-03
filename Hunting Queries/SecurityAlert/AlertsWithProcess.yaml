@@ -1,0 +1,32 @@
+id: 635cba46-c077-4959-a2d9-b7eb6fecb854
+name: Alerts With This Process
+description: |
+  'Any Alerts that fired on any host with this same process in the range of +-1d'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAllAlertsWithProcess = (suspiciousEventTime:datetime, v_Process:string){
+  let v_StartTime = suspiciousEventTime-1d;
+  let v_EndTime = suspiciousEventTime+1d;
+  SecurityAlert
+  | where TimeGenerated between (v_StartTime .. v_EndTime)
+  | extend Computer = toupper(parse_json(ExtendedProperties).["Compromised Host"])
+  | extend ProcessName = parse_json(ExtendedProperties).["Suspicious Process"]
+  | where ProcessName has v_Process
+  | project TimeGenerated, AlertName, Computer
+  | top 10 by TimeGenerated desc nulls last
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+  };
+  // change datetime value and <processname> value below
+  GetAllAlertsWithProcess(datetime('2019-01-18T10:36:07Z'), "<processname>")

@@ -1,0 +1,34 @@
+id: 3a72ba65-00fa-4bbc-b246-be1ff3f73ce1
+name: Alerts related to account
+description: |
+  'Any Alerts that fired related to a given account during the range of +6h and -3d'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAllAlertsForUser = (suspiciousEventTime:datetime, v_User:string){
+  //-3d and +6h as some alerts fire after accumulation of events
+  let v_StartTime = suspiciousEventTime-3d;
+  let v_EndTime = suspiciousEventTime+6h;
+  SecurityAlert
+  | where TimeGenerated between (v_StartTime .. v_EndTime)
+  // expand JSON properties
+  | extend Extprop = parsejson(ExtendedProperties)
+  | extend Computer = toupper(tostring(Extprop["Compromised Host"]))
+  | extend Account =  tolower(tostring(Extprop["User Name"]))
+  | where Account contains v_User
+  | project TimeGenerated, AlertName, Computer, Account, ExtendedProperties 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  };
+  // change datetime value and username value below
+  GetAllAlertsForUser(datetime('2019-01-20T10:02:51.000'), toupper("<username>"))

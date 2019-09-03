@@ -1,0 +1,33 @@
+id: 61a6edc0-e71a-4084-8f3c-05a58e1b9012
+name: Alerts On Host
+description: |
+  'Any Alerts that fired on a given host during the range of +6h and -3d'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAllAlertsOnHost = (suspiciousEventTime:datetime, v_Host:string){
+  //-3d and +6h as some alerts fire after accumulation of events
+  let v_StartTime = suspiciousEventTime-3d;
+  let v_EndTime = suspiciousEventTime+6h;
+  SecurityAlert
+  | where TimeGenerated between (v_StartTime .. v_EndTime)
+  // expand JSON properties
+  | extend Extprop = parsejson(ExtendedProperties)
+  | extend Computer = toupper(tostring(Extprop["Compromised Host"]))
+  | where Computer contains v_Host
+  | project TimeGenerated, AlertName, Computer, ExtendedProperties
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+  };
+  // change datetime value and hostname value below
+  GetAllAlertsOnHost(datetime('2019-01-20T10:02:51.000'), toupper("<hostname>"))
