@@ -1,0 +1,41 @@
+id: 723c5f46-133f-4f1e-ada6-5c138f811d75
+name: New Admin account activity seen which was not seen historically
+description: |
+  'This will help you discover any new admin account activity which was seen and were not seen historically. 
+  Any new accounts seen in the results can be validated and investigated for any suspicious activities.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - PrivilegeEscalation
+  - Collection
+relevantTechniques:
+  - T1078
+  - T1114
+query: |
+
+  let starttime = 14d;
+  let endtime = 1d;
+  let historicalActivity=
+  OfficeActivity
+  | where TimeGenerated between(ago(starttime)..ago(endtime))
+  | where RecordType=="ExchangeAdmin" and UserType in ("Admin","DcAdmin")
+  | summarize historicalCount=count() by UserId;
+  let recentActivity = OfficeActivity
+  | where TimeGenerated > ago(endtime)
+  | where UserType in ("Admin","DcAdmin")
+  | summarize recentCount=count() by UserId;
+  recentActivity | join kind = leftanti (
+     historicalActivity
+  ) on UserId
+  | project UserId,recentCount
+  | order by recentCount asc, UserId
+  | join kind = rightsemi 
+  (OfficeActivity 
+  | where TimeGenerated >= ago(endtime) 
+  | where RecordType == "ExchangeAdmin" | where UserType in ("Admin","DcAdmin")) 
+  on UserId
+  | summarize count(), min(TimeGenerated), max(TimeGenerated) by RecordType, Operation, UserType, UserId, OriginatingServer, ResultStatus
+  | extend timestamp = min_TimeGenerated, AccountCustomEntity = UserId

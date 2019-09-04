@@ -1,0 +1,26 @@
+id: 871ba14c-88ef-48aa-ad38-810f26760ca3
+name: Long lookback for multiple users forwarding Office mail to same destination
+description: |
+  'This query over Office Activity audit data highlights cases where user mail is being forwarded.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+
+  let timeframe = 14d;
+  OfficeActivity
+  | where TimeGenerated >= ago(timeframe)
+  | where (Operation == "Set-Mailbox" and Parameters contains 'ForwardingSmtpAddress') 
+      or (Operation == 'New-InboxRule' and Parameters contains 'ForwardTo')
+  | extend parsed=parse_json(Parameters)
+  | extend fwdingDestination = iif(Operation=="Set-Mailbox", tostring(parsed[1].Value), tostring(parsed[2].Value))
+  | where fwdingDestination != ""
+  | project TimeGenerated, UserId, Operation, fwdingDestination, ClientIP 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP

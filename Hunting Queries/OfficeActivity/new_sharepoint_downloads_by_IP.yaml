@@ -1,0 +1,33 @@
+id: e3d24cfd-b2a1-4ba7-8f80-0360892f9d57
+name: SharePointFileOperation via previously unseen IPs
+description: |
+  'Shows volume of documents uploaded to or downloaded from Sharepoint by new IP addresses. 
+  In stable environments such connections by new IPs may be unauthorized, especially if associated with 
+  spikes in volume which could be associated with large-scale document exfiltration.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let starttime = 14d;
+  let endtime = 1d;
+  let historicalActivity=
+  OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated between(ago(starttime)..ago(endtime))
+  | summarize historicalCount=count() by ClientIP;
+  let recentActivity = OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated > ago(endtime) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), recentCount=count() by ClientIP;
+  recentActivity | join kind= leftanti (
+     historicalActivity 
+  ) on ClientIP 
+  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP
