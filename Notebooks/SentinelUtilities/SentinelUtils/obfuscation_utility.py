@@ -30,7 +30,7 @@ class ObfuscationUtility():
         return en_text
 
     def deobfuscate_text(self, en_text):
-        """ Deobfuscate input text using key """
+        """ De-obfuscate input text using key """
 
         fernet = Fernet(self.seed)
         re_text = fernet.decrypt(en_text)
