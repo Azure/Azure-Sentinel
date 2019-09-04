@@ -1,0 +1,25 @@
+id: 0cd51b2e-d3b2-4001-8e3f-5cbb604f69b2
+name: Attempts to sign in to disabled accounts by IP address
+description: |
+  'Failed attempts to sign in to disabled accounts summarized by the IP address from from the sign-in attempts originate'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+
+  let timeRange = 14d;
+  SigninLogs 
+  | where TimeGenerated >= ago(timeRange)
+  | where ResultType == "50057" 
+  | where ResultDescription == "User account is disabled. The account has been disabled by an administrator." 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), numberAccountsTargeted = dcount(UserPrincipalName), 
+  numberApplicationsTargeted = dcount(AppDisplayName), accountSet = makeset(UserPrincipalName), applicationSet=makeset(AppDisplayName), 
+  numberLoginAttempts = count() by IPAddress
+  | extend timestamp = StartTimeUtc, IPCustomEntity = IPAddress
+  | order by numberLoginAttempts desc
+  
