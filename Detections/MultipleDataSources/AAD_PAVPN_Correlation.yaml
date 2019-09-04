@@ -1,0 +1,56 @@
+id: ba144bf8-75b8-406f-9420-ed74397f9479
+name: IP with multiple failed Azure AD logins successfully logs in to Palo Alto VPN.
+description: |
+    This query creates a list of IP addresses with a number failed login attempts to AAD 
+    above a set threshold.  It then looks for any successful Palo Alto VPN logins from any
+    of these IPs within the same timeframe.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+     - SigninLogs
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+     - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+  - T1110
+
+query: |
+  //Set a threshold of failed AAD signins from an IP address within 1 day above which we want to deem those logins suspicious.
+  let signin_threshold = 5; 
+  //Make a list of IPs with AAD signin failures above our threshold.
+  let suspicious_signins = 
+      SigninLogs
+      | where TimeGenerated >= ago(1d)
+      //Looking for logon failure results
+      | where ResultType !in ("0", "50125", "50140")
+      //Exclude localhost addresses to reduce the chance of FPs
+      | where IPAddress != "127.0.0.1"
+      | summarize count() by IPAddress
+      | where count_ >  signin_threshold
+      | summarize makelist(IPAddress);
+  //See if any of those IPs have sucessfully logged into PA VPNs during the same timeperiod
+  CommonSecurityLog
+      | where TimeGenerated > ago(1d)
+      //Select only PA VPN sucessful logons
+      | where DeviceVendor == "Palo Alto Networks"
+      | where DeviceEventClassID == "globalprotect"
+      | where Message has "GlobalProtect gateway user authentication succeeded"
+      //Parse out the logon source IP from the Message field to match on
+      | extend SourceIP = extract("Login from: ([^,]+)", 1, Message) 
+      | where SourceIP in (suspicious_signins)
+      | extend Reason = "Multiple failed AAD logins from SourceIP"
+      //Parse out other useful information from Message field
+      | extend User = extract("User name: ([^,]+)", 1, Message) 
+      | extend ClientOS = extract("Client OS version: ([^,\"]+)", 1, Message)
+      | extend Location = extract("Source region: ([^,]{2})",1, Message)
+      | project TimeGenerated, Reason, SourceIP, User, ClientOS, Location, Message, DeviceName, ReceiptTime, DeviceVendor, DeviceEventClassID, Computer, FileName
+      | extend AccountCustomEntity = User, IPCustomEntity = SourceIP
