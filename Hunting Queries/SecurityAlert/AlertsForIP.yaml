@@ -23,12 +23,13 @@ query: |
   SecurityAlert
   | where TimeGenerated between (v_StartTime .. v_EndTime)
   // expand JSON properties
-  | extend Extprop = parsejson(ExtendedProperties)
-  | extend Computer = toupper(tostring(Extprop["Compromised Host"]))
-  | extend Account =  tolower(tostring(Extprop["User Name"]))
   | where ExtendedProperties contains v_ipAddress or Entities contains v_ipAddress
-  | project StartTimeUtc = StartTime, EndTimeUtc = EndTime, AlertName, Computer, Account, ExtendedProperties, Entities
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | extend Extprop = parsejson(ExtendedProperties)
+  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
+  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
+  | extend IpAddress = tostring(parse_json(ExtendedProperties).["Client Address"]) 
+  | project StartTimeUtc = StartTime, EndTimeUtc = EndTime, AlertName, Computer, Account, IpAddress, ExtendedProperties, Entities
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   };
   // change datetime value and <ipaddress> value below
   GetAllAlertsWithIp(datetime('2019-02-05T10:02:51.000'), ("<ipaddress>"))

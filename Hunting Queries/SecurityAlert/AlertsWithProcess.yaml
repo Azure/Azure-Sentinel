@@ -21,12 +21,15 @@ query: |
   let v_EndTime = suspiciousEventTime+1d;
   SecurityAlert
   | where TimeGenerated between (v_StartTime .. v_EndTime)
-  | extend Computer = toupper(parse_json(ExtendedProperties).["Compromised Host"])
-  | extend ProcessName = parse_json(ExtendedProperties).["Suspicious Process"]
   | where ProcessName has v_Process
-  | project TimeGenerated, AlertName, Computer
+  | extend Extprop = parsejson(ExtendedProperties)
+  | extend ProcessName = parse_json(ExtendedProperties).["Suspicious Process"]
+  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
+  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
+  | extend IpAddress = tostring(parse_json(ExtendedProperties).["Client Address"]) 
+  | project TimeGenerated, AlertName, ProcessName, Computer, Account, IpAddress, ExtendedProperties 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   | top 10 by TimeGenerated desc nulls last
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
   };
   // change datetime value and <processname> value below
   GetAllAlertsWithProcess(datetime('2019-01-18T10:36:07Z'), "<processname>")
