@@ -9,12 +9,14 @@ After selecting a playbook, in the Azure Sentinel portal:
 4. Click Save
 5. Fill in needed data and click purchase
 
-Once deployment is complete, you will need to authorize the connection.
+Once deployment is complete, you will need to authorize each connection.
 1. Click the Azure Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
 5. Click Save
+6. Repeat steps for other connections
+    a. For Azure Log Analytics Data Collector,  you will need to add the workspace ID and Key
 
 You can now edit the playbook in Logic apps.
 
