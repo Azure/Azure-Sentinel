@@ -2,12 +2,12 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata":{
-        "comments": "This playbook will isolate (full) the machine in Microsoft Defender ATP.",
+        "comments": "This playbook will set the Risky User property in AAD using Graph API using a Beta API.  NOTE:  You must create an app registration for graph api with appropriate permissions.  NOTE:  You will need to add the managed identity that is created by the logic app to the Security Administrator role in Azure AD.",
         "author": "Nicholas DiCola"
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Isolate-MDATPMachine",
+            "defaultValue": "Confirm-AADRiskyUser",
             "type": "string"
         },
         "UserName": {
@@ -16,9 +16,7 @@
         }
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "MDATPConnectionName": "[concat('wdatp-', parameters('PlaybookName'))]"
-
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -35,30 +33,13 @@
             }
         },
         {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('MDATPConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
-                }
-            }
-        },
-        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
-            "tags": {
-                "LogicAppsCategory": "security"
+            "identity": {
+                "type": "SystemAssigned"
             },
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]"
-            ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -87,7 +68,7 @@
                         }
                     },
                     "actions": {
-                        "Alert_-_Get_hosts": {
+                        "Alert_-_Get_accounts": {
                             "runAfter": {
                                 "Alert_-_Get_incidents": [
                                     "Succeeded"
@@ -102,7 +83,7 @@
                                     }
                                 },
                                 "method": "post",
-                                "path": "/entities/host"
+                                "path": "/entities/account"
                             }
                         },
                         "Alert_-_Get_incidents": {
@@ -119,52 +100,96 @@
                             }
                         },
                         "For_each": {
-                            "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
+                            "foreach": "@body('Alert_-_Get_accounts')?['Accounts']",
                             "actions": {
-                                "For_each_2": {
-                                    "foreach": "@body('Alert_-_Get_incidents')?['value']",
-                                    "actions": {
-                                        "Actions_-_Isolate_machine": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "Comment": "Isolated from playbook for Azure Sentinel Incident: @{items('For_each_2')?['properties']?['Title']}",
-                                                    "IsolationType": "Full"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}/isolate"
-                                            }
-                                        },
-                                        "Incident_-_Add_comment": {
-                                            "runAfter": {
-                                                "Actions_-_Isolate_machine": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent(items('For_each_2')?['name'])}/@{encodeURIComponent('Machine (',items('For_each')?['HostName'],') was isolated in MDATP.  The status was ',body('Actions_-_Isolate_machine')?['status'],'.')}"
-                                            }
-                                        }
-                                    },
+                                "HTTP": {
                                     "runAfter": {},
-                                    "type": "Foreach"
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}"
+                                    }
+                                },
+                                "HTTP_2": {
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "userIds": [
+                                                "@{body('Parse_JSON')?['id']}"
+                                            ]
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/beta/riskyUsers/confirmCompromised"
+                                    }
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "properties": {
+                                                "businessPhones": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "displayName": {
+                                                    "type": "string"
+                                                },
+                                                "givenName": {
+                                                    "type": "string"
+                                                },
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "jobTitle": {
+                                                    "type": "string"
+                                                },
+                                                "mail": {
+                                                    "type": "string"
+                                                },
+                                                "mobilePhone": {
+                                                    "type": "string"
+                                                },
+                                                "officeLocation": {
+                                                    "type": "string"
+                                                },
+                                                "preferredLanguage": {
+                                                    "type": "string"
+                                                },
+                                                "surname": {
+                                                    "type": "string"
+                                                },
+                                                "userPrincipalName": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
                                 }
                             },
                             "runAfter": {
-                                "Alert_-_Get_hosts": [
+                                "Alert_-_Get_accounts": [
                                     "Succeeded"
                                 ]
                             },
@@ -180,11 +205,6 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                            },
-                            "wdatp": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]",
-                                "connectionName": "[variables('MDATPConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
                             }
                         }
                     }
