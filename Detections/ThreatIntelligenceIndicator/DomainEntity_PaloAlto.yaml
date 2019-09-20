@@ -17,7 +17,8 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-        let dt_lookBack = 1h;
+
+    let dt_lookBack = 1h;
     let ioc_lookBack = 14d;
     //Create a list of TLDs in our threat feed for later validation of extracted domains
     let list_tlds = ThreatIntelligenceIndicator
@@ -37,9 +38,9 @@ query: |
             CommonSecurityLog
             | where TimeGenerated > ago(dt_lookBack)
             | where DeviceVendor == 'Palo Alto Networks'
-            | where DeviceEventClassID == 'url'
+            | where DeviceEventClassID =~ 'url'
             //Uncomment the line below to only alert on allowed connections
-            //| where DeviceAction != "block-url"
+            //| where DeviceAction !~ "block-url"
             //Extract domain from RequestURL, if not present extarct it from AdditionalExtentions
             | extend Url = columnifexists("RequestURL", "None")
             | extend Url = iif(Url == "" and AdditionalExtensions !startswith "PanOS", extract("([^\"]+)", 1, tolower(AdditionalExtensions)), trim('"', Url))
@@ -53,5 +54,5 @@ query: |
             | where tld in~ (list_tlds)
             | extend CSL_TimeGenerated = TimeGenerated
         ) on $left.DomainName==$right.Domain
-        | project LatestIndicatorTime, Description, ActivityGroupNames, RequestURL, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, CSL_TimeGenerated, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod
+        | project LatestIndicatorTime, Description, ActivityGroupNames, Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, CSL_TimeGenerated, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod
         | extend timestamp = CSL_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName
