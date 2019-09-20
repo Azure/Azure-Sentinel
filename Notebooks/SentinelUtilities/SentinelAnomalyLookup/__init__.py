@@ -1,3 +1,4 @@
+# pylint: disable-msg=C0103
 """
 SentinelAnomalyLookup: This package is developed for Azure Sentinel Anomaly lookup
 """

@@ -1,3 +1,4 @@
+# pylint: disable-msg=C0103
 """
 SentinelExceptions: This package is developed for custom exceptions.
 """
