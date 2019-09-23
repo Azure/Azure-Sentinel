@@ -5,5 +5,4 @@ SentinelAzure: This package is developed for initializing and manipulating Pytho
 """
 
 # __init__.py
-from .azure_aad_helper import *
 from .azure_loganalytics_helper import *
