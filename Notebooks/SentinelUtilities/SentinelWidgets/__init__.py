@@ -1,3 +1,4 @@
+# pylint: disable-msg=C0103
 """
 SentinelWidgets: This package provides helper functionalities for UI comonents.
 """
