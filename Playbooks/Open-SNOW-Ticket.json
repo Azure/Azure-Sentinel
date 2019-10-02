@@ -2,7 +2,7 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata":{
-        "comments": "This playbook will open Service Now incident  when new incident open in sentinel.",
+        "comments": "This playbook will open Service Now incident when new incident open in sentinel.",
         "author": "Yaniv Shasha"
     },
     "parameters": {
@@ -17,7 +17,7 @@
     },
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "SNOWConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+        "SNOWConnectionName": "[concat('snow-', parameters('PlaybookName'))]"
 },
     "resources": [
         {
@@ -42,7 +42,7 @@
                 "displayName": "[parameters('UserName')]",
                 "customParameterValues": {},
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/service-now')]"
                 }
             }
         },
@@ -86,29 +86,51 @@
                         }
                     },
                     "actions": {
-                        "Create_Record": {
+                        "Alert_-_Get_incidents": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": {
-                                    "correlation_id": "@triggerBody()?['SystemAlertId']",
-                                    "description": "@triggerBody()?['Description']",
-                                    "severity": "@triggerBody()?['Severity']",
-                                    "short_description": "@triggerBody()?['AlertDisplayName']",
-                                    "sys_created_on": "@triggerBody()?['StartTimeUtc']"
-                                },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['service-now']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "method": "post",
-                                "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
-                                "queries": {
-                                    "sysparm_display_value": false,
-                                    "sysparm_exclude_reference_link": true
-                                }
+                                "method": "get",
+                                "path": "/cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
                             }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Alert_-_Get_incidents')?['value']",
+                            "actions": {
+                                "Create_Record": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "description": "@items('For_each')?['properties']?['Description']",
+                                            "severity": "@triggerBody()?['Severity']",
+                                            "short_description": "@items('For_each')?['properties']?['Title']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['service-now']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
+                                        "queries": {
+                                            "sysparm_display_value": false,
+                                            "sysparm_exclude_reference_link": true
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incidents": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
                         }
                     },
                     "outputs": {}
