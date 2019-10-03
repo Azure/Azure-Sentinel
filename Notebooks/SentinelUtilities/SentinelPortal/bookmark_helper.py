@@ -17,9 +17,7 @@ manipulate Hunting Bookmark (create, read, and delete).
 # pylint: disable-msg=W0201
 # pylint: disable=line-too-long
 
-# BookmarkProperties
 import uuid
-# BookmarkHelper
 import requests
 import jsons
 from SentinelUtils import InputValidation
@@ -32,32 +30,34 @@ class Constants():
     BOOKMARK_RESOURCE_BASE = '/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.OperationalInsights/workspaces/{2}/providers/Microsoft.SecurityInsights/bookmarks'
     BOOKMARK_ID = '/{0}'
     BOOKMARK_RESOURCE_ID = BOOKMARK_RESOURCE_BASE + BOOKMARK_ID
+    ENTITY_MAPPING = '__entityMapping'
+    ENTITY_TYPE = ['Bookmark'
+                   'SecurityAlert',
+                   'Account',
+                   'Host',
+                   'Malware',
+                   'File',
+                   'Process',
+                   'CloudApplication',
+                   'DnsResolution',
+                   'AzureResource',
+                   'FileHash',
+                   'RegistryKey',
+                   'RegistryValue',
+                   'SecurityGroup',
+                   'Url']
 
-class EntityType():
-    """ This class holds entity type enums """
-    BOOKMARK = 'Bookmark'
-    SECURITYALERT = 'SecurityAlert'
-    ACCOUNT = 'Account'
-    HOST = 'Host'
-    MALWARE = 'Malware'
-    FILE = 'File'
-    PROCESS = 'Process'
-    CLOUDAPPLICATION = 'CloudApplication'
-    DNSRESOLUTION = 'DnsResolution'
-    AZURERESOURCE = 'AzureResource'
-    FILEHASH = 'FileHash'
-    REGISTRYKEY = 'RegistryKey'
-    REGISTRYVALUE = 'RegistryValue'
-    SECURITYGROUP = 'SecurityGroup'
-    URL = 'Url'
 
 class BookmarkProperties():
-    """ This class holds properties for Hunting bookmark """
+    """
+    This class holds properties for Hunting bookmark.
+    Special Note:  For query_result_dict, actual value is the key, and the entity type is the value.
+    """
 
     def __init__(self,
                  display_name,
                  query,
-                 query_result=None,
+                 query_result_dict=None,
                  tag_list=None,
                  notes=None,
                  event_time=None,
@@ -66,7 +66,7 @@ class BookmarkProperties():
         self.displayName = display_name
         self.labels = tag_list
         self.query = query
-        self.queryResult = query_result
+        self.queryResult = query_result_dict
         self.notes = notes
         self.eventTime = event_time
         self.queryStartTime = query_start_time
@@ -126,9 +126,14 @@ class BookmarkProperties():
     @queryResult.setter
     def queryResult(self, query_result):
         """ queryResult setter """
-        if query_result:
-            self._queryResult = query_result
-        else:
+        result_str = None
+        if query_result and isinstance(query_result, dict):
+            if all(elem in Constants.ENTITY_TYPE for elem in list(query_result.values())):
+                query_result_dict = {}
+                query_result_dict.update({Constants.ENTITY_MAPPING: query_result})
+                result_str = jsons.dumps(query_result_dict)
+                self._queryResult = result_str
+        if not result_str:
             self._queryResult = '{}'
 
     @property
@@ -170,6 +175,7 @@ class BookmarkProperties():
     def queryEndTime(self, query_end_time):
         """ queryEndTime setter """
         self._queryEndTime = query_end_time
+
 
 class BookmarkModel():
     """ This class holds data model for Bookmark """
@@ -246,27 +252,26 @@ class BookmarkHelper:
     BOOKMARK_BASE_URL = 'https://management.azure.com'
     BOOKMARK_API_VERSION = '?api-version=2019-01-01-preview'
 
-    def __init__(self, bookmark_model):
-        self._bookmark_model = bookmark_model
+    def __init__(self, access_token):
+        self.access_token = access_token
 
-    @staticmethod
-    def __set_header(access_token):
-        return {'Authorization': 'Bearer ' + access_token}
+    def _set_header(self):
+        return {'Authorization': 'Bearer ' + self.access_token}
 
-    def __set_rp_put_url(self):
-        return self.BOOKMARK_BASE_URL + self._bookmark_model.id + self.BOOKMARK_API_VERSION
+    def _set_rp_put_url(self, bookmark_model):
+        return self.BOOKMARK_BASE_URL + bookmark_model.id + self.BOOKMARK_API_VERSION
 
-    def __set_rp_get_url(self):
-        return self.BOOKMARK_BASE_URL + self._bookmark_model.bookmark_resource_base + self.BOOKMARK_API_VERSION
+    def _set_rp_get_url(self, bookmark_model):
+        return self.BOOKMARK_BASE_URL + bookmark_model.bookmark_resource_base + self.BOOKMARK_API_VERSION
 
-    def __set_rp_delete_url(self):
-        return self.BOOKMARK_BASE_URL + self._bookmark_model.id + self.BOOKMARK_API_VERSION
+    def _set_rp_delete_url(self, bookmark_model):
+        return self.BOOKMARK_BASE_URL + bookmark_model.id + self.BOOKMARK_API_VERSION
 
-    def __generate_bookmark_payload(self):
-        items = jsons.dump(self._bookmark_model, strip_privates=True)
-        return jsons.dump(self.__cleanup_json(items))
+    def _generate_bookmark_payload(self, bookmark_model):
+        items = jsons.dump(bookmark_model, strip_privates=True)
+        return jsons.dump(self._cleanup_json(items))
 
-    def __cleanup_json(self, data):
+    def _cleanup_json(self, data):
         """
             Delete keys with the value ``None`` in a dictionary, recursively.
             This alters the input so you may wish to ``copy`` the dict first.
@@ -277,39 +282,39 @@ class BookmarkHelper:
             elif value is None:
                 del data[key]
             elif isinstance(value, dict):
-                self.__cleanup_json(value)
+                self._cleanup_json(value)
 
         return data
 
-    def add_bookmark(self, access_token):
+    def add_bookmark(self, bookmark_model):
         """ Create a hunting bookmark """
         try:
             result = requests.put(
-                self.__set_rp_put_url(),
-                headers=BookmarkHelper.__set_header(access_token),
-                json=self.__generate_bookmark_payload())
+                self._set_rp_put_url(bookmark_model),
+                headers=self._set_header(),
+                json=self._generate_bookmark_payload(bookmark_model))
             print('Success')
             return result
         except Exception as e:
             print(str(e))
 
-    def get_bookmarks(self, access_token):
+    def get_bookmarks(self, bookmark_model):
         """ Retrieve hunting bookmarks for workspace """
         try:
             result = requests.get(
-                self.__set_rp_get_url(),
-                headers=BookmarkHelper.__set_header(access_token))
+                self._set_rp_get_url(bookmark_model),
+                headers=self._set_header())
             print('Success')
             return result
         except Exception as e:
             print(str(e))
 
-    def delete_bookmark(self, access_token):
-        """ Delete a hunting bookmark """
+    def delete_bookmark(self, bookmark_model):
+        """ Delete a hunting bookmark, not recommend for notebook users """
         try:
             result = requests.delete(
-                self.__set_rp_delete_url(),
-                headers=BookmarkHelper.__set_header(access_token))
+                self._set_rp_delete_url(bookmark_model),
+                headers=self._set_header())
             print('Success')
             return result
         except Exception as e:

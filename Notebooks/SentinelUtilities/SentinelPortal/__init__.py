@@ -5,4 +5,4 @@ SentinelPortal: This package is developed for Sentinel notebooks integrating wit
 """
 
 # __init__.py
-from .bookmark_helper import Constants, EntityType, BookmarkProperties, BookmarkModel, BookmarkHelper
+from .bookmark_helper import Constants, BookmarkProperties, BookmarkModel, BookmarkHelper
