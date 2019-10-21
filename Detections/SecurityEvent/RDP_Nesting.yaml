@@ -1,0 +1,39 @@
+id: 69a45b05-71f5-45ca-8944-2e038747fb39
+name: RDP Nesting
+description: |
+  'Identifies when an RDP connection is made to a first system and then an RDP connection is made from the first system 
+  to another system with the same account within the same day.  
+  RDP connections are indicated by the logged EventID 4624 with LogonType = 10'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1076
+query: |
+
+  let timeframe = 1d;
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe) 
+  | where EventID == 4624 and LogonType == 10
+  // Labeling the first RDP connection time, computer and ip
+  | extend FirstHop = TimeGenerated, FirstComputer = Computer, FirstIPAddress = IpAddress 
+  | join (
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe) 
+  | where EventID == 4624 and LogonType == 10
+  // Labeling the second RDP connection time, computer and ip
+  | extend SecondHop = TimeGenerated, SecondComputer = Computer, SecondIPAddress = IpAddress 
+  ) on Account
+  // Make sure that the first connection is after the second connection --> SecondHop > FirstHop
+  // Then identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match --> FirstComputer != SecondComputer
+  // Then make sure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers --> FirstIPAddress != SecondIPAddress
+  | where SecondHop > FirstHop and FirstComputer != SecondComputer and FirstIPAddress != SecondIPAddress
+  | extend timestamp = FirstHop, AccountCustomEntity = Account, HostCustomEntity = FirstComputer, IPCustomEntity = FirstIPAddress
