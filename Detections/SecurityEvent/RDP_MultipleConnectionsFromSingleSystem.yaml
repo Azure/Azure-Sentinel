@@ -18,13 +18,29 @@ relevantTechniques:
   - T1076
 query: |
 
-  let timeframe = 1d;
-  // The threshold below includes matching on computer counts by account higher than 3 in a given day.  Change the threshold as needed.
-  let threshold = 3;
+  let endtime = 1d;
+  let starttime = 8d;
+  let avgDays = 7;
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe) 
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) 
   | where EventID == 4624 and LogonType == 10
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ComputerCount = dcount(Computer), makeset(Computer), makeset(ProcessName)  
+  | summarize ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account, IpAddress
+  // Computer count by same Account divided by days to determine average count
+  | extend AvgComputerCount = ComputerCount/avgDays;
+  SecurityEvent
+  | where TimeGenerated >= ago(endtime) 
+  | where EventID == 4624 and LogonType == 10
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ComputerCount = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)  
   by Account, IpAddress, AccountType, Activity, LogonTypeName
-  | where ComputerCount > threshold
+  | join (
+  SecurityEvent
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) 
+  | where EventID == 4624 and LogonType == 10
+  | summarize ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account, IpAddress
+  // Computer count by same Account divided by days to determine average count
+  | extend AvgComputerCount = ComputerCount/avgDays
+  | where AvgComputerCount != 0
+  ) on Account, IpAddress
+  | where ComputerCount > AvgComputerCount*3
+  | project StartTimeUtc, EndTimeUtc, Account, IpAddress, ComputerSet, ComputerCount, AccountType, Activity, LogonTypeName, ProcessSet
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, IPCustomEntity = IpAddress

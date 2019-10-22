@@ -19,15 +19,18 @@ relevantTechniques:
   - T1076
 query: |
 
-  let timeframe = 1d;
+  let endtime = 1d;
+  let starttime = 8d;
+  // The threshold below excludes matching on computer counts by account less than 5 in a given day.  Change the threshold as needed.
+  let threshold = 5;
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe) 
+  | where TimeGenerated >= ago(endtime) 
   | where EventID == 4624 and LogonType == 10
   // Labeling the first RDP connection time, computer and ip
   | extend FirstHop = TimeGenerated, FirstComputer = Computer, FirstIPAddress = IpAddress 
   | join (
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe) 
+  | where TimeGenerated >= ago(endtime) 
   | where EventID == 4624 and LogonType == 10
   // Labeling the second RDP connection time, computer and ip
   | extend SecondHop = TimeGenerated, SecondComputer = Computer, SecondIPAddress = IpAddress 
@@ -36,4 +39,17 @@ query: |
   // Then identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match --> FirstComputer != SecondComputer
   // Then make sure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers --> FirstIPAddress != SecondIPAddress
   | where SecondHop > FirstHop and FirstComputer != SecondComputer and FirstIPAddress != SecondIPAddress
+  | distinct Account, FirstHop, FirstComputer, FirstIPAddress, SecondHop, SecondComputer, SecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName
+  // use left anti to exclude anything from the previous 7 days where the Account and IP has connected to more than 5 computers.
+  | join kind=leftanti (
+  SecurityEvent
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) 
+  | where EventID == 4624 and LogonType == 10
+  | summarize makeset(Computer), ComputerCount = dcount(Computer) by Account, IpAddress
+  // Connection count to computer by same account and IP to determine rarity
+  | where ComputerCount > threshold
+  | mvexpand set_Computer
+  | extend Computer = tostring(set_Computer)
+  ) on Account, $left.SecondComputer == $right.Computer, $left.SecondIPAddress == $right.IpAddress
+  | distinct Account, FirstHop, FirstComputer, FirstIPAddress, SecondHop, SecondComputer, SecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName
   | extend timestamp = FirstHop, AccountCustomEntity = Account, HostCustomEntity = FirstComputer, IPCustomEntity = FirstIPAddress
