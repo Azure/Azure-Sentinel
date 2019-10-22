@@ -1,6 +1,6 @@
 # How to contribute new workbook
 
-This assumes that you already have a workbook that you want to share as a Sentinel template.<br/>
+This assumes you already have a workbook that you want to share as an Azure Sentinel template.<br/>
 Once this process is done, Sentinel users will be able to save an instance of your template that will visualize the data in their own workspace. 
 
 To learn how to create workbooks - go to [workbooks documentation](https://docs.microsoft.com/en-us/azure/azure-monitor/app/usage-workbooks) 
@@ -57,7 +57,7 @@ This logo should be in SVG format.
  
 # How to update workbooks
 
-Just change the version in the WorkbooksMetadata.json file and change the relevant JSON of the workbook you would like to update.
+Just change the version of the relevand workbook in the [WorkbooksMetadata.json](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json) file and change the relevant JSON of the workbook you would like to update.
 If needed, also update the preview images or the data types.
 
 
