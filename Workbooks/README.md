@@ -30,7 +30,6 @@ once this process is done, Sentinel users will be able to save an instance of yo
     "subtitle": "",
     "provider": "Microsoft"
   }
-  ```
   
   After this PR is updated, every 2 weeks the workbooks in Sentinel will be synced to the ones in github.
   
