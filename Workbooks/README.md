@@ -18,13 +18,15 @@ To learn how to create workbooks - go to [workbooks documentation](https://docs.
 
 4. Capture 2 screenshots of your workbook - in dark and light theme (this will eventually be the preview images displayed in the workbooks blade).
 
-## Step 2 - Create a PR to this repository
+## Step 2 - Create a pull request to this repository
 
-1. In the PR - add the screenshots of your workbook under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Try to be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the work _"white"_
-2. Add the gallery template json of your workbook directly under workbooks [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks).
-3. (optional) Add a logo that you want the workbook to display under [workbooks/images/logos](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Logos) - if not supplied - it will be the generic workbooks logo. <br/>
+This pull request will contain:
+
+* The screenshots of your workbook. Place them under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Please be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the work _"white"_
+* The gallery template json of your workbook. Place it directly under workbooks [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks).
+* (optional) A logo that you want the workbook to display. Place it under [workbooks/images/logos](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Logos) - if not supplied - it will be the generic workbooks logo. <br/>
 This logo should be in SVG format.
-4. Under workbooksMetadata.json [file](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json), add a new section, which will include:
+* Change workbooksMetadata.json [file](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json), so that it will contain a new section, which will include:
 
    ```
    {
@@ -69,8 +71,8 @@ This logo should be in SVG format.
       },
    
   
-  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced to the ones in github.<br/>
-  If you cannot wait 2 weeks, contact t-amberm@microsoft.com or mor.shabi@microsoft.com.
+  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>
+  If you need the sync to happen sooner, please contact mor.shabi@microsoft.com or t-amberm@microsoft.com.
   
  
 # How to update an existing workbook
@@ -79,4 +81,4 @@ Just change the version of the relevand workbook in the [WorkbooksMetadata.json]
 If needed, also update the preview images or the data types.
 
 
-For questions you can contact Amit Bergman - t-amberm@microsoft.com
+For questions on this instruction, you can contact Amit Bergman - t-amberm@microsoft.com
