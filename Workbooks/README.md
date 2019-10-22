@@ -16,15 +16,15 @@ To learn how to create workbooks - go to [workbooks documentation](https://docs.
     "fromTemplateId": "sentinel-MyNewWorkbook",
     "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 
-4. (optional) Capture 2 screenshots of your workbook - in dark and light theme (this will eventually be the preview images displayed in the workbooks blade).
+4. Capture 2 screenshots of your workbook - in dark and light theme (this will eventually be the preview images displayed in the workbooks blade).
 
 ## Step 2 - Create a PR to this repository
 
-1. In the PR - if you created screenshots - add them under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Try to be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the work _"white"_
+1. In the PR - add the screenshots of your workbook under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Try to be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the work _"white"_
 2. Add the gallery template json of your workbook directly under workbooks [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks).
 3. (optional) Add a logo that you want the workbook to display under [workbooks/images/logos](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Logos) - if not supplied - it will be the generic workbooks logo. <br/>
 This logo should be in SVG format.
-4. Under workbooksMetadata.json file, add another section, which will include:
+4. Under workbooksMetadata.json [file](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json), add a new section, which will include:
 
    ```
    {
