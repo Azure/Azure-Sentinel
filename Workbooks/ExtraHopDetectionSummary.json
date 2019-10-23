@@ -1,0 +1,199 @@
+﻿{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## ExtraHop Detections\n---\n"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "crossComponentResources": [],
+        "parameters": [
+          {
+            "id": "2b036d8d-8429-40a5-a5f4-8f7473738749",
+            "version": "KqlParameterItem/1.0",
+            "name": "query_times",
+            "label": "Time Interval",
+            "type": 4,
+            "description": "Time range for detection Start Times",
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"ExtraHop\"\n| extend detectionID = DeviceCustomNumber1\n| extend StartTime = extract(\"start=([0-9-]+T[0-9:.]+Z)\", 1, AdditionalExtensions,typeof(datetime))\n| summarize arg_min(todatetime(ReceiptTime), *) by detectionID\n| summarize count(detectionID) by Activity, bin(make_datetime(ReceiptTime), 1h)\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Detections by Recently Updated",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "query_times",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar",
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "Activity",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "count_detectionID",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "name": "detections_by_time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let category_map = dynamic(\n{\n    \"sec.action\" : \"Actions on Objective\",\n    \"sec.caution\": \"Caution\",\n    \"sec.command\": \"Command and Control\",\n    \"sec.exploit\": \"Exploitation\",\n    \"sec.lateral\": \"Lateral Movement\",\n    \"sec.recon\": \"Reconnaissance\"\n    }\n);\nCommonSecurityLog\n| where DeviceVendor == \"ExtraHop\"\n| extend categories = iif(DeviceCustomString2 != \"\", split(DeviceCustomString2, \",\"),dynamic(null))\n| extend detectionID = DeviceCustomNumber1\n| project detectionID, updateTime=todatetime(ReceiptTime), categories\n| summarize arg_max(updateTime, *) by detectionID\n| sort by detectionID desc \n| where isnotnull(categories)\n| mv-expand cat=categories to typeof(string) \n| summarize count() by cat\n| project Category=tostring(category_map[cat]), Count=count_\n| where Category != \"\"",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Detections by Category",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "query_times",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "total-detections-pie"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let ExtraHopDetections = materialize(CommonSecurityLog\n    | where DeviceVendor == \"ExtraHop\"\n    | extend detectionID = DeviceCustomNumber1\n    | extend StartTime = extract(\"start=([0-9-]+T[0-9:.]+Z)\", 1, AdditionalExtensions,typeof(datetime))\n    | project SourceIP, DestinationIP, detectionID, StartTime\n    | summarize arg_max(todatetime(StartTime), *) by detectionID\n    | sort by detectionID desc);\nlet t1 = ExtraHopDetection | where SourceIP != \"\" | summarize dcount=dcount(detectionID) by SourceIP | project IPAddress=SourceIP, dcount;\nlet t2 = ExtraHopDetection | where DestinationIP != \"\" | summarize dcount=dcount(detectionID) by DestinationIP | project IPAddress=DestinationIP, dcount;\nt1 | union t2 | summarize Count=sum(dcount) by [\"IP Address\"]=IPAddress | top 10 by Count desc",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top Participants",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "query_times",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "35",
+      "name": "top-participants"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n    | where DeviceVendor == \"ExtraHop\"\n    | extend StartTime = extract(\"start=([0-9-]+T[0-9:.]+Z)\", 1, AdditionalExtensions,typeof(datetime))\n    | extend detectionID = DeviceCustomNumber1\n    | summarize arg_max(todatetime(StartTime), *) by detectionID\n    | summarize Count=count() by Activity\n    | sort by Count desc, Activity asc\n    | project-rename [\"Detection Title\"]=Activity",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top Detections by Title",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "query_times",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "35",
+      "name": "detections-by-title"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"ExtraHop\"\n| summarize arg_max(ReceiptTime, *) by DeviceCustomNumber1 // detection ID\n| sort by DeviceCustomNumber2 // risk score\n| project [\"Risk Score\"] = DeviceCustomNumber2,\nTitle=Activity, \nSourceIP,\nDestinationIP,\n[\"Last Updated\"]=format_datetime(make_datetime(ReceiptTime), 'M/d/yyyy HH:mm:ss'),\nID=DeviceCustomNumber1,\nURI=DeviceCustomString1\n| take 10\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top Ten Detections by Highest Risk Score",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "query_times",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "top-ten-by-risk"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-ExtraHop",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
