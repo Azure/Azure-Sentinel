@@ -1,0 +1,21 @@
+// Id: 53b9baf6-8d53-403c-bcb9-0a3c32b3a489
+// DisplayName: Most Frequent IP Connections of The Device
+// Description: Most Frequent IP Connections of The Device
+// InputEntityType: IoTDevice
+// InputFields: [IoTDevice_DeviceId, IoTDevice_IoTHub]
+// OutputEntityTypes: [NetworkConnection]
+// DataConnector: #SecurityIoTRawEvent
+let IPConnection_byIoTDevice = (v_IotDevice_DeviceId:string, v_IoTDevice_IoTHub:string){
+    SecurityIoTRawEvent 
+    | where RawEventName == "ConnectionCreate"
+    | where AssociatedResourceId == parse_json(v_IoTDevice_IoTHub)["AzureResourceId"] and DeviceId == v_IotDevice_DeviceId
+    | extend Direction = tostring(parse_json(EventDetails)["Direction"])
+    | extend NetworkConnection_SourceAddress = iff(Direction == "in", tostring(parse_json(EventDetails)["RemoteAddress"]), "127.0.0.1")
+    | extend NetworkConnection_SourcePort = iff(Direction == "in", tostring(parse_json(EventDetails)["RemotePort"]), tostring(parse_json(EventDetails)["LocalPort"]))
+    | extend NetworkConnection_DestinationAddress = iff(Direction == "in", "127.0.0.1", tostring(parse_json(EventDetails)["RemoteAddress"]))
+    | extend NetworkConnection_DestinationPort = iff(Direction == "in", tostring(parse_json(EventDetails)["LocalPort"]), tostring(parse_json(EventDetails)["RemotePort"]))
+    | summarize ConnectionCount = count() by NetworkConnection_SourceAddress, NetworkConnection_SourcePort, NetworkConnection_DestinationAddress, NetworkConnection_DestinationPort
+    | top 10 by ConnectionCount 
+    | project-away ConnectionCount
+    };
+IPConnection_byIoTDevice('<DeviceId>', '<IoTHub>')
