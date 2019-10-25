@@ -22,7 +22,7 @@ To learn how to create workbooks - go to [workbooks documentation](https://docs.
 
 This pull request will contain:
 
-* The screenshots of your workbook. Place them under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Please be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the work _"white"_
+* The screenshots of your workbook. Place them under [workbooks/images/preview](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Preview). <br/>Please be consistent with the filename conventions - the dark theme filename should contain the word _"black"_ and the light theme image should contain the word _"white"_.
 * The gallery template json of your workbook. Place it directly under workbooks [directory](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks).
 * (optional) A logo that you want the workbook to display. Place it under [workbooks/images/logos](https://github.com/Azure/Azure-Sentinel/tree/master/Workbooks/Images/Logos) - if not supplied - it will be the generic workbooks logo. <br/>
 This logo should be in SVG format.
@@ -77,7 +77,7 @@ This logo should be in SVG format.
  
 # How to update an existing workbook
 
-Just change the version of the relevand workbook in the [WorkbooksMetadata.json](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json) file and change the relevant JSON of the workbook you would like to update.
+Just change the version of the relevant workbook in the [WorkbooksMetadata.json](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json) file and change the relevant JSON of the workbook you would like to update.
 If needed, also update the preview images or the data types.
 
 
