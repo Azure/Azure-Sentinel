@@ -3,7 +3,7 @@
 This assumes you already have a workbook that you want to share as an Azure Sentinel template.<br/>
 Once this process is completed, Sentinel users will be able to save an instance of your template that will visualize the data in their own workspace. 
 
-To learn how to create workbooks - go to [workbooks documentation](https://docs.microsoft.com/en-us/azure/azure-monitor/app/usage-workbooks) 
+To learn how to create workbooks - go to [workbooks documentation](https://docs.microsoft.com/en-us/azure/azure-monitor/app/usage-workbooks).
 
 ## Step 1 - get the workbook gallery template:
 
@@ -53,9 +53,9 @@ This logo should be in SVG format.
     "provider": "Microsoft" //The provider of the workbook
     }
     
-  Here is an example of a JSON of Palo Alto workbook:
+ Here is an example of the JSON of Palo Alto workbook:
   
-     ```
+    
        {
       "workbookKey": "PaloAltoOverviewWorkbook",
       "logoFileName": "paloalto_logo.svg",
@@ -77,8 +77,8 @@ This logo should be in SVG format.
  
 # How to update an existing workbook
 
-Just change the version of the relevant workbook in the [WorkbooksMetadata.json](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json) file and change the relevant JSON of the workbook you would like to update.
+Just create a pull request to this repository in which you change the version of the relevant workbook in the [WorkbooksMetadata.json](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json) file and change the relevant JSON of the workbook you would like to update.
 If needed, also update the preview images or the data types.
 
 
-For questions on this instruction, you can contact Amit Bergman - t-amberm@microsoft.com
+For questions on these instructions, you can contact Amit Bergman - t-amberm@microsoft.com
