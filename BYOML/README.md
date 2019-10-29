@@ -16,7 +16,7 @@ Following three Notebooks work with the collaborative filtering algorithm for An
 		
 It is run from Azure Databricks
 - Standard_DS4_v2 (28 GB)
-- Version 5.2 (includes Apache Spark 2.4.0, Scala 2.11)
+- Version 5.5 (includes Apache Spark 2.4.0, Scala 2.11)
 
 Other libraries:
 - scikit-surprise==1.0.6
