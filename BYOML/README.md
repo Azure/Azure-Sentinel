@@ -1,4 +1,4 @@
-Build-Your-Own Machine Learning(BYO ML) package is provided by Azure Sentinel team to help organizations build or bring your own ML to tackle security problems specifically for your business. This folder contains the BYO ML package including the first ML algorithm  Azure Sentinel team shares.
+Build-Your-Own Machine Learning(BYO ML) package, currently in private preview, is provided by Azure Sentinel team to help organizations build or bring your own ML to tackle security problems specifically for your business. This folder contains the BYO ML package including the first ML algorithm  Azure Sentinel team shares.
 
 The package includes:
 
