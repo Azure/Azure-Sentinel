@@ -1,0 +1,37 @@
+id: 9e146876-e303-49af-b847-b029d1a66852
+name: Port opened for an Azure Resource
+description: |
+  'Identifies what ports may have been opened for a given Azure Resource over the last 7 days' 
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - CommandAndControl
+  - Impact
+relevantTechniques:
+  - T1043
+  - T1065
+  - T1496
+query: |
+
+  let timeframe = 7d;
+  AzureActivity
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName has_any ("Create", "Update") and OperationName has_any ("Ip", "Security Rule")
+  // Choosing Accepted here because it has the Rule Attributes included
+  | where ActivityStatus == "Accepted" 
+  // If there is publicIP info, include it
+  | extend publicIPAddress_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).ipAddress) 
+  | extend publicIPAddressVersion_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAddressVersion) 
+  | extend publicIPAllocationMethod_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAllocationMethod) 
+  // Include rule attributes for context
+  | extend access = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).access) 
+  | extend description = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).description) 
+  | extend destinationPortRange = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).destinationPortRange) 
+  | extend direction = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).direction) 
+  | extend protocol = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).protocol) 
+  | extend sourcePortRange = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).sourcePortRange) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ResourceIds = makeset(ResourceId) by Caller, CallerIpAddress, Resource, ResourceGroup, 
+  ActivityStatus, ActivitySubstatus, SubscriptionId, access, description, destinationPortRange, direction, protocol, sourcePortRange  
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
