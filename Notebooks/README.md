@@ -1,6 +1,19 @@
 # Azure Notebooks for Azure Sentinel
 
+## <font color="red">Warning! The contents of this folder have moved.</font>
+
+The notebooks and support files in this folder have moved to the
+[Azure-Sentinel-Notebooks](https://github.com/Azure/Azure-Sentinel-Notebooks) repo.
+This new location will be the main repository for Azure Sentinel notebooks
+and all new and updated content will be posted there.
+Existing files have been left here to support links to these locations.
+The files here will not be maintained or updated.
+
+
+---
+
 ## What is Azure Notebooks?
+
 Azure Notebooks is a free hosted service to develop and run Jupyter notebooks in the cloud with no installation. <a href="https://jupyter.org/">Jupyter</a> is an open source project that lets you easily combine markdown text, executable code (Python, R, and F#), persistent data, graphics, and visualizations onto a single, sharable canvas called a notebook.
 
 ## How do Azure Notebooks work?
