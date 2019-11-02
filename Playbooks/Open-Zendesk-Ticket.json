@@ -60,77 +60,86 @@
         ],
         "properties": {
             "state": "Enabled",
-            "definition": {
-                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                "contentVersion": "1.0.0.0",
-                "parameters": {
-                    "$connections": {
-                        "defaultValue": {},
-                        "type": "Object"
-                    }
-                },
-                "triggers": {
-                    "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                        "type": "ApiConnectionWebhook",
-                        "inputs": {
-                            "body": {
-                                "callback_url": "@{listCallbackUrl()}"
-                            },
-                            "host": {
-                                "connection": {
-                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                }
-                            },
-                            "path": "/subscribe"
-                        }
-                    }
-                },
-                "actions": {
-                    "Alert_-_Get_incidents": {
-                        "runAfter": {},
-                        "type": "ApiConnection",
-                        "inputs": {
-                            "host": {
-                                "connection": {
-                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                }
-                            },
-                            "method": "get",
-                            "path": "/cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+             "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
                         }
                     },
-                    "For_each": {
-                        "foreach": "@body('Alert_-_Get_incidents')?['value']",
-                        "actions": {
-                            "Create_Item": {
-                                "runAfter": {},
-                                "type": "ApiConnection",
-                                "inputs": {
-                                    "body": {
-                                        "description": "@triggerBody()?['Description']",
-                                        "priority": "@triggerBody()?['Severity']",
-                                        "requester_id": 362778099500,
-                                        "subject": "@triggerBody()?['AlertDisplayName']",
-                                        "type": "incident"
-                                    },
-                                    "host": {
-                                        "connection": {
-                                            "name": "@parameters('$connections')['zendesk']['connectionId']"
-                                        }
-                                    },
-                                    "method": "post",
-                                    "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('tickets'))}/items"
-                                }
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
                             }
                         },
-                        "runAfter": {
-                            "Alert_-_Get_incidents": [
-                                "Succeeded"
-                            ]
+                        "Create_Item": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "description": "@body('Alert_-_Get_incident')?['properties']?['Description']",
+                                    "priority": "@body('Alert_-_Get_incident')?['properties']?['Severity']",
+                                    "requester_id": "@variables('requesterID')",
+                                    "subject": "@body('Alert_-_Get_incident')?['properties']?['Title']",
+                                    "type": "incident"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['zendesk']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('tickets'))}/items"
+                            }
                         },
-                        "type": "Foreach"
-                    }
-                },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "requesterID",
+                                        "type": "Integer"
+                                    }
+                                ]
+                            }
+                        }
+                    },
                     "outputs": {}
                 },
                 "parameters": {
