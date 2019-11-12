@@ -274,7 +274,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
             send_cef_message_local(daemon_port, 1)
         poll_result = poll_obj.poll(0)
         if poll_result:
-            line = tcp_dump.stdout.readline()
+            line = str(tcp_dump.stdout.readline())
             if handle_tcpdump_line(line, incoming_port, ok_message):
                 return True
         end_seconds = int(round(time.time()))
