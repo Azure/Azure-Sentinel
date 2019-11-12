@@ -105,7 +105,7 @@ def check_red_hat_firewall_issue():
     if e is not None:
         print_error("Error: could not check CentOS / RHEL 7 firewalld status.")
     else:
-        if "running" in o:
+        if "running" in str(o):
             print_warning(
                 "Warning: you have a firewall running on your linux machine this can prevent communication between the syslog daemon and the omsagent.")
             print("Checking if firewall has exception for omsagent port.[" + agent_port + "]")
@@ -138,8 +138,8 @@ def red_hat_firewall_d_exception_for_omsagent():
     o, e = firewall_status.communicate()
     if e is not None:
         print_error("Error: could not get /etc/firewalld/zones/public.xml file holding firewall exceptions")
-    print_command_response(o)
-    return agent_port in o
+    print_command_response(str(o))
+    return agent_port in str(o)
 
 
 def restart_red_hat_firewall_d():
@@ -274,7 +274,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
             send_cef_message_local(daemon_port, 1)
         poll_result = poll_obj.poll(0)
         if poll_result:
-            line = tcp_dump.stdout.readline()
+            line = str(tcp_dump.stdout.readline())
             if handle_tcpdump_line(line, incoming_port, ok_message):
                 return True
         end_seconds = int(round(time.time()))
