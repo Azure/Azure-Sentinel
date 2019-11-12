@@ -105,7 +105,7 @@ def check_red_hat_firewall_issue():
     if e is not None:
         print_error("Error: could not check CentOS / RHEL 7 firewalld status.")
     else:
-        if "running" in o:
+        if "running" in str(o):
             print_warning(
                 "Warning: you have a firewall running on your linux machine this can prevent communication between the syslog daemon and the omsagent.")
             print("Checking if firewall has exception for omsagent port.[" + agent_port + "]")
