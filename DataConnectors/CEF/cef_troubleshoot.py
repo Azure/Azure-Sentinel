@@ -138,8 +138,8 @@ def red_hat_firewall_d_exception_for_omsagent():
     o, e = firewall_status.communicate()
     if e is not None:
         print_error("Error: could not get /etc/firewalld/zones/public.xml file holding firewall exceptions")
-    print_command_response(o)
-    return agent_port in o
+    print_command_response(str(o))
+    return agent_port in str(o)
 
 
 def restart_red_hat_firewall_d():
