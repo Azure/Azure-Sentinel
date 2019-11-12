@@ -1,0 +1,30 @@
+id: 5b6ee21d-da53-46eb-827c-eab2a9ba3d2f
+name: Suspicious access to S3 buckets from Valid Accounts
+description: |
+  Adversaries may use existing IAM role or users to access private S3 buckets and do malicious actions. This query will look for any access with Assume Role operations which was not historically seen.
+  You can also limit the query to only private buckets with sensitive files which needs to be monitored.
+requiredDataConnectors:
+  - connectorId: Logstash
+    dataTypes:
+      - AwsBucketAPILogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+
+let starttime = 14d;
+let midtime = 2d;
+let endtime = 1d;
+AWSCloudTrail
+| where TimeGenerated >= ago(endtime)
+| where EventName == "AssumeRole" | extend RoleArn = tostring(parse_json(RequestParameters).roleArn)
+| project TimeGenerated, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy , SourceIpAddress, RoleArn
+| join kind= leftanti (
+    AWSCloudTrail
+| where TimeGenerated  between (ago(starttime)..ago(midtime))
+| where EventName == "AssumeRole" | extend RoleArn = tostring(parse_json(RequestParameters).roleArn)
+| project TimeGenerated, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy , SourceIpAddress, RoleArn
+) on RoleArn 
+| summarize count(), max(TimeGenerated), min(TimeGenerated) by RoleArn, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy, SourceIpAddress
+| extend timestamp = max_TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = tostring(split(RoleArn, "/")[1])

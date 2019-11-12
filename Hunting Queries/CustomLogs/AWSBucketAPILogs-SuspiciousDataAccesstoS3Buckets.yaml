@@ -1,0 +1,31 @@
+id: 5b6ee21d-da53-46eb-827c-eab2a9ba3d2f
+name: Suspicious Data Access to S3 Bucket from Unknown IP
+description: |
+  Adversaries may access data objects from improperly secured cloud storage. This query will look for any access originating from Source IP which was not seen historically accessing the bucket or downloading files from it.
+  You can also limit the query to only private buckets with sensitive files.
+requiredDataConnectors:
+  - connectorId: Logstash
+    dataTypes:
+      - AwsBucketAPILogs
+tactics:
+  - Collection
+relevantTechniques:
+  - T1530
+query: |
+
+let EventNameList = dynamic(["ListBucket","ListObjects","GetObject"]);
+let starttime = 14d;
+let midtime = 2d;
+let endtime = 1d;
+AWSS3BucketAPILogParsed 
+| where EventTime >= ago(endtime)
+| where EventName in (EventNameList)
+| project EventTime, EventSource,EventName, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName, Key
+| join kind=leftanti
+(
+    AWSS3BucketAPILogParsed 
+    | where EventTime between (ago(starttime)..ago(midtime))
+    | where EventName in (EventNameList)
+) on SourceIPAddress
+| summarize count(), max(EventTime), Files= makeset(Key) by EventSource,EventName, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName
+| extend timestamp = max_EventTime, HostCustomEntity = Host, AccountCustomEntity = SessionUserName, IPCustomEntity = SourceIPAddress

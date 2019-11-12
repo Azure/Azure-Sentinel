@@ -1,0 +1,44 @@
+id: 0ef8dee1-eb94-44c8-b59b-2eb096a4b983
+name: S3 Bucket outbound Data transfer anomaly
+description: |
+  'Identifies anomalous spike in data transfer from an S3 bucket based on GetObject API call and BytesTransferred out field. 
+  The query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns. 
+  Sudden increases in execution frequency of sensitive processes should be further investigated for malicious activity.
+  Tune the values from 1.5 to 3 in series_decompose_anomalies for further outliers or based on custom threshold values for score.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Logstash
+    dataTypes:
+      - AwsBucketAPILogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+query: |
+
+let starttime = 14dd;
+let endtime = 1d;
+let timeframe = 1h;
+let TimeSeriesData=
+AWSS3BucketAPILogParsed 
+| where EventTime between (startofday(ago(starttime))..startofday(ago(endtime)))
+| where EventName == "GetObject"
+| make-series Total=sum(BytesTransferredOut) on EventTime from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe;
+let TimeSeriesAlerts = TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 1.5, -1, 'linefit')
+  | mv-expand Total to typeof(double), EventTime to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0
+  | project EventTime, Total, baseline, anomalies, score;
+TimeSeriesAlerts
+  | join (
+    AWSS3BucketAPILogParsed 
+    | where EventTime between (startofday(ago(starttime))..startofday(ago(endtime)))
+    | where EventName == "GetObject"
+  | summarize Total = sum(BytesTransferredOut), Files= makeset(Key) by bin(EventTime, 1h), EventSource,EventName, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName
+  ) on EventTime
+  | project AnomalyHour = EventTime, SourceIPAddress, UserIdentityType,UserIdentityUserName,SessionUserName, BucketName, Host, AuthenticationMethod, Total, baseline, anomalies, score 
+  | extend timestamp = AnomalyHour, AccountCustomEntity = SessionUserName , HostCustomEntity = Host, IPCustomEntity = SourceIPAddress
