@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
+    "metadata": {
         "comments": "This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address.  It will write the City and Country to a tag on the Incident.",
         "author": "Nicholas DiCola"
     },
@@ -26,7 +26,8 @@
             "location": "[resourceGroup().location]",
             "properties": {
                 "displayName": "[parameters('UserName')]",
-                "customParameterValues": {},
+                "customParameterValues": {
+                },
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -47,37 +48,8 @@
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
                     "actions": {
                         "Alert_-_Get_IPs": {
-                            "runAfter": {
-                                "Alert_-_Get_incidents": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
                             "inputs": {
                                 "body": "@triggerBody()?['Entities']",
                                 "host": {
@@ -87,11 +59,15 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/ip"
-                            }
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
                         },
-                        "Alert_-_Get_incidents": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
+                        "Alert_-_Get_incident": {
                             "inputs": {
                                 "host": {
                                     "connection": {
@@ -99,61 +75,51 @@
                                     }
                                 },
                                 "method": "get",
-                                "path": "/cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                            },
+                            "runAfter": {
+                            },
+                            "type": "ApiConnection"
                         },
                         "For_each": {
-                            "foreach": "@body('Alert_-_Get_IPs')?['IPs']",
                             "actions": {
-                                "For_each_2": {
-                                    "foreach": "@body('Alert_-_Get_incidents')?['value']",
-                                    "actions": {
-                                        "Incident_-_Add_labels": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "Labels": [
-                                                        {
-                                                            "Label": "@body('Parse_JSON')?['city']"
-                                                        },
-                                                        {
-                                                            "Label": "@body('Parse_JSON')?['country']"
-                                                        }
-                                                    ]
+                                "Add_labels_to_incident": {
+                                    "inputs": {
+                                        "body": {
+                                            "Labels": [
+                                                {
+                                                    "Label": "@body('Parse_JSON')?['city']"
                                                 },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent(items('For_each_2')?['name'])}/AddLabels"
+                                                {
+                                                    "Label": "@body('Parse_JSON')?['country']"
+                                                }
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                             }
-                                        }
+                                        },
+                                        "method": "put",
+                                        "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}/AddLabels"
                                     },
                                     "runAfter": {
                                         "Parse_JSON": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "Foreach"
+                                    "type": "ApiConnection"
                                 },
                                 "HTTP": {
-                                    "runAfter": {},
-                                    "type": "Http",
                                     "inputs": {
                                         "method": "GET",
                                         "uri": "http://ip-api.com/json/@{items('For_each')?['Address']}"
-                                    }
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Http"
                                 },
                                 "Parse_JSON": {
-                                    "runAfter": {
-                                        "HTTP": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson",
                                     "inputs": {
                                         "content": "@body('HTTP')",
                                         "schema": {
@@ -203,9 +169,16 @@
                                             },
                                             "type": "object"
                                         }
-                                    }
+                                    },
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
                                 }
                             },
+                            "foreach": "@body('Alert_-_Get_IPs')?['IPs']",
                             "runAfter": {
                                 "Alert_-_Get_IPs": [
                                     "Succeeded"
@@ -214,7 +187,32 @@
                             "type": "Foreach"
                         }
                     },
-                    "outputs": {}
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {
+                    },
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
                 },
                 "parameters": {
                     "$connections": {
