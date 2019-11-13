@@ -277,7 +277,9 @@ def change_omsagent_protocol(configuration_path):
     configuration file
     :param configuration_path:
     '''
-    with open(configuration_path, "rt") as fin:
+    try:
+        # if opening this file failed the installation of the oms-agent has failed
+        fin = open(configuration_path, "rt")
         with open("tmp.txt", "wt") as fout:
             for line in fin:
                 if "protocol_type" in line and "udp" in line:
@@ -286,6 +288,9 @@ def change_omsagent_protocol(configuration_path):
                     print("Line changed: " + line)
                 else:
                     fout.write(line)
+    except IOError:
+        print_error("Oms-agent installation has failed please remove oms-agent and try again.")
+        return False
     command_tokens = ["sudo", "mv", "tmp.txt", configuration_path]
     write_new_content = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
@@ -482,9 +487,10 @@ def main():
                 elif "-help" in sys.argv[index]:
                     print(help_text)
                     return
-    if download_omsagent():
-        install_omsagent(workspace_id=workspace_id, primary_key=primary_key)
-        set_omsagent_configuration(workspace_id=workspace_id, omsagent_incoming_port=omsagent_incoming_port)
+    if download_omsagent() and install_omsagent(workspace_id=workspace_id, primary_key=primary_key):
+        # if setting oms agent configuration has failed we need to stop the script
+        if not set_omsagent_configuration(workspace_id=workspace_id, omsagent_incoming_port=omsagent_incoming_port):
+            return
     if is_rsyslog():
         print("Located rsyslog daemon running on the machine")
         create_daemon_forwarding_configuration(omsagent_incoming_port=omsagent_incoming_port,
