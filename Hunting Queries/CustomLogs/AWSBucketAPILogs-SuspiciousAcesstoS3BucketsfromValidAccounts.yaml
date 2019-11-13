@@ -3,6 +3,8 @@ name: Suspicious access to S3 buckets from Valid Accounts
 description: |
   Adversaries may use existing IAM role or users to access private S3 buckets and do malicious actions. This query will look for any access with Assume Role operations which was not historically seen.
   You can also limit the query to only private buckets with sensitive files which needs to be monitored.
+  Read more about ingest custom logs using Logstash at https://github.com/Azure/Azure-Sentinel/wiki/Ingest-Custom-Logs-LogStash 
+  and AWS API AssumeRole at https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
 requiredDataConnectors:
   - connectorId: Logstash
     dataTypes:
@@ -16,15 +18,17 @@ query: |
 let starttime = 14d;
 let midtime = 2d;
 let endtime = 1d;
+// Generating historical table of accounts with AssumeRole operations to  be compared with last 24 hour to find new accounts
 AWSCloudTrail
 | where TimeGenerated >= ago(endtime)
 | where EventName == "AssumeRole" | extend RoleArn = tostring(parse_json(RequestParameters).roleArn)
 | project TimeGenerated, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy , SourceIpAddress, RoleArn
+// Doing Leftanti join to find new accounts which was not seen historically in previous table.
 | join kind= leftanti (
-    AWSCloudTrail
+AWSCloudTrail
 | where TimeGenerated  between (ago(starttime)..ago(midtime))
 | where EventName == "AssumeRole" | extend RoleArn = tostring(parse_json(RequestParameters).roleArn)
 | project TimeGenerated, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy , SourceIpAddress, RoleArn
 ) on RoleArn 
-| summarize count(), max(TimeGenerated), min(TimeGenerated) by RoleArn, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy, SourceIpAddress
-| extend timestamp = min_TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = tostring(split(RoleArn, "/")[1])
+| summarize EventCount = count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by RoleArn, EventSource, EventName, UserIdentityType, UserIdentityInvokedBy, SourceIpAddress
+| extend timestamp = StartTimeUtc, IPCustomEntity = SourceIpAddress, AccountCustomEntity = tostring(split(RoleArn, "/")[1])
