@@ -10,15 +10,24 @@
 // Tactics: #Persistence, #Discovery, #LateralMovement, #Collection
 
 let GetServiceCreationsOnHost = (v_Account_Name:string){
-SecurityEvent
+Event
 | extend v_Account_Name = case(
 v_Account_Name has "@", tostring(split(v_Account_Name, "@")[0]),
 v_Account_Name has "\\", tostring(split(v_Account_Name, "\\")[1]),
 v_Account_Name
 )
 | where EventID == 7045
-| where tolower(Account) contains v_Account_Name
-| project-rename Process_Host_UnstructuredName=Computer, Process_Account_UnstructuredName=Account, Process_CommandLine=CommandLine, Process_ProcessId=ProcessId, Process_ImageFile_FullPath=NewProcessName
+| where tolower(UserName) contains v_Account_Name
+| extend EventDataParse = parse_xml(EventData)
+| extend ServiceName = tostring(EventDataParse.DataItem.EventData.Data.[0].["#text"])
+| extend ImagePath = tostring(EventDataParse.DataItem.EventData.Data.[1].["#text"])
+| extend ServiceType = tostring(EventDataParse.DataItem.EventData.Data.[2].["#text"])
+| extend StartType = tostring(EventDataParse.DataItem.EventData.Data.[3].["#text"])
+| extend ServiceAccount = tostring(EventDataParse.DataItem.EventData.Data.[4].["#text"])
+| where ImagePath !has "\\ProgramData\\Microsoft\\Windows Defender\\Definition Updates\\"
+| extend Account_Aux_info = pack("ServiceName", ServiceName, ServiceType, ServiceType, StartType, StartType, ServiceAccount, ServiceAccount)
+| project TimeGenerated, Computer, UserName, ServiceName, ImagePath, ServiceType, StartType, ServiceAccount, Account_Aux_info
+| project-rename Process_Host_UnstructuredName=Computer, Process_Account_UnstructuredName=UserName, Process_ImageFile_FullPath=ImagePath
 | top 10 by TimeGenerated desc nulls last
 };
 // change <Name> value below
