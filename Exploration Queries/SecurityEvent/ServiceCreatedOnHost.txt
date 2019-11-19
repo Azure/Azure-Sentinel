@@ -10,11 +10,20 @@
 // Tactics: #Persistence, #Discovery, #LateralMovement, #Collection
 
 let GetServiceCreationsOnHost = (v_Host_HostName:string){
-SecurityEvent 
+Event 
 // 7045: A service was installed in the system
 | where EventID == 7045
 | where toupper(Computer) contains v_Host_HostName or toupper(WorkstationName) contains v_Host_HostName
-| project-rename Process_Host_UnstructuredName=Computer, Process_Account_UnstructuredName=Account, Process_CommandLine=CommandLine, Process_ProcessId=ProcessId, Process_ImageFile_FullPath=NewProcessName
+| extend EventDataParse = parse_xml(EventData)
+| extend ServiceName = tostring(EventDataParse.DataItem.EventData.Data.[0].["#text"])
+| extend ImagePath = tostring(EventDataParse.DataItem.EventData.Data.[1].["#text"])
+| extend ServiceType = tostring(EventDataParse.DataItem.EventData.Data.[2].["#text"])
+| extend StartType = tostring(EventDataParse.DataItem.EventData.Data.[3].["#text"])
+| extend ServiceAccount = tostring(EventDataParse.DataItem.EventData.Data.[4].["#text"])
+| where ImagePath !has "\\ProgramData\\Microsoft\\Windows Defender\\Definition Updates\\"
+| extend Process_Aux_Account_info = pack("ServiceName", ServiceName, "ServiceType", ServiceType, "StartType", StartType, "ServiceAccount", ServiceAccount)
+| project TimeGenerated, Computer, UserName, ServiceName, ImagePath, ServiceType, StartType, ServiceAccount, Process_Aux_Account_info
+| project-rename Process_Host_UnstructuredName=Computer, Process_Account_UnstructuredName=UserName, Process_ImageFile_FullPath=ImagePath
 | top 10 by TimeGenerated desc nulls last
 };
 // change <HostName> value below
