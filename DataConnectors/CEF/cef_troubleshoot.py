@@ -565,14 +565,14 @@ def handle_rsyslog(workspace_id):
     print("Checking rsyslog daemon:")
     if test_daemon_configuration("rsyslog.d"):
         print_ok(
-            "rsyslog daemon found, checking daemon configuration content - forwarding facility local-4 to port " + daemon_port)
+            "rsyslog daemon found, checking daemon configuration content - forwarding all data to port " + daemon_port)
         daemon_config_valid = validate_daemon_configuration_content("rsyslog.d",
                                                                     rsyslog_security_config_omsagent_conf_content_tokens)
         if not daemon_config_valid:
-            print_error("Error: rsyslog daemon configuration was found invalid.")
+            print_error("Error: rsyslog daemon configuration was found invalid. ")
             print_notice("Notice: please make sure:")
             print_notice("\t1. /etc/rsyslog.d/security-config-omsagent.conf file exists")
-            print_notice("\t2. File contains the following content: \"local4.debug @127.0.0.1:" + agent_port + "\"")
+            print_notice("\t2. File contains the following content:" + "\":rawmsg, regex, \"CEF\|ASA\" ~\n*.* @@127.0.0.1:" + agent_port + "\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")
