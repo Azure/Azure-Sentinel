@@ -48,7 +48,7 @@ query: |
   ) on Computer
   | distinct Computer, Process, TotalProcessCountOnHost
   //Getting a decimal value for later computation
-  | extend TPCoHValue = TotalProcessCountOnHost*1.0;
+  | extend TPCoHValue = todecimal(TotalProcessCountOnHost);
   // Need the count of each class in my bucket or also said as count of ProcName(Class) per Host(Bucket) for use in the entropy calc
   let PCoH = Include | summarize ProcessCountOnHost = count(Process) by Computer, Process
   | join kind=inner (
@@ -56,15 +56,16 @@ query: |
   ) on Computer,Process
   | distinct Computer, Process, ProcessCountOnHost
   //Getting a decimal value for later computation
-  | extend PCoHValue = ProcessCountOnHost*1.0;
+  | extend PCoHValue = todecimal(ProcessCountOnHost);
   let Combined = DCwPC | join ( TPCoH ) on Computer, Process | join ( PCoH ) on Computer, Process; 
   let Results = Combined
   // Entropy calculation
   | extend ProcessEntropy = -log2(PCoHValue/TPCoHValue)*(PCoHValue/TPCoHValue)
+  | extend AdjustedProcessEntropy = toreal(ProcessEntropy*10000)
   // Calculating Weight, see details in description
-  | extend Weight = toreal((ProcessEntropy*100000)*ProcessCountOnHost*DistinctComputersWithProcessCount)
+  | extend Weight = toreal((ProcessEntropy*10000)*ProcessCountOnHost*DistinctComputersWithProcessCount)
   | where Weight <= 100
-  | project Computer, Process, Weight , ProcessEntropy, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount;
+  | project Computer, Process, Weight , ProcessEntropy, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount, AdjustedProcessEntropy;
   // Join back full entry
   Results | join kind= inner (
       SecurityEvent
@@ -73,7 +74,7 @@ query: |
       | where Process !in~ ("conhost.exe")
       | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName
   ) on Computer, Process
-  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, Weight, ProcessEntropy, Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
-  | sort by Weight asc, ProcessEntropy asc, NewProcessName asc
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, Weight, AdjustedProcessEntropy, FullDecimalProcessEntropy = ProcessEntropy, Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
+  | sort by Weight asc, AdjustedProcessEntropy asc, NewProcessName asc
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
   
