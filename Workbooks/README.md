@@ -38,7 +38,7 @@ This logo should be in SVG format.
     
     "dataTypesDependencies": [ "Datatype" ],//The data type(s) that your workbook queries
     
-    "datasourceCardKeysDependencies": [],//Relevant connectors
+    "dataConnectorsDependencies": [],//Relevant connectors
     
     "previewImagesFileNames": [ ],//The relative path of the preview images you saved under workbooks/images/previews
     
@@ -61,7 +61,7 @@ This logo should be in SVG format.
       "logoFileName": "paloalto_logo.svg",
       "description": "Gain insights and comprehensive monitoring into Palo Alto firewalls by analyzing traffic and activities.\nThis workbook correlates all Palo Alto data with threat events to identify suspicious entities and relationships.\nYou can learn about trends across user and data traffic, and drill down into Palo Alto Wildfire and filter results.",
       "dataTypesDependencies": [ "CommonSecurityLog" ],
-      "datasourceCardKeysDependencies": [ "PaloAlto" ],
+      "dataConnectorsDependencies": [ "PaloAlto" ],
       "previewImagesFileNames": [ "PaloAltoOverviewWhite1.png", "PaloAltoOverviewBlack1.png", "PaloAltoOverviewWhite2.png", "PaloAltoOverviewBlack2.png", "PaloAltoOverviewWhite3.png", "PaloAltoOverviewBlack3.png" ],
       "version": "1.1",
       "title": "Palo Alto overview",

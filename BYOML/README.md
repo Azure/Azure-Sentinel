@@ -19,11 +19,11 @@ It is run from Azure Databricks
 - Version 5.5 (includes Apache Spark 2.4.0, Scala 2.11)
 
 Other libraries:
-- scikit-surprise==1.0.6
-- numpy==1.15.0
-- pyarrow==0.12.0
-- azure.storage.blob
-- plotly  (for Sankey diagram)
+- azure.storage.blob==2.1.0 (from PyPi)
+- scikit-surprise==1.0.6 (from PyPi)
+- numpy==1.15.0 (from PyPi)
+- pyarrow==0.12.0 (from PyPi)
+- plotly  (from PyPi,for Sankey diagram)
 
 Notes:
 - Credentials for Azure Storage and Log Analytics are kept in KeyVault
