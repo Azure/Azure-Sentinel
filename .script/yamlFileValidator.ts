@@ -16,6 +16,12 @@ export function IsValidYamlFile(filePath:string): Boolean {
 const main = async () => {
     console.log("start  - yamlFileValidetor script");
     const pullRequestDiffFiles = await getPullRequestDiffFiles();
+
+    if(pullRequestDiffFiles === null){
+        console.log("No changes files in PR");
+        return 0;
+    }
+
     const changedYamlFiles = pullRequestDiffFiles.filter(filePath => filePath.endsWith('.yaml') || filePath.endsWith('.yml'));
 
     if (changedYamlFiles.length === 0) {
