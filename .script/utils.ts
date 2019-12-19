@@ -14,5 +14,3 @@ export async function getPullRequestDiffFiles() {
     console.log(`diff files in current PR: ${changedFiles.length}`);
     return changedFiles;
 }
-
-getPullRequestDiffFiles();
