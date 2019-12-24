@@ -2,7 +2,7 @@
 // Name: IPs From Rare Locations Used By Account
 // Description: IPs with rare location (less than 10 per cent of user's activity) during the range of +1w and -1w
 // InputEntityType: Account
-// InputFields: [Name, UPNSuffix, AadUserId]
+// InputFields: [[Name], [AadUserId]]
 // OutputEntityTypes: [IP]
 // QueryPeriodBefore: 1w
 // QueryPeriodAfter: 1w
@@ -13,13 +13,13 @@ let IPsFromRareLocations = (v_Account_Name:string, v_Account_AadUserId:string){
 	let LocationPrevalence = 
 		SigninLogs
         | extend v_Account_Name = case(
-        v_Account_Name has "@", tostring(split(v_Account_Name, "@")[0]),
-        v_Account_Name has "\\", tostring(split(v_Account_Name, "\\")[1]),
+        v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+        v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
         v_Account_Name
         )
-		| parse UserPrincipalName with Account_Name "@" Account_UPNSuffix
+		| parse UserPrincipalName with Account_Name '@' Account_UPNSuffix
 		| project-rename Account_AadUserId = UserId 
-		| where ((isnotempty(Account_Name) and Account_Name == v_Account_Name) or
+		| where ((isnotempty(Account_Name) and Account_Name =~ v_Account_Name) or
 				(isnotempty(Account_AadUserId) and Account_AadUserId == v_Account_AadUserId)
 				)
 		| summarize LocationCount = count() by Location, UserPrincipalName, IPAddress
@@ -32,10 +32,10 @@ let IPsFromRareLocations = (v_Account_Name:string, v_Account_AadUserId:string){
         | where percentOfActivity < 10
         | project UserPrincipalName, IPAddress, Location, LocationCount, percentOfActivity
         | top 10 by LocationCount asc nulls last
-        | extend Account_Aux_info = pack("LocationCount", LocationCount, "PercentOfActivity", percentOfActivity)
-        | parse UserPrincipalName with Account_NTDomain "\\" *
-	    | extend Account_Name = extract(@"^([^\\]*\\)?([^@]+)(@.*)?$", 2, UserPrincipalName),  
-		Account_UPNSuffix = extract(@"^([^\\]*\\)?([^@]+)(@(.*))?$", 4, UserPrincipalName)
+        | extend Account_Aux_info = pack('LocationCount', LocationCount, 'PercentOfActivity', percentOfActivity)
+        | parse UserPrincipalName with Account_NTDomain '\\' *
+	    | extend Account_Name = extract(@'^([^\\]*\\)?([^@]+)(@.*)?$', 2, UserPrincipalName),  
+		Account_UPNSuffix = extract(@'^([^\\]*\\)?([^@]+)(@(.*))?$', 4, UserPrincipalName)
         | project Account_Name, Account_NTDomain, Account_UPNSuffix, IP_Address = IPAddress, IP_Location = Location, Account_Aux_info
 };
 IPsFromRareLocations('<Name>', '<AadUserId>')
