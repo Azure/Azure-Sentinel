@@ -1,0 +1,33 @@
+﻿Id: bb6100ee-ae38-41b5-8457-88d503a3bf8f
+DisplayName: WireData Least Prevalent Inbound Connections by Host
+Description: Bottom 10 (least prevalent) for WireData Inbound event by a given Host (set time range to +-30m when running the query)
+InputEntityType: Host
+InputFields:
+- HostName
+OutputEntityTypes:
+- Ip
+- Process
+QueryPeriodBefore: 30m
+QueryPeriodAfter: 30m
+DataSource:
+- WireData
+Tactics:
+- Probing
+- Discovery
+- LateralMovement
+- Collection
+query: |
+
+let GetWireDataInboundWithHost = (v_Host_HostName:string){
+WireData
+| where Direction == 'Inbound' 
+| where Computer has v_Host_HostName
+| extend info = pack('Computer', Computer, 'LocalPortNumber', LocalPortNumber, 'RemoteIP', RemoteIP, 'Direction', Direction, 'ApplicationProtocol', ApplicationProtocol)
+| summarize min(SessionStartTime), count(), IP_Aux_info = makeset(info) by ProcessName , LocalIP, ProcessID
+| extend Process_Aux_info = IP_Aux_info
+| top 10 by count_ asc
+| project min_SessionStartTime, ProcessName , LocalIP, ProcessID, IP_Aux_info, Process_Aux_info
+| project-rename IP_Address=LocalIP, Process_ImageFile_FullPath=ProcessName, Process_ProcessId=ProcessID
+};
+// change <HostName> value below
+GetWireDataInboundWithHost('<HostName>')
