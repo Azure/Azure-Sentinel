@@ -235,7 +235,6 @@ if ($Timer.IsPastDue) {
 #add last run time to blob file to ensure no missed packages
 $endTime = $currentUTCtime | Get-Date -Format yyyy-MM-ddThh:mm:ss
 $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
-#$azstoragestring = "DefaultEndpointsProtocol=https;AccountName=o365test2;AccountKey=WsbTolIyBqB9JjDh395YO3KvaZFaBtihDdHqfzGUVt3YsXuAklDRx30uUVsgjH5t3Mw8nIh2qIJnUMu6M2MK3g==;EndpointSuffix=core.windows.net"
 $Context = New-AzStorageContext -ConnectionString $azstoragestring
 if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
     #Set Container
