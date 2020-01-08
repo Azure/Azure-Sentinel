@@ -257,16 +257,10 @@ $endTime
 $lastlogTime
 
 
-#Added Multi-Tenant support
-for($i=1; $i -le $env:numberOfTenants; $i++){
-    $clientId = (Get-ChildItem Env:Tenant$i* | Where-Object {$_.Name -like "*_clientid"}).Value
-    $clientSecret = (Get-ChildItem Env:Tenant$i* | Where-Object {$_.Name -like "*_clientsecret"}).Value
-    $domain = (Get-ChildItem Env:Tenant$i* | Where-Object {$_.Name -like "*_domain"}).Value
-    $domain = $domain+".onmicrosoft.com"
-    $tenantGuid = (Get-ChildItem Env:Tenant$i* | Where-Object {$_.Name -like "*_tenantGuid"}).Value
-    $headerParams = Get-AuthToken $clientID $clientSecret $domain $tenantGuid
-    Get-O365Data $startTime $endTime $headerParams $tenantGuid
-}
+$domain = $domain+".onmicrosoft.com"
+$headerParams = Get-AuthToken $env:clientID $env:clientSecret $domain $env:tenantGuid
+Get-O365Data $startTime $endTime $headerParams $tenantGuid
+
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
