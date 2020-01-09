@@ -116,12 +116,12 @@ Note: you will need to create additional keys if you have multiple tenants.
 * @Microsoft.KeyVault(SecretUri=https://<dnsname>/secrets/O365workspacekey/<versionstring>)
 10. Click Ok.
 11.  Update each setting
-    * clientID = AAD app registration id
-    * contentTypes = Audit.General or Audit.General,DLP.All or DLP.All
-    * domain = <domain> from <domain>.onmicrosoft.com
-    * publisher is a random guid for throttling that we used in steps to create subscription.
-    * recordTypes This can be 0 or a list of record types comma seperated like 28,40,41 (see https://docs.microsoft.com/en-us/office/office-365-management-api/office-365-management-activity-api-schema#auditlogrecordtype)
-    * tenantGuid is your AAD tenant guid.
-    * workspaceId is your Azure Sentinel workspace id
+* clientID = AAD app registration id
+* contentTypes = Audit.General or Audit.General,DLP.All or DLP.All
+* domain = <domain> from <domain>.onmicrosoft.com
+* publisher is a random guid for throttling that we used in steps to create subscription.
+* recordTypes This can be 0 or a list of record types comma seperated like 28,40,41 (see https://docs.microsoft.com/en-us/office/office-365-management-api/office-365-management-activity-api-schema#auditlogrecordtype)
+* tenantGuid is your AAD tenant guid.
+* workspaceId is your Azure Sentinel workspace id
 12. Click Save
 13. Go back to the function and click start under the overview blade.
