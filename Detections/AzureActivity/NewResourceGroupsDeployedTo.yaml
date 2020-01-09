@@ -8,7 +8,7 @@ requiredDataConnectors:
     dataTypes:
       - AzureActivity
 queryFrequency: 1d
-queryPeriod: 7d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -17,19 +17,23 @@ relevantTechniques:
   - T1496
 query: |
 
-  AzureActivity
-  | where TimeGenerated between (ago(7d) .. ago(1d))
-  | where OperationName =~ "Create or Update Virtual Machine" or OperationName =~ "Create Deployment" 
-  | where ActivityStatus =~ "Succeeded" 
-  | project Resource, ResourceGroup, Caller, OperationName, CallerIpAddress
-  | evaluate basket()
+  let szOperationNames = dynamic(["Create or Update Virtual Machine", "Create Deployment"]);
+  let starttime = 14d;
+  let endtime = 1d;
+  let RareCaller = AzureActivity
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where OperationName in~ (szOperationNames)
+  | project ResourceGroup, Caller, OperationName, CallerIpAddress
   | join kind=rightantisemi (
   AzureActivity
-  | where TimeGenerated >ago(1d)
-  | where OperationName =~ "Create or Update Virtual Machine" or OperationName =~ "Create Deployment" 
-  | where ActivityStatus =~ "Succeeded" 
-  | project TimeGenerated, Resource, ResourceGroup, Caller, OperationName, CallerIpAddress 
-  ) on ResourceGroup 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CreateCount = count() by Caller, CallerIpAddress, Resource, ResourceGroup, OperationName
+  | where TimeGenerated > ago(endtime)
+  | where OperationName in~ (szOperationNames)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityStatus = makeset(ActivityStatus), OperationIds = makeset(OperationId), CallerIpAddress = makeset(CallerIpAddress) 
+  by ResourceId, Caller, OperationName, Resource, ResourceGroup
+  ) on Caller, ResourceGroup 
+  | mvexpand CallerIpAddress
+  | where isnotempty(CallerIpAddress);
+  let Counts = RareCaller | summarize ActivityCountByCaller = count() by Caller;
+  RareCaller | join kind= inner (Counts) on Caller | project-away Caller1
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
-  | sort by CreateCount desc nulls last 
+  | sort by ActivityCountByCaller desc nulls last 
