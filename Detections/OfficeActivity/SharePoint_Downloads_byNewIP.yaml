@@ -2,7 +2,7 @@
 name: SharePointFileOperation via previously unseen IPs
 description: |
   'Identifies when the volume of documents uploaded to or downloaded from Sharepoint by new IP addresses
-  exceeds a threshold (default is 100).'
+  exceeds a threshold (default is 50).'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Office365
@@ -18,31 +18,32 @@ relevantTechniques:
   - T1030
 query: |
 
-  let threshold = 100;
+  let threshold = 50;
   let szSharePointFileOperation = "SharePointFileOperation";
   let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  let starttime = 14d;
+  let endtime = 1d;
   let historicalActivity =
   OfficeActivity
-  | where TimeGenerated between(ago(14d)..ago(1d))
+  | where TimeGenerated between(ago(starttime)..ago(endtime))
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
-  | summarize historicalCount = count() by ClientIP;
+  | summarize historicalCount = count() by ClientIP, RecordType, Operation;
   let recentActivity = OfficeActivity
-  | where TimeGenerated > ago(1d)
+  | where TimeGenerated > ago(endtime)
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
-  | summarize recentCount = count() by ClientIP;
-  recentActivity | join kind= leftanti ( historicalActivity ) on ClientIP
-  // More than 100 downloads/uploads from a new IP
-  | where recentCount > threshold
-  | join kind = rightsemi 
-  (OfficeActivity 
-  | where TimeGenerated >= ago(1d) 
+  | summarize min(Start_Time), max(Start_Time), recentCount = count() by ClientIP, RecordType, Operation;
+  let RareIP = recentActivity | join kind= leftanti ( historicalActivity ) on ClientIP, RecordType, Operation
+  // More than 50 downloads/uploads from a new IP
+  | where recentCount > threshold;
+  OfficeActivity 
+  | where TimeGenerated >= ago(endtime) 
   | where RecordType =~ szSharePointFileOperation
   | where Operation in~ (szOperations)
-  )
-  on ClientIP
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by RecordType, Operation, UserType, UserId, ClientIP, OfficeWorkload, Site_Url
+  | join kind= inner (RareIP) on ClientIP, RecordType, Operation
+  | where Start_Time between(min_Start_Time .. max_Start_Time)
+  | summarize StartTimeUtc = min(min_Start_Time), EndTimeUtc = max(max_Start_Time) by RecordType, Operation, UserType, UserId, ClientIP, OfficeWorkload, Site_Url, OfficeObjectId, UserAgent, IPSeenCount = recentCount
   | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Site_Url
-  | order by Operation, UserId asc
+  | order by IPSeenCount desc, ClientIP asc, Operation asc, UserId asc
 
