@@ -19,20 +19,35 @@ relevantTechniques:
   - T1496
 query: |
 
+  let szOperationNames = dynamic(["Create or Update Virtual Machine", "Create Deployment"]);
+  let starttime = 7d;
+  let endtime = 1d;
   AzureActivity
-  | where TimeGenerated >= startofday(ago(7d))
-  | where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment"
-  | where ActivityStatus == "Succeeded"
-  | make-series dResourceCount=dcount(ResourceId)  default=0 on EventSubmissionTimestamp in range(startofday(ago(7d)), now(), 1d) by Caller
+  | where TimeGenerated between (startofday(ago(starttime)) .. startofday(ago(endtime)))
+  | where OperationName in~ (szOperationNames)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+  OperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId) 
+  by ResourceId, Caller, OperationName, Resource, ResourceGroup
+  | mvexpand CallerIpAddress
+  | where isnotempty(CallerIpAddress)
+  | make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(7d)), now(), 1d) 
+  by Caller, tostring(ActivityTimeStamp), tostring(ActivityStatus), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationName, Resource, ResourceGroup
   | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)
   | where Slope > 0.2
   | join kind=leftsemi (
   // Last day's activity is anomalous
   AzureActivity
-  | where TimeGenerated >= startofday(ago(1d))
-  | where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment"
-  | where ActivityStatus == "Succeeded"
-  | make-series dResourceCount=dcount(ResourceId)  default=0 on EventSubmissionTimestamp in range(startofday(ago(1d)), now(), 1d) by Caller
+  | where TimeGenerated >= startofday(ago(endtime))
+  | where OperationName in~ (szOperationNames)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+  OperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId) 
+  by ResourceId, Caller, OperationName, Resource, ResourceGroup
+  | mvexpand CallerIpAddress
+  | where isnotempty(CallerIpAddress)
+  | make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(1d)), now(), 1d) 
+  by Caller, tostring(ActivityTimeStamp), tostring(ActivityStatus), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationName, Resource, ResourceGroup
   | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)
-  | where Slope >0.2    
-  ) on Caller
+  | where Slope > 0.2    
+  ) on Caller, CallerIpAddress        
+  | mvexpand todynamic(ActivityTimeStamp), todynamic(ActivityStatus), todynamic(OperationIds), todynamic(CorrelationId)
+  | extend timestamp = ActivityTimeStamp, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
