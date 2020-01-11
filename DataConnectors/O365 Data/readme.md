@@ -28,7 +28,7 @@ To add a tenant:
 14. Copy the client Id from the application properties and paste it somewhere.
 15. Also copy the tenant Id from the AAD directory properties blade.
 
-### Create O35 API Subscription
+### Create O365 API Subscription
 1. Open Powershell
 2. Run the following commands
 
