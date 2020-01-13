@@ -10,12 +10,10 @@ requiredDataConnectors:
       - AWSCloudTrail
   - connectorId: Office365
     dataTypes:
-     - OfficeActivity
-  - connectorId: WAF
+      - OfficeActivity
+  - connectorId: AzureMonitor(IIS)
     dataTypes:
-     - AzureDiagnostics
-  - dataTypes:
-    - W3CIISLog
+      - W3CIISLog
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -35,37 +33,32 @@ query: |
   let UserAgentAll =
   (union isfuzzy=true
   (OfficeActivity
-  | where TimeGenerated >= ago(starttime) 
+  | where TimeGenerated >= ago(starttime)
+  | where isnotempty(ExtendedProperties)
+  | where ExtendedProperties has "useragent"
   | extend UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP = ClientIP, Account = UserId, Type
-  ),
-  (
-  AzureDiagnostics
-  | where TimeGenerated >= ago(starttime) 
-  | extend UserAgent = replace(@'\+', @' ', userAgent_s)
   | where isnotempty(UserAgent)
-  | parse msg_s with * 'HTTPS request from' SourceIP ':' * 
-  | where isnotempty(SourceIP)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent, SourceIP, Type
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation
   ),
   (
   W3CIISLog
-  | where TimeGenerated >= ago(starttime) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type
+  | where TimeGenerated >= ago(starttime)
+  | where isnotempty(csUserAgent)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem
   ),
   (
   AWSCloudTrail
-  | where TimeGenerated >= ago(starttime) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type
+  | where TimeGenerated >= ago(starttime)
+  | where isnotempty(UserAgent)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName
   ));
   UserAgentAll
   | where StartTimeUtc < ago(endtime)
-  | summarize IP = dcount(SourceIP) by tostring(UserAgent), Account, Type
+  | summarize by tostring(UserAgent), SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
   | join kind=rightanti
   (
   UserAgentAll
   | where StartTimeUtc >= ago(endtime) 
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), IP = dcount(SourceIP) by tostring(UserAgent), SourceIP, Account, Type
-  ) on UserAgent, Account, Type
-  //| project UserAgent, SourceIP
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), count() by tostring(UserAgent), SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
+  ) on UserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
   | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, AccountCustomEntity = Account

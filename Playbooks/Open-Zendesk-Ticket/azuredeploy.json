@@ -2,7 +2,7 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata":{
-    "comments": "This playbook will open item when new incident open in Azure Sentinel entinel.",
+    "comments": "This playbook will open item when new incident open in Azure Sentinel.",
     "author": "Lior Tamir"
 },
 "parameters": {
@@ -10,8 +10,12 @@
         "defaultValue": "Open-Zendesk-Ticket",
         "type": "string"
     },
-    "UserName": {
-        "defaultValue": "<username>@<domain>",
+    "Zendesk_subdomain": {
+        "defaultValue": "zendesk",
+        "type": "string"
+    },
+    "requester_id":{
+        "defaultValue": "00000000001",
         "type": "string"
     }
 },
@@ -20,32 +24,34 @@
     "ZendeskConnectionName": "[concat('zendesk-', parameters('PlaybookName'))]"
 },
 "resources": [
-    {
+        {
         "type": "Microsoft.Web/connections",
         "apiVersion": "2016-06-01",
         "name": "[variables('AzureSentinelConnectionName')]",
         "location": "[resourceGroup().location]",
         "properties": {
-            "displayName": "[parameters('UserName')]",
+            "displayName": "[variables('AzureSentinelConnectionName')]",
             "customParameterValues": {},
             "api": {
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
             }
         }
     },
-    {
-        "type": "Microsoft.Web/connections",
-        "apiVersion": "2016-06-01",
-        "name": "[variables('ZendeskConnectionName')]",
-        "location": "[resourceGroup().location]",
-        "properties": {
-            "displayName": "[parameters('UserName')]",
-            "customParameterValues": {},
-            "api": {
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/zendesk')]"
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('ZendeskConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('Zendesk_subdomain')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/zendesk')]"
+                },
+                "parameterValues": {
+                "token:SubDomain": "[parameters('Zendesk_subdomain')]"
+                }
             }
-        }
-    },
+        },
     {
         "type": "Microsoft.Logic/workflows",
         "apiVersion": "2017-07-01",
@@ -60,16 +66,16 @@
         ],
         "properties": {
             "state": "Enabled",
-             "definition": {
-                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
+            "definition": {
+                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                "contentVersion": "1.0.0.0",
+                "parameters": {
+                    "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
                         "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
@@ -101,17 +107,17 @@
                         },
                         "Create_Item": {
                             "runAfter": {
-                                "Initialize_variable": [
+                                "Alert_-_Get_incident": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "description": "@body('Alert_-_Get_incident')?['properties']?['Description']",
+                                    "description": "Incident description: @{body('Alert_-_Get_incident')?['properties']?['Description']}",
                                     "priority": "@body('Alert_-_Get_incident')?['properties']?['Severity']",
-                                    "requester_id": "@variables('requesterID')",
-                                    "subject": "@body('Alert_-_Get_incident')?['properties']?['Title']",
+                                    "requester_id": "00000000001",
+                                    "subject": "New Azure Sentinel Incident: @{body('Alert_-_Get_incident')?['properties']?['Title']}",
                                     "type": "incident"
                                 },
                                 "host": {
@@ -121,22 +127,6 @@
                                 },
                                 "method": "post",
                                 "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('tickets'))}/items"
-                            }
-                        },
-                        "Initialize_variable": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "requesterID",
-                                        "type": "Integer"
-                                    }
-                                ]
                             }
                         }
                     },
