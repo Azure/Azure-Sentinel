@@ -28,7 +28,16 @@ query: |
   | where UserType in~ ("Admin","DcAdmin") 
   // Only admin or global-admin can disable/remove policy
   | where Operation startswith "Remove-" or Operation startswith "Disable-"
-  | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" 
-    or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters
+  | where Operation has_any ("AntiPhish", "SafeAttachment", "SafeLinks", "Dlp", "Audit")
+  | extend ClientIPOnly = case( 
+  ClientIP has ".", tostring(split(ClientIP,":")[0]), 
+  ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  ClientIP
+  )  
+  | extend Port = case(
+  ClientIP has ".", (split(ClientIP,":")[1]),
+  ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
+  ClientIP
+  )
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
   | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
