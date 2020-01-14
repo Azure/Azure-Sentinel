@@ -1,14 +1,14 @@
 ﻿id: 0777f138-e5d8-4eab-bec1-e11ddfbc2be2
 name: Failed logon attempts within 10 mins
 description: |
-  'Identifies when failed logon attempts are 6 or higher during a 10 minute period.'
+  'Identifies when failed logon attempts are 20 or higher during a 10 minute period (2 failed logons per minute minimum).'
 severity: Low
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
 queryFrequency: 10m
-queryPeriod: 20m
+queryPeriod: 10m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -18,11 +18,14 @@ relevantTechniques:
 query: |
 
   let timeframe = 10m;
+  let threshold = 20;
   SecurityEvent 
-  | where TimeGenerated > ago(2*timeframe) 
+  | where TimeGenerated >= ago(timeframe)
   | where EventID == "4625"
-  | where AccountType == "User"
-  | summarize min(TimeGenerated), max(TimeGenerated), FailedLogonCount = count() by EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
-  | where FailedLogonCount >= 6
-  | project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, FailedLogonCount, EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
+  | where AccountType =~ "User"
+  | summarize min(TimeGenerated), max(TimeGenerated), FailedLogonCount = count() by EventID, Activity, WorkstationName, Account, 
+  TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
+  | where FailedLogonCount >= threshold
+  | project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, FailedLogonCount, EventID, Activity, WorkstationName, 
+  Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = WorkstationName
