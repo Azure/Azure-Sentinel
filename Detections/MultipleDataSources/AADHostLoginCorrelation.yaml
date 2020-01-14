@@ -1,7 +1,7 @@
 id:  8ee967a2-a645-4832-85f4-72b635bcb3a6
 name: Failed AzureAD logons but success logon to host
 description: |
-  'Identifies a list of IP addresses with a minimum number (defualt of 5) of failed logon attempts to Azure Active Directory.
+  'Identifies a list of IP addresses with a minimum number (default of 5) of failed logon attempts to Azure Active Directory.
   Uses that list to identify any successful remote logons to hosts from these IPs within the same timeframe.'
 severity: Medium
 requiredDataConnectors:
@@ -24,36 +24,36 @@ tactics:
 relevantTechniques:
   - T1078
   - T1110
-
 query: |
 
+  let timeframe = 1d;
   //Adjust this threshold to fit the environment
   let signin_threshold = 5;
   //Make a list of all IPs with failed signins to AAD above our threshold
   let suspicious_signins =
   SigninLogs
-  | where TimeGenerated >= ago(1d)
+  | where TimeGenerated >= ago(timeframe)
   | where ResultType !in ("0", "50125", "50140")
   | where IPAddress != "127.0.0.1"
   | summarize count() by IPAddress
   | where count_ > signin_threshold
   | summarize make_list(IPAddress);
-  //See if any of these IPs have sucessfull logged into *nix hosts
+  //See if any of these IPs have sucessfully logged into *nix hosts
   let linux_logons =
   Syslog
-  | where TimeGenerated >= ago(1d)
+  | where TimeGenerated >= ago(timeframe)
   | where Facility contains "auth" and ProcessName != "sudo"
   | where SyslogMessage has "Accepted"
   | extend SourceIP = extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))",1,SyslogMessage)
   | where SourceIP in (suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
   | project TimeGenerated, Computer, HostIP, IpAddress = SourceIP, SyslogMessage, Facility, ProcessName, Reason;
-  //See if any of these IPs have sucessfull logged into Windows hosts
+  //See if any of these IPs have sucessfully logged into Windows hosts
   let win_logons =
   SecurityEvent
-  | where TimeGenerated >= ago(1d)
+  | where TimeGenerated >= ago(timeframe)
   | where EventID == 4624
-  | where LogonType == 10 or LogonType == 7 or LogonType == 3
+  | where LogonType in (10, 7, 3)
   | where IpAddress != "-"
   | where IpAddress in (suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
