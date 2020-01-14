@@ -1,10 +1,13 @@
 ﻿id: 06a9b845-6a95-4432-a78b-83919b28c375
-name: Time series anomaly detection for total volume in network logs
+name: Time series anomaly detection for total volume of traffic
 description: |
   'Identifies anamalous spikes in network traffic logs as compared to baseline or normal historical patterns. 
   The query leverages a KQL built-in anomaly detection algorithm to find large deviations from baseline patterns. 
   Sudden increases in network traffic volume may be an indication of data exfiltration attempts and should be investigated.
-  The higher the score, the further it is from the baseline value.'
+  The higher the score, the further it is from the baseline value.
+  The output is aggregated to provide summary view of unique source IP to destination IP address and port traffic observed in the flagged anomaly hour. 
+  The source IP addresses which were sending less than percentotalthreshold of the total traffic have been exluded whose value can be adjusted as needed .
+  You may have to run queries for individual source IP addresses from SourceIPlist to determine if anything looks suspicious'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Barracuda
@@ -41,7 +44,8 @@ query: |
   let starttime = 14d;
   let endtime = 1d;
   let timeframe = 1h;
-  let scorethreshold = 3;
+  let scorethreshold = 5;
+  let percentotalthreshold = 25;
   let TimeSeriesData = CommonSecurityLog 
   | where isnotempty(DestinationIP) and isnotempty(SourceIP)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
@@ -51,15 +55,21 @@ query: |
   let TimeSeriesAlerts=TimeSeriesData
   | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
   | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
-  | where anomalies > 0 | extend score = round(score,2)
-  | project DeviceVendor,TimeGenerated, Total, baseline, anomalies, score;
+  | where anomalies > 0 | extend score = round(score,2), AnomalyHour = TimeGenerated
+  | project DeviceVendor,AnomalyHour, TimeGenerated, Total, baseline, anomalies, score;
   //Join anomalies with Base Data to popalate associated records for investigation - Results sorted by score in descending order 
   TimeSeriesAlerts 
   | join (
       CommonSecurityLog 
   | where isnotempty(DestinationIP) and isnotempty(SourceIP)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-  | summarize HourlyCount = count(), ListOfDestPorts = make_list(DestinationPort)  by SourceIP, DestinationIP,DestinationPort, DeviceVendor, bin(TimeGenerated, 1h)
-  ) on TimeGenerated, DeviceVendor | extend PercentTotal = round((HourlyCount / Total) * 100, 3) | sort by score desc 
-  | project DeviceVendor ,TimeGenerated, SourceIP, DestinationIP, ListOfDestPorts, HourlyCount, PercentTotal, Total, baseline, score, anomalies
-  | extend IPCustomEntity = DestinationIP
+  | summarize HourlyCount = count(), TimeGeneratedMax = arg_max(TimeGenerated, *), DestinationIPlist = make_set(DestinationIP), DestinationPortlist = make_set(DestinationPort) by DeviceVendor, SourceIP, TimeGeneratedHour= bin(TimeGenerated, 1h)
+  | extend AnomalyHour = TimeGeneratedHour
+  ) on AnomalyHour, DeviceVendor 
+  | extend PercentTotal = round((HourlyCount / Total) * 100, 3)
+  | where PercentTotal > percentotalthreshold
+  | project DeviceVendor , AnomalyHour, TimeGeneratedMax, SourceIP, DestinationIPlist, DestinationPortlist, HourlyCount, PercentTotal, Total, baseline, score, anomalies
+  | summarize HourlyCount=sum(HourlyCount), TimeGeneratedMax=arg_max(TimeGeneratedMax, *), SourceIPlist = make_set(SourceIP), SourceIPMax= arg_max(SourceIP, *), DestinationIPlist = make_set(DestinationIPlist), DestinationPortlist = make_set(DestinationPortlist) by DeviceVendor , AnomalyHour, Total, baseline, score, anomalies
+  | project DeviceVendor , AnomalyHour, TimeGeneratedMax, SourceIPMax ,SourceIPlist, DestinationIPlist, DestinationPortlist, HourlyCount, Total, baseline, score, anomalies
+  | extend timestamp= TimeGeneratedMax , IPCustomEntity = SourceIPMax
+
