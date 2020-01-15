@@ -1,7 +1,8 @@
 ﻿id: d25b1998-a592-4bc5-8a3a-92b39eedb1bc
 name: Login to AWS Management Console without MFA
 description: |
-  'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA. 
+  'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.
+  You can limit this detection to trigger for adminsitrative accounts if you do not have MFA enabled on all accounts.
   This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used 
   and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
 severity: Low
@@ -9,7 +10,7 @@ requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
       - AWSCloudTrail
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -22,16 +23,13 @@ relevantTechniques:
   - T1078
 query: |
 
-  let timeframe = 1d;
+  let starttime = 1d;
+  let endtime = 1h;
   AWSCloudTrail
-  | where TimeGenerated >= ago(timeframe)
+  | where TimeGenerated between (ago(starttime)..ago(endtime))
   | where EventName == "ConsoleLogin" 
-  | extend AdditionalData = todynamic(AdditionalEventData)
-  | extend MFAUsed = AdditionalData["MFAUsed"]
-  | extend RElements = todynamic(ResponseElements)
-  | extend CLogin = RElements["ConsoleLogin"]
-  | where MFAUsed != "Yes"
-  | where CLogin != "Failure"
-  | project TimeGenerated, EventName, EventTypeName, CLogin, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent, 
-  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, AdditionalData, RElements
+  | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
+  | where MFAUsed != "Yes" and LoginResult != "Failure"
+  | summarize by TimeGenerated, EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent, 
+  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress

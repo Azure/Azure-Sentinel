@@ -2,13 +2,16 @@
 name: Changes made to AWS CloudTrail logs
 description: |
   'Attackers often try to hide their steps by deleting or stopping the collection of logs that could show their activity. 
-  This alert identifies any manipulation of AWS CloudTrail logs.'
+  This alert identifies any manipulation of AWS CloudTrail, Cloudwatch/EventBridge or VPC Flow logs.
+  More Information: AWS CloudTrail API: https://docs.aws.amazon.com/awscloudtrail/latest/APIReference/API_Operations.html
+  AWS Cloudwatch/Eventbridge API: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Operations.html
+  AWS DelteteFlowLogs API : https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteFlowLogs.html '
 severity: Low
 requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
       - AWSCloudTrail
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -18,10 +21,12 @@ relevantTechniques:
   - T1107
 query: |
 
-  let timeframe = 1d;
+  let starttime =1d;
+  let endtime = 1h;
+  let EventNameList = dynamic(["UpdateTrail","DeleteTrail","StopLogging","DeleteFlowLogs","DeleteEventBus"]);
   AWSCloudTrail
-  | where TimeGenerated >= ago(timeframe)
-  | where EventName == "UpdateTrail" or EventName == "DeleteTrail" or EventName == "StopLogging"
+  | where TimeGenerated between (ago(starttime)..ago(endtime))
+  | where EventName in (EventNameList)
   | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
   UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress
