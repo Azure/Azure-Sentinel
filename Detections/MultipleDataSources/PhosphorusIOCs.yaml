@@ -1,14 +1,15 @@
 ﻿id: 155f40c6-610d-497d-85fc-3cf06ec13256
-name: Known Phosphorus group domains
+name: Known Phosphorus group domains/IP
 description: |
-  'Matches domain name IOCs related to Phosphorus group activity with CommonSecurityLog, DnsEvents and VMConnection dataTypes.
+  'Matches domain name IOCs related to Phosphorus group activity with CommonSecurityLog, DnsEvents, OfficeActivity and VMConnection dataTypes.
   References: https://blogs.microsoft.com/on-the-issues/2019/03/27/new-steps-to-protect-customers-from-hacking/.'
 severity: High
 requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
       - DnsEvents
-  - dataTypes:
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
       - VMConnection
   - connectorId: CiscoASA
     dataTypes:
@@ -16,6 +17,9 @@ requiredDataConnectors:
   - connectorId: PaloAltoNetworks
     dataTypes:
       - CommonSecurityLog
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -43,20 +47,31 @@ query: |
   "customer-managers.info","confirmation-recovery-options.info","service-session-confirm.info","session-recovery-options.info","services-session-confirmation.info",
   "notification-managers.info","activities-services-notification.info","activities-recovery-options.info","activity-session-recovery.info","customers-services.info",
   "sessions-notification.info","download-teamspeak.info","services-issue-notification.info","microsoft-upgrade.mobi","broadcastnews.pro","mobile-messengerplus.network"]);
+  let IPList = dynamic(["51.91.200.147"]);
   (union isfuzzy=true
   (CommonSecurityLog 
   | where TimeGenerated >= ago(timeframe) 
   | parse Message with * '(' DNSName ')' * 
-  | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP),
+  | where isnotempty(SourceIP) or isnotempty(DestinationIP) or isnotempty(DNSName)
+  | where SourceIP in (IPList) or DestinationIP in (IPList) or Message has_any (IPList) or DNSName in~ (DomainNames)
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "Message") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field"), Account = SourceUserID, Host = DeviceName),
   (DnsEvents 
   | where TimeGenerated >= ago(timeframe) 
-  | extend IPAddress = ClientIP, DNSName = Name, Host = Computer),
+  | extend DestinationIPAddress = IPAddresses, DNSName = Name, Host = Computer
+  | where  DestinationIPAddress in (IPList) or DNSName in~ (DomainNames) 
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host),
   (VMConnection 
   | where TimeGenerated >= ago(timeframe) 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | extend IPAddress = RemoteIp, Host = Computer)
+  | where isnotempty(SourceIP) or isnotempty(DestinationIP) or isnotempty(DNSName)
+  | where SourceIP in (IPList) or DestinationIP in (IPList) or DNSName in~ (DomainNames)
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), Host = Computer),
+  (OfficeActivity
+  | where TimeGenerated >= ago(timeframe)
+  | extend SourceIPAddress = ClientIP, Account = UserId
+  | where  SourceIPAddress in (IPList)
+  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account )
   )
-  | where isnotempty(DNSName)
-  | where DNSName  in~ (DomainNames)
-  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = Account, HostCustomEntity = Host
 

@@ -23,13 +23,19 @@ query: |
   // Timeframe is set so that results do not change during the same day (UTC time)
   | where TimeGenerated >= start and TimeGenerated <= end
   | where EventID == 4688
-  | summarize count() by Process 
+  | summarize ExcludeCompCount = dcount(Computer),  ExcludeProcCount = count() by Process 
   // Removing noisy processes for an environment, adjust as needed
-  | where count_ >= 100000;
+  | where ExcludeProcCount >= 2000 and ExcludeCompCount > 2
+  ;
   let AllSecEvents = SecurityEvent
   | where TimeGenerated >= start and TimeGenerated <= end
   | where EventID == 4688
-  | where Process !in~ ("conhost.exe")
+  // excluding well known processes
+  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+  | where ParentProcessName !endswith ":\\Windows\\System32\\wuauclt.exe" and NewProcessName !startswith "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_"
+  | where ParentProcessName !has ":\\WindowsAzure\\GuestAgent_" and NewProcessName !has ":\\WindowsAzure\\GuestAgent_"
+  | where ParentProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_" and NewProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_"
+  | where ParentProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and ParentProcessName !endswith "\\MpCmdRun.exe" 
   | project Computer, Process;
   // Removing noisy process from full list
   let Include = Exclude | join kind= rightanti (
@@ -48,7 +54,7 @@ query: |
   ) on Computer
   | distinct Computer, Process, TotalProcessCountOnHost
   //Getting a decimal value for later computation
-  | extend TPCoHValue = TotalProcessCountOnHost*1.0;
+  | extend TPCoHValue = todecimal(TotalProcessCountOnHost);
   // Need the count of each class in my bucket or also said as count of ProcName(Class) per Host(Bucket) for use in the entropy calc
   let PCoH = Include | summarize ProcessCountOnHost = count(Process) by Computer, Process
   | join kind=inner (
@@ -56,24 +62,31 @@ query: |
   ) on Computer,Process
   | distinct Computer, Process, ProcessCountOnHost
   //Getting a decimal value for later computation
-  | extend PCoHValue = ProcessCountOnHost*1.0;
+  | extend PCoHValue = todecimal(ProcessCountOnHost);
   let Combined = DCwPC | join ( TPCoH ) on Computer, Process | join ( PCoH ) on Computer, Process; 
   let Results = Combined
   // Entropy calculation
   | extend ProcessEntropy = -log2(PCoHValue/TPCoHValue)*(PCoHValue/TPCoHValue)
+  | extend AdjustedProcessEntropy = toreal(ProcessEntropy*10000)
   // Calculating Weight, see details in description
-  | extend Weight = toreal((ProcessEntropy*100000)*ProcessCountOnHost*DistinctComputersWithProcessCount)
-  | where Weight <= 100
-  | project Computer, Process, Weight , ProcessEntropy, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount;
+  | extend Weight = toreal((ProcessEntropy*10000)*ProcessCountOnHost*DistinctComputersWithProcessCount)
+  // Remove or increase value to see processes with low entropy, meaning more common.
+  | where Weight <= 75
+  | project Computer, Process, Weight , ProcessEntropy, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount, AdjustedProcessEntropy;
   // Join back full entry
   Results | join kind= inner (
       SecurityEvent
       | where TimeGenerated >= start and TimeGenerated <= end
       | where EventID == 4688
-      | where Process !in~ ("conhost.exe")
+      // excluding well known processes
+      | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+      | where ParentProcessName !endswith ":\\Windows\\System32\\wuauclt.exe" and NewProcessName !startswith "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_"
+      | where ParentProcessName !has ":\\WindowsAzure\\GuestAgent_" and NewProcessName !has ":\\WindowsAzure\\GuestAgent_"
+      | where ParentProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_" and NewProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_"
+      | where ParentProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and ParentProcessName !endswith "\\MpCmdRun.exe" 
       | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName
   ) on Computer, Process
-  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, Weight, ProcessEntropy, Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
-  | sort by Weight asc, ProcessEntropy asc, NewProcessName asc
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, Weight, AdjustedProcessEntropy, FullDecimalProcessEntropy = ProcessEntropy, Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
+  | sort by Weight asc, AdjustedProcessEntropy asc, NewProcessName asc
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
   

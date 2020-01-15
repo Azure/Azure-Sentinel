@@ -20,6 +20,9 @@ relevantTechniques:
   - T1008
 query: |
 
+  let starttime = 10d;
+  let endtime = 1d;
+  let threshold = 100;
   let nxDomainDnsEvents = DnsEvents 
   | where ResultCode == "3" 
   | where QueryType in ("A", "AAAA")
@@ -27,17 +30,17 @@ query: |
   | where Name !contains "/"
   | where Name contains ".";
   nxDomainDnsEvents
-  | where TimeGenerated > ago(1d)
+  | where TimeGenerated > ago(endtime)
   | extend sld = tostring(split(Name, ".")[-2])
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(sld) by ClientIP
-  | where dcount_sld > 100
+  | where dcount_sld > threshold
   // Filter out previously seen IPs
   | join kind=leftanti (nxDomainDnsEvents
-      | where TimeGenerated between(ago(10d)..ago(1d))
+      | where TimeGenerated between(ago(starttime)..ago(endtime))
       | extend sld = tostring(split(Name, ".")[-2])
       | summarize dcount(sld) by ClientIP
-      | where dcount_sld > 100 ) on ClientIP
+      | where dcount_sld > threshold ) on ClientIP
   // Pull out sample NXDomain responses for those remaining potentially infected IPs
   | join kind = inner (nxDomainDnsEvents | summarize by Name, ClientIP) on ClientIP
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), sampleNXDomainList=makelist(Name, 100)  by ClientIP, dcount_sld
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), sampleNXDomainList=make_list(Name, 100)  by ClientIP, dcount_sld
   | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP

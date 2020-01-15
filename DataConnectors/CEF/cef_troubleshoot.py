@@ -105,7 +105,7 @@ def check_red_hat_firewall_issue():
     if e is not None:
         print_error("Error: could not check CentOS / RHEL 7 firewalld status.")
     else:
-        if "running" in o:
+        if "running" in str(o):
             print_warning(
                 "Warning: you have a firewall running on your linux machine this can prevent communication between the syslog daemon and the omsagent.")
             print("Checking if firewall has exception for omsagent port.[" + agent_port + "]")
@@ -138,8 +138,8 @@ def red_hat_firewall_d_exception_for_omsagent():
     o, e = firewall_status.communicate()
     if e is not None:
         print_error("Error: could not get /etc/firewalld/zones/public.xml file holding firewall exceptions")
-    print_command_response(o)
-    return agent_port in o
+    print_command_response(str(o))
+    return agent_port in str(o)
 
 
 def restart_red_hat_firewall_d():
@@ -274,7 +274,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
             send_cef_message_local(daemon_port, 1)
         poll_result = poll_obj.poll(0)
         if poll_result:
-            line = tcp_dump.stdout.readline()
+            line = str(tcp_dump.stdout.readline())
             if handle_tcpdump_line(line, incoming_port, ok_message):
                 return True
         end_seconds = int(round(time.time()))
@@ -565,14 +565,14 @@ def handle_rsyslog(workspace_id):
     print("Checking rsyslog daemon:")
     if test_daemon_configuration("rsyslog.d"):
         print_ok(
-            "rsyslog daemon found, checking daemon configuration content - forwarding facility local-4 to port " + daemon_port)
+            "rsyslog daemon found, checking daemon configuration content - forwarding all data to port " + daemon_port)
         daemon_config_valid = validate_daemon_configuration_content("rsyslog.d",
                                                                     rsyslog_security_config_omsagent_conf_content_tokens)
         if not daemon_config_valid:
-            print_error("Error: rsyslog daemon configuration was found invalid.")
+            print_error("Error: rsyslog daemon configuration was found invalid. ")
             print_notice("Notice: please make sure:")
             print_notice("\t1. /etc/rsyslog.d/security-config-omsagent.conf file exists")
-            print_notice("\t2. File contains the following content: \"local4.debug @127.0.0.1:" + agent_port + "\"")
+            print_notice("\t2. File contains the following content:" + "\":rawmsg, regex, \"CEF\|ASA\" ~\n*.* @@127.0.0.1:" + agent_port + "\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")

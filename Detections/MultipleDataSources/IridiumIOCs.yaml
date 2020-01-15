@@ -1,0 +1,120 @@
+id: 7ee72a9e-2e54-459c-bc8a-8c08a6532a63
+name: Known IRIDIUM IP
+description: |
+  'IRIDIUM command and control IP. Identifies a match across various data feeds for IP IOCs related to the IRIDIUM activity group.'
+severity: High
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+     - OfficeActivity
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureMonitor(WireData)
+    dataTypes:
+      - WireData
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+query:  | 
+
+  let timeframe = 1d;
+  let IPList = dynamic(["154.223.45.38","185.141.207.140","185.234.73.19","216.245.210.106","51.91.48.210","46.255.230.229"]);
+  (union isfuzzy=true
+  (CommonSecurityLog
+  | where TimeGenerated >= ago(timeframe) 
+  | where isnotempty(SourceIP) or isnotempty(DestinationIP)
+  | where SourceIP in (IPList) or DestinationIP in (IPList) or Message has_any (IPList)
+  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "Message") 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP, DestinationIP, DeviceProduct, DeviceAction, Message, Protocol, SourcePort, DestinationPort, DeviceAddress, DeviceName, IPMatch
+  | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field") 
+  ),
+  (OfficeActivity
+  | where TimeGenerated >= ago(timeframe) 
+  |extend SourceIPAddress = ClientIP, Account = UserId
+  | where  SourceIPAddress in (IPList)
+  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account
+  ),
+  (DnsEvents 
+  | where TimeGenerated >= ago(timeframe) 
+  | extend DestinationIPAddress = IPAddresses,  Host = Computer
+  | where  DestinationIPAddress has_any (IPList) 
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
+  ),
+  (VMConnection 
+  | where TimeGenerated >= ago(timeframe) 
+  | where isnotempty(SourceIp) or isnotempty(DestinationIp) 
+  | where SourceIp in (IPList) or DestinationIp in (IPList) 
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer
+  ),
+  (Event
+  | where TimeGenerated >= ago(timeframe)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
+  | where SourceIP in (IPList) or DestinationIP in (IPList) 
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  ), 
+  (WireData 
+  | where TimeGenerated >= ago(timeframe)
+  | where isnotempty(RemoteIP)
+  | where RemoteIP in (IPList)
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = Computer
+  ),
+  (SigninLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where isnotempty(IPAddress)
+  | where IPAddress in (IPList)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  ),
+  (W3CIISLog 
+  | where TimeGenerated >= ago(timeframe)
+  | where isnotempty(cIP)
+  | where cIP in (IPList)
+  | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName
+  ),
+  (AzureActivity 
+  | where TimeGenerated >= ago(timeframe)
+  | where isnotempty(CallerIpAddress)
+  | where CallerIpAddress in (IPList)
+  | extend timestamp = TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller
+  ),
+  (
+  AWSCloudTrail
+  | where TimeGenerated >= ago(timeframe)
+  | where isnotempty(SourceIpAddress)
+  | where SourceIpAddress in (IPList)
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+  )
+  )

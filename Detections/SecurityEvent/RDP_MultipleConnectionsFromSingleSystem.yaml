@@ -1,0 +1,46 @@
+id: 78422ef2-62bf-48ca-9bab-72c69818a425
+name: Multiple RDP connections from Single System
+description: |
+  'Identifies when an RDP connection is made to multiple systems from the same system with the same account within the same day.  
+  RDP connections are indicated by the logged EventID 4624 with LogonType = 10'
+severity: Low
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1076
+query: |
+
+  let endtime = 1d;
+  let starttime = 8d;
+  let avgDays = 7;
+  SecurityEvent
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) 
+  | where EventID == 4624 and LogonType == 10
+  | summarize ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account, IpAddress
+  // Computer count by same Account divided by days to determine average count
+  | extend AvgComputerCount = ComputerCount/avgDays;
+  SecurityEvent
+  | where TimeGenerated >= ago(endtime) 
+  | where EventID == 4624 and LogonType == 10
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ComputerCount = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)  
+  by Account, IpAddress, AccountType, Activity, LogonTypeName
+  | join (
+  SecurityEvent
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) 
+  | where EventID == 4624 and LogonType == 10
+  | summarize ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account, IpAddress
+  // Computer count by same Account divided by days to determine average count
+  | extend AvgComputerCount = ComputerCount/avgDays
+  | where AvgComputerCount != 0
+  ) on Account, IpAddress
+  | where ComputerCount > AvgComputerCount*3
+  | project StartTimeUtc, EndTimeUtc, Account, IpAddress, ComputerSet, ComputerCount, AccountType, Activity, LogonTypeName, ProcessSet
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, IPCustomEntity = IpAddress

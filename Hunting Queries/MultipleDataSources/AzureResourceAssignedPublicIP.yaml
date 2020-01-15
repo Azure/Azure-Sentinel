@@ -1,0 +1,76 @@
+id: 8d5996b2-7d4c-4dcf-bb0d-0d7fdf0e2c75
+name: Azure Resources assigned Public IP Addresses
+description: |
+  'Identifies when public IP addresses are assigned to Azure Resources.  Additionally, shows connections to those resources.
+  Resources: 
+  https://docs.microsoft.com/en-us/azure/azure-monitor/insights/azure-networking-analytics
+  https://docs.microsoft.com/en-us/azure/network-watcher/traffic-analytics-schema'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: AzureNetworkWatcher
+    dataTypes:
+      - AzureNetworkAnalytics_CL
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+
+  let timeframe = 7d;
+  AzureActivity
+  | where TimeGenerated >= ago(timeframe)
+  // We look for any Operation that modified and then was accepted or succeeded where a publicipaddress component is referenced
+  | where OperationName has_any ("Create", "Update", "Delete")// Virtual Machine" or OperationName == "Create Deployment" 
+  | where ActivityStatus has_any ("Succeeded", "Accepted")
+  | where Properties contains "publicipaddress"
+  //| extend frontendIPConfigurations = Properties.responseBody.properties.frontendIPConfigurations
+  // parsing the publicIPAddress from Properties. It is only available if the allocation method is Static.
+  | parse Properties with * "publicIPAddress\\" PublicIPAddressParse
+  | extend publicIPAddress_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).ipAddress) 
+  | extend publicIPAddressVersion_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAddressVersion) 
+  | extend publicIPAllocationMethod_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAllocationMethod) 
+  | extend scope_ = tostring(parse_json(Authorization).scope) 
+  | project TimeGenerated, OperationName, publicIPAllocationMethod_ , publicIPAddressVersion_, scope_ , Caller, CallerIpAddress, ActivityStatus, Resource 
+  // Join in the AzureNetworkAnalytics so that we can determine if any connections were made via the public ip address and get the currently assigned ip address when allocation method is Dynamic
+  | join kind= inner (
+  union isfuzzy=true
+  (AzureNetworkAnalytics_CL
+  | where TimeGenerated >= ago(timeframe) 
+  // Controlling for Schema Version and later parsing - This is Version 2 and Public IPs only
+  | where isnotempty(FASchemaVersion_s) and isnotempty(DestPublicIPs_s)
+  | extend SchemaVersion = FASchemaVersion_s
+  | extend PublicIPs = tostring(split(DestPublicIPs_s,"|")[0])
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FirstProcessedTimeUTC = min(FlowStartTime_t), LastProcessedTimeUtc = max(FlowEndTime_t), 
+  Regions = makeset(Region_s), AzureRegions = makeset(AzureRegion_s), VMs = makeset(VM_s), MACAddresses = makeset(MACAddress_s), PublicIPs = makeset(PublicIPs), DestPort = makeset(DestPort_d), SrcIP = makeset(SrcIP_s), 
+  ActivityCount = count() by NSGRule_s, NSGList_s, SubNet = Subnet1_s, FlowDirection_s, Subscription = Subscription1_g, Tags_s, SchemaVersion
+  //NSGList_s contains the subscription ID, remove that as we already have a field for this and now it will match what we get for SchemaVersion 1
+  | extend NSG = case(isnotempty(NSGList_s), strcat(split(NSGList_s, "/")[-2],"/",split(NSGList_s, "/")[-1]), "NotAvailable")
+  // Depending on the SchemaVersion, we will need to provide the NSG_Name for matching against the resource identified in AzureActivity
+  | extend NSG_Name = tostring(split(NSG, "/")[-1])
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where TimeGenerated >= ago(timeframe) 
+  // Controlling for Schema Version and later parsing - This is Version 1
+  | where isempty(FASchemaVersion_s)
+  // Controlling for public IPs only
+  | where isnotempty(PublicFrontendIPs_s) or isnotempty(PublicIPAddresses_s)
+  | where PublicFrontendIPs_s != "null" or PublicIPAddresses_s != "null"
+  | extend SchemaVersion = SchemaVersion_s
+  // The Public IP can be indicated in one of 2 locations, assigning here for easy union results
+  | extend PublicIPs = case(isnotempty(PublicFrontendIPs_s), PublicFrontendIPs_s,
+  PublicIPAddresses_s) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FirstProcessedTimeUTC = min(TimeProcessed_t), LastProcessedTimeUtc = max(TimeProcessed_t), 
+  Regions = makeset(Region_s), AzureRegions = makeset(DiscoveryRegion_s), VMs = makeset(VirtualMachine_s), MACAddresses = makeset(MACAddress_s), PublicIPs = makeset(PublicIPs), 
+  SrcIP = makeset(PrivateIPAddresses_s), Name = makeset(Name_s), DestPort = makeset(DestinationPortRange_s),
+  ActivityCount = count() by NSG = NSG_s, SubNet = Subnetwork_s, Subscription = Subscription_g, Tags_s, SchemaVersion
+  // Some events don't have an NSG listed, populating so it is clear it is not available in the datatype
+  | extend NSG = case(isnotempty(NSG), NSG, "NotAvailable")
+  // Depending on the SchemaVersion, we will need to provide the NSG_Name for matching against the resource identified in AzureActivity
+  | extend NSG_Name = tostring(split(NSG, "/")[-1])
+  )
+  | project StartTimeUtc, EndTimeUtc, FirstProcessedTimeUTC, LastProcessedTimeUtc, PublicIPs, NSG, NSG_Name, SrcIP, DestPort, SubNet, Name, VMs, MACAddresses, ActivityCount, Regions, AzureRegions, Subscription, Tags_s, SchemaVersion
+  ) on $left.Resource == $right.NSG_Name
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress

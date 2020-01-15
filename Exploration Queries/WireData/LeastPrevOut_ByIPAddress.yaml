@@ -1,0 +1,34 @@
+﻿Id: 897267e4-68e1-4827-b318-7fb055b52fc0
+DisplayName: WireData Least Prevalent Outbound Connections by IPAddress
+Description: Bottom 10 (least prevalent) for WireData Outbound event by a given IPAddress (set time range to +-30m when running the query)
+InputEntityType: Ip
+InputFields:
+  - Address
+OutputEntityTypes:
+  - Ip
+  - Process
+  - Host
+QueryPeriodBefore: 30m
+QueryPeriodAfter: 30m
+DataSource:
+  - WireData
+Tactics:
+  - Probing
+  - Discovery
+  - LateralMovement
+  - Collection
+query: | 
+
+  let GetWireDataOutboundWithIp = (v_IP_Address:string){
+  WireData
+  | where Direction == 'Outbound'
+  | where LocalIP has v_IP_Address
+  | extend info = pack('LocalIP', LocalIP, 'LocalPortNumber', LocalPortNumber, 'Direction', Direction, 'ApplicationProtocol', ApplicationProtocol)
+  | summarize min(SessionStartTime), count(), IP_Aux_info = makeset(info) by Computer, ProcessName, RemoteIP, ProcessID
+  | extend Process_Aux_info = IP_Aux_info, Host_Aux_info = IP_Aux_info
+  | top 10 by count_ asc
+  | project min_SessionStartTime, Computer, ProcessName, RemoteIP, ProcessID, IP_Aux_info, Process_Aux_info, Host_Aux_info
+  | project-rename IP_Address=RemoteIP, Process_ImageFile_FullPath=ProcessName, Host_UnstructuredName=Computer, Process_ProcessId=ProcessID
+  };
+  // change <Address> value below
+  GetWireDataOutboundWithIp('<Address>')
