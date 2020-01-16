@@ -1,0 +1,226 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+     "metadata":{
+        "comments": "This playbook will open Service Now incident  when new incident open in sentinel.",
+        "author": "Amichay Even Chen"
+    },
+    "parameters": {
+         "PlaybookName": {
+            "defaultValue": "aggregate-SNOW-tickets",
+            "type": "String"
+        },
+         "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+"variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "SNOWConnectionName": "[concat('service-now-', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+       
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SNOWConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/service-now')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered_2": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                            }
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Update_Record": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "comments": "Title: @{body('Alert_-_Get_incident')?['properties']?['Title']}\nSeverity: @{body('Alert_-_Get_incident')?['properties']?['Severity']}\nIncident number: @{body('Alert_-_Get_incident')?['properties']?['CaseNumber']}\nAlert id: @{triggerBody()?['SystemAlertId']}\nDescription: @{triggerBody()?['Description']}\nEntities: @{triggerBody()?['Entities']}",
+                                            "short_description": "Aggregation Incident"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['service-now']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/now/v2/table/@{encodeURIComponent('incident')}/@{encodeURIComponent(substring(concat(body('Alert_-_Get_incident')?['properties']?['Labels']),add(indexOf(concat(body('Alert_-_Get_incident')?['properties']?['Labels']),'sysid'), 5),32))}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_labels_to_incident": {
+                                        "runAfter": {
+                                            "Create_Record": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "Labels": [
+                                                    {
+                                                        "Label": "sysid@{body('Create_Record')?['result']?['sys_id']}"
+                                                    },
+                                                    {
+                                                        "Label": "SNOW"
+                                                    },
+                                                    {
+                                                        "Label": "@body('Create_Record')?['result']?['number']"
+                                                    }
+                                                ]
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/AddLabels"
+                                        }
+                                    },
+                                    "Create_Record": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "comments": "Title: @{body('Alert_-_Get_incident')?['properties']?['Title']}\nSeverity: @{body('Alert_-_Get_incident')?['properties']?['Severity']}\nIncident number: @{body('Alert_-_Get_incident')?['properties']?['CaseNumber']}\nAlert id: @{triggerBody()?['SystemAlertId']}\nDescription: @{triggerBody()?['Description']}\nEntities: @{triggerBody()?['Entities']}",
+                                                "severity": "@body('Alert_-_Get_incident')?['properties']?['Severity']",
+                                                "short_description": "@body('Alert_-_Get_incident')?['properties']?['Description']"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['service-now']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
+                                            "queries": {
+                                                "sysparm_display_value": true,
+                                                "sysparm_exclude_reference_link": true
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@body('Alert_-_Get_incident')?['properties']?['Labels']",
+                                            "SNOW"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                                "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "service-now": {
+                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]",
+                                "connectionName": "[variables('SNOWConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/service-now')]"
+                            }
+                        }
+                            
+                        }
+                }   
+            }
+       
+        
+        }
+
+    ]
+
+}
+
+

@@ -8,8 +8,8 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
-queryFrequency: 1h
-queryPeriod: 1h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -20,7 +20,7 @@ relevantTechniques:
   - T1078
 query: |
 
-  let timeframe = 1h;
+  let timeframe = 1d;
   // For AD SID mappings - https://docs.microsoft.com/en-us/windows/security/identity-protection/access-control/active-directory-security-groups
   let WellKnownLocalSID = "S-1-5-32-5[0-9][0-9]";
   let WellKnownGroupSID = "S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000";
@@ -31,9 +31,10 @@ query: |
   // 4728 - A member was added to a security-enabled global group
   // 4732 - A member was added to a security-enabled local group
   // 4756 - A member was added to a security-enabled universal group
-  | where EventID in ("4728", "4732", "4756")   
+  | where EventID in (4728, 4732, 4756)   
   | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
   // Exclude Remote Desktop Users group: S-1-5-32-555
   | where TargetSid !in ("S-1-5-32-555")
-  | project StartTimeUtc = TimeGenerated, EventID, Activity, Computer, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = MemberName, HostCustomEntity = Computer
+  | extend SimpleMemberName = tostring(split(tostring(split(MemberName, ",")[0]),"CN=")[1])
+  | project StartTimeUtc = TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = SimpleMemberName, HostCustomEntity = Computer
