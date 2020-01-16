@@ -1,8 +1,12 @@
 ﻿id: f2dd4a3a-ebac-4994-9499-1a859938c947
-name: Anomaly with data size transferred to public internet
+name: Time series anomaly for data size transferred to public internet
 description: |
   'Identifies anamalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern. 
-  A sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.'
+  A sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated. 
+  The higher the score, the further it is from the baseline value.
+  The output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour. 
+  The source IP addresses which were sending less than bytessentperhourthreshold have been exluded whose value can be adjusted as needed .
+  You may have to run queries for individual source IP addresses from SourceIPlist to determine if anything looks suspicious'
 severity: Medium
 requiredDataConnectors:
   - connectorId: CiscoASA
@@ -17,7 +21,7 @@ requiredDataConnectors:
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
-triggerThreshold: 3
+triggerThreshold: 1
 tactics:
   - Exfiltration
 relevantTechniques:
@@ -27,7 +31,8 @@ query: |
   let starttime = 14d;
   let endtime = 1d;
   let timeframe = 1h;
-  let scorethreshold = 3;
+  let scorethreshold = 5;
+  let bytessentperhourthreshold = 10;
   let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
   let TimeSeriesData = (union isfuzzy=true
   (
@@ -53,9 +58,9 @@ query: |
   let TimeSeriesAlerts = TimeSeriesData
   | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')
   | mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
-  | where anomalies > 0 | extend AnomalyTimeattheHour = TimeGenerated 
+  | where anomalies > 0 | extend AnomalyHour = TimeGenerated 
   | extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)
-  | project DeviceVendor, AnomalyTimeattheHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score;
+  | project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score;
   //Union of all BaseLogs aggregated per hour
   let BaseLogs = (union isfuzzy=true
   (
@@ -63,8 +68,9 @@ query: |
   | where isnotempty(DestinationIP) and isnotempty(SourceIP)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime))) 
   | extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024) 
-  | summarize HourlyCount = count(), ListOfDestPorts = make_set(DestinationPort), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DestinationIP, DeviceVendor, bin(TimeGenerated,1h)
-  | project DeviceVendor, TimeGenerated, SourceIP, DestinationIP, ListOfDestPorts, TotalSentBytesinMB, TotalReceivedBytesinMB 
+  | summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP), DestinationPortList = make_set(DestinationPort), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)
+  | project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB
+  | where TotalSentBytesinMB > bytessentperhourthreshold
   ),
   (
   VMConnection 
@@ -72,15 +78,17 @@ query: |
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime))) 
   | extend DeviceVendor = "VMConnection", SourceIP = SourceIp, DestinationIP = DestinationIp
   | extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)
-  | summarize HourlyCount = count(), ListOfDestPorts = make_set(DestinationPort), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DestinationIP, DeviceVendor, bin(TimeGenerated,1h)
-  | project DeviceVendor, TimeGenerated, SourceIP, DestinationIP, ListOfDestPorts, TotalSentBytesinMB, TotalReceivedBytesinMB 
+  | summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP), DestinationPortList = make_set(DestinationPort), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DestinationIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)
+  | project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB 
+  | where TotalSentBytesinMB > bytessentperhourthreshold
   )
   );
   // Join against base logs to retrive records associated with the hour of anomoly
   TimeSeriesAlerts
   | join (
-      BaseLogs 
-  ) on DeviceVendor, TimeGenerated | sort by score desc 
-  | project DeviceVendor, AnomalyTimeattheHour, SourceIP, DestinationIP, ListOfDestPorts, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies 
-  | order by score desc, TotalSentBytesinMB desc
-  | extend IPCustomEntity = DestinationIP
+      BaseLogs | extend AnomalyHour = TimeGeneratedHour
+  ) on DeviceVendor, AnomalyHour | sort by score desc 
+  | project DeviceVendor, AnomalyHour,TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies 
+  | summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP), DestinationIPList = make_set(DestinationIPList) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies
+  | project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount  
+  | extend timestamp =EndTimeUtc, IPCustomEntity = SourceIPMax 
