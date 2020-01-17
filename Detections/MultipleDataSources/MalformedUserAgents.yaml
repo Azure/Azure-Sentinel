@@ -34,9 +34,9 @@ query: |
   | extend OperationName = Operation, UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))),
   (AzureDiagnostics
   | where TimeGenerated >= ago(endtime)
-  | where ResourceType == "APPLICATIONGATEWAYS" 
-  | where OperationName == "ApplicationGatewayAccess" 
-  | extend ClientIP = CallerIpAddress, UserAgent = replace(@'\+', @' ', userAgent_s)))
+  | where ResourceType =~ "APPLICATIONGATEWAYS" 
+  | where OperationName =~ "ApplicationGatewayAccess" 
+  | extend ClientIP = columnifexists("clientIP_s", "None"), UserAgent = columnifexists("userAgent_s", "None")))
   // Likely artefact of hardcoding
   | where UserAgent startswith "User" or UserAgent startswith "\""
   // Incorrect casing
@@ -47,5 +47,7 @@ query: |
   or UserAgent matches regex @"MSIE\s?;"
   // Incorrect spacing around MSIE version
   or UserAgent matches regex  @"MSIE(?:\d|.{1,5}?\d\s;)"
-  | summarize by TimeGenerated, UserId, ClientIP, UserAgent, OperationName, RecordType
-  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationNames = makeset(OperationName), UserAgentCount = dcount(UserAgent), 
+  UserAgentList = makeset(UserAgent), RecordTypes = makeset(RecordType) by UserId, ClientIP
+  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+
