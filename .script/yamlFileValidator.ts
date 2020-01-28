@@ -1,47 +1,25 @@
-import { getPullRequestDiffFiles } from './utils';
+import { runCheckOverChangedFiles} from './utils/changedFilesValidator';
+import {ExitCode } from './utils/exitCode';
 import yaml from 'js-yaml';
 import fs from 'fs';
+import * as logger from './utils/logger';
 
-export function IsValidYamlFile(filePath:string): Boolean {
-    try {
-        yaml.safeLoad(fs.readFileSync(filePath, 'utf8'));
-        return true;
-    }
-    catch (e) {
-        console.error(`Incorrect yaml file. Tile path: ${filePath}. Error message: ${e.message}`);
-        return false
-    }
+export async function IsValidYamlFile(filePath:string): Promise<ExitCode> {
+       yaml.safeLoad(fs.readFileSync(filePath, 'utf8'));
+       return ExitCode.SUCCESS;
 }
 
-const main = async () => {
-    console.log("start  - yamlFileValidetor script");
-    const pullRequestDiffFiles = await getPullRequestDiffFiles();
-
-    if(pullRequestDiffFiles === null){
-        console.log("No changes files in PR");
-        return 0;
-    }
-
-    const changedYamlFiles = pullRequestDiffFiles.filter(filePath => filePath.endsWith('.yaml') || filePath.endsWith('.yml'));
-
-    if (changedYamlFiles.length === 0) {
-        console.log("No changes in yaml file");
-        return 0;
-    }
-
-    let retCode = 0;
-    changedYamlFiles.forEach(filePath => {
-        if(!IsValidYamlFile(filePath)){
-            retCode = -1;
-        }
-    });
-
-    return retCode;
+let fileTypeSuffixes = ["yaml","yml"];
+let CheckOptions = {
+  onCheckFile: (filePath: string) => {
+    return IsValidYamlFile(filePath);
+  },
+  onExecError:async (e:any, filePath: string) => {
+    console.log(`Incorrect yaml file. File path: ${filePath}. Error message: ${e.message}`);
+    }, 
+  onFinalFailed: async () => {
+    logger.logError('ERROR: yaml file.s with syntax error was found');
+  }
 }
 
-main().then(retCode => {
-    if (retCode !== 0) {
-        console.error(`ERROR: incorrect yaml files`);
-    }
-    process.exit(retCode);
-});
+runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes);
