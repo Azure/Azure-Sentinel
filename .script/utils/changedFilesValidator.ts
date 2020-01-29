@@ -42,20 +42,10 @@ async function changedFilesValidator(
   process.exit(retCode);
 }
 
-export function runCheckOverChangedFiles(
-  options: CheckOptions,
-  fileTypeSuffixes?: string[],
-  filePathFolderPreffixes?: string[]
-) {
-  changedFilesValidator(
-    options,
-    fileTypeSuffixes,
-    filePathFolderPreffixes
-  ).catch(e => {
+export function runCheckOverChangedFiles(options: CheckOptions, fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
+  changedFilesValidator(options, fileTypeSuffixes, filePathFolderPreffixes).catch(e => {
     console.error(e);
-    logger.logError(
-      `Fatal Error. Please report to AzureSentinel@microsoft.com`
-    );
+    logger.logError(`Error. If issue persists - please open an issue`);
     process.exit(ExitCode.ERROR);
   });
 }

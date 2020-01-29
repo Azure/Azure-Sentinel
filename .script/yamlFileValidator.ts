@@ -15,9 +15,7 @@ let CheckOptions = {
     return IsValidYamlFile(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
-    console.log(
-      `Incorrect yaml file. File path: ${filePath}. Error message: ${e.message}`
-    );
+    console.log(`Incorrect yaml file. File path: ${filePath}. Error message: ${e.message}`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");

@@ -2,17 +2,12 @@ import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
 
-export async function GetDiffFiles(
-  fileTypeSuffixes?: string[],
-  filePathFolderPreffixes?: string[]
-) {
+export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const config = cli.defaultConfig();
   const pr = await devOps.createPullRequestProperties(config);
 
   if (typeof pr === "undefined") {
-    console.log(
-      "Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue"
-    );
+    console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
 
@@ -22,32 +17,16 @@ export async function GetDiffFiles(
   const filterChangedFiles = changedFiles
     .filter(change => change.kind !== "Deleted")
     .map(change => change.path)
-    .filter(
-      filePath =>
-        typeof fileTypeSuffixes === "undefined" ||
-        filePath.endsWithAny(fileTypeSuffixes)
-    )
-    .filter(
-      filePath =>
-        typeof filePathFolderPreffixes === "undefined" ||
-        filePath.startsWithAny(filePathFolderPreffixes)
-    )
+    .filter(filePath => typeof fileTypeSuffixes === "undefined" || filePath.endsWithAny(fileTypeSuffixes))
+    .filter(filePath => typeof filePathFolderPreffixes === "undefined" || filePath.startsWithAny(filePathFolderPreffixes))
     .filter(filePath => filePath.indexOf(".script/tests") === -1);
 
   if (filterChangedFiles.length === 0) {
-    logger.logWarning(
-      `No changed files in current PR after filter. File type filter: ${
-        fileTypeSuffixes ? fileTypeSuffixes.toString() : null
-      }, file path filter: ${
-        filePathFolderPreffixes ? filePathFolderPreffixes.toString() : null
-      }`
-    );
+    logger.logWarning(`No changed files in current PR after files filter. File type filter: ${fileTypeSuffixes ? fileTypeSuffixes.toString() : null}, File path filter: ${filePathFolderPreffixes ? filePathFolderPreffixes.toString() : null}`);
     return;
   }
 
-  console.log(
-    `${filterChangedFiles.length} files changed in current PR after filter`
-  );
+  console.log(`${filterChangedFiles.length} files changed in current PR after filter`);
 
   return filterChangedFiles;
 }
