@@ -8,8 +8,8 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
-queryFrequency: 10m
-queryPeriod: 20m
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -20,11 +20,13 @@ relevantTechniques:
   - T1078
 query: |
 
-  let timeframe = 10m;
+  let timeframe = 1d;
+  let spanoftime = 10m;
+  let threshold = 0;
   SecurityEvent 
   | where TimeGenerated > ago(2*timeframe) 
   // A user account was created
-  | where EventID == "4720"
+  | where EventID == 4720
   | where AccountType =~ "User"
   | project creationTime = TimeGenerated, CreateEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
   AccountUsedToCreate = SubjectUserName, TargetSid, SubjectUserSid 
@@ -32,14 +34,14 @@ query: |
     SecurityEvent
     | where TimeGenerated > ago(timeframe) 
     // A user account was deleted 
-    | where EventID == "4726" 
+    | where EventID == 4726
   | where AccountType == "User"
   | project deletionTime = TimeGenerated, DeleteEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
   AccountUsedToDelete = SubjectUserName, TargetSid, SubjectUserSid 
   ) on Computer, TargetUserName
-  | where deletionTime - creationTime < 10m
+  | where deletionTime - creationTime < spanoftime
   | extend TimeDelta = deletionTime - creationTime
-  | where tolong(TimeDelta) >= 0
+  | where tolong(TimeDelta) >= threshold
   | project TimeDelta, creationTime, CreateEventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate, 
   deletionTime, DeleteEventID, AccountUsedToDelete
   | extend timestamp = creationTime, AccountCustomEntity = AccountUsedToCreate, HostCustomEntity = Computer
