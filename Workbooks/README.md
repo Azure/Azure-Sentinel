@@ -71,8 +71,7 @@ This logo should be in SVG format.
       },
    
   
-  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>
-  If you need the sync to happen sooner, please contact mor.shabi@microsoft.com or t-amberm@microsoft.com.
+  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>  
   
  
 # How to update an existing workbook
@@ -81,4 +80,4 @@ Just create a pull request to this repository in which you change the version of
 If needed, also update the preview images or the data types.
 
 
-For questions on these instructions, you can contact Amit Bergman - t-amberm@microsoft.com
+For any feedback on the instructions [Open an issue](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
