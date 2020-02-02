@@ -22,7 +22,8 @@ export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPr
     .filter(filePath => filePath.indexOf(".script/tests") === -1);
 
   if (filterChangedFiles.length === 0) {
-    logger.logWarning(`No changed files in current PR after files filter. File type filter: ${fileTypeSuffixes ? fileTypeSuffixes.toString() : null}, File path filter: ${filePathFolderPreffixes ? filePathFolderPreffixes.toString() : null}`);
+    logger.logWarning(`No changed files in current PR after files filter. File type filter: ${fileTypeSuffixes ? fileTypeSuffixes.toString() : null}, 
+        File path filter: ${filePathFolderPreffixes ? filePathFolderPreffixes.toString() : null}`);
     return;
   }
 
