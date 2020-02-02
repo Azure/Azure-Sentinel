@@ -8,15 +8,8 @@ export type CheckOptions = {
   onFinalFailed(): Promise<unknown>;
 };
 
-async function changedFilesValidator(
-  checkOptions: CheckOptions,
-  fileTypeSuffixes?: string[],
-  filePathFolderPreffixes?: string[]
-) {
-  const changedFiles = await GetDiffFiles(
-    fileTypeSuffixes,
-    filePathFolderPreffixes
-  );
+async function changedFilesValidator(checkOptions: CheckOptions, fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
+  const changedFiles = await GetDiffFiles(fileTypeSuffixes, filePathFolderPreffixes);
   if (changedFiles === undefined) {
     return;
   }
