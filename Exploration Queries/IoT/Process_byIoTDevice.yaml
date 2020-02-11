@@ -14,11 +14,15 @@ query: |
 
   let Process_byIoTDevice = (v_IotDevice_DeviceId:string, v_IoTDevice_IoTHub:string){
   SecurityIoTRawEvent 
-  | where RawEventName == 'ProcessCreate'
-  | where AssociatedResourceId == parse_json(v_IoTDevice_IoTHub)['ResourceId'] and DeviceId == v_IotDevice_DeviceId
+  | where RawEventName =~ 'ProcessCreate'
+  | where AssociatedResourceId =~ parse_json(v_IoTDevice_IoTHub)['ResourceId'] and DeviceId =~ v_IotDevice_DeviceId
   | extend Process_CommandLine = tostring(parse_json(EventDetails)['CommandLine'])
-  | summarize procCount = count() by Process_CommandLine
-  | top 10 by procCount 
+  | extend Process_ProcessId = tostring(parse_json(EventDetails)['ProcessId'])
+  | extend Process_ParentProcess_ProcessId = tostring(parse_json(EventDetails)['ParentProcessId'])
+  | extend Process_CreationTimeUtc = TimeStamp
+  | summarize procCount = count() by Process_CommandLine, Process_ProcessId, Process_ParentProcess_ProcessId, Process_CreationTimeUtc
+  | top 10 by procCount
+  | extend Process_Aux_Count = procCount
   | project-away procCount
   };
   Process_byIoTDevice('<DeviceId>', '<IoTHub>')
