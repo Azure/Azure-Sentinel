@@ -1,21 +1,20 @@
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
-import yaml from "js-yaml";
 import fs from "fs";
 import * as logger from "./utils/logger";
 
-export async function IsValidYamlFile(filePath: string): Promise<ExitCode> {
-  yaml.safeLoad(fs.readFileSync(filePath, "utf8"));
+export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
+  JSON.parse(fs.readFileSync(filePath, "utf8"));
   return ExitCode.SUCCESS;
 }
 
-let fileTypeSuffixes = ["yaml", "yml"];
+let fileTypeSuffixes = ["json"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    return IsValidYamlFile(filePath);
+    return IsValidJsonFile(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
-    console.log(`Incorrect yaml file. File path: ${filePath}. Error message: ${e.message}`);
+    console.log(`Incorrect Json file. File path: ${filePath}. Error message: ${e.message}`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");
