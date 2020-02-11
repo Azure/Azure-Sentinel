@@ -3,7 +3,7 @@
 This assumes you already have a workbook that you want to share as an Azure Sentinel template.<br/>
 Once this process is completed, Sentinel users will be able to save an instance of your template that will visualize the data in their own workspace. 
 
-To learn how to create workbooks - go to [workbooks documentation](https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data).
+To learn how to create workbooks - go to [workbooks documentation](https://docs.microsoft.com/en-us/azure/azure-monitor/app/usage-workbooks).
 
 ## Step 1 - get the workbook gallery template:
 
@@ -71,7 +71,8 @@ This logo should be in SVG format.
       },
    
   
-  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>  
+  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>
+  If you need the sync to happen sooner, please contact mor.shabi@microsoft.com or t-amberm@microsoft.com.
   
  
 # How to update an existing workbook
@@ -80,4 +81,4 @@ Just create a pull request to this repository in which you change the version of
 If needed, also update the preview images or the data types.
 
 
-For any feedback on the instructions [Open an issue](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
+For questions on these instructions, you can contact Amit Bergman - t-amberm@microsoft.com
