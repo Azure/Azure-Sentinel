@@ -47,6 +47,8 @@ rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtc
 oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
 
 
+
+
 def print_error(input_str):
     '''
     Print given text in red color for Error text
@@ -111,7 +113,7 @@ def handle_error(e, error_response_str):
     return False
 
 
-def install_omsagent(workspace_id, primary_key):
+def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     '''
     Installing the downloaded omsagent
     :param workspace_id:
@@ -119,7 +121,7 @@ def install_omsagent(workspace_id, primary_key):
     :return:
     '''
     print("Installing omsagent")
-    command_tokens = ["sh", omsagent_file_name, "-w", workspace_id, "-s", primary_key, "-d", "opinsights.azure.com"]
+    command_tokens = ["sh", omsagent_file_name, "-w", workspace_id, "-s", primary_key, "-d", oms_agent_install_url]
     print_notice(" ".join(command_tokens))
     install_omsagent_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = install_omsagent_command.communicate()
@@ -466,6 +468,7 @@ def set_syslog_ng_configuration():
 def main():
     omsagent_incoming_port = omsagent_default_incoming_port
     port_argument = False
+    oms_agent_install_url = "opinsights.azure.com"
     if len(sys.argv) < 3:
         print_error("Error: The installation script is expecting 2 arguments:")
         print_error("\t1) workspace id")
@@ -478,7 +481,9 @@ def main():
         print("Primary key: " + primary_key)
         if len(sys.argv) > 3:
             for index in range(3, len(sys.argv)):
-                if "-p" in sys.argv[index]:
+                if "-FF" in sys.argv[index]:
+                    oms_agent_install_url = "opinsights.azure.us"
+                elif "-p" in sys.argv[index]:
                     port_argument = True
                 elif port_argument:
                     omsagent_incoming_port = sys.argv[index]
@@ -487,7 +492,7 @@ def main():
                 elif "-help" in sys.argv[index]:
                     print(help_text)
                     return
-    if download_omsagent() and install_omsagent(workspace_id=workspace_id, primary_key=primary_key):
+    if download_omsagent() and install_omsagent(workspace_id=workspace_id, primary_key=primary_key, oms_agent_install_url=oms_agent_install_url):
         # if setting oms agent configuration has failed we need to stop the script
         if not set_omsagent_configuration(workspace_id=workspace_id, omsagent_incoming_port=omsagent_incoming_port):
             return
