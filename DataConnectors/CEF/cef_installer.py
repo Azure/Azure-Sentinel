@@ -107,7 +107,7 @@ def download_omsagent():
 
 
 def handle_error(e, error_response_str):
-    error_output = e.decode('ascii')
+    error_output = e.decode(encoding='UTF-8')
     print_error(error_response_str)
     print_error(error_output)
     return False
@@ -142,7 +142,7 @@ def process_check(process_name):
     p1 = subprocess.Popen(["ps", "-ef"], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["grep", "-i", process_name], stdin=p1.stdout, stdout=subprocess.PIPE)
     o, e = p2.communicate()
-    tokens = o.decode('ascii').split('\n')
+    tokens = o.decode(encoding='UTF-8').split('\n')
     tokens.remove('')
     return len(tokens)
 
