@@ -199,7 +199,7 @@ def rsyslog_get_cef_log_counter():
     grep = subprocess.Popen(["grep", "-E", "CEF\|ASA"], stdin=tac.stdout, stdout=subprocess.PIPE)
     count_lines = subprocess.Popen(["wc", "-l"], stdin=grep.stdout, stdout=subprocess.PIPE)
     o, e = count_lines.communicate()
-    output = o.decode('ascii')
+    output = o.decode(encoding='UTF-8')
     if e is None:
         print("Located " + str(output) + " CEF\\ASA messages")
         return int(output)
@@ -210,7 +210,7 @@ def rsyslog_get_cef_log_counter():
         grep = subprocess.Popen(["grep", "-E", "CEF\|ASA"], stdin=tac.stdout, stdout=subprocess.PIPE)
         count_lines = subprocess.Popen(["wc", "-l"], stdin=grep.stdout, stdout=subprocess.PIPE)
         o, e = count_lines.communicate()
-        output = o.decode('ascii')
+        output = o.decode(encoding='UTF-8')
         if e is None:
             print("Located " + str(output) + " CEF messages")
             return int(output)
@@ -287,7 +287,7 @@ def netstat_open_port(in_port, ok_message, error_message):
     print("Incoming port grep: " + in_port)
     grep = subprocess.Popen(["grep", in_port], stdin=netstat.stdout, stdout=subprocess.PIPE)
     o, e = grep.communicate()
-    output = o.decode('ascii')
+    output = o.decode(encoding='UTF-8')
     print(output)
     if e is None and in_port in output:
         print_ok(ok_message)
@@ -306,7 +306,7 @@ def check_file_in_directory(file_name, path):
     current_dir = subprocess.Popen(["ls", "-ltrh", path], stdout=subprocess.PIPE)
     grep = subprocess.Popen(["grep", "-i", file_name], stdin=current_dir.stdout, stdout=subprocess.PIPE)
     o, e = grep.communicate()
-    output = o.decode('ascii')
+    output = o.decode(encoding='UTF-8')
     if e is None and file_name in output:
         return True
     return False
@@ -322,7 +322,7 @@ def locate_check(process_name):
         print("Trying to use the \'locate\' command to locate " + process_name)
         locate = subprocess.Popen(["locate", process_name], stdout=subprocess.PIPE)
         o, e = locate.communicate()
-        response = o.decode('ascii')
+        response = o.decode(encoding='UTF-8')
         if e is not None:
             print_warning("Warning: Could not execute \'locate\' command.")
             print_notice(
@@ -360,7 +360,7 @@ def process_check(process_name):
     p1 = subprocess.Popen(["ps", "-ef"], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["grep", "-i", process_name], stdin=p1.stdout, stdout=subprocess.PIPE)
     o, e = p2.communicate()
-    tokens = o.decode('ascii').split('\n')
+    tokens = o.decode(encoding='UTF-8').split('\n')
     tokens.remove('')
     return tokens
 
@@ -398,7 +398,7 @@ def sudo_read_file_contains_string(file_tokens, file_path):
         print_error("Error: could not load " + file_path)
         return False
     else:
-        content = o.decode('ascii')
+        content = o.decode(encoding='UTF-8')
         print_command_response("Current content of the daemon configuration is:\n" + content)
         return all(token in file_tokens for token in file_tokens)
 
