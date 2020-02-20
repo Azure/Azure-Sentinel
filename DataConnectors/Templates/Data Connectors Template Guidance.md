@@ -88,6 +88,7 @@ A data connector can have multiple data types and these can be represented by co
 2. **availability** – Represents whether the connector is generally available. Do **not** update this property value.
 3. **permissions** – Represents the required permissions needed for the data connector to be enabled or connected. For e.g. write permissions to the workspace is needed for connector to be enabled, etc. These appear in the connector UX in the prerequisites section. This property value need **not** be updated and can remain as-is.
 4. **instructionSteps** – These are the specific instructions to connect to the data connector.
-  1. For CEF and Syslog, leverage the existing text as-is and add anything custom as needed.
-  2. For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Azure Sentinel **or** provide detailed guidance for customers to send data to Azure Sentinel.<p>
+  * For CEF and Syslog, leverage the existing text as-is and add anything custom as needed.
+  * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Azure Sentinel **or** provide detailed guidance for customers to send data to Azure Sentinel.<p>
+  
 Expand and add multiple instructions as needed by adding more title and description elements in this block.
