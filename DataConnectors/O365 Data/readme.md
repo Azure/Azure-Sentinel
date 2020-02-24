@@ -46,9 +46,13 @@ $publisher = "<randomGuid>" Get a guid from https://guidgenerator.com/
 ```
 
 * Run this command to enable Audit.General Subscription. 
+```powershell
 Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher
+```
 * Run this command to enable DLP.ALL subscription
+```powershell
 Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher
+```
 
 ### Deploy the Function App
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
