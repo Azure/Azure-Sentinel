@@ -32,6 +32,7 @@ To add a tenant:
 1. Open Powershell
 2. Run the following commands
 
+```powerhshell
 $ClientID = "<GUID> from AAD App Registration"
 $ClientSecret = "<clientSecret> from AAD App Registrtion"
 $loginURL = "https://login.microsoftonline.com/"
@@ -42,6 +43,7 @@ $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID
 $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
 $headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"} 
 $publisher = "<randomGuid>" Get a guid from https://guidgenerator.com/
+```
 
 * Run this command to enable Audit.General Subscription. 
 Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher
