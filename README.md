@@ -1,17 +1,17 @@
 # Azure Sentinel
-Welcome to the Azure Sentinel repository! This repository contains out of the box detections, exploration queries, hunting queries, workbooks and playbooks to help you get ramped up with Azure Sentinel and provide you security content to secure your environment and hunt for threats. You can also submit to [issues](https://github.com/Azure/Azure-Sentinel/issues) for any samples or resources you would like to see here as you onboard to Azure Sentinel. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
+Welcome to the Azure Sentinel repository! This repository contains out of the box detections, exploration queries, hunting queries, workbooks, playbooks and much more to help you get ramped up with Azure Sentinel and provide you security content to secure your environment and hunt for threats. You can also submit to [issues](https://github.com/Azure/Azure-Sentinel/issues) for any samples or resources you would like to see here as you onboard to Azure Sentinel. This repository welcomes contributions and refer to this repository's [wiki](https://aka.ms/threathunters) to get started. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
 
 # Resources
-[Getting started with GitHub](https://help.github.com/en#dotcom)
+* [Azure Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2073774&clcid=0x409)
+* [Security Community Webinars](https://aka.ms/securitywebinars)
+* [Getting started with GitHub](https://help.github.com/en#dotcom)
 
-[Azure Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2073774&clcid=0x409)
+We value your feedback. Here are some channels to help surface your questions or feedback:
+1. General product specific Q&A – Join in the [Azure Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
+1. Product specific feature requests – Upvote or post new on [Azure Sentinel feedback forums](https://feedback.azure.com/forums/920458-azure-sentinel)
+1. Report product or contribution bugs – File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
+1. General feedback on community and contribution process – File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
-[Azure Sentinel Techcommunity](https://aka.ms/azuresentinelcommunity)
-
-[Azure Sentinel UserVoice](https://aka.ms/azuresentineluservoice)
-Use this to request features to our product.
-
-[Security Community Webinars](https://aka.ms/securitywebinars)
 
 # Contributing
 
