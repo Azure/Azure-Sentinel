@@ -32,6 +32,7 @@ To add a tenant:
 1. Open Powershell
 2. Run the following commands
 
+```powerhshell
 $ClientID = "<GUID> from AAD App Registration"
 $ClientSecret = "<clientSecret> from AAD App Registrtion"
 $loginURL = "https://login.microsoftonline.com/"
@@ -42,15 +43,20 @@ $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID
 $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
 $headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"} 
 $publisher = "<randomGuid>" Get a guid from https://guidgenerator.com/
+```
 
 * Run this command to enable Audit.General Subscription. 
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher
+```powershell
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher
+```
 * Run this command to enable DLP.ALL subscription
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher
+```powershell
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher
+```
 
 ### Deploy the Function App
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
-1. Download the Zip file of the Azure Funciton app from Github.
+1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/O365%20Data/O365APItoAS-Template.zip?raw=true)  file of the Azure Funciton app from Github.
 2. Extract to location on your machine.
 3. Open VS Code
 4. Click File -> Open Folder
