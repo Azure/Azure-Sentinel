@@ -1,7 +1,7 @@
 ﻿id: 3af9285d-bb98-4a35-ad29-5ea39ba0c628
 name: Attempt to bypass conditional access rule in Azure AD
 description: |
-  'Identifies an attempt to Bypass conditional access rule in Azure Active Directory.
+  'Identifies an attempt to Bypass conditional access rule(s) in Azure Active Directory.
   The ConditionalAccessStatus column value details if there was an attempt to bypass Conditional Access
   or if the Conditional access rule was not satisfied (ConditionalAccessStatus == 1).
   References: 
@@ -30,16 +30,19 @@ relevantTechniques:
 query: |
 
   let timeRange = ago(1d);
+  let threshold = 1;
   SigninLogs
   | where TimeGenerated >= timeRange
-  // Conditional access rule was not satisfied when == 1
   | where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ "failure"
   | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-  | extend Region = tostring(LocationDetails["countryOrRegion"]), State = tostring(LocationDetails["state"]), City = tostring(LocationDetails["city"])
   | extend ConditionalAccessPol0Name = tostring(ConditionalAccessPolicies[0].displayName)
   | extend ConditionalAccessPol1Name = tostring(ConditionalAccessPolicies[1].displayName)
   | extend ConditionalAccessPol2Name = tostring(ConditionalAccessPolicies[2].displayName)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserPrincipalName, IPAddress, AppDisplayName, ResultDescription, StatusCode, StatusDetails, tostring(Browser), tostring(OS), Region, State, City, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name
-  | project StartTimeUtc, EndTimeUtc, UserPrincipalName, IPAddress, AppDisplayName, ResultDescription, StatusCode, StatusDetails, tostring(Browser), tostring(OS), Region, State, City, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend Status = strcat(StatusCode, ": ", ResultDescription) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Status = makelist(Status), StatusDetails = makelist(StatusDetails), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress) , CorrelationIds = makelist(CorrelationId) by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name
+  | where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
+  | mvexpand IPAddresses, Status, StatusDetails, CorrelationIds
+  | extend Status = strcat(Status, " ", StatusDetails)
+  | summarize IPAddresses = makeset(IPAddresses), Status = makeset(Status), CorrelationIds = makeset(CorrelationIds) by StartTimeUtc, EndTimeUtc, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, IPAddressCount
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)

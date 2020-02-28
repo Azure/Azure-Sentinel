@@ -25,6 +25,10 @@ query: |
   | where SyslogMessage contains "ssh2" 
   | parse kind=relaxed SyslogMessage with * "invalid user" user " from " ip " port" port " ssh2"
   | project user, ip, port, SyslogMessage, EventTime
-  | summarize count() by ip, bin(EventTime, 4h), user
-  | where count_ > threshold
-  | extend timestamp = EventTime, IPCustomEntity = ip, AccountCustomEntity = user
+  | summarize EventTimes = makelist(EventTime), PerHourCount = count() by ip, bin(EventTime, 4h), user
+  | where PerHourCount > threshold
+  | mvexpand EventTimes
+  | extend EventTimes = tostring(EventTimes) 
+  | summarize StartTimeUtc = min(EventTimes), EndTimeUtc = max(EventTimes), UserList = makeset(user), sum(PerHourCount) by IPAddress = ip
+  | extend UserList = tostring(UserList) 
+  | extend timestamp = StartTimeUtc, IPCustomEntity = IPAddress, AccountCustomEntity = UserList

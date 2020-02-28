@@ -1,0 +1,47 @@
+﻿Id: 2db8cac9-d2ce-4494-93bf-4678cd872ce4
+DisplayName: IPs from rare locations used by account
+Description: IPs from rare locations (less than 10 percent of users activity) during the range of +1w and -1w
+InputEntityType: Account
+InputFields:
+  - Name
+  - AadUserId
+OutputEntityTypes:
+  - Ip
+QueryPeriodBefore: 1w
+QueryPeriodAfter: 1w
+DataSources:
+  - SigninLogs
+Tactics:
+  - CredentialAccess
+  - Collection
+query: |
+
+  let IPsFromRareLocations = (v_Account_Name:string, v_Account_AadUserId:string){
+  let LocationPrevalence = 
+  SigninLogs
+  | extend v_Account_Name = case(
+  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+  v_Account_Name
+  )
+  | parse UserPrincipalName with Account_Name '@' Account_UPNSuffix
+  | project-rename Account_AadUserId = UserId 
+  | where ((isnotempty(Account_Name) and Account_Name =~ v_Account_Name) or
+  (isnotempty(Account_AadUserId) and Account_AadUserId == v_Account_AadUserId)
+  )
+  | summarize LocationCount = count() by Location, UserPrincipalName, IPAddress;
+  LocationPrevalence
+  | summarize makeset(IPAddress), makeset(Location), makeset(LocationCount) , totalActivity = sum(LocationCount) by UserPrincipalName
+  | mvexpand Location = set_Location, LocationCount = set_LocationCount, IPAddress = set_IPAddress
+  | extend Location = tostring(Location), LocationCount = toint(LocationCount), IPAddress = tostring(IPAddress)
+  | extend percentOfActivity = 100*LocationCount/totalActivity
+  | where percentOfActivity < 10
+  | project UserPrincipalName, IPAddress, Location, LocationCount, percentOfActivity
+  | top 10 by LocationCount asc nulls last
+  | extend Account_Aux_info = pack('LocationCount', LocationCount, 'PercentOfActivity', percentOfActivity)
+  | parse UserPrincipalName with Account_NTDomain '\\' *
+  | extend Account_Name = extract(@'^([^\\]*\\)?([^@]+)(@.*)?$', 2, UserPrincipalName),  
+  Account_UPNSuffix = extract(@'^([^\\]*\\)?([^@]+)(@(.*))?$', 4, UserPrincipalName)
+  | project Account_Name, Account_NTDomain, Account_UPNSuffix, IP_Address = IPAddress, IP_Location = Location, Account_Aux_info
+  };
+  IPsFromRareLocations('<Name>', '<AadUserId>')

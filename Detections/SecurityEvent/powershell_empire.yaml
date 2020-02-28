@@ -23,24 +23,23 @@ query: |
   let ProcessCreationEvents=() {
   let processEvents=SecurityEvent
   | where EventID==4688
-  | project TimeGenerated, ComputerName = Computer, AccountName = SubjectUserName, AccountDomain = SubjectDomainName,
-    FileName = tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, 
-  InitiatingProcessFileName = ParentProcessName, InitiatingProcessCommandLine = "", InitiatingProcessParentFileName = "";
+  | where isnotempty(CommandLine)
+  | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName;
   processEvents};
   let decodedPS = ProcessCreationEvents
   | where TimeGenerated >= ago(timeframe) 
-  | where ProcessCommandLine contains " -encodedCommand"
-  | parse kind=regex flags=i ProcessCommandLine with * "-EncodedCommand " encodedCommand
-  | project StartTimeUtc = TimeGenerated, encodedCommand = tostring(split(encodedCommand, ' ')[0]), ProcessCommandLine
+  | where CommandLine contains " -encodedCommand"
+  | parse kind=regex flags=i CommandLine with * "-EncodedCommand " encodedCommand
+  | project StartTimeUtc = TimeGenerated, encodedCommand = tostring(split(encodedCommand, ' ')[0]), CommandLine
   // Note: currently the base64_decodestring function is limited to supporting UTF8
-  | extend decodedCommand = translate('\0','', base64_decodestring(substring(encodedCommand, 0, strlen(encodedCommand) -  (strlen(encodedCommand) %8)))), encodedCommand, ProcessCommandLine , strlen(encodedCommand);
+  | extend decodedCommand = translate('\0','', base64_decodestring(substring(encodedCommand, 0, strlen(encodedCommand) -  (strlen(encodedCommand) %8)))), encodedCommand, CommandLine , strlen(encodedCommand);
   (decodedPS
   | union 
   (ProcessCreationEvents
   | where TimeGenerated >= ago(timeframe)
   | where FileName in~ ("powershell.exe","powershell_ise.exe")
-  | where ProcessCommandLine !contains "-encodedcommand")
+  | where CommandLine !contains "-encodedcommand")
   | extend StartTimeUtc = TimeGenerated
   )
-  | where ProcessCommandLine matches regex regexEmpire
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = AccountName, HostCustomEntity = ComputerName
+  | where CommandLine matches regex regexEmpire
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
