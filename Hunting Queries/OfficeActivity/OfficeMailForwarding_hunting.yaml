@@ -1,7 +1,9 @@
 id: 871ba14c-88ef-48aa-ad38-810f26760ca3
-name: UOffice Mail Forwarding
+name: Office Mail Forwarding
 description: |
-  'This query over Office Activity audit data highlights cases where user mail is being forwarded.'
+  'Adversaries often abuse email-forwarding rules to monitor activities of a victim, steal information and further gain intelligence on
+  victim or victim's organization.This query over Office Activity data highlights cases where user mail is being forwarded and shows if 
+  it is being forwarded to external domains as well.'
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
@@ -17,16 +19,16 @@ query: |
   let timeframe = 14d;
   OfficeActivity
   | where TimeGenerated >= ago(timeframe)
-  | where (Operation == "Set-Mailbox" and Parameters contains 'ForwardingSmtpAddress') 
-  or (Operation == 'New-InboxRule' and Parameters contains 'ForwardTo')
+  | where (Operation =~ "Set-Mailbox" and Parameters contains 'ForwardingSmtpAddress') 
+  or (Operation =~ 'New-InboxRule' and Parameters contains 'ForwardTo')
   | extend parsed=parse_json(Parameters)
-  | extend fwdingDestination_initial = (iif(Operation=="Set-Mailbox", tostring(parsed[1].Value), tostring(parsed[2].Value)))
+  | extend fwdingDestination_initial = (iif(Operation=~"Set-Mailbox", tostring(parsed[1].Value), tostring(parsed[2].Value)))
   | where isnotempty(fwdingDestination_initial)
   | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial,":")[1]), fwdingDestination_initial )
   | parse fwdingDestination with * '@' ForwardedtoDomain 
   | parse UserId with *'@' UserDomain
   | extend subDomain = ((split(strcat(tostring(split(UserDomain, '.')[-2]),'.',tostring(split(UserDomain, '.')[-1])), '.') [0]))
-  | where ForwardedtoDomain !contains  subDomain
+  | where ForwardedtoDomain !contains subDomain
   | extend Result = iff( ForwardedtoDomain != UserDomain ,"Mailbox rule created to forward to External Domain", "Forward rule for Internal domain")
   | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
   | extend Port = case(
@@ -34,5 +36,5 @@ query: |
   ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
   ClientIP
   )
-  | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress ,  Result, Port, OriginatingServer, OfficeObjectId, fwdingDestination
+  | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, OriginatingServer, OfficeObjectId, fwdingDestination
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIPAddress, HostCustomEntity =  OriginatingServer 
