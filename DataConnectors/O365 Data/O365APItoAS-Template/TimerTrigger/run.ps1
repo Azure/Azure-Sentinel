@@ -194,7 +194,7 @@ function Get-O365Data{
                         #We dont need Cloud App Security Alerts due to MCAS connector
                         if(($event.Source) -ne "Cloud App Security"){
                             #Write each event to Log A
-                            #$writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
+                            $writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
                             #$writeResult
                         }
                     }
@@ -205,7 +205,7 @@ function Get-O365Data{
                             #We dont need Cloud App Security Alerts due to MCAS connector
                             if(($event.Source) -ne "Cloud App Security"){
                                 #write each event to Log A
-                                #$writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
+                                $writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
                                 #$writeResult
                             }
                         }
