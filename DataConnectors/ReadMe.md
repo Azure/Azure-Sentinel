@@ -154,10 +154,11 @@ Once you have a working POC, you are ready to build, validate the data connector
    * [Connector_REST_API_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_template.json)
    * [Connector_Syslog_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json)
 3. **Validate the Connector UX** – Follow these steps to render and validate the connector UX you just built
-    1.	Go to Azure Sentinel -> Data Connectors 
-    2.	Click the “import” button and select the json file you created as follows.
+    1.	The test utility can be accessed by this URL - https://ms.portal.azure.com/?feature.BringYourOwnConnector=true
+    2.  Go to Azure Sentinel -> Data Connectors 
+    3.	Click the “import” button and select the json file you created as follows.
     ![Import button](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepc.png)
-    3. The json file you just created is loaded (example as follows) - Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos and formatting.  Update the json as needed and reload to revalidate. 
+    4. The json file you just created is loaded (example as follows) - Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos and formatting.  Update the json as needed and reload to revalidate. 
     ![Validate connector](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepd.png)
 
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
