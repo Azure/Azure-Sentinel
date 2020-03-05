@@ -4,6 +4,7 @@ Description: IPs from rare locations (less than 10 percent of users activity) du
 InputEntityType: Account
 InputFields:
   - Name
+  - UPNSuffix
   - AadUserId
 OutputEntityTypes:
   - Ip
@@ -16,32 +17,40 @@ Tactics:
   - Collection
 query: |
 
-  let IPsFromRareLocations = (v_Account_Name:string, v_Account_AadUserId:string){
-  let LocationPrevalence = 
+  let IPsFromRareLocations = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AadUserId:string){
+  let LocationPrevalence =
   SigninLogs
-  | extend v_Account_Name = case(
+  | extend p_Account_Name = case(
+  v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
   v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
   v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
   v_Account_Name
   )
-  | parse UserPrincipalName with Account_Name '@' Account_UPNSuffix
-  | project-rename Account_AadUserId = UserId 
-  | where ((isnotempty(Account_Name) and Account_Name =~ v_Account_Name) or
-  (isnotempty(Account_AadUserId) and Account_AadUserId == v_Account_AadUserId)
+  | extend p_Account_UPNSuffix = case(
+  v_Account_UPNSuffix has '@' and v_Account_UPNSuffix has '\\', tostring(split(v_Account_UPNSuffix, '@')[1]),
+  v_Account_UPNSuffix has '@', tostring(split(v_Account_UPNSuffix, '@')[1]),
+  v_Account_UPNSuffix has '\\', tostring(split(v_Account_UPNSuffix, '\\')[0]),
+  v_Account_UPNSuffix
   )
-  | summarize LocationCount = count() by Location, UserPrincipalName, IPAddress;
+  | parse UserPrincipalName with Account_Name '@' Account_UPNSuffix
+  | project-rename Account_AadUserId = UserId
+  | where (isnotempty(Account_Name) and Account_Name =~ p_Account_Name and isnotempty(Account_UPNSuffix) and Account_UPNSuffix =~ p_Account_UPNSuffix)
+  or (isnotempty(Account_AadUserId) and Account_AadUserId =~ v_Account_AadUserId)
+  | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
+  | summarize ConnectionCount = count() by FullLocation, UserPrincipalName, IPAddress, Account_Name, Account_UPNSuffix, Account_AadUserId;
   LocationPrevalence
-  | summarize makeset(IPAddress), makeset(Location), makeset(LocationCount) , totalActivity = sum(LocationCount) by UserPrincipalName
-  | mvexpand Location = set_Location, LocationCount = set_LocationCount, IPAddress = set_IPAddress
-  | extend Location = tostring(Location), LocationCount = toint(LocationCount), IPAddress = tostring(IPAddress)
-  | extend percentOfActivity = 100*LocationCount/totalActivity
+  | summarize make_list(IPAddress), make_list(FullLocation), make_list(ConnectionCount), dcount(FullLocation), totalActivity = sum(ConnectionCount) by UserPrincipalName, Account_Name, Account_UPNSuffix, Account_AadUserId
+  | mvexpand Location = list_FullLocation, ConnectionCount = list_ConnectionCount, IPAddress = list_IPAddress
+  | extend Location = tostring(Location), ConnectionCount = toint(ConnectionCount), IPAddress = tostring(IPAddress)
+  | extend percentOfActivity = 100*round(todouble(ConnectionCount)/totalActivity,4)
   | where percentOfActivity < 10
-  | project UserPrincipalName, IPAddress, Location, LocationCount, percentOfActivity
-  | top 10 by LocationCount asc nulls last
-  | extend Account_Aux_info = pack('LocationCount', LocationCount, 'PercentOfActivity', percentOfActivity)
+  | project UserPrincipalName, Account_Name, Account_UPNSuffix, Account_AadUserId, IPAddress, Location, ConnectionCount, percentOfActivity
+  | sort by percentOfActivity asc, ConnectionCount desc
+  | top 10 by percentOfActivity asc
+  | extend IP_Country = tostring(split(Location,'|')[0]), IP_Region = tostring(split(Location,'|')[1]), IP_City = tostring(split(Location,'|')[2])
+  | extend Account_Aux_info = pack('PercentOfActivity', percentOfActivity, 'ConnectionCount', ConnectionCount)
   | parse UserPrincipalName with Account_NTDomain '\\' *
-  | extend Account_Name = extract(@'^([^\\]*\\)?([^@]+)(@.*)?$', 2, UserPrincipalName),  
-  Account_UPNSuffix = extract(@'^([^\\]*\\)?([^@]+)(@(.*))?$', 4, UserPrincipalName)
-  | project Account_Name, Account_NTDomain, Account_UPNSuffix, IP_Address = IPAddress, IP_Location = Location, Account_Aux_info
+  | project Account_UnstructuredName = UserPrincipalName, Account_Name, Account_NTDomain, Account_UPNSuffix, Account_AadUserId, IP_Address = IPAddress, IP_Country, IP_Region, IP_City, Account_Aux_info
   };
-  IPsFromRareLocations('<Name>', '<AadUserId>')
+  // Where <Name> is the UserName such as John from John@contoso.com, <UPNSuffix> is the domain such as contoso.com from John@contoso.com and <AadUserId> is the GUID assigned in AAD to the user
+  IPsFromRareLocations('<Name>', '<UPNSuffix>', '<AadUserId>')
