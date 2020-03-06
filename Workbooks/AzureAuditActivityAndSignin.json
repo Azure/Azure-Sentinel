@@ -1,0 +1,719 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Azure AD audit, sign-in and Azure Activity logs\n---\nThis workbook combines the following Azure Monitoring tables:\n* Azure Active Directory audit logs\n* Signin logs\n* Azure Activity logs\n\n\n\nEdit the parameter below parameters to change the timerange used by the graphs"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "d1983eba-6224-4c08-b792-4910eff535ad",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "description": "Select the time range that will be used for the query's",
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "----\n## Signin Logs\n\nWith the SigninLogs we can give a security operater insight into the different Logins statusses and locations <br>\n\nThese graphs give a quick representation about the Signin activity of the company's users. <br>\nA securityteam can easy view the Signin locations and most used applications"
+      },
+      "name": "text - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SigninLogs\n| extend ResultText = case(isnotempty(ResultDescription), ResultDescription, ResultType == 0 and isempty(ResultDescription), \"Successfull login\", \"unknown\") // Create readable result text to include succesfull logins\n| summarize dcount(CorrelationId) by ResultText // Signin results by unique CorrelationId\n| render piechart",
+        "size": 0,
+        "title": "Login events by result",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "ResultText",
+        "exportParameterName": "Selected_ResultText",
+        "exportDefaultValue": "",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "chartSettings": {
+          "group": "ResultText",
+          "createOtherGroup": null,
+          "seriesLabelSettings": [
+            {
+              "seriesName": "Successfull login",
+              "color": "green"
+            }
+          ],
+          "ySettings": {
+            "unit": 17,
+            "min": null,
+            "max": null
+          }
+        }
+      },
+      "customWidth": "33",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SigninLogs\n| extend ResultText = case(isnotempty(ResultDescription), ResultDescription, ResultType == 0 and isempty(ResultDescription), \"Successfull login\", \"unknown\")\n| summarize dcount(CorrelationId) by ResultText, bin(TimeGenerated,4h) // summarize the total Signin events per Description per hour (by unique CorrelationId's)",
+        "size": 0,
+        "title": "Count of login types per 4 hours",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "ResultText",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "dcount_CorrelationId",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {}
+      },
+      "customWidth": "33",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SigninLogs\n| where isnotempty(LocationDetails['countryOrRegion']) and ResultType == 0// Where location details are available and login is successfull\n| extend city = tostring(LocationDetails['city'])\n| summarize count() by city, Location // Summarize by city name\n| join (\nSigninLogs\n| extend city = tostring(LocationDetails['city'])\n| make-series TrendList = count() on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by city \n) on city\n| project Location, city, [\"Total events\"] = count_, TrendLine = TrendList\n| top 10 by [\"Total events\"] desc",
+        "size": 0,
+        "title": "Successfull login locations",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Location",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "city",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Total events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TrendLine",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "greenRed",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "idColumn": "city",
+            "parentColumn": "Location",
+            "treeType": 0,
+            "expanderColumn": "city",
+            "expandTopLevel": false
+          }
+        },
+        "sortBy": [],
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "city",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Events",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        },
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "LocationDetails",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "centerContent": {
+            "columnMatch": "count_",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "nodeIdField": "count_",
+          "sourceIdField": "Location",
+          "targetIdField": "city",
+          "nodeSize": null,
+          "staticNodeSize": 100,
+          "colorSettings": null,
+          "hivesMargin": 5
+        },
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "locInfoColumn": "GeoSelection",
+          "latitude": "latitude",
+          "longitude": "longitude",
+          "sizeSettings": "count_",
+          "sizeAggregation": "Sum",
+          "defaultSize": 0,
+          "labelSettings": "locationInfo",
+          "legendMetric": "count_",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "count_",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "redGreen"
+          }
+        }
+      },
+      "customWidth": "33",
+      "name": "query - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SigninLogs\r\n| where ResultType == 0 and AppDisplayName != \"\"\r\n| summarize count() by AppDisplayName\r\n| join (\r\nSigninLogs\r\n| make-series TrendList = count() on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, 4h) by AppDisplayName \r\n) on AppDisplayName\r\n| top 10 by count_ desc",
+        "size": 4,
+        "title": "Successfull logins by application",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "AppDisplayName",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "TrendList",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        },
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "AppDisplayName",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "count_",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "name": "query - 14"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "----\n## AuditLogs\n\nThese tables give an Azure administrator the information he needs to make sure that the services and user operations are successfullly executed <br>\nIt also benefits the security operator by seeing with operations are perfomed by with users or services. Therefore he can act quickly on a suspicious operation."
+      },
+      "name": "text - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "\nAuditLogs\n| summarize Runs = count(), Success = countif(Result == 'success'), Fails = countif(Result != 'success') by OperationName // Summarize the total, successful and failed operations by name\n| extend SuccessRate = (Success * 100 / Runs) // Calculate the percentage of succesful operations against the total\n| join (\nAuditLogs\n| where Result == 'success'\n| make-series TrendList = count() on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by OperationName \n) on OperationName\n| project OperationName, Runs, SuccessRate, TrendList\n| top 10 by Runs desc // Show the top 10 of most run operations",
+        "size": 0,
+        "title": "Top 10 operation with by successrate",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OperationName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Runs",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SuccessRate",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "max": 100,
+                "palette": "redGreen",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TrendList",
+              "formatter": 9,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "\nAuditLogs\n| summarize Runs = count(), Success = countif(Result == 'success'), Fails = countif(Result != 'success') by OperationName // Summarize the total, successful and failed operations by name\n| extend SuccessRate = (Success * 100 / Runs) // Calculate the percentage of succesful operations against the total\n| project OperationName, Runs, SuccessRate, Fails\n| top 10 by SuccessRate asc // Show the 10 Operation by least SuccessRate",
+        "size": 0,
+        "title": "Top 10 most failed operations",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OperationName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Runs",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SuccessRate",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "max": 100,
+                "palette": "redGreen",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Fails",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redBright",
+                "showIcon": true
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 5 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AuditLogs\n| extend InitiatedByName = iff(isempty(Identity), InitiatedBy['user']['userPrincipalName'], Identity) // If there is no Identity field use userPrincipalName instead\n| extend Target = iff(isnull(TargetResources[0]['displayName']),TargetResources[0]['userPrincipalName'] ,TargetResources[0]['displayName'] )\n| project Time = TimeGenerated, Operation = OperationName, ['Initiated by'] = InitiatedByName, Target, Result = iff(Result == 'failure','failed',Result) // Change the result value to failure for the icon \n| top 50 by Time desc",
+        "size": 0,
+        "title": "Latest operation",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Time",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operation",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "InitiatedByName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Target",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Result",
+              "formatter": 11,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ]
+        }
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## Azure Activity"
+      },
+      "name": "text - 13"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\r\n| summarize count() by ResourceProvider",
+        "size": 0,
+        "title": "Most activity by ResourceProvider",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ResourceProvider",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TotalEvents",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ResourceProvider1",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Events",
+              "formatter": 19,
+              "formatOptions": {
+                "showIcon": true,
+                "timelineSettings": {
+                  "timelineStartColumn": "TimeGenerated"
+                }
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ]
+        },
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "ExtendedLocation",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "LoginEvents",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Events",
+            "formatter": 19,
+            "formatOptions": {
+              "palette": "blueOrange",
+              "showIcon": true,
+              "timelineSettings": {
+                "timelineStartColumn": "TimeGenerated",
+                "timestampIsEndTime": true
+              }
+            }
+          },
+          "showBorder": false,
+          "sortCriteriaField": "TotalEvents",
+          "sortOrderField": 2
+        },
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "ResourceProvider",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "TotalEvents",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {}
+      },
+      "customWidth": "33",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\n| extend ActivityType = case(OperationName contains \"delete\", \"Delete\",\n                             OperationName contains \"create\", \"Create\",\n                             OperationName contains \"Update\", \"Update\", \"Other\")\n| summarize Succeeded = countif(ActivityStatus == \"Succeeded\"), Failed = countif(ActivityStatus == \"Failed\") by ResourceProvider, ActivityType\n| extend SuccesRate = Succeeded * 100 / (Succeeded + Failed)\n| where isnotempty(SuccesRate)\n| top 10 by SuccesRate asc \n| project ActivityType, ResourceProvider, SuccesRate, Succeeded, Failed ",
+        "size": 0,
+        "title": "Least successrate by Action and ResourceProvider",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "OperationName",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Runs",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "66",
+      "name": "query - 13"
+    }
+  ],
+  "fromTemplateId": "AzureAuditActivityAndSigninWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
