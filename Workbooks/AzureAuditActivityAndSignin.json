@@ -4,7 +4,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## Azure AD audit, sign-in and Azure Activity logs\n---\nThis workbook combines the following Azure Monitoring tables:\n* Azure Active Directory audit logs\n* Signin logs\n* Azure Activity logs\n\n\n\nEdit the parameter below parameters to change the timerange used by the graphs"
+        "json": "## Azure AD audit, sign-in and Azure Activity logs\n---\nThis workbook combines the following Azure Monitoring tables:\n* Azure Active Directory audit logs\n* Signin logs\n* Azure Activity logs\n\n\nEdit the parameter below parameters to change the timerange used by the graphs"
       },
       "name": "text - 2"
     },
@@ -497,9 +497,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AuditLogs\n| extend InitiatedByName = iff(isempty(Identity), InitiatedBy['user']['userPrincipalName'], Identity) // If there is no Identity field use userPrincipalName instead\n| extend Target = iff(isnull(TargetResources[0]['displayName']),TargetResources[0]['userPrincipalName'] ,TargetResources[0]['displayName'] )\n| project Time = TimeGenerated, Operation = OperationName, ['Initiated by'] = InitiatedByName, Target, Result = iff(Result == 'failure','failed',Result) // Change the result value to failure for the icon \n| top 50 by Time desc",
+        "query": "AzureActivity \n| union (AuditLogs) // Insert AuditLogs\n| extend CallerUserName = case( Type == 'AuditLogs' and notempty(InitiatedBy['user']), InitiatedBy['user']['userPrincipalName'], // Find best initiator for data source\n                                Type == 'AuditLogs' and InitiatedBy == \"{}\", Identity,\n                                Type == 'AzureActivity'   ,Caller, 'Unknown')\n| extend TargetResource =  case( Type == 'AuditLogs' and TargetResources[0]['type'] == 'User', strcat(TargetResources[0]['type'], \": \", TargetResources[0]['userPrincipalName']), // Find the best resource name for the data source\n                                Type == 'AuditLogs' and TargetResources[0]['type'] == 'Group', strcat(TargetResources[0]['type'], \": \", TargetResources[0]['displayName']),\n                                Type == 'AzureActivity'   ,Resource, 'Unknown')\n| extend ResultStatus =  case( Type == 'AuditLogs' and Result == 'failure', 'failed', // Change the result value to failure for the icon\n                               Type == 'AuditLogs' and Result == 'success', Result, // Only resutl that directly matches icon name\n                               Type == 'AzureActivity' and ActivityStatus == 'Started', 'info', // There is no started icon so using info instead.\n                               Type == 'AzureActivity' and ActivityStatus == 'Failed', 'failed', // change to failed\n                               Type == 'AzureActivity' and ActivityStatus == 'Succeeded', 'success', // Change to success\n                               'unknown')\n| sort by TimeGenerated desc // Sort descending on TimeGenerated to see latest events\n| project Time = TimeGenerated, ['From data source'] = Type, Operation = OperationName, ['Initiated by'] = CallerUserName, TargetResource, ResultStatus\n",
         "size": 0,
-        "title": "Latest operation",
+        "title": "Latest operation from audit and activity logs",
         "timeContext": {
           "durationMs": 0
         },
@@ -543,8 +543,20 @@
                 "showIcon": true
               }
             }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "Time",
+              "sortOrder": 1
+            }
           ]
-        }
+        },
+        "sortBy": [
+          {
+            "itemKey": "Time",
+            "sortOrder": 1
+          }
+        ]
       },
       "name": "query - 2"
     },
@@ -671,8 +683,26 @@
         },
         "chartSettings": {}
       },
-      "customWidth": "33",
+      "customWidth": "35",
       "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\r\n| summarize Activities = count() by User = Caller",
+        "size": 0,
+        "title": "Activities by user",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "customWidth": "25",
+      "name": "query - 16"
     },
     {
       "type": 3,
@@ -688,6 +718,48 @@
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ActivityType",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ResourceProvider",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SuccesRate",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Succeeded",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Failed",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redBright",
+                "showIcon": true
+              }
+            }
+          ]
+        },
         "tileSettings": {
           "showBorder": false,
           "titleContent": {
@@ -710,8 +782,87 @@
           }
         }
       },
-      "customWidth": "66",
-      "name": "query - 13"
+      "customWidth": "40",
+      "name": "query - 13",
+      "styleSettings": {
+        "maxWidth": "100%"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\r\n| summarize count() by OperationName, bin(TimeGenerated, 4h)",
+        "size": 0,
+        "title": "Timechart count activitytypes by 4 hours",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart"
+      },
+      "customWidth": "50",
+      "name": "query - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\r\n//| where ActivityStatus == 'Succeeded'\r\n| summarize Actions = count() by OperationName, Id = strcat(Caller, ' - ', CallerIpAddress)\r\n| extend Name = Id\r\n| union ( AzureActivity\r\n//| where ActivityStatus == 'Succeeded'\r\n| summarize Actions = count() by Id = OperationName\r\n| extend Name = Id)\r\n| project Name, Actions, Id, OperationName\r\n| order by Actions desc",
+        "size": 0,
+        "title": "Tree view for users by operations",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Actions",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "OperationName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "OperationName",
+            "treeType": 0,
+            "expanderColumn": "Name",
+            "expandTopLevel": true
+          }
+        },
+        "sortBy": []
+      },
+      "customWidth": "50",
+      "name": "query - 14"
     }
   ],
   "fromTemplateId": "AzureAuditActivityAndSigninWorkbook",
