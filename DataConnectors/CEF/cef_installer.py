@@ -27,6 +27,7 @@
 import subprocess
 import time
 import sys
+import os
 
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
@@ -121,7 +122,12 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     :return:
     '''
     print("Installing omsagent")
-    command_tokens = ["sh", omsagent_file_name, "-w", workspace_id, "-s", primary_key, "-d", oms_agent_install_url]
+    omsagent_proxy_conf = os.getenv('https_proxy')
+    if omsagent_proxy_conf is not None:
+        print("Detected https_proxy environment variable set to " + omsagent_proxy_conf)
+        command_tokens = ["sh", omsagent_file_name, "-w", workspace_id, "-s", primary_key, "-d", oms_agent_install_url, "-p", omsagent_proxy_conf]
+    else:
+        command_tokens = ["sh", omsagent_file_name, "-w", workspace_id, "-s", primary_key, "-d", oms_agent_install_url]
     print_notice(" ".join(command_tokens))
     install_omsagent_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = install_omsagent_command.communicate()
