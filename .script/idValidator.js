@@ -1,6 +1,6 @@
 const git = require('simple-git/promise');
 var templateIdRegex = "id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
-var targetBranch = "Azure:master";
+var targetBranch = "master";
 var workingDir = __dirname
 
 async function getBranch(options) {
