@@ -4,9 +4,9 @@ const gitWrapper = require("./utils/gitWrapper");
 const templateIdRegex = "id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
 
 
-let fileTypeSuffixes = ["json", "yaml", "yml"];
-const changedFiles = await GetDiffFiles(fileTypeSuffixes);
-console.log("-------Test:    " + changedFiles[0].path);
+// let fileTypeSuffixes = ["json", "yaml", "yml"];
+// const changedFiles = await GetDiffFiles(fileTypeSuffixes);
+// console.log("-------Test:    " + changedFiles[0].path);
 
 async function getDiff() {
     let diffSummary = null;
