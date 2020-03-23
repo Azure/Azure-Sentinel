@@ -1,6 +1,6 @@
 const git = require('simple-git/promise');
 const avocado = require("@azure/avocado");
-const gitWrapper = require("./utils/gitWrapper");
+// const gitWrapper = require("./utils/gitWrapper");
 const templateIdRegex = "id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
 
 
@@ -21,7 +21,7 @@ async function getDiff() {
         diffSummary = await git(workingDir).diff(options, null);
         console.log(diffSummary);
         if (diffSummary.search(templateIdRegex) > 0){
-            console.log("Some of the files ID has changed")
+            console.log('File - ' +filePath.path + "is incorrect. Don't change id please")
         }    
         else {
             console.log("All tests passed successfuly")
