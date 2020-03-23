@@ -3,9 +3,9 @@ const avocado = require("@azure/avocado");
 var templateIdRegex = "id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
 var targetBranch = process.env.SYSTEM_PULLREQUEST_TARGETBRANCH;
 // const sourceBranch = 'source-b6791c5f-e0a5-49b1-9175-d7fd3e341cb8'
-var workingDir = __dirname
 
 var config = avocado.cli.defaultConfig();
+var workingDir = config.cwd;
 var sourceBranch = avocado.devOps.createPullRequestProperties(config).sourceBranch;
 
 async function getBranch(options) {
