@@ -16,12 +16,12 @@ async function getDiff() {
     let changedFiles = await pr.diff();
     
     for (const filePath of changedFiles) {
-        console.log("-------------------\nFile path:-----------\n" + filePath.path + "\n---------------------------------")
-        var options = [pr.targetBranch, pr.sourceBranch, filePath];
+        console.log("-------------------\nFile path: " + filePath.path + "\n---------------------------------")
+        var options = [pr.targetBranch, pr.sourceBranch, filePath.path];
         diffSummary = await git(workingDir).diff(options, null);
         console.log(diffSummary);
         if (diffSummary.search(templateIdRegex) > 0){
-            console.log('File - ' +filePath.path + "is incorrect. Don't change id please")
+            console.log('File - ' +filePath.path + "is incorrect. Don't change id please");
         }    
         else {
             console.log("All tests passed successfuly")
