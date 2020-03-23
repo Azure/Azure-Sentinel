@@ -11,7 +11,7 @@ async function getBranch(options) {
 async function getDiff(options) {
    let diffSummary = null;
    try {
-       diffSummary = await git(workingDir).diff(options, null);
+       diffSummary = await git(workingDir).diff();
    }
    catch (e) {
       console.log("An error occerrued")
