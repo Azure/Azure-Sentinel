@@ -24,7 +24,7 @@ getBranch([]).then(function(branches){
     console.log("target: " + targetBranch);
     console.log("source: " + sourceBranch);
     // console.log("branch name: " + branches.current);
-    var options = [targetBranch];
+    var options = [targetBranch, sourceBranch];
 
     getDiff(options).then(function(result){
         console.log(result);
