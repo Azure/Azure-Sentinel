@@ -1,6 +1,6 @@
 const git = require('simple-git/promise');
 var templateIdRegex = "id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
-var targetBranch = "master";
+var targetBranch = process.env.SYSTEM_PULLREQUEST_TARGETBRANCH;
 var workingDir = __dirname
 
 async function getBranch(options) {
@@ -19,9 +19,9 @@ async function getDiff(options) {
    return diffSummary;
 }
 
-
 getBranch([]).then(function(branches){
-    console.log("branch name: " + branches.current);
+    console.log("target: " + targetBranch);
+    // console.log("branch name: " + branches.current);
     var options = [branches.current, targetBranch];
 
     getDiff(options).then(function(result){
