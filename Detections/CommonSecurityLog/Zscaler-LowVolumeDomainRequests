@@ -8,42 +8,32 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
 tactics:
-  - Command And Control
+  - CommandAndControl
 relevantTechniques:
   - T1102
   - T1071
 query: |
 
-let timeRange = 7d;
+let timeRange = 1d;
 //The number of URI's seen to be suspicious, higher = less likely to be suspicious
 let uriThreshold = 1;
 let suspiciousURLs =
 CommonSecurityLog
-| where DeviceVendor == "Zscaler"
+| where TimeGenerated >= ago(timeRange)
 // Only look at connections that were allowed through the web proxy. Comment line out for all events including those which were blocked
-| where DeviceAction == "Allowed"
+| where DeviceVendor =~ "Zscaler" and DeviceAction =~ "Allowed"
 // Only look where some data was exchanged. Comment out to see 0 byte connections
 | where SentBytes > 0 and ReceivedBytes > 0
-//Extract the hostname
-| extend Domain = extract("([^.]*).{0,7}$", 1, DestinationHostName)
-| summarize makelist(RequestURL), makelist(TimeGenerated) by Domain
+// Extract the Domain
+| extend Domain = iff(countof(DestinationHostName,'.') >= 2, strcat(split(DestinationHostName,'.')[-2], '.',split(DestinationHostName,'.')[-1]), DestinationHostName)
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makelist(RequestURL), makelist(DestinationIP), numOfConnections = count() by Domain
 // Determine the number of URIs that have been visited for the domain
 | extend destinationURI = arraylength(list_RequestURL)
-// How many times did a connection occur to the domain
-| extend numOfConnections = arraylength(list_TimeGenerated)
 | where destinationURI <= uriThreshold
-| where tostring(list_RequestURL) contains ".php" or tostring(list_RequestURL) contains ".aspx";
+| where tostring(list_RequestURL) has_any (".php",".aspx")
+;
 suspiciousURLs
-| mvexpand list_RequestURL
-| extend RequestURL = tostring(list_RequestURL)
-// We need to get some information back so we can link the event to an IP
-| join (
-   CommonSecurityLogz
-   | where DestinationIP != "0.0.0.0" 
-   | project TimeGenerated, DestinationIP, SourceIP, RequestURL
-) on RequestURL
-| summarize makelist(RequestURL), makelist(SourceIP), makelist(DestinationIP) by Domain, TimeGenerated, numOfConnections
-// Optional: The below line will remove hits where only one connection was observed, repeat connections to a single resource are more interesting from a malware detection perspective... 
-// ...however a single connection can be indicative of a link in an email
-//| where numOfConnections > 1
-| project TimeGenerated, SourceIP = list_SourceIP, DestinationIP = list_DestinationIP, Domain, URI = list_RequestURL, NumberOfConnections = numOfConnections
+| mvexpand list_RequestURL, list_DestinationIP
+| extend RequestURL = tostring(list_RequestURL), DestinationIP = tostring(list_DestinationIP)
+| project-away list_RequestURL, list_DestinationIP
+| extend timestamp = StartTimeUtc, IPCustomEntity = DestinationIP
