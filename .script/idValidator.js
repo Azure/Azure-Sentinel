@@ -8,11 +8,12 @@ async function getDiff() {
     let workingDir = config.cwd;
     let pr = await avocado.devOps.createPullRequestProperties(config);
     let changedFiles = await pr.diff();
-    console.log("Changed files:\n" + changedFiles);
     
     for (const filePath of changedFiles) {
+        console.log("-------------------\nFile path:-----------\n" + filePath + "\n---------------------------------")
         var options = [pr.targetBranch, pr.sourceBranch, filePath];
         diffSummary = await git(workingDir).diff(options, null);
+        console.log(diffSummary);
         if (diffSummary.search(templateIdRegex) > 0){
             console.log("Some of the files ID has changed")
         }    
@@ -21,9 +22,20 @@ async function getDiff() {
         }    
     }    
 
+    return diffSummary;
 }
 
-getDiff();
+getDiff().then(function(result){
+    console.log("\n\n---------------------Final---------------" + result);
+    if (result.search(templateIdRegex) > 0){
+        console.log("Some of the files ID has changed")
+    }    
+    else {
+        console.log("All tests passed successfuly")
+    }    
+})    
+
+
 // getDiff().then(function(result){
 //     console.log(result);
 //     if (result.search(templateIdRegex) > 0){
