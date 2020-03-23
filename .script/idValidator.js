@@ -2,7 +2,7 @@ const git = require('simple-git/promise');
 const avocado = require("@azure/avocado");
 // const gitWrapper = require("./utils/gitWrapper");
 const templateIdRegex = "id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
-
+console.log(process.cwd());
 
 // let fileTypeSuffixes = ["json", "yaml", "yml"];
 // const changedFiles = await GetDiffFiles(fileTypeSuffixes);
@@ -15,30 +15,25 @@ async function getDiff() {
     let pr = await avocado.devOps.createPullRequestProperties(config);
     let changedFiles = await pr.diff();
     
-    for (const filePath of changedFiles) {
-        console.log("-------------------\nFile path: " + filePath.path + "\n---------------------------------")
-        var options = [pr.targetBranch, pr.sourceBranch, filePath.path];
+    for (const file of changedFiles) {
+        console.log("-------------------\nFile path: " + file.path + "\n---------------------------------")
+        var options = [pr.targetBranch, pr.sourceBranch, workingDir + '/' + file.path];
         diffSummary = await git(workingDir).diff(options, null);
         console.log(diffSummary);
         if (diffSummary.search(templateIdRegex) > 0){
-            console.log('File - ' +filePath.path + "is incorrect. Don't change id please");
+            console.log('File - ' +file.path + "is incorrect. Don't change id please");
+            return -1;
         }    
         else {
             console.log("All tests passed successfuly")
         }    
     }    
 
-    return diffSummary;
+    return 0;
 }
 
 getDiff().then(function(result){
-    console.log("\n\n---------------------Final---------------" + result);
-    if (result.search(templateIdRegex) > 0){
-        console.log("Some of the files ID has changed")
-    }    
-    else {
-        console.log("All tests passed successfuly")
-    }    
+    process.exit(result);
 })    
 
 
