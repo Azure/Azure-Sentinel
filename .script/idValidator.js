@@ -12,7 +12,7 @@ async function getBranch(options) {
 async function getDiff(options) {
    let diffSummary = null;
    try {
-       diffSummary = await git(workingDir).diff();
+       diffSummary = await git(workingDir).diff(options, null);
    }
    catch (e) {
       console.log("An error occerrued")
@@ -24,7 +24,7 @@ getBranch([]).then(function(branches){
     console.log("target: " + targetBranch);
     console.log("source: " + sourceBranch);
     // console.log("branch name: " + branches.current);
-    var options = [branches.current, targetBranch];
+    var options = [targetBranch];
 
     getDiff(options).then(function(result){
         console.log(result);
