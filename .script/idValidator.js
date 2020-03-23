@@ -21,10 +21,11 @@ async function getDiff(options) {
 
 
 getBranch([]).then(function(branches){
-    console.log(branches.current);
+    console.log("branch name: " + branches.current);
     var options = [branches.current, targetBranch];
 
     getDiff(options).then(function(result){
+        console.log(result);
         if (result.search(templateIdRegex) > 0){
             console.log("Some of the files ID has changed")
         }    
