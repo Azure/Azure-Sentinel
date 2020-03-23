@@ -8,6 +8,12 @@ console.log(process.cwd());
 // const changedFiles = await GetDiffFiles(fileTypeSuffixes);
 // console.log("-------Test:    " + changedFiles[0].path);
 
+let a = 5;
+let b = 10;
+console.log(`Fifteen is ${a + b} and
+not ${2 * a + b}.`);
+
+
 async function getDiff() {
     let diffSummary = null;
     let config = avocado.cli.defaultConfig();
@@ -16,8 +22,9 @@ async function getDiff() {
     let changedFiles = await pr.diff();
     
     for (const file of changedFiles) {
-        console.log("-------------------\nFile path: " + file.path + "\n---------------------------------")
-        var options = [pr.targetBranch, pr.sourceBranch, workingDir + '/' + file.path];
+        var filePath = workingDir + '/' + file.path;
+        console.log("-------------------\nFile path: " + filePath + "\n---------------------------------")
+        var options = [pr.targetBranch, pr.sourceBranch, filePath];
         diffSummary = await git(workingDir).diff(options, null);
         console.log(diffSummary);
         if (diffSummary.search(templateIdRegex) > 0){
