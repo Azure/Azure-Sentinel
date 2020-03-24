@@ -16,7 +16,8 @@ export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPr
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
-
+  console.log("Git wrapper:" + pr.targetBranch);
+  console.log(pr.sourceBranch);
   let changedFiles = await pr.diff();
   console.log(`${changedFiles.length} files changed in current PR`);
 
