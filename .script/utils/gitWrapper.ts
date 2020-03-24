@@ -3,7 +3,7 @@ import * as logger from "./logger";
 import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
 
-let pullRequestDetails: PullRequestProperties | undefined;
+declare var pullRequestDetails: PullRequestProperties | undefined;
 
 export async function GetPRDetails() {
   if (pullRequestDetails === undefined){
