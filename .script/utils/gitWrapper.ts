@@ -1,6 +1,18 @@
 import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
+import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
+
+let pullRequestDetails: PullRequestProperties | undefined;
+
+export async function GetPRDetails() {
+  if (typeof pullRequestDetails === "undefined"){
+    console.log("Getting pr details");
+    const config = cli.defaultConfig();
+    pullRequestDetails = await devOps.createPullRequestProperties(config);
+  }
+  return pullRequestDetails;
+}
 
 export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const config = cli.defaultConfig();
@@ -10,7 +22,7 @@ export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPr
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
-
+ 
   let changedFiles = await pr.diff();
   console.log(`${changedFiles.length} files changed in current PR`);
 
