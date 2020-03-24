@@ -15,6 +15,7 @@ export async function GetPRDetails() {
 }
 
 export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], fileKinds?: string[]) {
+  console.log(pullRequestDetails);
   const pr = await GetPRDetails();
 
   if (typeof pr === "undefined") {
