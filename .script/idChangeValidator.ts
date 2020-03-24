@@ -11,7 +11,8 @@ const git: SimpleGit = gitP(workingDir);
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
   filePath = workingDir + '/' + filePath;
   const pr = await GetPRDetails();
-
+  console.log(filePath);
+  
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return ExitCode.ERROR;

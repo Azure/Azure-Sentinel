@@ -6,8 +6,8 @@ import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
 let pullRequestDetails: PullRequestProperties | undefined;
 
 export async function GetPRDetails() {
-  if (typeof pullRequestDetails === "undefined"){
-    console.log("Getting pr details");
+  if (pullRequestDetails === undefined){
+    console.log("Getting PR details");
     const config = cli.defaultConfig();
     pullRequestDetails = await devOps.createPullRequestProperties(config);
   }
@@ -41,7 +41,8 @@ export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPr
 
   let fileTypeSuffixesLogValue = typeof fileTypeSuffixes === "undefined" ? null : fileTypeSuffixes.join(",");
   let filePathFolderPreffixesLogValue = typeof filePathFolderPreffixes === "undefined" ? null : filePathFolderPreffixes.join(",");
-  console.log(`${filterChangedFiles.length} files changed in current PR after filter. File Type Filter: ${fileTypeSuffixesLogValue}, File path Filter: ${filePathFolderPreffixesLogValue}`);
+  let fileKindsLogValue = typeof fileKinds === "undefined" ? null : fileKinds.join(",");
+  console.log(`${filterChangedFiles.length} files changed in current PR after filter. File Type Filter: ${fileTypeSuffixesLogValue}, File path Filter: ${fileKindsLogValue}, File path Filter: ${filePathFolderPreffixesLogValue}`);
 
   return filterChangedFiles;
 }
