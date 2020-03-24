@@ -9,7 +9,7 @@ export type CheckOptions = {
 };
 
 async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
-  const changedFiles = await GetDiffFiles(fileTypeSuffixes, filePathFolderPreffixes, fileKinds);
+  const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPreffixes);
   if (changedFiles === undefined) {
     return;
   }

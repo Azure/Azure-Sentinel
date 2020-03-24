@@ -14,7 +14,7 @@ export async function GetPRDetails() {
   return pullRequestDetails;
 }
 
-export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], fileKinds?: string[]) {
+export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const pr = await GetPRDetails();
 
   if (typeof pr === "undefined") {
@@ -26,7 +26,7 @@ export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPr
   console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
-    .filter(change => fileKinds?.includes(change.kind))
+    .filter(change => fileKinds.includes(change.kind))
     .map(change => change.path)
     .filter(filePath => typeof fileTypeSuffixes === "undefined" || filePath.endsWithAny(fileTypeSuffixes))
     .filter(filePath => typeof filePathFolderPreffixes === "undefined" || filePath.startsWithAny(filePathFolderPreffixes))
