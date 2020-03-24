@@ -21,7 +21,6 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
   
   let options = [pr.targetBranch, pr.sourceBranch, filePath];
   let diffSummary = await git.diff(options);
-  console.log(diffSummary);
   if (diffSummary.search(templateIdRegex) > 0){
       throw new Error();
   }
