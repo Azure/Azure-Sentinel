@@ -3,22 +3,19 @@ import * as logger from "./logger";
 import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
 
-var pullRequestDetails: PullRequestProperties | undefined;
-var isPullRequestDetailsInitialized: boolean = false;
+let pullRequestDetails: PullRequestProperties | undefined;
 
 export async function GetPRDetails() {
-  if (!isPullRequestDetailsInitialized){
+  if (typeof pullRequestDetails == "undefined"){
     console.log("Getting PR details");
     const config = cli.defaultConfig();
     pullRequestDetails = await devOps.createPullRequestProperties(config);
-    isPullRequestDetailsInitialized = true;
   }
   return pullRequestDetails;
 }
 
 export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], fileKinds?: string[]) {
-  const config = cli.defaultConfig();
-  const pr = await devOps.createPullRequestProperties(config);
+  const pr = await GetPRDetails();
 
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
