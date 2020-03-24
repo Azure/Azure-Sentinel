@@ -16,6 +16,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return ExitCode.ERROR;
   }
+  console.log(filePath);
   console.log(pr.targetBranch);
   console.log(pr.sourceBranch);
   let options = [pr.targetBranch, pr.sourceBranch, filePath];
