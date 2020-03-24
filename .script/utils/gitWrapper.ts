@@ -2,9 +2,15 @@ import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
 
-export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
+
+export async function GetPRDetails() {
   const config = cli.defaultConfig();
   const pr = await devOps.createPullRequestProperties(config);
+  return pr;
+}
+
+export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
+  const pr = await GetPRDetails();
 
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
