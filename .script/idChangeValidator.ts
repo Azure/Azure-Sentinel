@@ -6,7 +6,7 @@ import gitP, { SimpleGit } from 'simple-git/promise';
 
 const workingDir:string = process.cwd();
 const guidRegex:string = "[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
-const templateIdRegex:string = `((id: ${guidRegex})([\s\S].*)?){2}`;
+const templateIdRegex:string = `(id: ${guidRegex}(.|\n)*){2}`;
 const git: SimpleGit = gitP(workingDir);
 
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
