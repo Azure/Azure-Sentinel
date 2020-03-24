@@ -5,7 +5,8 @@ import * as logger from "./utils/logger";
 import gitP, { SimpleGit } from 'simple-git/promise';
 
 const workingDir:string = process.cwd();
-const templateIdRegex:string = "((id: [0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})([\s\S].*)?){2}";
+const guidRegex:string = "[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
+const templateIdRegex:string = `((id: ${guidRegex})([\s\S].*)?){2}`;
 const git: SimpleGit = gitP(workingDir);
 
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
@@ -20,15 +21,16 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
   
   let options = [pr.targetBranch, pr.sourceBranch, filePath];
   let diffSummary = await git.diff(options);
-
+  console.log(diffSummary);
   if (diffSummary.search(templateIdRegex) > 0){
-      throw new Error(diffSummary);
+      throw new Error();
   }
   return ExitCode.SUCCESS;
 }
 
-// let fileKinds = ["Modified"];
+let fileKinds = ["Modified"];
 let fileTypeSuffixes = ["yaml", "yml", "json"];
+let fileTypePreffixes = ["Detections"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return IsIdHasChanged(filePath);
@@ -41,4 +43,4 @@ let CheckOptions = {
   }
 };
 
-runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes, undefined, undefined);
+runCheckOverChangedFiles(CheckOptions, fileKinds, fileTypeSuffixes, fileTypePreffixes);
