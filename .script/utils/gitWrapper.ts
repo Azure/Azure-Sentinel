@@ -1,15 +1,17 @@
 import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
+import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
 
-let pr: any = null;
+let pullRequestDetails: PullRequestProperties | undefined;
 
 export async function GetPRDetails() {
-  if (pr !== null){
+  if (typeof pullRequestDetails === "undefined"){
+    console.log("Get pr details");
     const config = cli.defaultConfig();
-    pr = await devOps.createPullRequestProperties(config);
+    pullRequestDetails = await devOps.createPullRequestProperties(config);
   }
-  return pr;
+  return pullRequestDetails;
 }
 
 export async function GetDiffFiles(fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
