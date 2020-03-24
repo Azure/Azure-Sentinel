@@ -4,12 +4,14 @@ import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
 
 declare var pullRequestDetails: PullRequestProperties | undefined;
+var isPullRequestDetailsInitialized: boolean = false;
 
 export async function GetPRDetails() {
-  if (typeof pullRequestDetails === "undefined"){
+  if (!isPullRequestDetailsInitialized){
     console.log("Getting PR details");
     const config = cli.defaultConfig();
     pullRequestDetails = await devOps.createPullRequestProperties(config);
+    isPullRequestDetailsInitialized = true;
   }
   return pullRequestDetails;
 }
