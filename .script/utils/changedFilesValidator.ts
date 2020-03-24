@@ -8,8 +8,8 @@ export type CheckOptions = {
   onFinalFailed(): Promise<unknown>;
 };
 
-async function changedFilesValidator(checkOptions: CheckOptions, fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
-  const changedFiles = await GetDiffFiles(fileTypeSuffixes, filePathFolderPreffixes);
+async function changedFilesValidator(checkOptions: CheckOptions, fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], fileKinds?: string[]) {
+  const changedFiles = await GetDiffFiles(fileTypeSuffixes, filePathFolderPreffixes, fileKinds);
   if (changedFiles === undefined) {
     return;
   }
@@ -35,8 +35,8 @@ async function changedFilesValidator(checkOptions: CheckOptions, fileTypeSuffixe
   process.exit(retCode);
 }
 
-export function runCheckOverChangedFiles(options: CheckOptions, fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
-  changedFilesValidator(options, fileTypeSuffixes, filePathFolderPreffixes).catch(e => {
+export function runCheckOverChangedFiles(options: CheckOptions, fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], fileKinds?: string[]) {
+  changedFilesValidator(options, fileTypeSuffixes, filePathFolderPreffixes, fileKinds).catch(e => {
     console.error(e);
     logger.logError(`Error. If issue persists - please open an issue`);
     process.exit(ExitCode.ERROR);

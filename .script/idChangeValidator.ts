@@ -26,6 +26,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
   return ExitCode.SUCCESS;
 }
 
+let fileKinds = ["Modified"];
 let fileTypeSuffixes = ["yaml", "yml", "json"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
@@ -39,4 +40,4 @@ let CheckOptions = {
   }
 };
 
-runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes);
+runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes, fileKinds);

@@ -10,6 +10,7 @@ export async function IsValidYamlFile(filePath: string): Promise<ExitCode> {
 }
 
 let fileTypeSuffixes = ["yaml", "yml"];
+let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return IsValidYamlFile(filePath);
@@ -22,4 +23,4 @@ let CheckOptions = {
   }
 };
 
-runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes);
+runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes, fileKinds);
