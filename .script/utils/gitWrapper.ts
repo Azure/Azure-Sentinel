@@ -2,10 +2,13 @@ import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
 
+let pr: any = null;
 
 export async function GetPRDetails() {
-  const config = cli.defaultConfig();
-  const pr = await devOps.createPullRequestProperties(config);
+  if (pr !== null){
+    const config = cli.defaultConfig();
+    pr = await devOps.createPullRequestProperties(config);
+  }
   return pr;
 }
 

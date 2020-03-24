@@ -17,6 +17,7 @@ async function changedFilesValidator(checkOptions: CheckOptions, fileTypeSuffixe
   let retCode = ExitCode.SUCCESS;
 
   for (const filePath of changedFiles) {
+    console.log(filePath);
     try {
       const validationResultCode = await checkOptions.onCheckFile(filePath);
       if (validationResultCode !== ExitCode.SUCCESS) {
