@@ -22,4 +22,4 @@ let CheckOptions = {
   }
 };
 
-runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes, fileKinds);
+runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes, undefined, fileKinds);
