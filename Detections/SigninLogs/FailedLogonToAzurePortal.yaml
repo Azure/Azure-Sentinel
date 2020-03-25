@@ -28,17 +28,18 @@ query: |
   let threshold_Failed = 5;
   let threshold_FailedwithSingleIP = 20;
   let threshold_IPAddressCount = 2;
+  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
   let azPortalSignins = SigninLogs
   | where TimeGenerated >= ago(timeRange)
   // Azure Portal only and exclude non-failure Result Types
   | where AppDisplayName has "Azure Portal" and ResultType !in ("0", "50125", "50140")
   // Tagging identities not resolved to friendly names
-  | extend Unresolved = iff(Identity matches regex "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}", true, false)
+  | extend Unresolved = iff(Identity matches regex isGUID, true, false)
   ;
   // Lookup up resolved identities from last 7 days
   let identityLookup = SigninLogs
   | where TimeGenerated >= ago(lookBack)
-  | where not(Identity matches regex "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}")
+  | where not(Identity matches regex isGUID)
   | summarize by UserId, lu_UserDisplayName = UserDisplayName, lu_UserPrincipalName = UserPrincipalName;
   // Join resolved names to unresolved list from portal signins
   let unresolvedNames = azPortalSignins | where Unresolved == true | join kind= inner (
@@ -56,6 +57,6 @@ query: |
   | mvexpand TimeGenerated, IPAddresses, Status
   | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses), Status = tostring(Status)
   | project-away IPAddresses
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status, FailedLogonCount, IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status, FailedLogonCount, IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
   | where (IPAddressCount >= threshold_IPAddressCount and FailedLogonCount >= threshold_Failed) or FailedLogonCount >= threshold_FailedwithSingleIP
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
