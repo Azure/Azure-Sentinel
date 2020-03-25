@@ -1,0 +1,31 @@
+id: a787a819-40df-4c9f-a5ae-850d5a2a0cf6
+name: URI requests from single client
+description: |
+  'This will look for connections to files on the server that are requested by only a single client. This analytic will be effective where an actor is utilising relatively static operational IP addresses. The threshold can be modified. The larger the execution window for this query the more reliable the results returned.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+
+let timeRange = 7d;
+let clientThreshold = 1;
+let data = W3CIISLog
+//Get script files asmx, aspx
+| where csUriStem contains ".as"
+//Exclude local addresses, needs editing to matc your network configuration
+| where cIP !startswith "10." and cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
+| summarize makelist(cIP), count(TimeGenerated) by csUriStem, sSiteName, csUserAgent;
+data
+| mvexpand list_cIP
+| distinct tostring(list_cIP), csUriStem, sSiteName, csUserAgent
+| summarize dcount(list_cIP), makelist(list_cIP), makelist(sSiteName) by csUriStem, csUserAgent
+| where dcount_list_cIP == clientThreshold 
+//Uncomment to check to see if useragent is likely a browser
+//| where csUserAgent startswith "Mozilla"
+
