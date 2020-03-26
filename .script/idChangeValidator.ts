@@ -21,7 +21,8 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
   
   let options = [pr.targetBranch, pr.sourceBranch, filePath];
   let diffSummary = await git.diff(options);
-  if (diffSummary.search(templateIdRegex) > 0){
+  let idHasChanged = diffSummary.search(templateIdRegex) > 0;
+  if (idHasChanged){
       throw new Error();
   }
   return ExitCode.SUCCESS;
@@ -29,17 +30,17 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
 let fileKinds = ["Modified"];
 let fileTypeSuffixes = ["yaml", "yml", "json"];
-let fileTypePreffixes = ["Detections"];
+let filePathFolderPreffixes = ["Detections"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return IsIdHasChanged(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
-    console.log(`${e}: Id of file - "${filePath}" has changed.`);
+    console.log(`Error: Id of file - "${filePath}" has changed, please make sure you do not change any file id.`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");
   }
 };
 
-runCheckOverChangedFiles(CheckOptions, fileKinds, fileTypeSuffixes, fileTypePreffixes);
+runCheckOverChangedFiles(CheckOptions, fileKinds, fileTypeSuffixes, filePathFolderPreffixes);
