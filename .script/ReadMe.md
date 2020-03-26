@@ -42,6 +42,7 @@ By default, the logs color is white. In case you want another color you can use 
      - onFinalFailed:  error behavior at the end of the validation, execute in case one of the validation failed
    - Call runCheckOverChangedFiles with properties:
      - checkOptions:  the object you create in the earlier step 2  
+     - fileKinds: file kind filter, there are 3 kinds- "Added", "Modified", "Deleted"
      - fileTypeSuffixes : file type filter, example: ["yaml", "yml"]
      - filePathFolderPreffixes: folder path filter, example: ["Detections"]
    - Run prettier command to fix type script files format.  
