@@ -36,7 +36,7 @@ let CheckOptions = {
     return IsIdHasChanged(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
-    console.log(`Error: Id of file - "${filePath}" has changed, please make sure you do not change any file id.`);
+    console.log(`${e}: Id of file - "${filePath}" has changed, please make sure you do not change any file id.`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");
