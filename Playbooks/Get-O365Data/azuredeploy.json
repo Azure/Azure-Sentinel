@@ -1,0 +1,216 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will collect data from the Office 365 Management Activity API and write it to a Custom Log in Azure Sentinel",
+        "author": "Pete Bryan"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-O365Data",
+            "type": "string"
+        },
+        "AADAppClientID": {
+            "type": "string"
+        },
+        "AADAppSecret": {
+            "type": "string"
+        },
+        "AADTenantID": {
+            "type": "string"
+        }
+
+    },
+    "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "O365Data",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "actions": {
+                        "Current_time": {
+                            "inputs": {
+                            },
+                            "kind": "CurrentTime",
+                            "runAfter": {
+                            },
+                            "type": "Expression"
+                        },
+                        "HTTP": {
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://manage.office.com",
+                                    "clientId": "[parameters('AADAppClientID')]",
+                                    "secret": "[parameters('AADAppSecret')]",
+                                    "tenant": "[parameters('AADTenantID')]",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "uri": "https://manage.office.com/api/v1.0/<Tenant ID>/activity/feed/subscriptions/content?contentType=Audit.General&startTime=@{body('Subtract_from_time')}&endTime=@{body('Current_time')}"
+                            },
+                            "runAfter": {
+                                "Subtract_from_time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "HTTP_2": {
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://manage.office.com",
+                                    "clientId": "[parameters('AADAppClientID')]",
+                                    "secret": "[parameters('AADAppSecret')]",
+                                    "tenant": "[parameters('AADTenantID')]",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "uri": "@body('Parse_JSON')?['contentUri']"
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Parse_JSON": {
+                            "inputs": {
+                                "content": "@body('HTTP')[0]",
+                                "schema": {
+                                    "properties": {
+                                        "contentCreated": {
+                                            "type": "string"
+                                        },
+                                        "contentExpiration": {
+                                            "type": "string"
+                                        },
+                                        "contentId": {
+                                            "type": "string"
+                                        },
+                                        "contentType": {
+                                            "type": "string"
+                                        },
+                                        "contentUri": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Send_Data": {
+                            "inputs": {
+                                "body": "@{body('HTTP_2')}",
+                                "headers": {
+                                    "Log-Type": "O365API",
+                                    "time-generated-field": "CreationTime"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            },
+                            "runAfter": {
+                                "HTTP_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Subtract_from_time": {
+                            "inputs": {
+                                "baseTime": "@body('Current_time')",
+                                "interval": 5,
+                                "timeUnit": "Minute"
+                            },
+                            "kind": "SubtractFromTime",
+                            "runAfter": {
+                                "Current_time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression"
+                        }
+                    },
+                    "outputs": {
+                    },
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 5
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
