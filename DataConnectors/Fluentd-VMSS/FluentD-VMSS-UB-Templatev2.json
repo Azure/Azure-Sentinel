@@ -3,7 +3,8 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "Base_Name": {
-            "type": "string"
+            "type": "string",
+            "defaultValue": "fluentd"
         },
         "Autoscale_Min": {
             "type": "int",
@@ -15,10 +16,14 @@
         },
         "AdminUserName": {
             "type": "string",
-            "defaultValue": "logstash"
+            "defaultValue": "fluentd"
         },
         "AdminPassword": {
             "type": "securestring"
+        },
+        "GeoLiteDBURL": {
+            "type": "string",
+            "defaultValue": "Enter your URL to download GeoLite Database"
         },
         "workspaceId": {
             "type": "string"
@@ -36,7 +41,7 @@
         "autoscale_Name": "[concat(parameters('Base_Name'),'-autoscale')]",
         "loadbalancer_Name": "[concat(parameters('Base_Name'),'-lb')]",
         "maxPortRange": "[if(lessOrEquals(parameters('Autoscale_Max'), 9), '5000', '500')]",
-        "cloudinit": "[concat('#cloud-config\nruncmd:\n  - sudo yum update -y\n  - sudo echo \"root         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"root         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py ', parameters('workspaceId'), ' ', parameters('workspaceKey'), '\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF-VMSS/security-config-omsagent.conf -O /etc/rsyslog.d/security-config-omsagent.conf\n  - sudo sed -i -e ''s@*.*;auth,authpriv.none@syslog.*;auth,authpriv.none@g'' /etc/rsyslog.d/50-default.conf\n  - sudo sed -i -e ''s@input(type=\"imudp\" port=\"514\")@input(type=\"imudp\" port=\"514\" ruleset=\"forwarddata\")@g'' /etc/rsyslog.conf\n  - sudo sed -i -e ''s@input(type=\"imtcp\" port=\"514\")@input(type=\"imtcp\" port=\"514\" ruleset=\"forwarddata\")@g'' /etc/rsyslog.conf\n  - sudo systemctl restart rsyslog\n  - sudo /opt/microsoft/omsagent/bin/service_control stop ', parameters('workspaceId'), '\n  - sudo /opt/microsoft/omsagent/bin/service_control start ', parameters('workspaceId'))]"
+        "cloudinit": "[concat('#cloud-config\nruncmd:\n  - sudo apt-get update\n  - sudo apt-get install build-essential\n  - sudo apt-get install libgeoip-dev\n  - sudo echo \"root         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"root         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         soft    nofile         65536\" >> /etc/security/limits.conf\n  - sudo echo \"*         hard    nofile         65536\" >> /etc/security/limits.conf\n  - sudo curl -L https://toolbelt.treasuredata.com/sh/install-ubuntu-bionic-td-agent3.sh | sh\n  - wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/FluentD-VMSS/td-agent.conf -O /etc/td-agent/td-agent.conf\n  - wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/FluentD-VMSS/cef_version_0_keys.yaml -O /etc/td-agent/plugin/cef_version_0_keys.yaml\n  - wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/FluentD-VMSS/formatter_cef-as.rb -O /etc/td-agent/plugin/formatter_cef-as.rb\n  - wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/FluentD-VMSS/out_remote_syslog-as.rb -O /etc/td-agent/plugin/out_remote_syslog-as.rb\n  - wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/FluentD-VMSS/parser_cef-as.rb -O /etc/td-agent/plugin/parser_cef-as.rb\n  - wget -q ', parameters('GeoLiteDBURL'), ' -O /etc/td-agent/plugin/GeoLite2-City.mmdb\n  - sudo td-agent-gem install fluent-plugin-geoip\n  - sudo systemctl start td-agent.service\n  - sudo systemctl enable td-agent.service\n  - sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py ', parameters('WorkspaceID'), parameters('WorkspaceKey'))]"
     },
     "resources": [
         {
@@ -65,7 +70,7 @@
                         "properties": {
                             "protocol": "*",
                             "sourcePortRange": "*",
-                            "destinationPortRange": "514",
+                            "destinationPortRange": "5514",
                             "sourceAddressPrefix": "*",
                             "destinationAddressPrefix": "*",
                             "access": "Allow",
@@ -115,7 +120,7 @@
             "properties": {
                 "protocol": "TCP",
                 "sourcePortRange": "*",
-                "destinationPortRange": "514",
+                "destinationPortRange": "5514",
                 "sourceAddressPrefix": "*",
                 "destinationAddressPrefix": "*",
                 "access": "Allow",
@@ -269,8 +274,8 @@
                             "frontendIPConfiguration": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
                             },
-                            "frontendPort": 514,
-                            "backendPort": 514,
+                            "frontendPort": 5514,
+                            "backendPort": 5514,
                             "enableFloatingIP": false,
                             "idleTimeoutInMinutes": 5,
                             "protocol": "TCP",
@@ -291,8 +296,8 @@
                             "frontendIPConfiguration": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('loadbalancer_Name')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
                             },
-                            "frontendPort": 514,
-                            "backendPort": 514,
+                            "frontendPort": 5514,
+                            "backendPort": 5514,
                             "enableFloatingIP": false,
                             "idleTimeoutInMinutes": 5,
                             "protocol": "Udp",
@@ -313,7 +318,7 @@
                         "name": "tcpProbe",
                         "properties": {
                             "protocol": "Tcp",
-                            "port": 514,
+                            "port": 5514,
                             "intervalInSeconds": 5,
                             "numberOfProbes": 2
                         }
@@ -386,10 +391,10 @@
                             "diskSizeGB": 32
                         },
                         "imageReference": {
-                            "publisher": "RedHat",
-                            "offer": "RHEL",
-                            "sku": "7-RAW-CI",
-                            "version": "7.6.2019072418"
+                            "publisher": "Canonical",
+                            "offer": "UbuntuServer",
+                            "sku": "18.04-LTS",
+                            "version": "latest"
                         }
                     },
                     "networkProfile": {
