@@ -47,11 +47,11 @@ $publisher = "<randomGuid>" Get a guid from https://guidgenerator.com/
 
 * Run this command to enable Audit.General Subscription. 
 ```powershell
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher"
 ```
 * Run this command to enable DLP.ALL subscription
 ```powershell
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher"
 ```
 
 ### Deploy the Function App
