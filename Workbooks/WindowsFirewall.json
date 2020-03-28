@@ -19,7 +19,7 @@
             "name": "TimeRange",
             "type": 4,
             "value": {
-              "durationMs": 604800000
+              "durationMs": 2592000000
             },
             "typeSettings": {
               "selectableValues": [
@@ -69,7 +69,8 @@
                   "durationMs": 7776000000
                 }
               ]
-            }
+            },
+            "resourceType": "microsoft.insights/components"
           },
           {
             "id": "7a206eb7-2655-42d5-a7d7-2e42bd04709b",
@@ -80,10 +81,13 @@
             "quote": "'",
             "delimiter": ",",
             "query": "Heartbeat\r\n| where Solutions contains \"windowsFirewall\"\r\n| distinct Computer",
-            "value": [],
             "typeSettings": {
               "additionalResourceOptions": []
             },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
             "queryType": 0,
             "resourceType": "microsoft.operationalinsights/workspaces"
           }
@@ -180,7 +184,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let commonPorts = dynamic({\"443\": \"HTTPS\", \"80\":\"HTTP\", \"3389\":\"RDP\", \"53\":\"DNS\", \"389\":\"LDAP\", \"445\":\"SMB\", \"135\":\"RPC\", \"47001\":\"WinRM\",\"22\":\"ssh\", \"21\": \"ftp\"}); // Set of common portnames\r\nlet param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where isnotempty(DestinationPort) and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\") // Filter giver computers from parameter\r\n| summarize Droped = countif(FirewallAction == \"DROP\"), Allowed = countif(FirewallAction == \"ALLOW\"), Total = count() by tostring(DestinationPort)\r\n| extend portName = iff(commonPorts contains DestinationPort, commonPorts[DestinationPort],DestinationPort)\r\n| sort by Total desc\r\n| project [\"Port nmr\"] = DestinationPort, [\"Port name\"] = portName, Total, Allowed, Droped",
+        "query": "let commonPorts = dynamic({\"443\": \"HTTPS\", \"80\":\"HTTP\", \"3389\":\"RDP\", \"53\":\"DNS\", \"389\":\"LDAP\", \"445\":\"SMB\", \"135\":\"RPC\", \"47001\":\"WinRM\",\"22\":\"ssh\", \"21\": \"ftp\"}); // Set of common portnames\r\nlet param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where isnotempty(DestinationPort) and (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers)) // Filter giver computers from parameter\r\n| summarize Dropped = countif(FirewallAction =~ \"DROP\"), Allowed = countif(FirewallAction =~ \"ALLOW\"), Total = count() by tostring(DestinationPort), Protocol\r\n| extend portName = iff(commonPorts contains DestinationPort, commonPorts[DestinationPort],DestinationPort)\r\n| sort by Total desc\r\n| project [\"Destination Port\"] = DestinationPort,['Core Protocol'] = Protocol , [\"Default Protocol\"] = portName, Total, Allowed, Dropped",
         "size": 0,
         "timeContext": {
           "durationMs": 0
@@ -191,14 +195,21 @@
         "gridSettings": {
           "formatters": [
             {
-              "columnMatch": "Port nmr",
+              "columnMatch": "Destination Port",
               "formatter": 0,
               "formatOptions": {
                 "showIcon": true
               }
             },
             {
-              "columnMatch": "Port name",
+              "columnMatch": "Core Protocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Default Protocol",
               "formatter": 0,
               "formatOptions": {
                 "showIcon": true
@@ -219,7 +230,7 @@
               }
             },
             {
-              "columnMatch": "Droped",
+              "columnMatch": "Dropped",
               "formatter": 4,
               "formatOptions": {
                 "showIcon": true
@@ -228,16 +239,16 @@
           ]
         }
       },
-      "customWidth": "33",
+      "customWidth": "60",
       "name": "query - 10"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let commonPorts = dynamic({\"443\": \"HTTPS\", \"80\":\"HTTP\", \"3389\":\"RDP\", \"53\":\"DNS\", \"389\":\"LDAP\", \"445\":\"SMB\", \"135\":\"RPC\", \"47001\":\"WinRM\",\"22\":\"ssh\", \"21\": \"ftp\"}); // Set of common portnames\r\nlet param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where isnotempty(DestinationPort) and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")// Filter giver computers from parameter\r\n| summarize Allowed = count() by tostring(DestinationPort)\r\n| extend portName = iff(commonPorts contains DestinationPort, commonPorts[DestinationPort],DestinationPort)\r\n| sort by Allowed desc\r\n| project portName, Allowed\r\n",
+        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where isnotempty(DestinationPort) and (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))// Filter giver computers from parameter\r\n| summarize Allowed = count() by tostring(DestinationPort)\r\n| sort by Allowed desc\r\n| project DestinationPort, Allowed",
         "size": 0,
-        "title": "Most events by ports",
+        "title": "Allowed Connections by Port",
         "timeContext": {
           "durationMs": 0
         },
@@ -246,82 +257,14 @@
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "piechart"
       },
-      "customWidth": "33",
+      "customWidth": "40",
       "name": "query - 11 - Copy"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let param_Computers = \"{Computers}\";\r\nSecurityEvent\r\n| where AccountType == \"User\" and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize Tries = count(), TriedbyIPs = dcount(IpAddress) by Account\r\n| top 15 by Tries desc\r\n| project Account, Tries, ['Tried by IPs'] = TriedbyIPs",
-        "size": 0,
-        "title": "Security events by Account",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "table",
-        "gridSettings": {
-          "formatters": [
-            {
-              "columnMatch": "Account",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Tries",
-              "formatter": 4,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Tried by IPs",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            }
-          ]
-        },
-        "sortBy": [],
-        "tileSettings": {
-          "showBorder": false,
-          "titleContent": {
-            "columnMatch": "Account",
-            "formatter": 1
-          },
-          "leftContent": {
-            "columnMatch": "Tries",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "auto"
-            },
-            "numberFormat": {
-              "unit": 17,
-              "options": {
-                "maximumSignificantDigits": 3,
-                "maximumFractionDigits": 2
-              }
-            }
-          }
-        },
-        "chartSettings": {
-          "createOtherGroup": 8
-        }
-      },
-      "customWidth": "33",
-      "name": "query - 11"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall\r\n| where (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize Events = count() by Protocol",
+        "query": "let commonPorts = dynamic({\"443\": \"HTTPS\", \"80\":\"HTTP\", \"3389\":\"RDP\", \"53\":\"DNS\", \"389\":\"LDAP\", \"445\":\"SMB\", \"135\":\"RPC\", \"47001\":\"WinRM\",\"22\":\"ssh\", \"21\": \"ftp\"}); // Set of common portnames\r\nlet param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where isnotempty(DestinationPort) and (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))// Filter giver computers from parameter\r\n| summarize Allowed = count() by tostring(DestinationPort)\r\n| extend portName = iff(commonPorts contains DestinationPort, commonPorts[DestinationPort],DestinationPort)\r\n| sort by Allowed desc\r\n| project portName, Allowed",
         "size": 0,
         "title": "Piechart by protocol",
         "timeContext": {
@@ -339,7 +282,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall\r\n| where (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize Events = count() by bin(TimeGenerated,30m), Protocol",
+        "query": "let commonPorts = dynamic({\"443\": \"HTTPS\", \"80\":\"HTTP\", \"3389\":\"RDP\", \"53\":\"DNS\", \"389\":\"LDAP\", \"445\":\"SMB\", \"135\":\"RPC\", \"47001\":\"WinRM\",\"22\":\"ssh\", \"21\": \"ftp\"}); // Set of common portnames\r\nlet param_Computers = \"{Computers}\";\r\nWindowsFirewall\r\n| where (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))\r\n| extend DestinationPort = tostring(DestinationPort)\r\n| extend protocolName = iff(commonPorts has DestinationPort, commonPorts[DestinationPort],Protocol)\r\n| summarize Events = count() by bin(TimeGenerated,30m), protocolName",
         "size": 0,
         "title": "Timechart by protocol",
         "timeContext": {
@@ -390,6 +333,80 @@
       "name": "query - 14"
     },
     {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let param_Computers = \"{Computers}\";\r\nSecurityEvent\r\n| where AccountType == \"User\" and  isnotempty(IpAddress) and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize EventCount = count(), DistinctIPCount = dcount(IpAddress),IPAddresses = makeset(IpAddress) by Account\r\n| top 10 by DistinctIPCount desc\r\n| project Account, ['Distinct IP Count'] = DistinctIPCount, ['Event Count'] = EventCount, IPAddresses",
+        "size": 0,
+        "title": "Windows Security Events by Account",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Account",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Distinct IP Count",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Event Count",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IPAddresses",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ]
+        },
+        "sortBy": [],
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Account",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Tries",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "createOtherGroup": 8
+        }
+      },
+      "name": "query - 11"
+    },
+    {
       "type": 1,
       "content": {
         "json": "----\r\n## Correlation\r\n\r\nThere visuals give a representation about the Windows firewall, security log and Azure signins events.\r\n\r\nResults below could mean targeted attack to an organisation private and public cloud. <br>\r\nThis can also be used to monitor organistaion most used IP's "
@@ -400,7 +417,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize FirewallEvents = count() by SourceIP\r\n| join kind = inner(\r\n   SigninLogs\r\n   | summarize SuccessAzureLogin = countif(ResultType == 0), FailedAzureLogin = countif(ResultType != 0) by SourceIP = IPAddress\r\n) on SourceIP\r\n| join kind = inner(\r\n    SecurityEvent\r\n    | summarize SucessRDPLogin = countif(EventID == 4624), FailedRDPlogin = countif(EventID == 4625) by SourceIP = IpAddress, Computer\r\n) on SourceIP\r\n| project SourceIP , Computer, ['Firewall events']=FirewallEvents, ['Success Azure logins']=SuccessAzureLogin, ['Failed Azure logins']=FailedAzureLogin, ['Success RDP logins']=SucessRDPLogin, ['Failed RDP logins']=FailedRDPlogin\r\n| sort by ['Failed RDP logins'],['Failed Azure logins'] desc",
+        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall \r\n| where (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))\r\n| summarize FirewallEvents = count() by SourceIP\r\n| join kind = inner(\r\n   SigninLogs\r\n   | summarize SuccessAzureLogin = countif(ResultType == 0), FailedAzureLogin = countif(ResultType != 0) by SourceIP = IPAddress\r\n) on SourceIP\r\n| join kind = inner(\r\n    SecurityEvent\r\n    | summarize SucessRDPLogin = countif(EventID == 4624), FailedRDPlogin = countif(EventID == 4625) by SourceIP = IpAddress, Computer\r\n) on SourceIP\r\n| project SourceIP , Computer, ['Firewall events']=FirewallEvents, ['Success Azure logins']=SuccessAzureLogin, ['Failed Azure logins']=FailedAzureLogin, ['Success RDP logins']=SucessRDPLogin, ['Failed RDP logins']=FailedRDPlogin\r\n| sort by ['Failed RDP logins'],['Failed Azure logins'] desc",
         "size": 1,
         "title": "Correlating events between windows firewall, security logs and azure signins",
         "noDataMessage": "No links between Windows firewall and azure logins (positive)",
@@ -417,7 +434,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let param_Computers = \"{Computers}\";\r\nSecurityEvent\r\n| where AccountType == \"User\" and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize FailedRDPLogins = countif(EventID == 4625), SuccessRDPLogins = countif(EventID == 4624) by IpAddress, Computer\r\n| join kind= inner (\r\n    WindowsFirewall\r\n    | where DestinationPort == 3389 and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n    | summarize FirewallDroped = countif(FirewallAction == \"DROP\"), FirewallAllowed = countif(FirewallAction == \"ALLOW\") by SourceIP \r\n) on $left.IpAddress == $right.SourceIP \r\n| project Computer, IpAddress, FailedRDPLogins, SuccessRDPLogins, FirewallDroped, FirewallAllowed\r\n| sort by SuccessRDPLogins, FailedRDPLogins desc",
+        "query": "let param_Computers = \"{Computers}\";\r\nSecurityEvent\r\n| where AccountType == \"User\" and LogonType == 10 and (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))\r\n| summarize FailedRDPLogins = countif(EventID == 4625), SuccessRDPLogins = countif(EventID == 4624) by IpAddress, Computer\r\n| join kind= inner (\r\n    WindowsFirewall\r\n    | where DestinationPort == 3389 and (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))\r\n    | summarize FirewallDropped = countif(FirewallAction =~ \"DROP\"), FirewallAllowed = countif(FirewallAction =~ \"ALLOW\") by SourceIP \r\n) on $left.IpAddress == $right.SourceIP \r\n| project Computer, IpAddress, FailedRDPLogins, SuccessRDPLogins, FirewallDropped, FirewallAllowed\r\n| sort by SuccessRDPLogins, FailedRDPLogins desc",
         "size": 0,
         "title": "Correlating events between Windows firewall and security logs",
         "timeContext": {
@@ -457,7 +474,7 @@
               }
             },
             {
-              "columnMatch": "FirewallDroped",
+              "columnMatch": "FirewallDropped",
               "formatter": 4,
               "formatOptions": {
                 "showIcon": true
@@ -480,7 +497,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall\r\n| where (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\") and SourceIP !in (\"::1\",\"-\")\r\n| summarize FirewallEvents = count() by SourceIP\r\n| join(\r\nSecurityEvent\r\n| where IpAddress != \"\" and (Computer == param_Computers or param_Computers contains Computer or param_Computers == \"\")\r\n| summarize SecurityEvents = count() by SourceIP = IpAddress\r\n) on SourceIP\r\n| top 15 by FirewallEvents desc\r\n| project SourceIP, SecurityEvents, FirewallEvents",
+        "query": "let param_Computers = \"{Computers}\";\r\nWindowsFirewall\r\n| where (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers)) and SourceIP !in (\"::1\",\"-\")\r\n| summarize FirewallEvents = count() by SourceIP\r\n| join(\r\nSecurityEvent\r\n| where isnotempty(IpAddress) and (Computer == param_Computers or param_Computers contains Computer or isempty(param_Computers))\r\n| summarize SecurityEvents = count() by SourceIP = IpAddress\r\n) on SourceIP\r\n| top 15 by FirewallEvents desc\r\n| project SourceIP, SecurityEvents, FirewallEvents",
         "size": 0,
         "title": "Correlating IPs between Windows firewall and security logs",
         "timeContext": {
