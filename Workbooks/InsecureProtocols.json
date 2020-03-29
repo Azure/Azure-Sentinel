@@ -12,9 +12,64 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "query": "",
-        "crossComponentResources": [],
+        "crossComponentResources": [
+          "{Subscription}"
+        ],
         "parameters": [
+          {
+            "id": "6b543dcb-ffbe-4fca-80d7-68d15257c377",
+            "version": "KqlParameterItem/1.0",
+            "name": "DefaultSubscription_Internal",
+            "type": 1,
+            "isRequired": true,
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+            "crossComponentResources": [
+              "value::selected"
+            ],
+            "isHiddenWhenLocked": true,
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "959662e2-5c74-4876-b5c7-0aaeb2de2ca5",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscription",
+            "type": 6,
+            "query": "resources\r\n| summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)",
+            "crossComponentResources": [
+              "value::selected"
+            ],
+            "value": "/subscriptions/44e4eff8-1fcb-4a22-a7d6-992ac7286382",
+            "typeSettings": {
+              "additionalResourceOptions": []
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "d0ab5058-af8c-4ea2-b4a4-8d836769d278",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "type": 5,
+            "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| project id",
+            "crossComponentResources": [
+              "{Subscription}"
+            ],
+            "value": "/subscriptions/44e4eff8-1fcb-4a22-a7d6-992ac7286382/resourceGroups/SOC/providers/Microsoft.OperationalInsights/workspaces/CyberSecurityDemo",
+            "typeSettings": {
+              "additionalResourceOptions": []
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
           {
             "id": "020de58b-73ca-47fe-838e-bc3ac7afaef6",
             "version": "KqlParameterItem/1.0",
@@ -73,14 +128,181 @@
                 }
               ],
               "allowCustom": true
-            }
+            },
+            "resourceType": "microsoft.insights/components"
           }
         ],
-        "style": "pills",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces"
+        "style": "above",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
       },
       "name": "parameters - 7"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Summary",
+            "subTarget": "Summary",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "LDAP",
+            "subTarget": "LDAP",
+            "preText": "LDAP",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "NTLM",
+            "subTarget": "NTLM",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "SMB",
+            "subTarget": "SMB",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Kerberos",
+            "subTarget": "Kerberos",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "WDigest",
+            "subTarget": "WDigest",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "AAD Legacy Auth ",
+            "subTarget": "AADLegacy",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "links - 34"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityEvent\r\n| parse EventData with * '\"TicketEncryptionType\">' TicketEncryptionType '<' *\r\n| union Event\r\n| where (EventID == 2889) or (EventID == 3000 and EventLog == 'Microsoft-Windows-SMBServer/Audit') or (EventID == 4624 and AuthenticationPackageName == 'NTLM' and LmPackageName == 'NTLM V1' and Account !contains 'ANONYMOUS LOGON') or ((EventID == 4624 or EventID == 4776) and Level == 8 and PackageName contains 'WDigest') or (EventID == 4768 or EventID == 4769) and Level == 8 or (EventID == 4768 or EventID == 4769 and TicketEncryptionType != \"0x12\") or (EventID == 4768 or EventID == 4769 and TicketEncryptionType != \"0x11\") or (EventID == 4768 or EventID == 4769 and TicketEncryptionType != \"0x17\")\r\n| summarize Count=count() by bin(TimeGenerated, {TimeRange:grain}), tostring(EventID)\r\n| extend Protocol=replace(tostring(4776), 'WDigest', replace(tostring(4768), 'Kerberos weak cipher', replace(tostring(4769), 'Kerberos weak cipher', replace(tostring(2889), 'Insecure LDAP', replace(tostring(4624), 'NTLM v1', replace(tostring(3000), 'SMB v1', tostring(EventID)))))))\r\n| project Protocol, Count, TimeGenerated \r\n| sort by Count desc\r\n",
+        "size": 1,
+        "title": "Summary of Insecure Protocols: {TimeRange:label}",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "barchart",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "Count",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "Count",
+            "sortOrder": 2
+          }
+        ],
+        "chartSettings": {}
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Summary"
+      },
+      "name": "query - 34"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let important = dynamic(['2889','3000','4624','4776','4768','4769']);   // add more to this list \r\nunion withsource=TableName SecurityEvent, Event\r\n| summarize ['High value EventID vs. Normal'] = strcat(dcountif(EventID, important has tostring(EventID)), \" of \", dcountif(EventID, important !has tostring(EventID))),\r\n            ['High value EventID list']=make_set_if(EventID, important has tostring(EventID)),  ['Count of High value EventIDs']=countif(important has tostring(EventID)) by TableName",
+        "size": 1,
+        "title": "Summary of valuable EventIDs found in: {TimeRange:label}",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table",
+        "sortBy": [],
+        "tileSettings": {
+          "showBorder": false
+        },
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "TableName",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "centerContent": {
+            "columnMatch": "Normal EventID",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "nodeIdField": "excellent_ok",
+          "sourceIdField": "TableName",
+          "targetIdField": "excellent_ok",
+          "edgeLabel": "excellent_ok",
+          "nodeSize": null,
+          "staticNodeSize": 100,
+          "colorSettings": null,
+          "groupByField": "TableName",
+          "hivesMargin": 5
+        },
+        "chartSettings": {
+          "group": "Crucial EventID",
+          "createOtherGroup": null
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Summary"
+      },
+      "name": "query - 34 - Copy"
     },
     {
       "type": 3,
@@ -88,14 +310,21 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent\r\n| union Event\r\n| where (EventID == 2889) or (EventID == 3000 and EventLog == 'Microsoft-Windows-SMBServer/Audit') or (EventID == 4624 and AuthenticationPackageName == 'NTLM' and LmPackageName == 'NTLM V1' and Account !contains 'ANONYMOUS LOGON') or ((EventID == 4624 or EventID == 4776) and Level == 8 and PackageName contains 'WDigest')\r\n| summarize Count=count() by bin(TimeGenerated, {TimeRange:grain}), tostring(EventID)\r\n| extend Protocol=replace(tostring(4776), 'WDigest', replace(tostring(2889), 'Insecure LDAP', replace(tostring(4624), 'NTLM v1', replace(tostring(3000), 'SMB v1', tostring(EventID)))))\r\n| project Protocol, Count, TimeGenerated \r\n| sort by Count desc",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "barchart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "NTLM"
       },
       "name": "query - 14"
     },
@@ -103,6 +332,11 @@
       "type": 1,
       "content": {
         "json": "---\r\n#### Unsigned LDAP"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
       },
       "name": "text - 13"
     },
@@ -112,52 +346,15 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend Title = \"Number of events\"\r\n | summarize QueryCount = count(EventID) by Title//, NumberOfIPs = dcount(IPAddress), NumberOfAccounts = dcount(Account)",
         "size": 4,
-        "exportToExcelOptions": "visible",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "Title",
-            "formatOptions": {
-              "showIcon": true
-            }
-          },
-          "leftContent": {
-            "columnMatch": "QueryCount",
-            "formatter": 12,
-            "formatOptions": {
-              "min": 0,
-              "palette": "orange",
-              "showIcon": true
-            }
-          },
-          "showBorder": false
-        },
-        "graphSettings": {
-          "type": 0
-        }
-      },
-      "customWidth": "20",
-      "name": "query - 8"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "Event \r\n | where EventID == 2889 \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend Title = \"Number of IP Addresses\"\r\n | summarize QueryCount =  dcount(IPAddress) by Title//, NumberOfIPs = dcount(IPAddress), NumberOfAccounts = dcount(Account)",
-        "size": 4,
-        "exportToExcelOptions": "visible",
-        "timeContext": {
-          "durationMs": 0
-        },
-        "timeContextFromParameter": "TimeRange",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "tiles",
         "tileSettings": {
           "titleContent": {
@@ -185,6 +382,11 @@
           "showBorder": false
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
+      },
       "customWidth": "20",
       "name": "query - 9"
     },
@@ -192,15 +394,67 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event \r\n | where EventID == 2889 \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend Title = \"Number of Accounts\"\r\n | summarize QueryCount = dcount(Account) by Title//, NumberOfIPs = dcount(IPAddress), NumberOfAccounts = dcount(Account)",
+        "query": "Event \r\n | where EventID == 2889 \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend Title = \"Number of IP Addresses\"\r\n | summarize QueryCount =  dcount(IPAddress) by Title//, NumberOfIPs = dcount(IPAddress), NumberOfAccounts = dcount(Account)",
         "size": 4,
-        "exportToExcelOptions": "visible",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Title",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "QueryCount",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
+      },
+      "customWidth": "20",
+      "name": "query - 9 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Event \r\n | where EventID == 2889 \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend Title = \"Number of Accounts\"\r\n | summarize QueryCount = dcount(Account) by Title//, NumberOfIPs = dcount(IPAddress), NumberOfAccounts = dcount(Account)",
+        "size": 4,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "tiles",
         "tileSettings": {
           "titleContent": {
@@ -230,6 +484,11 @@
           "showBorder": false
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
+      },
       "customWidth": "20",
       "name": "query - 10"
     },
@@ -239,17 +498,19 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n //| project ParameterXml, DomainController=Computer , TimeGenerated, EventID  \r\n //| parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | summarize QueryCount = count(EventID) by Account, IPAddress\r\n | order by QueryCount\r\n \r\n \r\n //| summarize querycount = count (EventID) by TimeGenerated bin(day)\r\n //| summarize Count = count(EventID) by Account, bin (TimeGenerated, 1d)\r\n //| top 10 by QueryCount\r\n\r\n\r\n\r\n//let string_to_trim = @\"--https://bing.com--\";\r\n//let substring = \"--\";\r\n//print string_to_trim = string_to_trim, trimmed_string = trim(substring,string_to_trim)",
         "size": 0,
-        "exportFieldName": "Account",
-        "exportParameterName": "Account",
-        "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
         "title": "By Account - click to filter",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "Account",
+        "exportParameterName": "Account",
+        "exportDefaultValue": "All",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "table",
         "gridSettings": {
           "formatters": [
@@ -323,10 +584,6 @@
               "columnId": "Account"
             },
             {
-              "columnId": "Computer",
-              "label": "Domain Controller"
-            },
-            {
               "columnId": "IPAddress",
               "label": "Source IP"
             },
@@ -335,7 +592,18 @@
               "label": "Number of Insecure Binds"
             }
           ]
-        }
+        },
+        "sortBy": [
+          {
+            "itemKey": "$gen_bar_QueryCount_2",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
       },
       "customWidth": "50",
       "name": "LDAP by Account"
@@ -346,7 +614,6 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n// | project ParameterXml, DomainController=Computer , TimeGenerated, EventID  \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n //| summarize QueryCount = count(EventID) by Account, bin(TimeGenerated, 1h)\r\n //| summarize QueryCount = count(EventID) by Account, bin (HourGenerated=TimeGenerated, 1h), SourceIP=IPAddress\r\n | extend TimeFromNow = now() - TimeGenerated\r\n | extend TimeAgo = strcat(case(TimeFromNow < 2m, strcat(toint(TimeFromNow / 1m), ' seconds'), TimeFromNow < 2h, strcat(toint(TimeFromNow / 1m), ' minutes'), TimeFromNow < 2d, strcat(toint(TimeFromNow / 1h), ' hours'), strcat(toint(TimeFromNow / 1d), ' days')), ' ago')\r\n | where Account == '{Account:escape}' or  '{Account:escape}' == \"All\"\r\n //| project '{Account:escape}'\r\n | project Account, IPAddress, Computer, RenderedDescription, UserName, EventID, Time_of_Bind=TimeAgo\r\n// T | summarize Hits=count() by bin(Duration, 1s)",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Account Details",
         "timeContext": {
           "durationMs": 0
@@ -354,6 +621,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -442,6 +712,11 @@
           ]
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
+      },
       "customWidth": "50",
       "name": "query - 7"
     },
@@ -451,7 +726,6 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n// | project ParameterXml, DomainController=Computer , TimeGenerated, EventID  \r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n //| summarize QueryCount = count(EventID) by Account, bin(TimeGenerated, 1h)\r\n //| summarize QueryCount = count(EventID) by Account, bin (HourGenerated=TimeGenerated, 1h), SourceIP=IPAddress\r\n | extend TimeFromNow = now() - TimeGenerated\r\n | extend TimeAgo = strcat(case(TimeFromNow < 2m, strcat(toint(TimeFromNow / 1m), ' seconds'), TimeFromNow < 2h, strcat(toint(TimeFromNow / 1m), ' minutes'), TimeFromNow < 2d, strcat(toint(TimeFromNow / 1h), ' hours'), strcat(toint(TimeFromNow / 1d), ' days')), ' ago')\r\n | where Account == '{Account:escape}' or  '{Account:escape}' == \"All\"\r\n //| project '{Account:escape}'\r\n | summarize count() by Account, bin(TimeGenerated, {TimeRange:grain})\r\n// T | summarize Hits=count() by bin(Duration, 1s)",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Acount events over time",
         "timeContext": {
           "durationMs": 0
@@ -459,7 +733,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "linechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
       },
       "name": "query - 11"
     },
@@ -469,17 +751,19 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n //| project ParameterXml, DomainController=Computer , TimeGenerated, EventID  \r\n //| parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '><Param>' Account '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | summarize QueryCount = count(EventID) by IPAddress, Account\r\n",
         "size": 0,
-        "exportFieldName": "IPAddress",
-        "exportParameterName": "IPAddress",
-        "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
         "title": "By Source IP - click to filter",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "IPAddress",
+        "exportParameterName": "IPAddress",
+        "exportDefaultValue": "All",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "table",
         "gridSettings": {
           "formatters": [
@@ -570,7 +854,18 @@
               "label": "Number of Insedcure Binds"
             }
           ]
-        }
+        },
+        "sortBy": [
+          {
+            "itemKey": "$gen_bar_QueryCount_2",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
       },
       "customWidth": "50",
       "name": "query - 3"
@@ -581,7 +876,6 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n// | project ParameterXml, DomainController=Computer , TimeGenerated, EventID  \r\n | parse ParameterXml with * '><Param>' Accounts '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend TimeFromNow = now() - TimeGenerated\r\n | extend TimeAgo = strcat(case(TimeFromNow < 2m, strcat(toint(TimeFromNow / 1m), ' seconds'), TimeFromNow < 2h, strcat(toint(TimeFromNow / 1m), ' minutes'), TimeFromNow < 2d, strcat(toint(TimeFromNow / 1h), ' hours'), strcat(toint(TimeFromNow / 1d), ' days')), ' ago')\r\n | where IPAddress == '{IPAddress:escape}' or '{IPAddress:escape}' == \"All\"\r\n | project IPAddress, Accounts, Computer, RenderedDescription, UserName, EventID, Time_of_Bind=TimeAgo",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Source IP Details",
         "timeContext": {
           "durationMs": 0
@@ -589,6 +883,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -643,9 +940,13 @@
               }
             }
           ],
-          "filter": true,
-          "labelSettings": []
+          "filter": true
         }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
       },
       "customWidth": "50",
       "name": "query - 8"
@@ -656,7 +957,6 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n | where EventID == 2889 \r\n// | project ParameterXml, DomainController=Computer , TimeGenerated, EventID  \r\n | parse ParameterXml with * '><Param>' Accounts '</' *\r\n | parse ParameterXml with * '<Param>' IPAddress ':' * \r\n | parse kind = regex ParameterXml with * '</Param><Param>' * '</Param><Param>' BindingType '</Param>'\r\n | extend TimeFromNow = now() - TimeGenerated\r\n | extend TimeAgo = strcat(case(TimeFromNow < 2m, strcat(toint(TimeFromNow / 1m), ' seconds'), TimeFromNow < 2h, strcat(toint(TimeFromNow / 1m), ' minutes'), TimeFromNow < 2d, strcat(toint(TimeFromNow / 1h), ' hours'), strcat(toint(TimeFromNow / 1d), ' days')), ' ago')\r\n | where IPAddress == '{IPAddress:escape}' or '{IPAddress:escape}' == \"All\"\r\n | summarize count() by IPAddress, bin(TimeGenerated, {TimeRange:grain})",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "IP addresses events over time",
         "timeContext": {
           "durationMs": 0
@@ -664,7 +964,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "linechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "LDAP"
       },
       "name": "query - 12"
     },
@@ -672,6 +980,11 @@
       "type": 1,
       "content": {
         "json": "---\r\n### NTLM v1"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "NTLM"
       },
       "name": "text - 14"
     },
@@ -681,13 +994,15 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent \r\n| where EventID == 4624 \r\n| where AuthenticationPackageName == 'NTLM' \r\n| where LmPackageName == 'NTLM V1'  \r\n| where Account !contains 'ANONYMOUS LOGON' \r\n| summarize Count = count() by WorkstationName, Computer \r\n| project WorkstationName, Computer, Count\r\n| order by Count desc\r\n",
         "size": 0,
+        "title": "NTLM v1 events, by Source and server - click to filter",
         "exportFieldName": "",
         "exportParameterName": "WorkstationName",
         "exportDefaultValue": "{\"WorkstationName\":\"All\"}",
-        "exportToExcelOptions": "visible",
-        "title": "NTLM v1 events, by Source and server - click to filter",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "table",
         "gridSettings": {
           "formatters": [
@@ -735,9 +1050,14 @@
               "itemKey": "Computer",
               "sortOrder": 2
             }
-          ],
-          "labelSettings": []
+          ]
         },
+        "sortBy": [
+          {
+            "itemKey": "Computer",
+            "sortOrder": 2
+          }
+        ],
         "tileSettings": {
           "showBorder": false,
           "titleContent": {
@@ -760,6 +1080,11 @@
           }
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "NTLM"
+      },
       "customWidth": "50",
       "name": "query - 6"
     },
@@ -769,7 +1094,6 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent \r\n| where EventID == 4624 \r\n| where AuthenticationPackageName == 'NTLM' \r\n| where LmPackageName == 'NTLM V1'  \r\n| where Account !contains 'ANONYMOUS LOGON' \r\n| where '{WorkstationName:escape}' contains \"All\" or '{WorkstationName:escape}' contains WorkstationName\r\n| summarize Count=count() by WorkstationName, Day=bin(TimeGenerated, {TimeRange:grain}) ",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "NTLM v1 events, by time",
         "timeContext": {
           "durationMs": 0
@@ -777,7 +1101,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "areachart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "NTLM"
       },
       "customWidth": "50",
       "name": "query - 15"
@@ -788,7 +1120,6 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent \r\n| where EventID == 4624 \r\n| where AuthenticationPackageName == 'NTLM' \r\n| where LmPackageName == 'NTLM V1'  \r\n| where Account !contains 'ANONYMOUS LOGON' \r\n| where '{WorkstationName:escape}' contains \"All\" or ('{WorkstationName:escape}' contains WorkstationName and '{WorkstationName:escape}' contains Computer)\r\n| summarize Count = count() by Account, WorkstationName, DC=Computer, LogonProcessName, TargetDomainName, TargetAccount, IpAddress\r\n| sort by Count desc  ",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "NTLM v1 events details",
         "timeContext": {
           "durationMs": 0
@@ -796,6 +1127,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -863,9 +1197,13 @@
               }
             }
           ],
-          "filter": true,
-          "labelSettings": []
+          "filter": true
         }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "NTLM"
       },
       "name": "query - 16"
     },
@@ -873,6 +1211,11 @@
       "type": 1,
       "content": {
         "json": "---\r\n### SMB v1"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "SMB"
       },
       "name": "text - 18"
     },
@@ -882,17 +1225,19 @@
         "version": "KqlItem/1.0",
         "query": "let data = Event\r\n| where EventID == 3000 and EventLog == 'Microsoft-Windows-SMBServer/Audit' \r\n| parse ParameterXml with * '<Param>' ClientAddress '</' * \r\n| extend Client = replace(@'>', @'', replace(@'\\]', @'', replace(@'\\[', @'', replace(@'<!\\[CDATA', @'', ClientAddress))));\r\ndata\r\n| summarize Count = count() by Client\r\n| join kind = fullouter (datatable(Client:string)['Medium', 'high', 'low']) on Client\r\n| project Client = iff(Client == '', Client1, Client), Count = iff(Client == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Client)\r\n on Client\r\n| project-away Client1, TimeGenerated\r\n| extend Clients = Client\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Client = 'All', Clients = '*' \r\n)\r\n| order by Count desc\r\n| take 10\r\n",
         "size": 4,
-        "exportFieldName": "Client",
-        "exportParameterName": "ClientFilter",
-        "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
         "title": "SMB v1 events, by client - click to filter",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "Client",
+        "exportParameterName": "ClientFilter",
+        "exportDefaultValue": "All",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "tiles",
         "tileSettings": {
           "titleContent": {
@@ -929,6 +1274,11 @@
           "showBorder": false
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "SMB"
+      },
       "name": "query - 18"
     },
     {
@@ -937,7 +1287,6 @@
         "version": "KqlItem/1.0",
         "query": "Event \r\n| where EventID == 3000 and EventLog == 'Microsoft-Windows-SMBServer/Audit' \r\n| parse ParameterXml with * '<Param>' ClientAddress '</' * \r\n| extend Client = replace(@'>', @'', replace(@'\\]', @'', replace(@'\\[', @'', replace(@'<!\\[CDATA', @'', ClientAddress)))) \r\n| where Client == '{ClientFilter}' or '{ClientFilter}' == \"All\"\r\n| summarize Count=count() by bin(TimeGenerated, 1h) , SMBServer=Computer \r\n\r\n",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "SMB v1 events, by SMB Server over time",
         "timeContext": {
           "durationMs": 0
@@ -945,7 +1294,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "areachart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "SMB"
       },
       "customWidth": "50",
       "name": "query - 19"
@@ -956,7 +1313,6 @@
         "version": "KqlItem/1.0",
         "query": "Event\r\n| where EventID == 3000 and EventLog == 'Microsoft-Windows-SMBServer/Audit'\r\n| parse ParameterXml with * '<Param>' ClientAddress '</' *\r\n| extend Client = replace(@'>', @'', replace(@'\\]', @'', replace(@'\\[', @'', replace(@'<!\\[CDATA', @'', ClientAddress))))\r\n| where Client == '{ClientFilter}' or '{ClientFilter}' == \"All\"\r\n| summarize Count=count() by Client, SMBServer=Computer, ParameterXml, RenderedDescription, EventData\r\n| sort by Count desc",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "SMB v1 event details",
         "timeContext": {
           "durationMs": 0
@@ -964,6 +1320,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -1030,9 +1389,13 @@
             "groupBy": [
               "Client"
             ]
-          },
-          "labelSettings": []
+          }
         }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "SMB"
       },
       "customWidth": "50",
       "name": "query - 20"
@@ -1042,6 +1405,11 @@
       "content": {
         "json": "---\r\n### Kerberos weak ciphers"
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Kerberos"
+      },
       "name": "text - 21"
     },
     {
@@ -1050,8 +1418,6 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent\r\n| where EventID == 4768 or EventID == 4769\r\n| where Level == 8\r\n| parse EventData with * '\"TicketEncryptionType\">' TicketEncryptionType '<' *\r\n| where TicketEncryptionType != \"0x12\" and TicketEncryptionType != \"0x11\" //AES128/256, this filter needs to be activated\r\n//| where TicketEncryptionType != \"0x17\" //RC4\r\n| parse EventData with * '\"IpAddress\">' IpAddress '<' *\r\n| parse EventData with * '\"TargetUserName\">' TargetUserName '<' *\r\n| parse EventData with * '\"ServiceName\">' ServiceName '<' *\r\n| extend Cipher=replace('0x18$', 'RC4-HMAC-EXP', replace('0x12$', 'AES256-CTS-HMAC-SHA1', replace('0x11$', 'AES128-CTS-HMAC-SHA1', replace('0x1$', 'DES_CBC_CRC', replace('0x2$', 'DES_CBC_MD4', replace('0x7$', 'DES3_CBC_SHA1', replace('0x5$', 'DES3_CBC_MD5', replace('0x3$', 'DES_CBC_MD5', replace('0x17$', 'RC4_HMAC', TicketEncryptionType)))))))))\r\n| summarize Count=count() by Cipher, bin(TimeGenerated, 1h)\r\n",
         "size": 0,
-        "exportDefaultValue": "All",
-        "exportToExcelOptions": "visible",
         "title": "Kerberos weak ciphers, by time and cipher",
         "timeContext": {
           "durationMs": 0
@@ -1059,7 +1425,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "areachart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Kerberos"
       },
       "customWidth": "50",
       "name": "query - 22"
@@ -1070,7 +1444,6 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent\r\n| where EventID == 4768 or EventID == 4769\r\n| where Level == 8\r\n| parse EventData with * '\"TicketEncryptionType\">' TicketEncryptionType '<' *\r\n| where TicketEncryptionType != \"0x12\" and TicketEncryptionType != \"0x11\" //AES128/256, this filter needs to be activated\r\n//| where TicketEncryptionType != \"0x17\" //RC4\r\n| parse EventData with * '\"IpAddress\">' IpAddress '<' *\r\n| parse EventData with * '\"TargetUserName\">' TargetUserName '<' *\r\n| parse EventData with * '\"ServiceName\">' ServiceName '<' *\r\n| extend Cipher=replace('0x18$', 'RC4-HMAC-EXP', replace('0x12$', 'AES256-CTS-HMAC-SHA1', replace('0x11$', 'AES128-CTS-HMAC-SHA1', replace('0x1$', 'DES_CBC_CRC', replace('0x2$', 'DES_CBC_MD4', replace('0x7$', 'DES3_CBC_SHA1', replace('0x5$', 'DES3_CBC_MD5', replace('0x3$', 'DES_CBC_MD5', replace('0x17$', 'RC4_HMAC', TicketEncryptionType)))))))))\r\n| summarize Count=count() by Cipher, IpAddress, TargetUserName , ServiceName, Computer, Activity\r\n| sort by Count desc\r\n",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Kerberos weak ciphers event details",
         "timeContext": {
           "durationMs": 0
@@ -1078,6 +1451,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -1134,9 +1510,13 @@
               }
             }
           ],
-          "filter": true,
-          "labelSettings": []
+          "filter": true
         }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Kerberos"
       },
       "customWidth": "50",
       "name": "query - 23"
@@ -1146,6 +1526,11 @@
       "content": {
         "json": "---\r\n### WDigest"
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "WDigest"
+      },
       "name": "text - 24"
     },
     {
@@ -1154,16 +1539,18 @@
         "version": "KqlItem/1.0",
         "query": "let data = SecurityEvent \r\n| where EventID == 4624 or EventID == 4776 \r\n| where Level == 8 \r\n| where PackageName contains 'WDigest';\r\nlet appData = data\r\n| summarize TotalCount = count() by TargetAccount\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by TargetAccount\r\n    | project-away TimeGenerated) on TargetAccount\r\n| order by TotalCount desc, TargetAccount asc\r\n| project TargetAccount, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Workstation , TargetAccount\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by TargetAccount, Workstation\r\n    | project-away TimeGenerated) on TargetAccount, Workstation\r\n| order by TotalCount desc, TargetAccount asc\r\n| project TargetAccount, Workstation, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on TargetAccount\r\n| project Id, Name = Workstation, Type = 'Workstation', ['TargetAccounts Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = TargetAccount, Type = 'TargetAccount', ['TargetAccounts Count'] = TotalCount,  Trend)\r\n| order by ['TargetAccounts Count'] desc, Name asc\r\n",
         "size": 0,
-        "exportParameterName": "WDigest",
-        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
-        "exportToExcelOptions": "visible",
         "title": "WDigest, by account workstation - click to filter",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
+        "exportParameterName": "WDigest",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "table",
         "gridSettings": {
           "formatters": [
@@ -1219,9 +1606,13 @@
             "parentColumn": "ParentId",
             "treeType": 0,
             "expanderColumn": "Name"
-          },
-          "labelSettings": []
+          }
         }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "WDigest"
       },
       "customWidth": "50",
       "name": "query - 25"
@@ -1232,7 +1623,6 @@
         "version": "KqlItem/1.0",
         "query": "let details = dynamic({WDigest});\r\nSecurityEvent \r\n| where EventID == 4624 or EventID == 4776 \r\n| where Level == 8 \r\n| where PackageName contains 'WDigest' \r\n| where (details.Type == 'Workstation' and details.Name == Workstation) or (details.Type == 'TargetAccount' and details.Name == TargetAccount) or (details.Type == '*')\r\n| summarize Count=count() by bin(TimeGenerated, 1h), Workstation",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "WDigest, by time and workstation",
         "timeContext": {
           "durationMs": 0
@@ -1240,7 +1630,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "areachart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "WDigest"
       },
       "customWidth": "50",
       "name": "query - 26"
@@ -1251,7 +1649,6 @@
         "version": "KqlItem/1.0",
         "query": "let details = dynamic({WDigest});\r\nSecurityEvent\r\n| where EventID == 4624 or EventID == 4776\r\n| where Level == 8\r\n| where PackageName contains 'WDigest'\r\n| where (details.Type == 'Workstation' and details.Name == Workstation) or (details.Type == 'TargetAccount' and details.Name == TargetAccount) or (details.Type == '*')\r\n| summarize Count=count() by TargetAccount, Workstation, WDigestServer=Computer , Activity\r\n| sort by Count desc",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "WDigest event details",
         "timeContext": {
           "durationMs": 0
@@ -1259,6 +1656,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -1299,9 +1699,13 @@
               }
             }
           ],
-          "filter": true,
-          "labelSettings": []
+          "filter": true
         }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "WDigest"
       },
       "name": "query - 27"
     },
@@ -1310,15 +1714,19 @@
       "content": {
         "json": "---\r\n### Azure AD Legacy Auth"
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "AADLegacy"
+      },
       "name": "text - 28"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\r\n| where ClientAppUsed in ('Other clients; Older Office clients', 'Other clients', 'Other clients; IMAP', 'Other clients; POP', 'Other clients; SMTP')\r\n| summarize count() by UserPrincipalName, ClientAppUsed //doughnut\r\n",
+        "query": "SigninLogs\r\n| where ClientAppUsed !contains \"Browser\" and ClientAppUsed !contains \"Mobile Apps and Desktop clients\" and ClientAppUsed !contains \"Exchange ActiveSync\"\r\n//| extend ClientAppUsedNew = iff(isempty(ClientAppUsed)==true,\"Unknown Auth\" ,ClientAppUsed)\r\n//| where ClientAppUsedNew !contains \"Unknown Auth\"\r\n| summarize count() by UserPrincipalName, ClientAppUsed //doughnut\r\n",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Legacy authentications, by account",
         "timeContext": {
           "durationMs": 0
@@ -1326,7 +1734,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "piechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "AADLegacy"
       },
       "customWidth": "50",
       "name": "query - 29"
@@ -1335,9 +1751,8 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\r\n| where ClientAppUsed in ('Other clients; Older Office clients', 'Other clients', 'Other clients; IMAP', 'Other clients; POP', 'Other clients; SMTP')\r\n| summarize count() by IPAddress,ClientAppUsed //doughnut",
+        "query": "SigninLogs\r\n| where ClientAppUsed !contains \"Browser\" and ClientAppUsed !contains \"Mobile Apps and Desktop clients\" and ClientAppUsed !contains \"Exchange ActiveSync\"\r\n//| extend ClientAppUsedNew = iff(isempty(ClientAppUsed)==true,\"Unknown Auth\" ,ClientAppUsed)\r\n//| where ClientAppUsedNew !contains \"Unknown Auth\"\r\n| summarize count() by IPAddress,ClientAppUsed //doughnut",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Legacy authentications, by IP address",
         "timeContext": {
           "durationMs": 0
@@ -1345,7 +1760,15 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "piechart"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "AADLegacy"
       },
       "customWidth": "50",
       "name": "query - 30"
@@ -1354,9 +1777,8 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\r\n| where ClientAppUsed in ('Other clients; Older Office clients', 'Other clients', 'Other clients; IMAP', 'Other clients; POP', 'Other clients; SMTP')\r\n| summarize count() by tostring(CountryOrRegion=LocationDetails.countryOrRegion), ClientAppUsed //bar\r\n| order by count_\r\n",
+        "query": "SigninLogs\r\n| where ClientAppUsed !contains \"Browser\" and ClientAppUsed !contains \"Mobile Apps and Desktop clients\" and ClientAppUsed !contains \"Exchange ActiveSync\"\r\n//| extend ClientAppUsedNew = iff(isempty(ClientAppUsed)==true,\"Unknown Auth\" ,ClientAppUsed)\r\n//| where ClientAppUsedNew !contains \"Unknown Auth\"\r\n| summarize count() by tostring(CountryOrRegion=LocationDetails.countryOrRegion), ClientAppUsed //bar\r\n| order by count_\r\n",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Legacy authentications, by country/region",
         "timeContext": {
           "durationMs": 0
@@ -1364,6 +1786,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "visualization": "table",
         "gridSettings": {
           "formatters": [
@@ -1420,6 +1845,11 @@
           ]
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "AADLegacy"
+      },
       "customWidth": "50",
       "name": "query - 31"
     },
@@ -1427,9 +1857,8 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\r\n| where ClientAppUsed in ('Other clients; Older Office clients', 'Other clients', 'Other clients; IMAP', 'Other clients; POP', 'Other clients; SMTP')\r\n| summarize count() by ClientAppUsed, UserPrincipalName //bar",
+        "query": "SigninLogs\r\n| where ClientAppUsed !contains \"Browser\" and ClientAppUsed !contains \"Mobile Apps and Desktop clients\" and ClientAppUsed !contains \"Exchange ActiveSync\"\r\n//| extend ClientAppUsedNew = iff(isempty(ClientAppUsed)==true,\"Unknown Auth\" ,ClientAppUsed)\r\n//| where ClientAppUsedNew !contains \"Unknown Auth\"\r\n| summarize count() by ClientAppUsed, UserPrincipalName //bar",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Legacy authentications, by authentication type",
         "timeContext": {
           "durationMs": 0
@@ -1437,6 +1866,9 @@
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "gridSettings": {
           "formatters": [
             {
@@ -1492,6 +1924,11 @@
           ]
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "AADLegacy"
+      },
       "customWidth": "50",
       "name": "query - 32"
     },
@@ -1499,21 +1936,69 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\r\n| where ClientAppUsed in ('Other clients; Older Office clients', 'Other clients', 'Other clients; IMAP', 'Other clients; POP', 'Other clients; SMTP')\r\n| summarize count() by UserPrincipalName, IPAddress, ClientAppUsed, tostring(CountryOrRegion=LocationDetails.countryOrRegion) //table",
+        "query": "SigninLogs\r\n| where ClientAppUsed !contains \"Browser\" and ClientAppUsed !contains \"Mobile Apps and Desktop clients\" and ClientAppUsed !contains \"Exchange ActiveSync\"\r\n//| extend ClientAppUsedNew = iff(isempty(ClientAppUsed)==true,\"Unknown Auth\" ,ClientAppUsed)\r\n//| where ClientAppUsedNew !contains \"Unknown Auth\"\r\n| extend mergeCountry = toupper(LocationDetails.countryOrRegion)\r\n| summarize  IPaddress = make_set(IPAddress), count() by UserPrincipalName,  ClientAppUsed, tostring(CountryOrRegion=mergeCountry) //table\r\n| order by count_ desc",
         "size": 0,
-        "exportToExcelOptions": "visible",
         "title": "Legacy authentications details",
         "timeContext": {
           "durationMs": 0
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces"
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserPrincipalName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IPAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ClientAppUsed",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CountryOrRegion",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true
+        },
+        "sortBy": []
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "AADLegacy"
       },
       "name": "query - 33"
     }
   ],
-  "styleSettings": {},
   "fromTemplateId": "sentinel-InsecureProtocols",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
