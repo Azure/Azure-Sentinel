@@ -44,80 +44,70 @@ query: |
 
     let triThreshold = 500;
     let startTime = 6h;
-    let endTime = 0h;
     let dgaLengthThreshold = 8;
     // fetch the alexa top 1M domains
-    let top1M =
-    (externaldata (Position:int, Domain:string) 
-     [@"http://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"]
-     with (format="csv", zipPattern="*.csv"));
+    let top1M =  (externaldata (Position:int, Domain:string)   [@"http://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"]  with (format="csv", zipPattern="*.csv"));
     // extract tri grams that are above our threshold - i.e. are common
-    let triBaseline = 
-    top1M
-     | extend Domain = tolower(extract("([^.]*).{0,7}$", 1, Domain))
-     | extend AllTriGrams = array_concat(extract_all("(...)", Domain), extract_all("(...)", substring(Domain, 1)), extract_all("(...)", substring(Domain, 2)))
-     | mvexpand Trigram=AllTriGrams
-     | summarize triCount=count() by tostring(Trigram)
-     | sort by triCount desc
-     | where triCount > triThreshold
-     | distinct Trigram;
-    // collect domain information from common security log, filter and extract the DGA candidate
-    let allDataSummarized = 
-    CommonSecurityLog
+    let triBaseline =   top1M
+    | extend Domain = tolower(extract("([^.]*).{0,7}$", 1, Domain))
+    | extend AllTriGrams = array_concat(extract_all("(...)", Domain), extract_all("(...)", substring(Domain, 1)), extract_all("(...)", substring(Domain, 2)))
+    | mvexpand Trigram=AllTriGrams
+    | summarize triCount=count() by tostring(Trigram)
+    | sort by triCount desc
+    | where triCount > triThreshold
+    | distinct Trigram;
+    // collect domain information from common security log, filter and extract the DGA candidate and its trigrams
+    let allDataSummarized =   CommonSecurityLog
     | where TimeGenerated > ago(startTime)
-    | where TimeGenerated < ago(endTime)
     | where isnotempty(DestinationHostName)
-    | project Name=tolower(DestinationHostName), SourceIP, DestinationIP, DataSource=DeviceVendor
-    | summarize count() by Name, SourceIP, DestinationIP, DataSource
-    | where Name contains "."
-    | where Name !has ".home"
-    | where Name !has ".lan"
+    | extend Name = tolower(DestinationHostName)
+    | distinct Name
+    | where Name has "."
+    | where Name !endswith ".home" and Name !endswith ".lan"
+    // extract DGA candidate
     | extend DGADomain = extract("([^.]*).{0,7}$", 1, Name)
     | where strlen(DGADomain) > dgaLengthThreshold
     // throw out domains with number in them
     | where DGADomain matches regex "^[A-Za-z]{0,}$"
-    | project DGADomain, Name, SourceIP, DestinationIP, DataSource;
     // extract the tri grams from summarized data
-    let extractedTris = allDataSummarized 
     | extend AllTriGrams = array_concat(extract_all("(...)", DGADomain), extract_all("(...)", substring(DGADomain, 1)), extract_all("(...)", substring(DGADomain, 2)));
-    // find domains that have repeating tri's and/or >=3 repeating letters
-    let invalidTris =
-    extractedTris
-    | mvexpand AllTriGrams
-    | summarize count() by tostring(AllTriGrams), Name, DGADomain, SourceIP, DestinationIP, DataSource
-    | where count_ > 1
-    | distinct DGADomain;
-    // throw them out using an anti join
-    let nonRepeatingTris =
-    extractedTris
-    | join kind=leftanti
-        (
-            invalidTris
-        ) on DGADomain;
-    // find domains that have a common tri in the baseline
-    let domainsToExclude =
-    nonRepeatingTris
-    | mvexpand AllTriGrams
-    | extend Trigram = tostring(AllTriGrams)
-    | summarize count() by Trigram, DGADomain
-    | join kind=inner
-       (
-          triBaseline
-       )on Trigram
-    | distinct DGADomain;
-    // throw them out using an anti join
-    let dataWithRareTris =
-    nonRepeatingTris
-    | join kind=leftanti
-        (
-            domainsToExclude
-        ) on DGADomain;
-    // throw out domains that feature in the top 1M
-    dataWithRareTris
+    // throw out domains that have repeating tri's and/or >=3 repeating letters
+    let nonRepeatingTris =  allDataSummarized
     | join kind=leftanti
     (
-        top1M
-        | extend Name = Domain
-        | project Name
-    ) on Name
+        allDataSummarized
+        | mvexpand AllTriGrams
+        | summarize count() by tostring(AllTriGrams), DGADomain
+        | where count_ > 1
+        | distinct DGADomain
+    )
+    on DGADomain;
+    // find domains that do not have a common tri in the baseline
+    let dataWithRareTris =  nonRepeatingTris
+    | join kind=leftanti
+    (
+        nonRepeatingTris
+        | mvexpand AllTriGrams
+        | extend Trigram = tostring(AllTriGrams)
+        | distinct Trigram, DGADomain
+        | join kind=inner
+        (
+            triBaseline
+        )
+        on Trigram
+        | distinct DGADomain
+    )
+    on DGADomain;
+    dataWithRareTris
+    // join DGAs back on connection data
+    | join kind=inner
+    (
+        CommonSecurityLog
+        | where TimeGenerated > ago(startTime)
+        | where isnotempty(DestinationHostName)
+        | extend DestinationHostName = tolower(DestinationHostName)
+        | project-rename Name=DestinationHostName, DataSource=DeviceVendor
+        | distinct Name, SourceIP, DestinationIP, DataSource
+    )
+    on Name
     | project Name, DGADomain, SourceIP, DestinationIP, DataSource
