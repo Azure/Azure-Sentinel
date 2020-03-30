@@ -15,17 +15,18 @@ query: |
 
   let timeRange = 7d;
   let clientThreshold = 1;
+  let eventFrequency = 10;
   let data = W3CIISLog
-  //Get script files asmx, aspx
+  //Get script files e.g. asmx, aspx
   | where csUriStem contains ".as"
   //Exclude local addresses, needs editing to matc your network configuration
   | where cIP !startswith "10." and cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
-  | summarize makelist(cIP), count(TimeGenerated) by csUriStem, sSiteName, csUserAgent;
+  | distinct cIP, TimeGenerated, csUriStem, sSiteName, csUserAgent, sIP 
+  | summarize makeset(cIP), dcount(TimeGenerated), min(TimeGenerated), max(TimeGenerated) by csUriStem, sSiteName, csUserAgent, sIP
+  | where dcount_TimeGenerated >= eventFrequency;
   data
-  | mvexpand list_cIP
-  | distinct tostring(list_cIP), csUriStem, sSiteName, csUserAgent
-  | summarize dcount(list_cIP), makelist(list_cIP), makelist(sSiteName) by csUriStem, csUserAgent
-  | where dcount_list_cIP == clientThreshold 
-  //Uncomment to check to see if useragent is likely a browser
+  | mvexpand set_cIP
+  | summarize dcount(tostring(set_cIP)), makeset(set_cIP), makeset(sSiteName) by csUriStem, csUserAgent, sIP, min_TimeGenerated, max_TimeGenerated
+  | where dcount_set_cIP <= clientThreshold
+  | project ClientIP = tostring(set_set_cIP), list_SiteName = set_sSiteName, RequestedURI = csUriStem, SourceIP = sIP, csUserAgent, min_TimeGenerated, max_TimeGenerated
   | where csUserAgent startswith "Mozilla"
-
