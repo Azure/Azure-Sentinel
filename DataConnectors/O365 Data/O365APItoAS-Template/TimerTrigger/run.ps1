@@ -256,9 +256,8 @@ $endTime
 $lastlogTime
 
 
-$domain = $domain+".onmicrosoft.com"
-$headerParams = Get-AuthToken $env:clientID $env:clientSecret $domain $env:tenantGuid
-Get-O365Data $startTime $endTime $headerParams $tenantGuid
+$headerParams = Get-AuthToken $env:clientID $env:clientSecret $env:domain $env:tenantGuid
+Get-O365Data $startTime $endTime $headerParams $env:tenantGuid
 
 
 # Write an information log with the current time.
