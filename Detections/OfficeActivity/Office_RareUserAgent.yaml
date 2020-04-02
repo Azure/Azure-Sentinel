@@ -1,0 +1,48 @@
+id: 967376d1-cace-4c88-912b-76f3388022ae
+name: OfficeActivity - Rare user agent detected
+description: |
+  'Identifies rare user agents observed in OfficeActivity data based upon a 14 day baseline. This detection
+  extracts words from user agents to build the baseline and determine rareity rather than perform a direct comparison. 
+  This avoids FPs caused by version numbers and other high entropy user agent components'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 6h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+query: |
+
+    let startTime = 14d;
+    let captureWindow = 6h;
+    let allData = 
+    OfficeActivity
+    | where isnotempty(UserAgent)
+    | where TimeGenerated > ago(startTime)
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, ClientIP, UserId, Type
+    // remove wordSize blocks of non-numeric hex characters prior to word extraction
+    | extend UserAgentNoHexAlphas = replace("([A-Fa-f]{4,})", "x", UserAgent)
+    // once blocks of hex chars are removed, extract wordSize blocks of a-z
+    | extend Tokens = extract_all("([A-Za-z]{4,})", UserAgentNoHexAlphas)
+    // concatenate extracted words to create a summarized user agent for baseline and comparison 
+    | extend NormalizedUserAgent = strcat_array(Tokens, "|")
+    | project-away UserAgentNoHexAlphas, Tokens;
+    allData
+    | where StartTime > ago(captureWindow)
+    | join kind = leftanti
+    (
+        allData
+        | where StartTime > ago(startTime)
+        | where StartTime < ago(captureWindow)
+        | summarize by NormalizedUserAgent
+    )
+    on NormalizedUserAgent
+    | project StartTime, EndTime, RareUserAgent = UserAgent, NormalizedUserAgent, UserId, ClientIP, Type
+    | extend AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+
