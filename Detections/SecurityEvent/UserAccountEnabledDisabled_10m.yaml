@@ -1,0 +1,47 @@
+﻿id: 3d023f64-8225-41a2-9570-2bd7c2c4535e
+name: User account enabled and disabled within 10 mins
+description: |
+  'Identifies when a user account is enabled and then disabled within 10 minutes. This can be an indication of compromise and
+  an adversary attempting to hide in the noise.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+
+  let timeframe = 1d;
+  let spanoftime = 10m;
+  let threshold = 0;
+  SecurityEvent 
+  | where TimeGenerated > ago(2*timeframe) 
+  // A user account was enabled
+  | where EventID == 4722
+  | where AccountType =~ "User"
+  | project creationTime = TimeGenerated, CreateEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
+  AccountUsedToCreate = SubjectUserName, TargetSid, SubjectUserSid 
+  | join kind= inner (
+    SecurityEvent
+    | where TimeGenerated > ago(timeframe) 
+    // A user account was disabled 
+    | where EventID == 4725
+  | where AccountType == "User"
+  | project deletionTime = TimeGenerated, DeleteEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
+  AccountUsedToDelete = SubjectUserName, TargetSid, SubjectUserSid 
+  ) on Computer, TargetUserName
+  | where deletionTime - creationTime < spanoftime
+  | extend TimeDelta = deletionTime - creationTime
+  | where tolong(TimeDelta) >= threshold
+  | project TimeDelta, creationTime, CreateEventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate, 
+  deletionTime, DeleteEventID, AccountUsedToDelete
+  | extend timestamp = creationTime, AccountCustomEntity = AccountUsedToCreate, HostCustomEntity = Computer
