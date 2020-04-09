@@ -26,14 +26,14 @@ query: |
   | where EventID == 4625 and AccountType =~ "User"
   | where IpAddress !in ("127.0.0.1", "::1")
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), CountToday = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
-  | join (
+  | join kind=leftouter (
       SecurityEvent 
       | where TimeGenerated between (ago(starttime) .. ago(endtime))
       | where EventID == 4625 and AccountType =~ "User"
       | where IpAddress !in ("127.0.0.1", "::1")
       | summarize CountPrev7day = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
   ) on EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress
-  | where CountToday >= CountPrev7day*threshold and CountToday >= countlimit
+  | where CountToday >= coalesce(CountPrev7day,0)*threshold and CountToday >= countlimit
   | extend Reason = case(
   SubStatus == '0xc000005e', 'No logon servers available to service the logon request',
   SubStatus == '0xc0000062', 'Account name is not properly formatted',
