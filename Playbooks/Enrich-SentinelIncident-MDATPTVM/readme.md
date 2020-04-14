@@ -4,8 +4,6 @@ author: Yaniv Shasha
 This playbook will enrich the Client machine that is part of sentinel incident with thread vulnerabilities data (TVM) with CVE that their score is grater then 7.5.
 Also it automatically add this information to the incident as comments and change the incident severity to High."
 
-This playbook will enrich the Client machine that is part of sentinel incident with thread vulnerabilities data (TVM) with CVE that their score is grater then 7.5.
-Also it automatically add this information to the incident as comments and change the incident severity to High.
 
 Prerequisite:
 
