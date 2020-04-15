@@ -1,6 +1,7 @@
 ﻿# Azure Function
 
-## Prerequisite
+## Prerequisites
+* Ideally have access to Visual Studio or Visual Studio Code
 * Install dotnet core 3.1, https://dotnet.microsoft.com/download/dotnet-core
 * Install azure-cli, https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest
 * Install azure-functions-core-tools, https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local
@@ -20,7 +21,7 @@
     - Obtain the Azure Storage connection string for the container. https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string 
 3. Create a new Azure Keyvault. 
 	- Add the following secrets
-		- BlobStorageAccountKeys - A semi-colon ';' separated list of storage accounts and to check ie NAME:KEY;NAME:KEY
+		- BlobStorageAccountKeys - A semi-colon ';' separated list of storage accounts to check ie NAME:KEY;NAME:KEY
             - NAME is the name of the storage account
             - KEY is the access key taken from the storage account's 'Access Keys' page.
 		- BlobStorageConnectionString - The connection string to blob storage that will hold state data
@@ -32,15 +33,17 @@
 
 ## Publish the Azure Function
 You can publish an Azure Function with Visual Studio or Visual Studio Code. Alternatively the following commands will get you started.
+
 An important note on using the following commands, the Azure Function version must match what is defined in your codebase. Visual Studio will prompt to upgrade the function if this is different, the command below may not.
 
 Run the following commands
 ``az login``
-``func azure functionapp publish nameoffunction --csharp --force
-``
+followed by
+``func azure functionapp publish nameoffunction --csharp --force``
 
 ## Configure
-In the Azure Function Application settings set up a configuration mapping from environment variable to keyvault entry. You can find these settings Platform features -> Configuration -> Application settings -> New application setting. 
+In the Azure Function Application settings set up a configuration mapping from environment variable to keyvault entry.
+You can find these settings in Platform features -> Configuration -> Application settings -> New application setting. 
 You can find the SECRETURI references below in the respective properies of the keyvault entries created earlier.
 * Name = BlobStorageAccountKeys Value = @Microsoft.KeyVault(SecretUri=https://SECRETURI)
 * Name = BlobStorageConnectionString Value = @Microsoft.KeyVault(SecretUri=https://SECRETURI)
