@@ -24,7 +24,7 @@ The objective is helping customers to quickly deploy Azure Sentinel following th
 
 4. Click “Submit” then “Create Project”
 
-![Instructions](./Gifs/signin.gif)
+![Instructions](./Gifs/createproject.gif)
 
 5. An Azure DevOps project will be created in your organization
 
