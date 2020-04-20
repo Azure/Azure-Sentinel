@@ -9,7 +9,7 @@ The objective is helping customers to quickly deploy Azure Sentinel following th
 
 1. Create or use an existing Azure DevOps organization
 2. [Access to Azure Sentinel DevOps Template](https://nam06.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdocs.microsoft.com%2Fen-us%2Fazure%2Fdevops%2Forganizations%2Faccounts%2Fcreate-organization%3Fview%3Dazure-devops&data=02%7C01%7Ccrmuno%40microsoft.com%7Cd340cee195414944089708d7e20b9512%7C72f988bf86f141af91ab2d7cd011db47%7C1%7C0%7C637226411708890912&sdata=sUZ77jIq42KnMWF8%2BCTtEyaoGDDQ1xk9OE1HJGitlaI%3D&reserved=0)
-3. [Access to Azure DevOps Generator](https://nam06.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdocs.microsoft.com%2Fen-us%2Fazure%2Fdevops%2Fdemo-gen%2Fuse-demo-generator-v2%3Fview%3Dazure-devops&data=02%7C01%7Ccrmuno%40microsoft.com%7Cd340cee195414944089708d7e20b9512%7C72f988bf86f141af91ab2d7cd011db47%7C1%7C0%7C637226411708900870&sdata=0XTp%2BCwHnScmiiNJly0pv%2ByyFsmU8h6RjXb2V4pdO%2B8%3D&reserved=0)
+3. [Access to Azure DevOps Generator](https://azuredevopsdemogenerator.azurewebsites.net/)
 
 Steps:
 
