@@ -11,14 +11,21 @@ The objective is helping customers to quickly deploy Azure Sentinel following th
 2. [Access to Azure Sentinel DevOps Template](https://nam06.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdocs.microsoft.com%2Fen-us%2Fazure%2Fdevops%2Forganizations%2Faccounts%2Fcreate-organization%3Fview%3Dazure-devops&data=02%7C01%7Ccrmuno%40microsoft.com%7Cd340cee195414944089708d7e20b9512%7C72f988bf86f141af91ab2d7cd011db47%7C1%7C0%7C637226411708890912&sdata=sUZ77jIq42KnMWF8%2BCTtEyaoGDDQ1xk9OE1HJGitlaI%3D&reserved=0)
 3. [Access to Azure DevOps Generator](https://azuredevopsdemogenerator.azurewebsites.net/)
 
-Steps:
+**Steps**:
 
-1. Sign in to Azure DevOps Generator
+1. Sign in to [Azure DevOps Generator]()
 
-2. Create a new project, ex: “Azure Sentinel POC” then select your organization “.
+![Instructions](./Gifs/signin.gif)
+
+2. Create a new project, Specify a Project Name i.e. “Azure Sentinel POC” then select your organization.
+
+
 3. Click “Choose template”, select Github. Past the raw url: (<https://raw.githubusercontent.com/microsoft/AzureSentinelDevOps/master/Azure%20-Sentinel-DevOps.zip)>
 
 4. Click “Submit” then “Create Project”
+
+![Instructions](./Gifs/signin.gif)
+
 5. An Azure DevOps project will be created in your organization
 
 6. Click on “Backlogs”, you should be able to see “Features” and “User Stories” providing guidance.
