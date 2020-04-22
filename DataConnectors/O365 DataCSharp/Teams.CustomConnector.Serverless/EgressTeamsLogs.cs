@@ -1,15 +1,14 @@
 using Microsoft.Azure.WebJobs;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Teams.CustomConnector.Common;
-using Teams.CustomConnector.Models;
-using Teams.CustomConnector.StorageHandler;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
+using Teams.CustomConnector.Common;
+using Teams.CustomConnector.Models;
 using Teams.CustomConnector.Sentinel;
+using Teams.CustomConnector.StorageHandler;
 
 namespace Teams.CustomConnector.Serverless
 {

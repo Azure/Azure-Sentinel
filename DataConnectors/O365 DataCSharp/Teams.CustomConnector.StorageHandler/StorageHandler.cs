@@ -1,10 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage;
-using Teams.CustomConnector.Common;
 using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Teams.CustomConnector.Common;
 using Constants = Teams.CustomConnector.Common.Constants;
 
 /// <summary>
@@ -110,15 +110,12 @@ namespace Teams.CustomConnector.StorageHandler
             catch (Exception ex)
             {
                 log.LogError(ex.InnerException.ToString());
-             //   throw;
             }
             return operationDetails;
         }
 
         private void CreateCloudStroageHandler()
         {
-          
-
             bool.TryParse(Environment.GetEnvironmentVariable(Constants.KeyVaultEnabled), out bool isKeyVaultEnabled);
             if (isKeyVaultEnabled)
             {

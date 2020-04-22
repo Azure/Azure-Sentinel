@@ -1,7 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
-using Teams.CustomConnector.Common;
-using Teams.CustomConnector.Models;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -11,6 +9,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Teams.CustomConnector.Common;
+using Teams.CustomConnector.Models;
 
 
 /// <summary>
@@ -248,12 +248,12 @@ namespace Teams.CustomConnector.Processor
             try
             {
                 log.LogInformation(Constants.OMSDetailHttpRequestSent);
-                // **** Call the Http Client Service ****
+           
                 HttpClient client = new HttpClient();
                 client.BaseAddress = new Uri(url);
 
                 var AuthToken = await GetAuthToken();
-                // Add an Accept header for JSON format.
+                
                 client.DefaultRequestHeaders.Add("Authorization", "Bearer " + AuthToken);
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
