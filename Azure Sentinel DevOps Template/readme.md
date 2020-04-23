@@ -1,7 +1,8 @@
 # Azure DevOps Generator
+Microsoft’s cloud-native SIEM Azure Sentinel provides intelligent security analytics at cloud scale for your entire enterprise. Azure Sentinel makes it easy to collect security data across your entire hybrid organization from devices, users, apps and servers on any cloud. It uses the power of artificial intelligence to ensure you are identifying real threats quickly and unleashes you from the burden of traditional SIEMs by eliminating the need to spend time on setting up, maintaining, and scaling infrastructure.
 
 Organizations struggle with the number of tasks to adopt a cloud technology due the lack of an agile methodology to plan, execute,  validate its initial success and deploy into production.
-Adopting a cloud native SIEM
+Frankly, adopting a cloud native SIEM is not trivial task.
 
 The objective is helping customers to quickly deploy Azure Sentinel following the best practices using  Azure DevOps board with agile practices.
 
