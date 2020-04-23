@@ -1,8 +1,7 @@
 # Azure DevOps Generator
-Microsoft’s cloud-native SIEM Azure Sentinel provides intelligent security analytics at cloud scale for your entire enterprise. Azure Sentinel makes it easy to collect security data across your entire hybrid organization from devices, users, apps and servers on any cloud. It uses the power of artificial intelligence to ensure you are identifying real threats quickly and unleashes you from the burden of traditional SIEMs by eliminating the need to spend time on setting up, maintaining, and scaling infrastructure.
 
 Organizations struggle with the number of tasks to adopt a cloud technology due the lack of an agile methodology to plan, execute,  validate its initial success and deploy into production.
-Frankly, adopting a cloud native SIEM is not trivial task.
+Adopting a cloud native SIEM
 
 The objective is helping customers to quickly deploy Azure Sentinel following the best practices using  Azure DevOps board with agile practices.
 
@@ -21,7 +20,7 @@ The objective is helping customers to quickly deploy Azure Sentinel following th
 2. Create a new project, Specify a Project Name i.e. “Azure Sentinel POC” then select your organization.
 
 
-3. Click “Choose template”, select Github. Past the raw url: (<https://raw.githubusercontent.com/microsoft/AzureSentinelDevOps/master/Azure%20-Sentinel-DevOps.zip)>
+3. Click “Choose template”, select Github. Past the raw udirrl: (<https://raw.githubusercontent.com/microsoft/AzureSentinelDevOps/master/Azure%20-Sentinel-DevOps.zip)>
 
 4. Click “Submit” then “Create Project”
 
