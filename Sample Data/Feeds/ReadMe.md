@@ -1,0 +1,1 @@
+Folder to store threat intel feeds 
