@@ -68,7 +68,7 @@ Note: You will need to prepare VS code for Azure function development.  See http
 16. Click Generate.
 17. Click WorkspaceKey and copy the current version string to a temp location.
 
-### Confiugure Settings for the Function
+### Configure Settings for the Function
 1. Go to the Azure Portal.
 2. Go to the resource group that was created.  Click the Function.
 3. Click Platform Features Tab.
