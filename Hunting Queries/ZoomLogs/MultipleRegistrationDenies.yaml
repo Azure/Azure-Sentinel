@@ -1,0 +1,36 @@
+
+id: e119c365-9213-45a1-bbd7-8faf6d103d30
+name: User denined multiple registration events sucessfully registering
+description: |
+  'This hunting query identifies users that have attempted to register for multiple webinars or recordings 
+  but have been deined by the organizer but have then sucessfull registered for an event. The number of events
+  a user needs to be rejected from is adjusted with the threshold variable.'
+requiredDataConnectors:
+  - connectorId: CustomConnector
+    dataTypes:
+      - ZoomLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+
+  let hunt_time = 30d; 
+  let threshold = 2; 
+  let failed_users = (
+ZoomLogs 
+  | where TimeGenerated > ago(hunt_time) 
+  | where Event == "webinar.registration_denied" or Event == "recording.registration_denied" 
+  | extend RegisteringUser = columnifexists('payload_object_registrant_email_s', payload_object_registrant_email_s)
+  | extend ItemId = columnifexists('tostring(parse_json(WebinarEvents).WebinarId)',payload_object_uuid_s)
+  | summarize dcount(ItemId) by RegisteringUser
+  | where dcount_ItemId > threshold
+  | project RegisteringUser);
+ZoomLogs 
+  | where TimeGenerated > ago(hunt_time) 
+  | where Event == "webinar.registration_approved" or Event == "recording.registration_approved" 
+  | extend RegisteringUser = columnifexists('payload_object_registrant_email_s', payload_object_registrant_email_s) 
+  | extend ItemId = columnifexists('tostring(parse_json(WebinarEvents).WebinarId)',payload_object_uuid_s)
+  | extend EventName = columnifexists('tostring(parse_json(WebinarEvents).WebinarName)',payload_object_topic_s)
+  | where RegisteringUser !in (failed_users)
+  | project RegisteringUser, EventName

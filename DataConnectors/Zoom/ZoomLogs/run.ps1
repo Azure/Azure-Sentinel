@@ -137,16 +137,22 @@ function Write-OMSLogfile {
 
 Write-Host "PowerShell HTTP trigger function processed a request."
 $currentUTCtime = (Get-Date).ToUniversalTime()
+$headers = $Request.Headers
 
+# If Verification key is set to None skip verification
+If ($env:ZoomVerification -eq "None") {Write-Host "Not Verifying"}
+
+# If authorization key is not valid
+If ($headers["authorization"] -eq $env:ZoomVerification -Or $env:ZoomVerification -eq "None") {
 # Get request body
 $event = $Request.Body
 
 # Write logs to OMS Workspace
 $writeResult = Write-OMSLogfile $currentUTCtime $env:customLogName $event $env:workspaceId $env:workspaceKey
 
-
 # Return Write-OMSLogfile response to output binding
 Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
     StatusCode = $writeResult
     Body = ""
 })
+}{Write-Host "Invalid Source"}
