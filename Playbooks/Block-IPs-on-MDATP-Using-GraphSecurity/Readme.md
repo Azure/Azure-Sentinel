@@ -6,7 +6,7 @@ This playbook will get the IP information from an Azure Sentinel incident when t
 **NOTE**: **This playbook requires the enablement of at least one of the following data connections: Azure Sentinel, Office 365 Outlook, Microsoft Graph Security. This playbook uses a managed identity to access the API. You will need to add the playbook to the subscriptions or management group with Security Reader Role.**
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-IPs-on-MDATP-Using-GraphSecurity%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+    <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-IPs-on-MDATP-Using-GraphSecurity%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
