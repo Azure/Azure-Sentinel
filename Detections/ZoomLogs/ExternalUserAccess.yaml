@@ -20,16 +20,17 @@ query: |
 
   let timeframe = 1d;
   ZoomLogs 
-  | where TimeGenerated > ago(timeframe)
-  | where Event == "account.settings_updated" 
+  | where TimeGenerated >= ago(timeframe)
+  | where Event =~ "account.settings_updated" 
   | extend EnforceLogin = columnifexists("payload_object_settings_schedule_meeting_enfore_login_b", "") 
   | extend EnforceLoginDomain = columnifexists("payload_object_settings_schedule_meeting_enfore_login_b", "") 
   | extend GuestAlerts = columnifexists("payload_object_settings_in_meeting_alert_guest_join_b", "") 
   | where EnforceLogin == 'false' or EnforceLoginDomain == 'false' or GuestAlerts == 'false' 
-  | extend SettingChanged = iif(EnforceLogin == 'false' and EnforceLoginDomain == 'false' and GuestAlerts == 'false', "All settings changed", 
-                              iif(EnforceLogin == 'false' and EnforceLoginDomain == 'false', "Enforced Logons and Restricted Domains Changed", 
-                              iif(EnforceLoginDomain == 'false' and GuestAlerts == 'false', "Enforced Domains Changed", 
-                              iif(EnforceLoginDomain == 'false', "Enfored Domains Changed", 
-                              iif(GuestAlerts == 'false', "Guest Join Alerts Changed", 
-                              iif(EnforceLogin == 'false', "Enforced Logins Changed", "No Changes")))))) 
-  | project TimeGenerated, Event, User, UserId, SettingChanged   
+  | extend SettingChanged = case(EnforceLogin == 'false' and EnforceLoginDomain == 'false' and GuestAlerts == 'false', "All settings changed", 
+                              EnforceLogin == 'false' and EnforceLoginDomain == 'false', "Enforced Logons and Restricted Domains Changed", 
+                              EnforceLoginDomain == 'false' and GuestAlerts == 'false', "Enforced Domains Changed", 
+                              EnforceLoginDomain == 'false', "Enfored Domains Changed", 
+                              GuestAlerts == 'false', "Guest Join Alerts Changed", 
+                              EnforceLogin == 'false', "Enforced Logins Changed", 
+                              "No Changes")
+  | extend timestamp = TimeGenerated, AccountCustomEntity = User

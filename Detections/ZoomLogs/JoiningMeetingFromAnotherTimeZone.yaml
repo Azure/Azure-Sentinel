@@ -8,8 +8,8 @@ requiredDataConnectors:
   - connectorId: CustomConnector
     dataTypes:
       - ZoomLogs
-queryFrequency: 6h
-queryPeriod: 6h
+queryFrequency: 1d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -18,19 +18,19 @@ relevantTechniques:
   - T1078
 query: |
 
-  let schedule_lookback = 30d; 
-  let join_lookback = 6h; 
+  let schedule_lookback = 14d; 
+  let join_lookback = 1d; 
   // If you want to whitelist specific timezones include them in a list here
   let tz_whitelist = dynamic([]);
   let meetings = ( 
   ZoomLogs 
-  | where TimeGenerated > ago(schedule_lookback) 
-  | where Event == "meeting.created" 
+  | where TimeGenerated >= ago(schedule_lookback) 
+  | where Event =~ "meeting.created" 
   | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId)  
   | extend SchedTimezone = tostring(parse_json(MeetingEvents).Timezone)); 
   ZoomLogs 
-  | where TimeGenerated > ago(join_lookback) 
-  | where Event == "meeting.participant_joined" 
+  | where TimeGenerated >=W ago(join_lookback) 
+  | where Event =~ "meeting.participant_joined" 
   | extend JoinedTimeZone = tostring(parse_json(MeetingEvents).Timezone) 
   | extend MeetingName = tostring(parse_json(MeetingEvents).MeetingName) 
   | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId) 
@@ -38,3 +38,4 @@ query: |
   | join (meetings) on MeetingId 
   | where SchedTimezone != JoinedTimeZone 
   | project TimeGenerated, MeetingName, JoiningUser=payload_object_participant_user_name_s, JoinedTimeZone, SchedTimezone, MeetingScheduler=User1 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = JoiningUser
