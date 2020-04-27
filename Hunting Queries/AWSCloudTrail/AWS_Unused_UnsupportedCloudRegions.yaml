@@ -1,0 +1,38 @@
+id: e0d57543-acbd-428b-bb96-24a67506f84d
+name: Unused or Unsupported Cloud Regions
+description: |
+  'Adversaries may create cloud instances in unused geographic service regions in order to evade detection. 
+  Access is usually obtained through compromising accounts used to manage cloud infrastructure.
+  Refer: https://attack.mitre.org/techniques/T1535/'
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1535
+query: |
+
+  let starttime = 14d;
+  let midtime = 2d;
+  let endtime = 1d;
+  // Generating historical table of all events per AccountId and Region
+  AWSCloudTrail
+  | where TimeGenerated >= ago(endtime)
+  | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId 
+  // Doing Leftanti join to find new regions historically not seen for the same account.
+  | join kind= leftanti
+  (
+    AWSCloudTrail
+    | where TimeGenerated  between (ago(starttime)..ago(midtime))
+    | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId 
+  ) on AWSRegion, UserIdentityAccountId 
+  // Join Ununsed region seen with current data to gather context about API events seen
+  | join kind= inner (
+     AWSCloudTrail
+     | where TimeGenerated >= ago(endtime)
+  ) on AWSRegion, UserIdentityAccountId
+  | extend UnusedRegion = AWSRegion 
+  | summarize EventCount = count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventNameList=make_set(EventName), IPList=make_set(SourceIpAddress) by UserIdentityAccountId, UnusedRegion, UserIdentityUserName
+  | extend timestamp = StartTimeUtc , AccountCustomEntity = UserIdentityUserName
