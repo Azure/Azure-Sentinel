@@ -1,30 +1,44 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-        "metadata":{
+    "metadata": {
         "comments": "This playbook will ingest OKTA events logs into Sentinel.",
         "author": "Yaniv Shasha"
-        },
+    },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "OktaEvents-to-Sentinel",
             "type": "String"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "OktaURL": {
+            "type": "string",
+            "defaultValue": "Enter your okta instance url"
+        },
+        "APIKey": {
+            "type": "string",
+            "defaultValue": "Enter your okta API Key"
         }
     },
     "variables": {
 
- "azureloganalyticsdatacollector": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "azuremonitorlogs_1": "[concat('azuremonitorlogs_1-', parameters('PlaybookName'))]"
+        "azureloganalyticsdatacollector": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "azuremonitorlogs": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
 
     },
-    "resources":[
+    "resources": [
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
             "name": "[variables('azureloganalyticsdatacollector')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "customParameterValues": {},
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                 }
@@ -33,10 +47,12 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('azuremonitorlogs_1')]",
+            "name": "[variables('azuremonitorlogs')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "customParameterValues": {},
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
                 }
@@ -52,7 +68,7 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]",
-                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs_1'))]"
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -61,7 +77,8 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": {
-                            "defaultValue": {},
+                            "defaultValue": {
+                            },
                             "type": "Object"
                         }
                     },
@@ -79,7 +96,8 @@
                             "foreach": "@body('Parse_JSON')",
                             "actions": {
                                 "Send_Data": {
-                                    "runAfter": {},
+                                    "runAfter": {
+                                    },
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": "@{items('For_each')}",
@@ -108,7 +126,8 @@
                             "foreach": "@body('Run_query_and_list_results')?['value']",
                             "actions": {
                                 "Parse_JSON_2": {
-                                    "runAfter": {},
+                                    "runAfter": {
+                                    },
                                     "type": "ParseJson",
                                     "inputs": {
                                         "content": "@items('For_each_2')",
@@ -154,18 +173,19 @@
                                     "Authorization": "SSWS @{variables('APIKey')}"
                                 },
                                 "method": "GET",
-                                "uri": "https://dev-541535-admin.okta.com/api/v1/events?startDate=@{first(body('Parse_JSON_2'))?['max_published_t']}"
+                                "uri": "[concat('https://', parameters('OktaURL'), '/api/v1/events?startDate=@{first(body(''Parse_JSON_2''))?[''max_published_t'']}')]"
                             }
                         },
                         "Initialize_variable": {
-                            "runAfter": {},
+                            "runAfter": {
+                            },
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
                                         "name": "APIKey",
                                         "type": "string",
-                                        "value": ""
+                                        "value": "[parameters('APIKey')]"
                                     }
                                 ]
                             }
@@ -566,7 +586,8 @@
                             }
                         }
                     },
-                    "outputs": {}
+                    "outputs": {
+                    }
                 },
                 "parameters": {
                     "$connections": {
@@ -576,9 +597,9 @@
                                 "connectionName": "[variables('azureloganalyticsdatacollector')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                             },
-                            "azuremonitorlogs_1": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs_1'))]",
-                                "connectionName": "[variables('azuremonitorlogs_1')]",
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                                "connectionName": "[variables('azuremonitorlogs')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
                             }
                         }
