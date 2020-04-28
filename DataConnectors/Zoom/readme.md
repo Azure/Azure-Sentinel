@@ -20,15 +20,15 @@ The easiest way is via the provided ARM templates:
 Alternatively you can deploy the elements manually.
 #### 2: Deploy via VS Code
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
-1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/ZoomLogs/DataConnectors/master/zoom_logs_template.zip?raw=true) file of the Azure Funciton app from Github.
-2. Extract to location on your machine.
+1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Zoom/zoom_logs_template.zip?raw=true) file of the Azure Funciton app from Github.
+2. Extract to a location on your local host.
 3. Open VS Code.
 4. Click File -> Open Folder.
-5. Select the Top folder from extracted files.
+5. Select the top level folder from extracted files.
 6. Type Crtl+Shift+P.
-7. Click Azure Functions: Deploy to function app.  You maybe asked to sign in to azure.
+7. Click Azure Functions: Deploy to function app.  You maybe asked to sign in to Azure.
 8. Click Create New function app in Azure (advanced).
-9. Provide a unique name like "ZoomLogs".  Press Enter.
+9. Provide a unique name like "ZoomLogs". Press Enter.
 10. Click Windows.
 11. Click Consumption.
 12. Click PowerShell.
@@ -64,26 +64,26 @@ Note: You will need to prepare VS code for Azure function development.  See http
 12. Click Save.
 13. Click Secrets.
 14. Click Generate.
-15. Enter WorkspaceKey.  Paste the AAD app secret.  Click Create.
+15. Enter WorkspaceKey. Paste in your Azure Sentinel Workspace Key. Click Create.
 16. Click Generate.
-17. Click WorkspaceKey and copy the current version string to a temp location.
+17. Click WorkspaceKey and copy the current version string to a temporary location.
 
 ### Configure Settings for the Function
 1. Go to the Azure Portal.
-2. Go to the resource group that was created.  Click the Function.
+2. Go to the resource group that was created. Click the Function.
 3. Click Platform Features Tab.
 4. Click Configuration under General.
-5. click edit next to workspaceKey.
-6. Update the value using your copied properties.
+5. Click edit next to workspaceKey.
+6. Update the value using the string copied from KeyVault.
 * @Microsoft.KeyVault(SecretUri=https://<dnsname>/secrets/workspaceKey/<versionstring>)
 7. Click Ok.
-8. click Edit next to workspaceKey.
-9. Update the value with your Azure Sentinel Workspace ID.
-10. Click OK.
+8. Click edit next to workspaceId.
+9. Update the value with your Sentinel Workspace Id.
+10. Click Ok.
 11. Click Save.
 
 ## Configure your Zoom API app.
-You also need to configure your Zoom account to sent event to your Function App to do this go to https://marketplace.zoom.us/ and log in with a user who has admin access to your Zoom account.
+You also need to configure your Zoom account to sent events to your Function App. To do this go to https://marketplace.zoom.us/ and log in with a user who has admin access to your Zoom account.
 1. Select ‘Develop’ in the top right hand corner and click ‘Build App’. 
 2. Select ‘Webhook Only’ as your app type. 
 3. Give your app a name.
