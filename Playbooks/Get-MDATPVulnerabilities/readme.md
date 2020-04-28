@@ -27,7 +27,7 @@ This playbook will retrieve the list of vulnerabilities from the Microsoft Defen
 	
 7. Populate Microsoft Word Template
 
-  * Set the Location and Document Library of where you stored the Word template. The VulnDetails parameter should automatically be populated with vulnarray.
+   * Set the Location and Document Library of where you stored the Word template. The VulnDetails parameter should automatically be populated with vulnarray.
 	
 8. Create WordDoc on Sharepoint 
 
@@ -35,11 +35,11 @@ This playbook will retrieve the list of vulnerabilities from the Microsoft Defen
 	
 9. Convert Word doc to PDF 
 
- * Set the Location and Document Library of where the Word file is stored. If you have stored it in the standard Documents library, the expression in File should be able to dynamically retrieve it.
+   * Set the Location and Document Library of where the Word file is stored. If you have stored it in the standard Documents library, the expression in File should be able to dynamically retrieve it.
 	
 10. Create PDF
 
- * Set the Site Address and Folder Path to export the PDF. Filename has been configured to use the same format as the Word doc
+   * Set the Site Address and Folder Path to export the PDF. Filename has been configured to use the same format as the Word doc
 	
 11. Create link to PDF
 	
@@ -47,4 +47,4 @@ This playbook will retrieve the list of vulnerabilities from the Microsoft Defen
 	
 12. Optional  - Customizing comment field
 
- * You can customize the comment field under Add comment to incident (V2) to include more details
+   * You can customize the comment field under Add comment to incident (V2) to include more details
