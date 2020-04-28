@@ -1,4 +1,4 @@
-# Create-AzureDevOpsTask
+# Get-MDATPVulnerabilities
 author: Wayne Lee
 
 This playbook will retrieve the list of vulnerabilities from the Microsoft Defender ATP API for the host entity
