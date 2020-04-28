@@ -39,12 +39,12 @@ This playbook will retrieve the list of vulnerabilities from the Microsoft Defen
 	
 10. Create PDF
 
-   * Set the Site Address and Folder Path to export the PDF. Filename has been configured to use the same format as the Word doc
+    * Set the Site Address and Folder Path to export the PDF. Filename has been configured to use the same format as the Word doc
 	
 11. Create link to PDF
 	
-   * Set Site address and Library name. The default sharing permissions are limited to the people in your organization, with View-only access.
+    * Set Site address and Library name. The default sharing permissions are limited to the people in your organization, with View-only access.
 	
 12. Optional  - Customizing comment field
 
-   * You can customize the comment field under Add comment to incident (V2) to include more details
+    * You can customize the comment field under Add comment to incident (V2) to include more details
