@@ -1,0 +1,799 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "SharepointOnline:TenantID": {
+      "type": "string",
+      "metadata": {
+        "description": "The tenant ID of for the Azure Active Directory application"
+      }
+    },
+    "LogicAppLocation": {
+      "type": "string",
+      "minLength": 1,
+      "allowedValues": [
+        "[resourceGroup().location]",
+        "eastasia",
+        "southeastasia",
+        "centralus",
+        "eastus",
+        "eastus2",
+        "westus",
+        "northcentralus",
+        "southcentralus",
+        "northeurope",
+        "westeurope",
+        "japanwest",
+        "japaneast",
+        "brazilsouth",
+        "australiaeast",
+        "australiasoutheast",
+        "southindia",
+        "centralindia",
+        "westindia",
+        "canadacentral",
+        "canadaeast",
+        "uksouth",
+        "ukwest",
+        "westcentralus",
+        "westus2",
+        "koreacentral",
+        "koreasouth",
+        "francecentral",
+        "francesouth",
+        "uaecentral",
+        "southafricanorth",
+        "southafricawest"
+      ],
+      "defaultValue": "japaneast"
+    },
+    "PlaybookName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "Get-VulnerabilitiesDefenderATP"
+    },
+    "ClientID": {
+      "type": "string"
+    },
+    "ClientSecret": {
+      "type": "securestring"
+    },
+    "MDATP:TenantID": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionDisplayName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "SharepointOnlineConnectionDisplayName": "[concat('sharepointonline-', parameters('PlaybookName'))]",
+    "WordOnlineBusinessConnectionDisplayName": "[concat('wordonlinebusiness-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "SharepointOnlineConnectionName": "[concat('sharepointonline-', parameters('PlaybookName'))]",
+    "WordOnlineBusinessConnectionName": "[concat('wordonlinebusiness-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "Add_comment_to_incident_(V2)": {
+              "inputs": {
+                "body": {
+                  "Value": "Link to vuln report:\n@{body('Create_link_to_PDF')?['link']?['webUrl']}\n"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}"
+              },
+              "runAfter": {
+                "Alert_-_Get_incident": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection"
+            },
+            "Alert_-_Get_incident": {
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+              },
+              "runAfter": {
+                "Create_link_to_PDF": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection"
+            },
+            "Convert_Word_Document_to_PDF": {
+              "runAfter": {
+                "Create_WordDoc": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['wordonlinebusiness']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/api/templates/convertFile",
+                "queries": {
+                  "drive": "",
+                  "file": "@{replace(body('Create_WordDoc')?['Path'],'/Shared Documents','')}",
+                  "format": "pdf",
+                  "source": ""
+                }
+              }
+            },
+            "Create_WordDoc": {
+              "runAfter": {
+                "Populate_a_Microsoft_Word_template": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@body('Populate_a_Microsoft_Word_template')",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/datasets//files",
+                "queries": {
+                  "folderPath": "",
+                  "name": "@{utcNow('s')}_@{variables('hostname')}.docx",
+                  "queryParametersSingleEncoded": true
+                }
+              }
+            },
+            "Create_PDF": {
+              "runAfter": {
+                "Convert_Word_Document_to_PDF": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@body('Convert_Word_Document_to_PDF')",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/datasets//files",
+                "queries": {
+                  "folderPath": "",
+                  "name": "@{utcNow('s')}_@{variables('hostname')}.pdf",
+                  "queryParametersSingleEncoded": true
+                }
+              }
+            },
+            "Create_link_to_PDF": {
+              "inputs": {
+                "body": {
+                  "scope": "organization",
+                  "type": "view"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/datasets//codeless/_api/v2.0/sites/root/lists//items/@{encodeURIComponent(encodeURIComponent(body('Create_PDF')?['ItemId']))}/driveItem/createLink"
+              },
+              "runAfter": {
+                "Create_PDF": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection"
+            },
+            "For_each_2": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_JSON_for_Computer_Name')?['value']",
+              "actions": {
+                "For_each_3": {
+                  "type": "Foreach",
+                  "foreach": "@body('Parse_JSON')",
+                  "actions": {
+                    "Condition": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "contains": [
+                              "@items('For_each_2')?['computerDnsName']",
+                              "@items('For_each_3')?['HostName']"
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "For_each": {
+                          "type": "Foreach",
+                          "foreach": "@body('Parse_JSON_for_Vulnerabilities')?['value']",
+                          "actions": {
+                            "Append_to_array_variable": {
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "vulnarray",
+                                "value": {
+                                  "CVE": "@items('For_each')?['id']",
+                                  "CVSS": "@items('For_each')?['cvssV3']",
+                                  "Description": "@items('For_each')?['description']",
+                                  "Name": "@items('For_each')?['name']",
+                                  "Severity": "@items('For_each')?['severity']"
+                                }
+                              },
+                              "runAfter": {}
+                            }
+                          },
+                          "runAfter": {
+                            "Parse_JSON_for_Vulnerabilities": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Get_Vulnerabilities": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "https://api.securitycenter.windows.com/api/machines/@{variables('machine_id')}/vulnerabilities",
+                            "headers": {
+                              "Authorization": "Bearer @{body('Parse_JSON_for_Token')?['access_token']}"
+                            }
+                          },
+                          "runAfter": {
+                            "Set_hostname": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Parse_JSON_for_Vulnerabilities": {
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('Get_Vulnerabilities')",
+                            "schema": {
+                              "properties": {
+                                "@@odata.context": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "items": {
+                                    "properties": {
+                                      "cvssV3": {
+                                        "type": "number"
+                                      },
+                                      "description": {
+                                        "type": "string"
+                                      },
+                                      "exploitInKit": {
+                                        "type": "boolean"
+                                      },
+                                      "exploitTypes": {
+                                        "type": "array"
+                                      },
+                                      "exploitUris": {
+                                        "type": "array"
+                                      },
+                                      "exploitVerified": {
+                                        "type": "boolean"
+                                      },
+                                      "exposedMachines": {
+                                        "type": "integer"
+                                      },
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "publicExploit": {
+                                        "type": "boolean"
+                                      },
+                                      "publishedOn": {
+                                        "type": "string"
+                                      },
+                                      "severity": {
+                                        "type": "string"
+                                      },
+                                      "updatedOn": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "name",
+                                      "description",
+                                      "severity",
+                                      "cvssV3",
+                                      "exposedMachines",
+                                      "publishedOn",
+                                      "updatedOn",
+                                      "publicExploit",
+                                      "exploitVerified",
+                                      "exploitInKit",
+                                      "exploitTypes",
+                                      "exploitUris"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          },
+                          "runAfter": {
+                            "Get_Vulnerabilities": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Set_hostname": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "hostname",
+                            "value": "@items('For_each_2')?['computerDnsName']"
+                          },
+                          "runAfter": {
+                            "Set_value_of_machine_id": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Set_value_of_machine_id": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "machine_id",
+                            "value": "@items('For_each_2')?['id']"
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "runAfter": {}
+                }
+              },
+              "runAfter": {
+                "Init_var_for_hostname_fqdn": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Get_AuthToken": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "https://login.windows.net/@{parameters('tenant_id')}/oauth2/token",
+                "headers": {
+                  "Content-Type": "application/x-www-form-urlencoded"
+                },
+                "body": "resource=https://api.securitycenter.windows.com&client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&grant_type=client_credentials"
+              },
+              "runAfter": {
+                "Parse_JSON": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Get_MachineList": {
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "https://api.securitycenter.windows.com/api/machines",
+                "headers": {
+                  "Authorization": "Bearer @{body('Parse_JSON_for_Token')?['access_token']}"
+                }
+              },
+              "runAfter": {
+                "Parse_JSON_for_Token": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Init_array_for_vuln": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "vulnarray",
+                    "type": "array"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Init_var_for_machine_id": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Init_var_for_hostname": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "hostname",
+                    "type": "string"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Init_array_for_vuln": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Init_var_for_hostname_fqdn": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "hostname_fqdn",
+                    "type": "string"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Init_var_for_hostname": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Init_var_for_machine_id": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "machine_id",
+                    "type": "string"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Parse_JSON_for_Computer_Name": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_JSON": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()?['Entities']",
+                "schema": {
+                  "items": {
+                    "properties": {
+                      "$id": {
+                        "type": "string"
+                      },
+                      "Address": {
+                        "type": "string"
+                      },
+                      "DnsDomain": {
+                        "type": "string"
+                      },
+                      "HostName": {
+                        "type": "string"
+                      },
+                      "Type": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "$id",
+                      "Type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "runAfter": {}
+            },
+            "Parse_JSON_for_Computer_Name": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Get_MachineList')",
+                "schema": {
+                  "properties": {
+                    "@@odata.context": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "properties": {
+                          "aadDeviceId": {},
+                          "agentVersion": {
+                            "type": "string"
+                          },
+                          "computerDnsName": {
+                            "type": "string"
+                          },
+                          "exposureLevel": {
+                            "type": "string"
+                          },
+                          "firstSeen": {
+                            "type": "string"
+                          },
+                          "healthStatus": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "lastExternalIpAddress": {
+                            "type": "string"
+                          },
+                          "lastIpAddress": {
+                            "type": "string"
+                          },
+                          "lastSeen": {
+                            "type": "string"
+                          },
+                          "machineTags": {
+                            "type": "array"
+                          },
+                          "osBuild": {
+                            "type": "integer"
+                          },
+                          "osPlatform": {
+                            "type": "string"
+                          },
+                          "osProcessor": {
+                            "type": "string"
+                          },
+                          "osVersion": {},
+                          "rbacGroupId": {
+                            "type": "integer"
+                          },
+                          "rbacGroupName": {},
+                          "riskScore": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "computerDnsName",
+                          "firstSeen",
+                          "lastSeen",
+                          "osPlatform",
+                          "osVersion",
+                          "osProcessor",
+                          "version",
+                          "lastIpAddress",
+                          "lastExternalIpAddress",
+                          "agentVersion",
+                          "osBuild",
+                          "healthStatus",
+                          "rbacGroupId",
+                          "rbacGroupName",
+                          "riskScore",
+                          "exposureLevel",
+                          "aadDeviceId",
+                          "machineTags"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "runAfter": {
+                "Get_MachineList": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_JSON_for_Token": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Get_AuthToken')",
+                "schema": {
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "string"
+                    },
+                    "expires_on": {
+                      "type": "string"
+                    },
+                    "ext_expires_in": {
+                      "type": "string"
+                    },
+                    "not_before": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    },
+                    "token_type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "runAfter": {
+                "Get_AuthToken": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Populate_a_Microsoft_Word_template": {
+              "runAfter": {
+                "For_each_2": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "01HHIYXYSJROIMCNXWHVEJIUASW2EPCJY6": "",
+                "01VLYQLCBAYFATD4JBZRELY24YCTH3GPCL": ""
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "-102104082": "@variables('vulnarray')"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['wordonlinebusiness']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/api/templates/getFile",
+                "queries": {
+                  "drive": "",
+                  "file": "",
+                  "source": ""
+                }
+              }
+            }
+          },
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "client_id": {
+              "type":  "String"
+            },
+            "client_secret": {
+              "type": "SecureString"
+            },
+            "tenant_id": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "wordonlinebusiness": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'japaneast', '/managedApis/', 'wordonlinebusiness')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('WordOnlineBusinessConnectionName'))]",
+                "connectionName": "[variables('WordOnlineBusinessConnectionName')]"
+              },
+              "sharepointonline": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'japaneast', '/managedApis/', 'sharepointonline')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SharepointOnlineConnectionName'))]",
+                "connectionName": "[variables('SharepointOnlineConnectionName')]"
+              },
+              "azuresentinel": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'japaneast', '/managedApis/', 'azuresentinel')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]"
+              }
+            }
+          },
+          "client_id": {
+            "value": "[parameters('ClientID')]"
+          },
+          "client_secret": {
+            "value": "[parameters('ClientSecret')]"
+          },
+          "tenant_id": {
+            "value": "[parameters('MDATP:TenantID')]"
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('LogicAppLocation')]",
+      "tags": {
+        "displayName": "LogicApp"
+      },
+      "apiVersion": "2016-06-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('WordOnlineBusinessConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('SharepointOnlineConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ]
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('SharepointOnlineConnectionName')]",
+      "location": "japaneast",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'japaneast', '/managedApis/', 'sharepointonline')]"
+        },
+        "displayName": "[variables('SharepointOnlineConnectionDisplayName')]",
+        "nonSecretParameterValues": {
+          "token:TenantId": "[parameters('SharepointOnline:TenantID')]"
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "japaneast",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'japaneast', '/managedApis/', 'azuresentinel')]"
+        },
+        "displayName": "[variables('AzureSentinelConnectionDisplayName')]"
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('WordOnlineBusinessConnectionName')]",
+      "location": "japaneast",
+      "properties": {
+        "api": {
+          "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', 'japaneast', '/managedApis/', 'wordonlinebusiness')]"
+        },
+        "displayName": "[variables('WordOnlineBusinessConnectionDisplayName')]"
+      }
+    }
+  ],
+  "outputs": {}
+}
