@@ -29,7 +29,7 @@ Use a dedicated account with a complex pwd stored in Azure Key Vault.
 2. Create a new function that is timer based. Depending on your need, set it to run on a schedule like every 5 minutes. (For high load consider more often)
 3. Paste the code from ingestmsgtrace.ps1 to the code window
 4. Select Platform features, by clicking on the Function App name and click the Platform features tab at the top. Click Configuration under General Settings.
-5. Provide the following values, if you want to add further protection store the pwd and key in Azure Key Vault. https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references
+5. Provide the following values, if you want to add further protection store the pwd and key in Azure Key Vault. https://docs.microsoft.com/azure/app-service/app-service-key-vault-references
      - expass  (Exchange password)
      - exuser (User account with the right to run Get-messagetrace)
      - workspaceId (log analytics workspace)
