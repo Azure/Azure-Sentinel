@@ -14,6 +14,8 @@ description: "This sample can be used to process message traces from an Azure Fu
 
 # Ingesting Office 365 Message Traces to Azure Sentinel
 
+Kudos to Stefan Simon! :)
+
 Implementing this script as part of an Azure Function will allow you to ingest Office 365 Message traces to Log Analytics.
 
 ### Prerequisites
