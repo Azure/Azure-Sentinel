@@ -18,21 +18,23 @@ query: |
   let midtime = 2d;
   let endtime = 1d;
   // Generating historical table of all events per AccountId and Region
-  AWSCloudTrail
-  | where TimeGenerated >= ago(endtime)
-  | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId 
+  let EventInfo_CurrentDay =  materialize (AWSCloudTrail | where TimeGenerated >= ago(endtime));
+  let EventInfo_historical = AWSCloudTrail  | where TimeGenerated  between (ago(starttime)..ago(midtime)) | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId; 
   // Doing Leftanti join to find new regions historically not seen for the same account.
+  let EventInfo_Unseen = materialize (
+  EventInfo_CurrentDay
+  | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId
   | join kind= leftanti
   (
-    AWSCloudTrail
-    | where TimeGenerated  between (ago(starttime)..ago(midtime))
-    | summarize max(TimeGenerated) by AWSRegion, UserIdentityAccountId 
-  ) on AWSRegion, UserIdentityAccountId 
+    EventInfo_historical
+  ) on AWSRegion, UserIdentityAccountId
+  );
+  EventInfo_Unseen
   // Join Ununsed region seen with current data to gather context about API events seen
   | join kind= inner (
-     AWSCloudTrail
-     | where TimeGenerated >= ago(endtime)
+     EventInfo_CurrentDay
   ) on AWSRegion, UserIdentityAccountId
-  | extend UnusedRegion = AWSRegion 
-  | summarize EventCount = count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventNameList=make_set(EventName), IPList=make_set(SourceIpAddress) by UserIdentityAccountId, UnusedRegion, UserIdentityUserName
-  | extend timestamp = StartTimeUtc , AccountCustomEntity = UserIdentityUserName
+  | extend UnusedRegion = AWSRegion
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | summarize EventCount = count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), EventNameList=make_set(EventName), IPList=make_set(SourceIpAddress) by UserIdentityAccountId, UnusedRegion, UserIdentityUserName
+  | extend timestamp = StartTime , AccountCustomEntity = UserIdentityUserName
