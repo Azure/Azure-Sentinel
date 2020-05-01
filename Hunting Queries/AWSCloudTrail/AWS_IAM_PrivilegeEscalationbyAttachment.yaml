@@ -3,7 +3,7 @@ name: IAM Privilege Escalation by Instance Profile attachment
 description: |
   'An instance profile is a container for an IAM role that you can use to pass role information to an EC2 instance when the instance start.
   Identifies when existing role is removed and new/existing high privileged role is added to instance profile. 
-  Any instance with this instance profile attached can able to perform privileged operations.
+  Any instance with this instance profile attached is able to perform privileged operations.
   AWS Instance Profile: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html
   and CloudGoat - IAM PrivilegeEscalation by Attachment: https://github.com/RhinoSecurityLabs/cloudgoat/tree/master/scenarios/iam_privesc_by_attachment'
 requiredDataConnectors:
@@ -22,22 +22,23 @@ query: |
   | where TimeGenerated >= ago(timeframe)
   | where  EventName in~ ("RemoveRoleFromInstanceProfile") and isempty(ErrorMessage)
   | extend RoleRemoved = tostring(parse_json(RequestParameters).roleName), InstanceProfileName = tostring(parse_json(RequestParameters).instanceProfileName), TimeRemoved=TimeGenerated
-  | distinct TimeRemoved, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
-  UserIdentityUserName, SourceIpAddress, AWSRegion, EventSource, RoleRemoved, InstanceProfileName;
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | summarize RoleRemovedCount= dcount(TimeRemoved) by TimeRemoved, EventName, EventTypeName, UserIdentityArn, UserIdentityUserName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
+  SourceIpAddress, AWSRegion, EventSource, RoleRemoved, InstanceProfileName;
   // Creating separate table for AddRoleToInstanceProfile
   let AddRole=AWSCloudTrail
   | where TimeGenerated >= ago(timeframe)
   | where  EventName in~ ("AddRoleToInstanceProfile") and isempty(ErrorMessage)
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
   | extend RoleAdded = tostring(parse_json(RequestParameters).roleName), InstanceProfileName = tostring(parse_json(RequestParameters).instanceProfileName), TimeAdded=TimeGenerated
-  | distinct TimeAdded, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
-  UserIdentityUserName, SourceIpAddress, AWSRegion, EventSource, RoleAdded, InstanceProfileName;
+  | summarize RoleAddedCount= dcount(TimeAdded) by TimeAdded, EventName, EventTypeName, UserIdentityArn, UserIdentityUserName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
+  SourceIpAddress, AWSRegion, EventSource, RoleAdded, InstanceProfileName;
   //Joining both operations from the same source IP, user and instance profile name
   RemoveRole
   | join kind= inner (
      AddRole 
   ) on AWSRegion,SourceIpAddress, InstanceProfileName, UserIdentityUserName
   | where TimeAdded  > TimeRemoved // Checking if RoleAdd operation was performed after removal
-  | summarize count(), make_set(EventName) by TimeAdded, TimeRemoved, RoleAdded, RoleRemoved, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,
-  UserIdentityUserName, SourceIpAddress, AWSRegion, EventSource
-  | extend timestamp = iff(TimeAdded > TimeRemoved,TimeAdded, TimeRemoved)
-  | extend timestamp , IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityAccountId
+  | summarize TotalCount=count() by TimeAdded, TimeRemoved, RoleAdded, RoleRemoved, UserIdentityUserName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,
+  SourceIpAddress, AWSRegion, EventSource, RoleRemovedCount, RoleAddedCount
+  | extend timestamp = iff(TimeAdded > TimeRemoved,TimeAdded, TimeRemoved), IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
