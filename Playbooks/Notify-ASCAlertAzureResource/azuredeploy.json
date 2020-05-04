@@ -2,7 +2,7 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata":{
-        "comments": "This playbook will notify all mail enabled users assigned RBAC on the Azure Resource via a ASC alert generated Sentinel Incident.",
+        "comments": "This playbook will notify RBAC assigned Owners and Contributors both user and mail enabled security groups on the Azure Resource via a ASC alert generated Sentinel Incident.",
         "author": "Nathan Swift"
     },
     "parameters": {
@@ -80,6 +80,14 @@
             "tags": {
                 "LogicAppsCategory": "security"
             },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -137,11 +145,23 @@
                                     "type": "Query",
                                     "inputs": {
                                         "from": "@body('HTTP_2')?['value']",
-                                        "where": "@not(equals(item()?['mail'], null))"
+                                        "where": "@or(not(equals(item()?['mail'], null)), not(equals(item()?['otherMails'], null)))"
+                                    }
+                                },
+                                "Filter_array_2": {
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('HTTP')?['value']",
+                                        "where": "@or(contains(item()?['properties']?['roleDefinitionId'], '8e3af657-a8ff-443c-a75c-2fe8c4bcb635'), contains(item()?['properties']?['roleDefinitionId'], 'b24988ac-6180-42a0-ab88-20f7382dd24c'))"
                                     }
                                 },
                                 "For_each_2": {
-                                    "foreach": "@body('HTTP')?['value']",
+                                    "foreach": "@body('Filter_array_2')",
                                     "actions": {
                                         "Append_to_array_variable": {
                                             "runAfter": {},
@@ -153,7 +173,7 @@
                                         }
                                     },
                                     "runAfter": {
-                                        "HTTP": [
+                                        "Filter_array_2": [
                                             "Succeeded"
                                         ]
                                     },
@@ -162,13 +182,68 @@
                                 "For_each_3": {
                                     "foreach": "@body('Filter_array')",
                                     "actions": {
-                                        "Append_to_string_variable": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Append_to_string_variable": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "emailstring",
+                                                        "value": "@{items('For_each_3')?['mail']}; "
+                                                    }
+                                                }
+                                            },
                                             "runAfter": {},
-                                            "type": "AppendToStringVariable",
-                                            "inputs": {
-                                                "name": "emailstring",
-                                                "value": "@{items('For_each_3')?['mail']};"
-                                            }
+                                            "else": {
+                                                "actions": {
+                                                    "For_each_4": {
+                                                        "foreach": "@items('For_each_3')?['otherMails']",
+                                                        "actions": {
+                                                            "Condition_2": {
+                                                                "actions": {
+                                                                    "Append_to_string_variable_2": {
+                                                                        "runAfter": {},
+                                                                        "type": "AppendToStringVariable",
+                                                                        "inputs": {
+                                                                            "name": "emailstring",
+                                                                            "value": "@{items('For_each_4')}; "
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {},
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "not": {
+                                                                                "equals": [
+                                                                                    "@items('For_each_4')",
+                                                                                    "@null"
+                                                                                ]
+                                                                            }
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "Foreach"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each_3')?['mail']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
                                         }
                                     },
                                     "runAfter": {
@@ -210,7 +285,8 @@
                                             "includeDirectoryObjectReferences": true,
                                             "objectIds": "@variables('simpleassignarray')",
                                             "types": [
-                                                "user"
+                                                "user",
+                                                "group"
                                             ]
                                         },
                                         "method": "POST",

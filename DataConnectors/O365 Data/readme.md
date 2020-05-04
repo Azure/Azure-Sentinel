@@ -1,14 +1,5 @@
 # Deploy Function App for getting Office 365 Management API data into Azure Sentinel
-This function app will poll O365 Activity Managment API every 5 mins for logs.  It does support multi-tenant and is designed to get Audit.General and DLP.All events.
-
-For multi-tenant, you will need to add 4 properties to the app config.  You can do this locally in local.settings.json before deploying the app or after in the Azure Portal.
-To add a tenant:
-1. Update numberOfTenants to the number of tenants you want to poll.
-2. Add each of the following items replacing tenant1_ with tenant2_ and 3 and so on.
-* "tenant1_clientID": "<GUID>",
-* "tenant1_clientSecret": "@Microsoft.KeyVault(SecretUri=https://<name>.vault.azure.net/secrets/<secret>/<version>)",
-* "tenant1_domain": "<domain>",
-* "tenant1_tenantGuid": "<GUID>",
+This function app will poll O365 Activity Managment API every 5 mins for logs.  It is designed to get Audit.General and DLP.All events.
 
 ## Deployment and Configuration
 ### Add AAD App Permissions
@@ -47,14 +38,30 @@ $publisher = "<randomGuid>" Get a guid from https://guidgenerator.com/
 
 * Run this command to enable Audit.General Subscription. 
 ```powershell
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher"
 ```
 * Run this command to enable DLP.ALL subscription
 ```powershell
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher"
 ```
 
 ### Deploy the Function App
+There are 2 deployment Options.
+
+#### 1: Deploy via Azure ARM Template
+1.  Deploy the template.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+
+2. Deploy permissions for the function to the Key Vault.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy2.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+
+#### 1: Deploy via VS Code
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
 1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/O365%20Data/O365APItoAS-Template.zip?raw=true)  file of the Azure Funciton app from Github.
 2. Extract to location on your machine.

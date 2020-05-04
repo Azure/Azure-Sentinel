@@ -1,8 +1,9 @@
 ﻿id: 223db5c1-1bf8-47d8-8806-bed401b356a4
 name: Failed login attempts to Azure Portal
 description: |
-  'Identifies failed login attempts in the Azure Active Directory SigninLogs to the Azure Portal.  Multiple failed logon 
-  attempts could indicate a potential brute force attack.  We exclude the following success and non-failure results:
+  'Identifies failed login attempts in the Azure Active Directory SigninLogs to the Azure Portal.  Many failed logon 
+  attempts or some failed logon attempts from multiple IPs could indicate a potential brute force attack.  
+  The following are excluded due to success and non-failure results:
   References: https://docs.microsoft.com/en-us/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
   0 - successful logon
   50125 - Sign-in was interrupted due to a password reset or password registration entry.
@@ -13,7 +14,7 @@ requiredDataConnectors:
     dataTypes:
       - SigninLogs
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -23,21 +24,39 @@ relevantTechniques:
 query: |
 
   let timeRange = 1d;
-  SigninLogs
+  let lookBack = 7d;
+  let threshold_Failed = 5;
+  let threshold_FailedwithSingleIP = 20;
+  let threshold_IPAddressCount = 2;
+  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
+  let azPortalSignins = SigninLogs
   | where TimeGenerated >= ago(timeRange)
-  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
-  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-  | where AppDisplayName contains "Azure Portal"
-  // Exclude non-failure types
-  | where ResultType !in ("0", "50125", "50140")
-  // Removing unresolved identities that don't provide status
-  | where isnotempty(StatusDetails) and isnotempty(Location) and not(Identity matches regex "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}")
-  | extend Status = strcat(StatusCode, ": ", ResultDescription) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Status = makelist(Status), StatusDetails = makelist(StatusDetails), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress)
-  by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, CorrelationId  
-  | mvexpand IPAddresses, Status, StatusDetails
-  | extend Status = strcat(Status, "-", StatusDetails)
-  | summarize Status = makeset(Status) by StartTimeUtc, EndTimeUtc, tostring(IPAddresses), UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, IPAddressCount, CorrelationId
-  | where Status !has "MFA requirement satisfied by claim in the token"
-  | summarize Status = makeset(Status), IPAddresses = makeset(IPAddresses), CorrelationIds = makeset(CorrelationId) by StartTimeUtc, EndTimeUtc, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, IPAddressCount
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
+  // Azure Portal only and exclude non-failure Result Types
+  | where AppDisplayName has "Azure Portal" and ResultType !in ("0", "50125", "50140")
+  // Tagging identities not resolved to friendly names
+  | extend Unresolved = iff(Identity matches regex isGUID, true, false)
+  ;
+  // Lookup up resolved identities from last 7 days
+  let identityLookup = SigninLogs
+  | where TimeGenerated >= ago(lookBack)
+  | where not(Identity matches regex isGUID)
+  | summarize by UserId, lu_UserDisplayName = UserDisplayName, lu_UserPrincipalName = UserPrincipalName;
+  // Join resolved names to unresolved list from portal signins
+  let unresolvedNames = azPortalSignins | where Unresolved == true | join kind= inner (
+     identityLookup 
+  ) on UserId
+  | extend UserDisplayName = lu_UserDisplayName, UserPrincipalName = lu_UserPrincipalName
+  | project-away lu_UserDisplayName, lu_UserPrincipalName;
+  // Join Signins that had resolved names with list of unresolved that now have a resolved name
+  let u_azPortalSignins = azPortalSignins | where Unresolved == false | union unresolvedNames;
+  u_azPortalSignins
+  | extend Status = strcat(ResultType, ": ", ResultDescription), OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
+  | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
+  | summarize TimeGenerated = makelist(TimeGenerated), Status = makelist(Status), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress), FailedLogonCount = count()
+  by UserPrincipalName, UserId, UserDisplayName, AppDisplayName, Browser, OS, FullLocation
+  | mvexpand TimeGenerated, IPAddresses, Status
+  | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses), Status = tostring(Status)
+  | project-away IPAddresses
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status, FailedLogonCount, IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
+  | where (IPAddressCount >= threshold_IPAddressCount and FailedLogonCount >= threshold_Failed) or FailedLogonCount >= threshold_FailedwithSingleIP
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress

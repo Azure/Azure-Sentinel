@@ -9,6 +9,7 @@ export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
 }
 
 let fileTypeSuffixes = ["json"];
+let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return IsValidJsonFile(filePath);
@@ -21,4 +22,4 @@ let CheckOptions = {
   }
 };
 
-runCheckOverChangedFiles(CheckOptions, fileTypeSuffixes);
+runCheckOverChangedFiles(CheckOptions, fileKinds, fileTypeSuffixes);

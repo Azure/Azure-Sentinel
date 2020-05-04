@@ -194,7 +194,7 @@ function Get-O365Data{
                         #We dont need Cloud App Security Alerts due to MCAS connector
                         if(($event.Source) -ne "Cloud App Security"){
                             #Write each event to Log A
-                            #$writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
+                            $writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
                             #$writeResult
                         }
                     }
@@ -205,7 +205,7 @@ function Get-O365Data{
                             #We dont need Cloud App Security Alerts due to MCAS connector
                             if(($event.Source) -ne "Cloud App Security"){
                                 #write each event to Log A
-                                #$writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
+                                $writeResult = Write-OMSLogfile (Get-Date) $env:customLogName $event $env:workspaceId $env:workspaceKey
                                 #$writeResult
                             }
                         }
@@ -256,9 +256,8 @@ $endTime
 $lastlogTime
 
 
-$domain = $domain+".onmicrosoft.com"
-$headerParams = Get-AuthToken $env:clientID $env:clientSecret $domain $env:tenantGuid
-Get-O365Data $startTime $endTime $headerParams $tenantGuid
+$headerParams = Get-AuthToken $env:clientID $env:clientSecret $env:domain $env:tenantGuid
+Get-O365Data $startTime $endTime $headerParams $env:tenantGuid
 
 
 # Write an information log with the current time.
