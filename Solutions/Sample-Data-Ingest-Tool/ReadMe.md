@@ -74,6 +74,7 @@ This option allows users to post their own custom log data to Azure Log Analytic
 ### Setup
 >> 1. Follow step 1-4 from the [Setup](#Setup) section under Option 1 above.
 >> 2. In the Custom folder under Sample Data directory of the cloned repo, create a new file with your custom log data in a json format.
+>> 3. Follow step 5 from the [Setup](#Setup) section under Option 1 above.
 
 ### Contributing
 
