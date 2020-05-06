@@ -42,7 +42,10 @@ namespace SampleDataIngestTool
             var laClient = new OperationalInsightsDataClient(creds);
             laClient.WorkspaceId = customerId;
 
-            tableName = "alcide_kaudit_activity_1_CL";
+            var path = new SampleDataPath();
+            var dirPath = path.GetDirPath();
+            tableName = tableName.Replace(dirPath, "").Replace(".json", "");
+            
             string query = tableName
                            + @"| where TimeGenerated > ago(10d)
                              | limit 100";

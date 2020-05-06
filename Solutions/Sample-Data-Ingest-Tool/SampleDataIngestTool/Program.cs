@@ -39,7 +39,7 @@ namespace SampleDataIngestTool
 
                     // Check if the file has been pushed to the Log Analytics
                     bool result = laCheck.RunLAQuery(file);
-                    if (result == false)
+                    if (result == true)
                     {
                         // Prompt user to choose to repush data
                         Console.WriteLine("{0} has been posted. Would you like to post it again?", fileName);
