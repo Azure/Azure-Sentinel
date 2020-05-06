@@ -19,7 +19,7 @@ namespace SampleDataIngestTool
             {
                 var currentDirectory = System.IO.Directory.GetCurrentDirectory();
                 var basePath = currentDirectory.Split(new string[] { "\\bin" }, StringSplitOptions.None)[0];
-                var filePath = basePath + "\\config.json";
+                var filePath = basePath + "\\config.txt";
 
                 using (StreamReader streamReader = new StreamReader(filePath))
                 {
