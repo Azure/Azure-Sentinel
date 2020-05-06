@@ -24,9 +24,9 @@ namespace SampleDataIngestTool
             {
                 // Get credentials
                 var appConfig = new AppConfig();
-                var creds = appConfig.GetCredentials(customerId, sharedKey, "", "", "");
+                var creds = appConfig.GetCredentials();
                 customerId = creds["workspaceId"];
-                sharedKey = creds["sharedkey"];
+                sharedKey = creds["sharedKey"];
 
                 var laCheck = new LogAnalyticsCheck();
                 var path = new SampleDataPath();
@@ -39,7 +39,7 @@ namespace SampleDataIngestTool
 
                     // Check if the file has been pushed to the Log Analytics
                     bool result = laCheck.RunLAQuery(file);
-                    if (result == true)
+                    if (result == false)
                     {
                         // Prompt user to choose to repush data
                         Console.WriteLine("{0} has been posted. Would you like to post it again?", fileName);

@@ -19,8 +19,9 @@ namespace SampleDataIngestTool
 
         public bool RunLAQuery(string tableName)
         {
+            // Get credentials fron config.json
             var appConfig = new AppConfig();
-            var credentials = appConfig.GetCredentials(customerId, "", clientId, clientSecret, domain);
+            var credentials = appConfig.GetCredentials();
             customerId = credentials["workspaceId"];
             clientId = credentials["clientId"];
             clientSecret = credentials["clientSecret"];
