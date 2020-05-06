@@ -17,7 +17,10 @@ To configure the tool, the following assembly is required to post sample data to
 
 3. **Log Analytics workspace**. If you don't have one, [create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/learn/quick-create-workspace).
 
-4. Obtain **WorkSpaceId** and **Key** following this [documentation](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key). Copy this workspace Id and Key as you will need them later to run the application.
+4. Obtain **WorkSpaceId** and **Key** following these steps. Copy this workspace Id and Key as you will need them later to run the application.
+>> In the Azure portal, search for and select **Log Analytics workspaces**.
+In your list of Log Analytics workspaces, select the workspace you intend on configuring the agent to report to.
+Select Advanced settings.
 
 5. To enable Azure Sentinel, you need **contributor** permissions to the subscription in which the Azure Sentinel workspace resides. Learn more to [onboard Azure Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard#enable-azure-sentinel-).
 
@@ -50,13 +53,13 @@ This option allows users to post the readily available sample custom data in the
 2) In the cloned repo, navigate to the Solutions directory, and open SampleDataIngestTool solution.
 3) Install necessary dependencies: In Visual Studio, right click the **SampleDataIngestTool** solution.
 Click **Restore NuGet Packages**.
-4) Open AppConfig.cs file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
+4) Open config.txt file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
 
-        private readonly static string _customerId = "<enter_your_workspaceId_here>";
-        private readonly static string _sharedKey = "<enter_your_workspace_primary_key_here>";
-        private readonly static string _clientId = "<enter_your_workspaceId_here>";
-        private readonly static string _clientSecret = "<enter_your_client_secret_here>";
-        private readonly static string _domain = "<enter_your_domain_here>";
+        "workspaceId": "enter_your_workspaceId_or_customerId_here",
+        "sharedKey": "enter_your_workspace_primary_key_here",
+        "clientId": "enter_your_clientId_here",
+        "clientSecret": "enter_your_client_secret_here",
+        "domain": "enter_your_domain_here";
 
 5) Once changes are complete, save the file. <br>
 Now you can run the application. Please note that the "Main" function in the Program.cs class is the entry point for the application.
