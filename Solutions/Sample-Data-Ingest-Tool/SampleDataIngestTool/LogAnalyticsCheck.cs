@@ -74,6 +74,7 @@ namespace SampleDataIngestTool
                 }
                 else
                 {
+                    //check if there's any data in the table
                     string query1 = tableName
                                + @"| where TimeGenerated > ago(7d)
                              | limit 10";
