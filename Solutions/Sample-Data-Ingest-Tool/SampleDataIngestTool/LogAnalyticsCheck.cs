@@ -68,13 +68,13 @@ namespace SampleDataIngestTool
                 }
 
                 //check if the custom table name exists in the list
-                if (!tableNameList.Contains(tableName) == true)
+                if (tableNameList.Contains(tableName) == false)
                 {
                     return false;
                 }
                 else
                 {
-                    //check if there's any data in the table
+                    //check if there's any data in the table for last 7 days
                     string query1 = tableName
                                + @"| where TimeGenerated > ago(7d)
                              | limit 10";
