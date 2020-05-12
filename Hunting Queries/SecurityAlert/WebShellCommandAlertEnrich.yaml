@@ -1,0 +1,68 @@
+id: d2e6f31b-add1-4f44-b54d-1975a5605c1d
+name: Web shell command alert enrichment
+description: |
+  'Extracts MDATP Alerts that indicate a command was executed by a web shell. Uses time window based querying to idneitfy the potential web shell location on the server, then enriches with Attacker IP and User Agent'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - Privilege Escalation
+  - Persistence
+query: |
+  let timeRange = 3d;  
+  let lookupWindow = 5min;  
+  let lookupBin = lookupWindow / 2.0;
+  //Extract all MDATP security alert data for alerts associated with command execution by a web shell
+  let alldata = SecurityAlert  
+  | where ProviderName =~ "MDATP"  
+  | where AlertType =~ "c6a690b5-d9ee-447f-9ef5-f4a81aaf204d" or AlertType =~ "209703f8-7096-426a-bb95-2fc5f40970b9" or AlertType =~ "57c6571e-f37c-4c7f-8482-5f8dbd11b022" or AlertType =~ "1acde8eb-1c0b-45de-98b6-da1817cec9a3" 
+  | extend alertData = parse_json(Entities)  
+  | extend recordGuid = new_guid()  
+  | mvexpand alertData  
+  ;  
+  //Extract process data from alert JSON
+  let filedata = alldata  
+  | extend id = tostring(alertData.$id)  
+  | extend type = alertData.Type  
+  | extend imagename = alertData.Name  
+  | where type =~ "file"  
+  | where imagename != ""  
+  | extend imagefileref = id  
+  ;
+  //Extract commandline data from alert JSON
+  let commanddata = alldata  
+  | extend type = alertData.Type  
+  | extend commandline = tostring(alertData.CommandLine)  
+  | extend creationtime = tostring(alertData.CreationTimeUtc)  
+  | where type =~ "process"  
+  | extend imagefileref = tostring(alertData.ImageFile.$ref);
+  //Join file and command data together, we have no parsed the JSON object into a table we can work with
+  filedata  
+  | join kind=leftouter (  
+  commanddata  
+  | extend id = imagefileref  
+  ) on imagefileref  
+  | project recordGuid, TimeGenerated, creationtime, imagename, commandline, TimeKey = bin(TimeGenerated, lookupBin) 
+  | where commandline != "" 
+  | extend Start = TimeGenerated 
+  //Join to W3CIISLog using a time windows and key to find files accessed during the time that the commandline was executed
+  | join kind=inner ( 
+  W3CIISLog  
+  | where csUriStem endswith ".aspx" or csUriStem endswith ".asmx"  
+  | extend splitUriStem = split(csUriStem, "/")  
+  | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2]  
+  | extend TimeKey = range(bin(TimeGenerated-lookupWindow, lookupBin), bin(TimeGenerated, lookupBin),lookupBin)  
+  | mv-expand TimeKey to typeof(datetime)  
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) by Site=sSiteName, AttackerIP=cIP, AttackerUserAgent=csUserAgent, csUriStem, filename=tostring(FileName), tostring(firstDir), TimeKey 
+  ) on TimeKey 
+  | where (Start - EndTime) between (0min .. lookupWindow) 
+  | extend attackerP = pack(AttackerIP, AttackerUserAgent)  
+  | summarize Site=makeset(Site), Attacker=make_bag(attackerP) by csUriStem, filename, tostring(imagename), tostring(commandline) 
+  | project Site, ShellLocation=csUriStem, ShellName=filename, ParentProcess=imagename, CommandLine=commandline, Attacker
