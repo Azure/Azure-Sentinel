@@ -5,11 +5,7 @@ import * as logger from "./utils/logger";
 
 export async function IsFileContainsLinkWithLocale(filePath: string): Promise<ExitCode> {
   const content = fs.readFileSync(filePath, "utf8");
-  /* tslint:disable:no-unused-variable */
-  const fix = (content: string) => content.replace(/(https:\/\/docs.microsoft.com|https:\/\/azure.microsoft.com)(\/[a-z]{2}-[a-z]{2})(.*)$/i, 
-    (a, b, c, d) => `${b}${d}`);
-
-  if (content === fix(content)) {
+  if (content.test(/(https:\/\/docs.microsoft.com|https:\/\/azure.microsoft.com)(\/[a-z]{2}-[a-z]{2})/i)) {
       return ExitCode.SUCCESS;
   }
   return ExitCode.ERROR;

@@ -6,18 +6,19 @@ import chaiAsPromised from "chai-as-promised";
 
 chai.use(chaiAsPromised);
 
-describe("jsonFileValidator", () => {
-  it("should pass when json file is valid", async () => {
-    let result = await IsValidJsonFile(".script/tests/jsonFileValidatorTest/validFile.json");
-
+describe("documentsLinkValidator", () => {
+  it("should pass when no links", async () => {
+    let result = await IsValidJsonFile(".script/tests/documentsLinkValidatorTest/nodoclinks.md");
     expect(result).to.equal(ExitCode.SUCCESS);
   });
 
-  it("should throw exception when json file is invalid", async () => {
-    let filePath = ".script/tests/jsonFileValidatorTest/invalidFile.json";
+  it("should pass when link is valid", async () => {
+    let result = await IsValidJsonFile(".script/tests/documentsLinkValidatorTest/validlink.md");
+    expect(result).to.equal(ExitCode.ERROR);
+  });
 
-    await expect(IsValidJsonFile(filePath))
-      .eventually.rejectedWith(Error)
-      .and.have.property("name", "SyntaxError");
+  it("should fail when link conains locale", async () => {
+    let result = await IsValidJsonFile(".script/tests/documentsLinkValidatorTest/badlink.md");
+    expect(result).to.equal(ExitCode.ERROR);
   });
 });
