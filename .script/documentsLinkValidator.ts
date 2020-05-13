@@ -19,8 +19,8 @@ let CheckOptions = {
   onExecError: async (e: any, filePath: string) => {
     console.log(`Documentation links should not include locale: ${filePath}, ${e.message}`);
   },
-  onFinalFailed: async () => {
-    logger.logError("An error occurred, please open an issue");
+  onFinalFailed: async (e: any) => {
+    logger.logError("An error occurred, please open an issue, ${e} ${e.message}");
   }
 };
 
