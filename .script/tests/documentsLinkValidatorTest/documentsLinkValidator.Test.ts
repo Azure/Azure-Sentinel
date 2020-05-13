@@ -19,6 +19,6 @@ describe("documentsLinkValidator", () => {
 
   it("should fail when link contains locale", async () => {
     let result = await IsFileContainsLinkWithLocale(".script/tests/documentsLinkValidatorTest/badlink.md");
-    expect(result).to.equal(ExitCode.ERROR);
+    expect(result).eventually.rejectedWith(Error)
   });
 });
