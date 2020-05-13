@@ -4,7 +4,7 @@ At the time of submitting your Pull Request, automatic GitHub validations using 
 
 ## What is Azure Pipelines  
 
-[Azure Pipelines](https://docs.microsoft.com/en-us/azure/devops/pipelines/get-started/what-is-azure-pipelines?view=azure-devops) is a cloud service that you can use to automatically build and test your code project and make it available to other users. It works with just about any language or project type.   
+[Azure Pipelines](https://docs.microsoft.com/azure/devops/pipelines/get-started/what-is-azure-pipelines?view=azure-devops) is a cloud service that you can use to automatically build and test your code project and make it available to other users. It works with just about any language or project type.   
 
 
 ## How to add new PR validation:
@@ -18,7 +18,7 @@ The libraries are defined in package.json
 3. Create an Azure Pipeline job for the new validation.  
 Add new yaml file under [.azure-pipelines](https://github.com/Azure/Azure-Sentinel/blob/master/.azure-pipelines/) folder, see example in [yamlFileValidator.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/.azure-pipelines/yamlFileValidator.yaml) file (note - the script code should be added on another file for clearer code, see in step #5). 
     * Add scripts those are relevant to the specific folder under one yaml file in the same job. The validation infrastructure and the examples are in TypeScript, but you can use other languages if you prefer
-    * Azure Pipelines work with many languages such as Python, Java,JavaScript, PHP, Ruby, C#, C++, and Go. Refer to [Azure Pipelines documentation](https://docs.microsoft.com/en-us/azure/devops/pipelines/?view=azure-devops) for further information on this. 
+    * Azure Pipelines work with many languages such as Python, Java,JavaScript, PHP, Ruby, C#, C++, and Go. Refer to [Azure Pipelines documentation](https://docs.microsoft.com/azure/devops/pipelines/?view=azure-devops) for further information on this. 
 
 4. Add the new job to [azure-pipelines.yml](https://github.com/Azure/Azure-Sentinel/blob/master/azure-pipelines.yml) file as a new template under jobs property
 
@@ -30,7 +30,7 @@ Add new yaml file under [.azure-pipelines](https://github.com/Azure/Azure-Sentin
 ### How to add scipt validation
 
 **Note**: All script logs are public and display in DevOps pipeline.  
-By default, the logs color is white. In case you want another color you can use [logging commands](https://docs.microsoft.com/en-us/azure/devops/pipelines/scripts/logging-commands?view=azure-devops&tabs=bash)
+By default, the logs color is white. In case you want another color you can use [logging commands](https://docs.microsoft.com/azure/devops/pipelines/scripts/logging-commands?view=azure-devops&tabs=bash)
 
 1. Create script file under [.script](https://github.com/Azure/Azure-Sentinel/tree/master/.script) folder
 

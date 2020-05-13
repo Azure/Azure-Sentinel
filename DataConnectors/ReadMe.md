@@ -37,7 +37,7 @@ Once you have decided on the type of data connector you plan to support, set the
 
 ### REST API Connectors
 
-1. Use the [Azure Monitor Data Collector API](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/data-collector-api) to send data to Azure Log Analytics. [This blog](https://zimmergren.net/building-custom-data-collectors-for-azure-log-analytics/) covers step by step instructions with screenshots to do so. If on prem, open port 443 (HTTPS/TLS) on your environment to talk to Azure Sentinel.
+1. Use the [Azure Monitor Data Collector API](https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api) to send data to Azure Log Analytics. [This blog](https://zimmergren.net/building-custom-data-collectors-for-azure-log-analytics/) covers step by step instructions with screenshots to do so. If on prem, open port 443 (HTTPS/TLS) on your environment to talk to Azure Sentinel.
 2. Ensure the schema used for structuring the data in Log Analytics is locked. Any changes to the schema after the data connector is published will have a compatibility impact, hence need to have a new name for the connector data type.
 3. Design a configuration mechanism in your product experience via product settings or via your product website, where your customers can go and enter the following information to send their logs into Log Analytics for Azure Sentinel.
     1. [**Required**] Azure Sentinel workspace ID
