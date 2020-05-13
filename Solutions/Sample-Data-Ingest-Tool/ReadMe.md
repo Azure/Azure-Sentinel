@@ -11,16 +11,16 @@ To configure the tool, the following assembly is required to post sample data to
 1. **Active Azure Subscription**, if you don't have one, create a [free account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F) before you begin.
 
 2. Obtain **domain** by following these steps:
->> 1. Login into [Azure Management Portal](https://portal.azure.com)
->> 2. Navigate to the **Azure Active Directory** blade
->> 3. Click on **Custom Domain Names**. Copy your domain name as you will need it later to run the application.
+    1. Login into [Azure Management Portal](https://portal.azure.com)
+    1. Navigate to the **Azure Active Directory** blade
+    1. Click on **Custom Domain Names**. Copy your domain name as you will need it later to run the application.
 
 3. **Log Analytics workspace**. If you don't have one, [create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/learn/quick-create-workspace).
 
 4. Obtain **WorkSpaceId** and **Key** following these steps. Copy this workspace Id and Key as you will need them later to run the application.
->> In the Azure portal, search for and select **Log Analytics workspaces**.
-In your list of Log Analytics workspaces, select the workspace you intend on configuring the agent to report to.
-Select Advanced settings.
+   1. In the Azure portal, search for and select **Log Analytics workspaces**
+   1. In your list of Log Analytics workspaces, select the workspace you intend on configuring the agent to report to.
+   1. Select **Advanced Settings**.
 
 5. To enable Azure Sentinel, you need **contributor** permissions to the subscription in which the Azure Sentinel workspace resides. Learn more to [onboard Azure Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard#enable-azure-sentinel-).
 
@@ -40,20 +40,20 @@ Follow these steps to register a new application:
 5. Under **Certificates & secrets**, choose **New client secret** and add a quick description. A new secret will be displayed in the **Value** column. Copy this password. You will need it later to complete the configuration process and it will not be shown again.
 
 6. Link Log Analytics workspace to your registered application by following these steps:
->> 1. Navigate to your Azure portal, and select or search for Log Analytics.
->> 2. Select your workspace from the list of available options, or search for it.
->> 3. From the left menu that opens, select Access Control (IAM). Click Add, and select "Log Analytics Reader" for the Role in the blade that appears. Search for your AAD App by name, and then click save.
->> 4. You app is now setup to make API calls to your workspace.
+   1. Navigate to your Azure portal, and select or search for **Log Analytics**.
+   1. Select your workspace from the list of available options, or search for it.
+   1. From the left menu that opens, select **Access Control (IAM)**. Click Add, and select **Log Analytics Reader** for the Role in the blade that appears. Search for your AAD App by name, and then click save.
+   1. You app is now setup to make API calls to your workspace.
 
 ## Option 1: Post existing custom log data
-This option allows users to post the readily available sample custom data in the Sample Data directory to Azure Log Analytics Custom logs.
+This option allows users to post the readily available sample custom data in the **Sample Data** directory to Azure Log Analytics Custom logs.
 
 ### Setup
 1) Clone Azure Sentinel repository by running this command: git clone https://github.com/Azure/Azure-Sentinel.git
-2) In the cloned repo, navigate to the Solutions directory, and open SampleDataIngestTool solution.
+2) In the cloned repo, navigate to the Solutions directory, and open **SampleDataIngestTool** solution.
 3) Install necessary dependencies: In Visual Studio, right click the **SampleDataIngestTool** solution.
 Click **Restore NuGet Packages**.
-4) Open config.txt file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
+4) Open **config.txt** file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
 
         "workspaceId": "enter_your_workspaceId_or_customerId_here",
         "sharedKey": "enter_your_workspace_primary_key_here",
@@ -61,20 +61,20 @@ Click **Restore NuGet Packages**.
         "clientSecret": "enter_your_client_secret_here",
         "domain": "enter_your_domain_here";
 
-5) Once changes are complete, save the file. <br>
+5) Once changes are complete, save the file.
 Now you can run the application. Please note that the "Main" function in the Program.cs class is the entry point for the application.
->> 1. If it's the first time the application is run, all custom data files of json format are posted to the Log Analytics custom logs. Once the application finishes running, check the Console to see the names of the file that have been successfully pushed.
->> 2. In the next runs after the first run, you are asked to enter your response to a prompt in the Console. Enter your reponse (Yes/No) to indicate whether or not you'd like to post the sample data again.
->> 3. If the response is Yes, the sample data is pushed again to the Log Analytics custom logs.
->> 4. View the sample data in your Log Analytics Custom Logs or Azure Sentinel Custom Log.
+   1. If it's the first time the application is run, all custom data files of json format are posted to the Log Analytics custom logs. Once the application finishes running, check the Console to see the names of the file that have been successfully pushed.
+   1. In the next runs after the first run, you are asked to enter your response to a prompt in the Console. Enter your reponse (Yes/No) to indicate whether or not you'd like to post the sample data again.
+   1. If the response is Yes, the sample data is pushed again to the Log Analytics custom logs.
+   1. View the sample data in your Log Analytics Custom Logs or Azure Sentinel Custom Log.
 
 ## Option 2: Post your own custom log data
 This option allows users to post their own custom log data to Azure Log Analytics Custom logs.
 
 ### Setup
->> 1. Follow step 1-4 from the [Setup](#Setup) section under Option 1 above.
->> 2. In the Custom folder under Sample Data directory of the cloned repo, create a new file with your custom log data in a json format.
->> 3. Follow step 5 from the [Setup](#Setup) section under Option 1 above.
+   1. Follow step 1-4 from the [Setup](#Setup) section under Option 1 above.
+   1. In the Custom folder under Sample Data directory of the cloned repo, create a new file with your custom log data in a json format with a "_CL" suffix. For example, "testdata_CL.json" is a valid custom log file name.
+   1. Follow step 5 from the [Setup](#Setup) section under Option 1 above.
 
 ### Contributing
 
