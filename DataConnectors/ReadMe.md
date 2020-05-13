@@ -163,13 +163,13 @@ Once you have a working POC, you are ready to build, validate the data connector
 
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
 
-4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized sample data for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. This is the test validation set that can be used to build other contribution types on top of this data connector. The format for this file can be a spreadsheet or json with the column names / property names adhering to the data type property names. The data file name can the same name as the data connector. Submit the sample data file via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata).
+4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized sample data for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. This is the test validation set that can be used to build other contribution types on top of this data connector. The format for this file can be json / csv (json preferred) file with the column names / property names adhering to the data type property names. The data file name needs to be the same name as the data type name. Submit the sample data file via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector.
 5.	**Submit your data connector** - Do a PR for:
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
-    2.	The sample data file in the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
+    2.	The sample data file in the right subfolder of ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
     3.	The company logo adhering to the following requirements in the ['Logo' folder](https://aka.ms/azuresentinelgithublogos)
         1.	Logo needs to be in SVG format
-        2.	Ensure raw file of logo doesn’t have cls style formats
+        2.	Ensure raw file of logo doesn’t have: a. cls style formats b. embedded png formats
         3.  Logo scales well to fit in a 75 px square
 
 6. **Prepare and submit your data connector documentation** – Besides Azure Sentinel gallery discoverability, the connectors can also be discovered out of product in documentation. 
