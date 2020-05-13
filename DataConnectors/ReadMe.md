@@ -125,9 +125,9 @@ To use TLS communication between the security solution and the Syslog machine, y
 
 ### Syslog Connector
 
-**Note:** If your product supports CEF, the connection is more complete and you should choose CEF and follow the instructions in [Connecting data from CEF](https://docs.microsoft.com/en-us/azure/sentinel/connect-common-event-format) and data connector building steps detailed in the CEF connector section.
+**Note:** If your product supports CEF, the connection is more complete and you should choose CEF and follow the instructions in [Connecting data from CEF](https://docs.microsoft.com/azure/sentinel/connect-common-event-format) and data connector building steps detailed in the CEF connector section.
 
-1. Follow the steps outlined in the [Connecting data from Syslog](https://docs.microsoft.com/en-us/azure/sentinel/connect-syslog) to use the Azure Sentinel syslog connector to connect your product.
+1. Follow the steps outlined in the [Connecting data from Syslog](https://docs.microsoft.com/azure/sentinel/connect-syslog) to use the Azure Sentinel syslog connector to connect your product.
 2. Set your security solution to send Syslog messages to the proxy machine. This varies from product to product and follow the process for your product.
 3. Outline specific steps custom for sending your product logs along with link to your (partner) product documentation on how customers should configure their agent to send Syslog logs from the respective product into Azure Sentinel.
 4. Design and validate a few key queries that lands the value of the data stream using Kusto Query Language. Share these as sample queries in the data connector.
