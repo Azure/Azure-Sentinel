@@ -1,5 +1,5 @@
 id: 2be4ef67-a93f-4d8a-981a-88158cb73abd
-name: (Preview) COVID-19 Threat Intel File Hash to CommonSecurityLog Event
+name: Microsoft COVID-19 file hash indicator matches
 description: |
   'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed'
 severity: Medium
@@ -14,13 +14,17 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-let dt_lookBack = 1h;
+
+  let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )
   [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv"] with (format="csv"));
-  covidIndicators
+  let fileHashIndicators = covidIndicators
   | where TimeGenerated >= ago(ioc_lookBack) 
-  | where isnotempty(FileHashValue)
+  | where isnotempty(FileHashValue);
+  // Handle matches against both lower case and uppercase versions of the hash:
+  ( fileHashIndicators | extend FileHashValue = tolower(FileHashValue)
+    | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
   |  join (
      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) 
      | where isnotempty(FileHash)
