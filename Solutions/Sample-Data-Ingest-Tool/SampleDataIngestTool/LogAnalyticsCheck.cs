@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Azure.OperationalInsights;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
@@ -45,49 +44,22 @@ namespace SampleDataIngestTool
                 var laClient = new OperationalInsightsDataClient(creds);
                 laClient.WorkspaceId = customerId;
 
-                //get custom table name
                 var path = new SampleDataPath();
                 var dirPath = path.GetDirPath();
                 tableName = tableName.Replace(dirPath, "").Replace(".json", "");
 
-                //get a list of table names in your workspace
-                var tableNameList = new List<string>();
-                string query = @"search * | distinct $table";
-                var result = laClient.Query(query).Tables;
-                foreach (var table in result)
+                string query = tableName
+                               + @"| where TimeGenerated > ago(10d)
+                             | limit 100";
+                var results = laClient.Query(query);
+                var tableCount = results.Tables.Count;
+                if (tableCount > 0)
                 {
-                    var rows = table.Rows;
-                    foreach (var r in rows)
-                    {
-                        var customFileName = r[0];
-                        if (customFileName.EndsWith("_CL"))
-                        {
-                            tableNameList.Add(customFileName);
-                        }
-                    }
-                }
-
-                //check if the custom table name exists in the list
-                if (tableNameList.Contains(tableName) == false)
-                {
-                    return false;
+                    return true;
                 }
                 else
                 {
-                    //check if there's any data in the table for last 7 days
-                    string query1 = tableName
-                               + @"| where TimeGenerated > ago(7d)
-                             | limit 10";
-                    var results = laClient.Query(query1);
-                    var tableCount = results.Tables.Count;
-                    if (tableCount > 0)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
             catch (Exception ex)
