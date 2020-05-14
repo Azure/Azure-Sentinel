@@ -4,7 +4,7 @@ description: |
   'Identifies failed login attempts in the Azure Active Directory SigninLogs to the Azure Portal.  Many failed logon 
   attempts or some failed logon attempts from multiple IPs could indicate a potential brute force attack.  
   The following are excluded due to success and non-failure results:
-  References: https://docs.microsoft.com/en-us/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+  References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
   0 - successful logon
   50125 - Sign-in was interrupted due to a password reset or password registration entry.
   50140 - This error occurred due to 'Keep me signed in' interrupt when the user was signing-in.'
@@ -29,26 +29,46 @@ query: |
   let threshold_FailedwithSingleIP = 20;
   let threshold_IPAddressCount = 2;
   let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
-  let azPortalSignins = SigninLogs
+  let azPortalSignins = materialize(SigninLogs
+  | where TimeGenerated >= ago(lookBack)
+  // Azure Portal only
+  | where AppDisplayName =~ "Azure Portal")
+  ;
+  let successPortalSignins = azPortalSignins
   | where TimeGenerated >= ago(timeRange)
   // Azure Portal only and exclude non-failure Result Types
-  | where AppDisplayName has "Azure Portal" and ResultType !in ("0", "50125", "50140")
+  | where ResultType in ("0", "50125", "50140")
+  // Tagging identities not resolved to friendly names
+  //| extend Unresolved = iff(Identity matches regex isGUID, true, false)
+  | distinct TimeGenerated, UserPrincipalName, Id, ResultType
+  ;
+  let failPortalSignins = azPortalSignins
+  | where TimeGenerated >= ago(timeRange)
+  // Azure Portal only and exclude non-failure Result Types
+  | where ResultType !in ("0", "50125", "50140")
   // Tagging identities not resolved to friendly names
   | extend Unresolved = iff(Identity matches regex isGUID, true, false)
   ;
+  // Verify there is no success for the same connection attempt after the fail
+  let failnoSuccess = failPortalSignins | join kind= leftouter (
+     successPortalSignins 
+  ) on UserPrincipalName, Id
+  | where TimeGenerated > TimeGenerated1
+  | project-away TimeGenerated1, UserPrincipalName1, Id1, ResultType1
+  ;
   // Lookup up resolved identities from last 7 days
-  let identityLookup = SigninLogs
+  let identityLookup = azPortalSignins
   | where TimeGenerated >= ago(lookBack)
   | where not(Identity matches regex isGUID)
   | summarize by UserId, lu_UserDisplayName = UserDisplayName, lu_UserPrincipalName = UserPrincipalName;
   // Join resolved names to unresolved list from portal signins
-  let unresolvedNames = azPortalSignins | where Unresolved == true | join kind= inner (
+  let unresolvedNames = failnoSuccess | where Unresolved == true | join kind= inner (
      identityLookup 
   ) on UserId
   | extend UserDisplayName = lu_UserDisplayName, UserPrincipalName = lu_UserPrincipalName
   | project-away lu_UserDisplayName, lu_UserPrincipalName;
   // Join Signins that had resolved names with list of unresolved that now have a resolved name
-  let u_azPortalSignins = azPortalSignins | where Unresolved == false | union unresolvedNames;
+  let u_azPortalSignins = failnoSuccess | where Unresolved == false | union unresolvedNames;
   u_azPortalSignins
   | extend Status = strcat(ResultType, ": ", ResultDescription), OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
   | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
