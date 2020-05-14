@@ -19,10 +19,11 @@ query: |
   let timeRange = 3d;  
   let lookupWindow = 5min;  
   let lookupBin = lookupWindow / 2.0;
+  let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
   //Extract all MDATP security alert data for alerts associated with command execution by a web shell
   let alldata = SecurityAlert  
   | where ProviderName =~ "MDATP"  
-  | where AlertType =~ "c6a690b5-d9ee-447f-9ef5-f4a81aaf204d" or AlertType =~ "209703f8-7096-426a-bb95-2fc5f40970b9" or AlertType =~ "57c6571e-f37c-4c7f-8482-5f8dbd11b022" or AlertType =~ "1acde8eb-1c0b-45de-98b6-da1817cec9a3" 
+  | where DisplayName has_any("Possible IIS web shell", "Possible IIS compromise", "Suspicious processes indicative of a web shell", "A suspicious web script was created")
   | extend alertData = parse_json(Entities)  
   | extend recordGuid = new_guid()  
   | mvexpand alertData  
@@ -55,7 +56,7 @@ query: |
   //Join to W3CIISLog using a time windows and key to find files accessed during the time that the commandline was executed
   | join kind=inner ( 
   W3CIISLog  
-  | where csUriStem endswith ".aspx" or csUriStem endswith ".asmx"  
+  | where csUriStem has_any(scriptExtensions)
   | extend splitUriStem = split(csUriStem, "/")  
   | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2]  
   | extend TimeKey = range(bin(TimeGenerated-lookupWindow, lookupBin), bin(TimeGenerated, lookupBin),lookupBin)  
