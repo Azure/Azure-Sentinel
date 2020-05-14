@@ -1,0 +1,34 @@
+id: 2be4ef67-a93f-4d8a-981a-88158cb73abd
+name: (Preview) COVID-19 Threat Intel File Hash to CommonSecurityLog Event
+description: |
+  'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv"] with (format="csv"));
+  covidIndicators
+  | where TimeGenerated >= ago(ioc_lookBack) 
+  | where isnotempty(FileHashValue)
+  |  join (
+     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) 
+     | where isnotempty(FileHash)
+     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  )
+  on $left.FileHashValue == $right.FileHash
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by FileHashValue
+  | project LatestIndicatorTime, FileHashValue, FileHashType, Description, ThreatType,  
+  CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, 
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
+  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName
