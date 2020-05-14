@@ -1,6 +1,7 @@
 # About
 This folder tracks sample data of CEF format and can be pushed to Azure Log Analytics CommonEventFormat.
 
+## Pushing CEF log data via CEF connector
 To enable the CEF connector, deploy a dedicated proxy Linux machine (VM or on premises) to support the communication between your security solution (the product that sends the CEF messages) and Azure Sentinel.
 
 Enable the CEF connector as follows:

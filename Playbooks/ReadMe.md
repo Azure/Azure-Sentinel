@@ -25,13 +25,13 @@ Once you have created a playbook that you want to export to share, go to the Log
 > Note: this is the generic instructions there may be other steps depending how complex or what connectors are used for the playbook.
 1. Click Export Template from the resource menu
 2. Copy the contents of the template
-3. Usig VS code, create a new JSON file
+3. Using VS code, create a new JSON file
 4. Paste the code into the new file
-5. In the parameters section, you can remove all parameters and add the following:
+5. In the parameters section, you can remove all parameters and add the following minimum fields. Users can edit the parameters when deploying your template. You can add more parameters based on your playbook requirements.
 ```json
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "PlaybookName",
+            "defaultValue": "<PlaybookName>",
             "type": "string"
         },
         "UserName": {
@@ -40,16 +40,24 @@ Once you have created a playbook that you want to export to share, go to the Log
         }
     },
 ```
-* You need a playbook name and username that will be used for the connections.
-6. In the variables section, you will need to create a variable for each connection the playbook is using like,
+* Playbook name and username are minimum requirements that will be used for the connections.
+6. In the variables section, create a variable for each connection the playbook is using. 
+* To construct a string variable, use this following snippet. Make sure to replace the <connectorname> with actual name of the connector.
+
+```
+    [concat('<connectorname>-', parameters('PlaybookName'))]
+```
+
+* For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
+
 ```json
     "variables": {
         "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
 ```
-* The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
-7. Next,, you will need to add resources to be created for each connection.
+
+7. Next, you will need to add resources to be created for each connection.
 ```json
    "resources": [
         {
@@ -66,8 +74,13 @@ Once you have created a playbook that you want to export to share, go to the Log
             }
         },
 ```
-* The name is using the variable we created.  The location is using the resource group that was selected as part of the deployment.  The displayname is using the Username parameter. Lastly, you can build the string for the id using strings plus properties of the subscription and resource group. Repeat for each connection needed.
-8. In the `Microsoft.Logic/workflows` resource under `paramters / $connections`, there will be a `value` for each connection.  You will need to update each like the following.
+* The name is using the variable we created.  
+* The location is using the resource group that was selected as part of the deployment.  
+* The displayname is using the Username parameter. 
+* Lastly, you can build the string for the id using strings plus properties of the subscription and resource group. 
+* Repeat for each connection needed.
+
+8. In the `Microsoft.Logic/workflows` resource under `parameters / $connections`, there will be a `value` for each connection.  You will need to update each like the following.
 ```json
 "parameters": {
                     "$connections": {
@@ -87,7 +100,9 @@ Once you have created a playbook that you want to export to share, go to the Log
                 }
 
 ```
-* The connectionId will use a string and variable.  The Connection name is the variable/.  The id is the string we used early for the id when creating the resource.
+* The connectionId will use a string and variable.  
+* The Connection name is the variable.  
+* The id is the string we used early for the id when creating the resource.
 9.  Save the JSON and contribute to the repository.
 
 # Suggestions and feedback
