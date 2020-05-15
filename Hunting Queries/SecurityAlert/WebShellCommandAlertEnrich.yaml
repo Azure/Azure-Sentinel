@@ -21,21 +21,22 @@ query: |
   let lookupBin = lookupWindow / 2.0;
   let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
   //Extract all MDATP security alert data for alerts associated with command execution by a web shell
-  let alldata = SecurityAlert  
+  let alldata = materialize(SecurityAlert
+  | where TimeGenerated >= ago(timeRange)
   | where ProviderName =~ "MDATP"  
   | where DisplayName has_any("Possible IIS web shell", "Possible IIS compromise", "Suspicious processes indicative of a web shell", "A suspicious web script was created")
   | extend alertData = parse_json(Entities)  
   | extend recordGuid = new_guid()  
-  | mvexpand alertData  
+  | mvexpand alertData)  
   ;  
   //Extract process data from alert JSON
   let filedata = alldata  
   | extend id = tostring(alertData.$id)  
   | extend type = alertData.Type  
   | extend imagename = alertData.Name  
-  | where type =~ "file"  
-  | where imagename != ""  
-  | extend imagefileref = id  
+  | where type =~ "file"
+  | where imagename != ""
+  | extend imagefileref = id
   ;
   //Extract commandline data from alert JSON
   let commanddata = alldata  
@@ -55,7 +56,8 @@ query: |
   | extend Start = TimeGenerated 
   //Join to W3CIISLog using a time windows and key to find files accessed during the time that the commandline was executed
   | join kind=inner ( 
-  W3CIISLog  
+  W3CIISLog
+  | where TimeGenerated >= ago(timeRange)
   | where csUriStem has_any(scriptExtensions)
   | extend splitUriStem = split(csUriStem, "/")  
   | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2]  
@@ -65,5 +67,6 @@ query: |
   ) on TimeKey 
   | where (Start - EndTime) between (0min .. lookupWindow) 
   | extend attackerP = pack(AttackerIP, AttackerUserAgent)  
-  | summarize Site=makeset(Site), Attacker=make_bag(attackerP) by csUriStem, filename, tostring(imagename), tostring(commandline) 
-  | project Site, ShellLocation=csUriStem, ShellName=filename, ParentProcess=imagename, CommandLine=commandline, Attacker
+  | extend timestamp = StartTime, IPCustomEntity = AttackerIP
+  | summarize Site=make_set(Site), Attacker=make_bag(attackerP) by csUriStem, filename, tostring(imagename), tostring(commandline), timestamp, IPCustomEntity
+  | project Site, ShellLocation=csUriStem, ShellName=filename, ParentProcess=imagename, CommandLine=commandline, Attacker, timestamp, IPCustomEntity
