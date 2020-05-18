@@ -16,57 +16,63 @@ tactics:
   - Privilege Escalation
   - Persistence
 query: |
-  let timeRange = 3d;  
-  let lookupWindow = 5min;  
-  let lookupBin = lookupWindow / 2.0;
   let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
-  //Extract all MDATP security alert data for alerts associated with command execution by a web shell
-  let alldata = materialize(SecurityAlert
-  | where TimeGenerated >= ago(timeRange)
+  let timeRange = 3d; 
+  let lookupWindow = 1m;  
+  let lookupBin = lookupWindow / 2.0; 
+  let distinctIpThreshold = 3; 
+  let alerts = SecurityAlert  
+  | where TimeGenerated > ago(timeRange) 
+  | extend alertData = parse_json(Entities), recordGuid = new_guid(); 
+  let shellAlerts = alerts 
   | where ProviderName =~ "MDATP"  
-  | where DisplayName has_any("Possible IIS web shell", "Possible IIS compromise", "Suspicious processes indicative of a web shell", "A suspicious web script was created")
-  | extend alertData = parse_json(Entities)  
-  | extend recordGuid = new_guid()  
-  | mvexpand alertData)  
-  ;  
-  //Extract process data from alert JSON
+  | mvexpand alertData 
+  | where alertData.Type =~ "file" and alertData.Name =~ "w3wp.exe" 
+  | distinct SystemAlertId 
+  | join kind=inner (alerts) on SystemAlertId; 
+  let alldata = shellAlerts  
+  | mvexpand alertData 
+  | extend Type = alertData.Type; 
   let filedata = alldata  
   | extend id = tostring(alertData.$id)  
-  | extend type = alertData.Type  
-  | extend imagename = alertData.Name  
-  | where type =~ "file"
-  | where imagename != ""
-  | extend imagefileref = id
-  ;
-  //Extract commandline data from alert JSON
+  | extend ImageName = alertData.Name  
+  | where Type =~ "file" and ImageName != "w3wp.exe" 
+  | extend imagefileref = id;  
   let commanddata = alldata  
-  | extend type = alertData.Type  
-  | extend commandline = tostring(alertData.CommandLine)  
+  | extend CommandLine = tostring(alertData.CommandLine)  
   | extend creationtime = tostring(alertData.CreationTimeUtc)  
-  | where type =~ "process"  
-  | extend imagefileref = tostring(alertData.ImageFile.$ref);
-  //Join file and command data together, we have no parsed the JSON object into a table we can work with
-  filedata  
-  | join kind=leftouter (  
+  | where Type =~ "process"  
+  | where isnotempty(CommandLine)  
+  | extend imagefileref = tostring(alertData.ImageFile.$ref); 
+  let hostdata = alldata 
+  | where Type =~ "host" 
+  | project HostName = tostring(alertData.HostName), DnsDomain = tostring(alertData.DnsDomain), SystemAlertId 
+  | distinct HostName, DnsDomain, SystemAlertId; 
+  let commandKeyedData = filedata 
+  | join kind=inner (  
   commanddata  
-  | extend id = imagefileref  
-  ) on imagefileref  
-  | project recordGuid, TimeGenerated, creationtime, imagename, commandline, TimeKey = bin(TimeGenerated, lookupBin) 
-  | where commandline != "" 
-  | extend Start = TimeGenerated 
-  //Join to W3CIISLog using a time windows and key to find files accessed during the time that the commandline was executed
+  ) on imagefileref 
+  | join kind=inner (hostdata) on SystemAlertId 
+  | project recordGuid, TimeGenerated, ImageName, CommandLine, TimeKey = bin(TimeGenerated, lookupBin), HostName, DnsDomain 
+  | extend Start = TimeGenerated; 
+  let baseline = W3CIISLog  
+  | where TimeGenerated > ago(timeRange) 
+  | project-rename SourceIP=cIP, PageAccessed=csUriStem 
+  | summarize dcount(SourceIP) by PageAccessed 
+  | where dcount_SourceIP <= distinctIpThreshold; 
+  commandKeyedData 
   | join kind=inner ( 
-  W3CIISLog
-  | where TimeGenerated >= ago(timeRange)
-  | where csUriStem has_any(scriptExtensions)
+  W3CIISLog  
+  | where TimeGenerated > ago(timeRange) 
+  | where csUriStem has_any(scriptExtensions)  
   | extend splitUriStem = split(csUriStem, "/")  
-  | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2]  
-  | extend TimeKey = range(bin(TimeGenerated-lookupWindow, lookupBin), bin(TimeGenerated, lookupBin),lookupBin)  
+  | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2] | extend TimeKey = range(bin(TimeGenerated-lookupWindow, lookupBin), bin(TimeGenerated, lookupBin),lookupBin)  
   | mv-expand TimeKey to typeof(datetime)  
-  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) by Site=sSiteName, AttackerIP=cIP, AttackerUserAgent=csUserAgent, csUriStem, filename=tostring(FileName), tostring(firstDir), TimeKey 
-  ) on TimeKey 
-  | where (Start - EndTime) between (0min .. lookupWindow) 
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) by Site=sSiteName, HostName=sComputerName, AttackerIP=cIP, AttackerUserAgent=csUserAgent, csUriStem, filename=tostring(FileName), tostring(firstDir), TimeKey 
+  ) on TimeKey, HostName 
+  | where (StartTime - EndTime) between (0min .. lookupWindow) 
+  | extend IPCustomEntity = AttackerIP, timestamp = StartTime
   | extend attackerP = pack(AttackerIP, AttackerUserAgent)  
-  | extend timestamp = StartTime, IPCustomEntity = AttackerIP
-  | summarize Site=make_set(Site), Attacker=make_bag(attackerP) by csUriStem, filename, tostring(imagename), tostring(commandline), timestamp, IPCustomEntity
-  | project Site, ShellLocation=csUriStem, ShellName=filename, ParentProcess=imagename, CommandLine=commandline, Attacker, timestamp, IPCustomEntity
+  | summarize Site=makeset(Site), Attacker=make_bag(attackerP) by csUriStem, filename, tostring(ImageName), CommandLine, HostName, IPCustomEntity, timestamp
+  | project Site, ShellLocation=csUriStem, ShellName=filename, ParentProcess=ImageName, CommandLine, Attacker, HostName, IPCustomEntity, timestamp
+  | join kind=inner (baseline) on $left.ShellLocation == $right.PageAccessed
