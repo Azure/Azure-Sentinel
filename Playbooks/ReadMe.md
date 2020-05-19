@@ -42,7 +42,7 @@ Once you have created a playbook that you want to export to share, go to the Log
 ```
 * Playbook name and username are minimum requirements that will be used for the connections.
 6. In the variables section, create a variable for each connection the playbook is using. 
-* To construct a string variable, use this following snippet. Make sure to replace the <connectorname> with actual name of the connector.
+* To construct a string variable, use this following snippet. Make sure to replace the `connectorname` with actual name of the connector.
 
 ```
     [concat('<connectorname>-', parameters('PlaybookName'))]
