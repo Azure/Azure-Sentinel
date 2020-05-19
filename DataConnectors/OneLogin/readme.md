@@ -1,5 +1,5 @@
 # Deploy a Function App for collecting OneLogin data into Azure Sentinel
-This function app will listen for OneLogin API events and will write them to Log Analytics on arrival.
+This function app will listen for **OneLogin API** events and will write them to Log Analytics on arrival.
 
 ### Deploy the Function App
 The easiest way is via the provided ARM templates:
@@ -7,13 +7,14 @@ The easiest way is via the provided ARM templates:
 #### 1: Deploy via Azure ARM Template
 1.  Deploy the template.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2Fonelogin%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FOneLogin%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>    
 </a>
 
+
 2. Deploy permissions for the function to the Key Vault.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2Fonelogin%2Fazuredeploy_kv.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FOneLogin%2Fazuredeploy_kv.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 
@@ -86,14 +87,15 @@ Note: You will need to prepare VS code for Azure function development.  See http
 11. Click Save.
 
 ## Configure your One Login API app.
-You also need to configure your OneLogin account to sent events to your Function App. To do this go to https://<Your-Tenant-Name>.onelogin.com/broadcasters and log in with a user who has admin access to your OneLogin account.
+You also need to configure your OneLogin account to sent events to your Function App. To do this go to https://Your-Tenant-Name.onelogin.com/broadcasters and log in with a user who has admin access to your OneLogin account.
 1. Select ‘Developer’ in the top right hand corner and click ‘Build App’. 
-2. Select ‘Webhooks’ on the drop-down. 
+2. Select **Webhooks** on the drop-down. 
 3. Press **New Webhooks**.
-4. Select **Event Webhook for log management. 
+4. Select **Event Webhook for log management**. 
 5. Under the **New Broadcaster** Window gave it friendly name, select in the format **JSON array**. 
 6. Set a **Function URL** name in the **Listener URL** box. 
-This should be in the format of https://<FunctionAppName>.azurewebsites.net/api/<FunctionName>. You can find this you app URL in the Azure Portal.  
+This should be in the format of https://FunctionAppName.azurewebsites.net/api/FunctionName<br>
+You can find this you app URL in the Azure Portal.  
 7. Click **Save** and wait for the new broadcast channel to be healthy and green. 
 
 
