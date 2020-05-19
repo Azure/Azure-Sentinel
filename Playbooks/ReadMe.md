@@ -74,10 +74,10 @@ Once you have created a playbook that you want to export to share, go to the Log
             }
         },
 ```
-* The name is using the variable we created.  
-* The location is using the resource group that was selected as part of the deployment.  
-* The displayname is using the Username parameter. 
-* Lastly, you can build the string for the id using strings plus properties of the subscription and resource group. 
+* The `name` is using the variable we created.  
+* The `location` is using the resource group that was selected as part of the deployment.  
+* The `displayname` is using the Username parameter. 
+* Lastly, you can build the string for the `id` using strings plus properties of the subscription and resource group. 
 * Repeat for each connection needed.
 
 8. In the `Microsoft.Logic/workflows` resource under `parameters / $connections`, there will be a `value` for each connection.  You will need to update each like the following.
@@ -100,11 +100,11 @@ Once you have created a playbook that you want to export to share, go to the Log
                 }
 
 ```
-* The connectionId will use a string and variable.  
-* The Connection name is the variable.  
-* The id is the string we used early for the id when creating the resource.
+* The `connectionId` will use a string and variable.  
+* The `connectionName` is the variable.  
+* The `id` is the string we used early for the id when creating the resource.
 
-9. In the `Microsoft.Logic/workflows` resource, you will also need the `dependsOn` field, which is a list of `resourceId`. The string for each `resourceId` is contructed using this snippet, followed by an example which contains Azure AD and Azure Sentinel connections.
+9. In the `Microsoft.Logic/workflows` resource, you will also need the `dependsOn` field, which is a list of `resourceId`. The string for each `resourceId` is constructed using this snippet, followed by an example which contains Azure AD and Azure Sentinel connections.
 
 ```
     [resourceId('Microsoft.Web/connections', <ConnectionVariableName>)]
