@@ -1,14 +1,14 @@
 ![alt text](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/Logic_Apps.svg "Azure Logic Apps")
 # About
-This repo contains sample security playbooks for security automation, orchestration and response (SOAR)
+This repo contains sample security playbooks for security automation, orchestration and response (SOAR). Each folder contains a security playbook ARM template that uses Microsoft Azure Sentinel trigger.
 
-## Each folder contains a security playbook ARM template that uses Microsoft Azure Sentinel trigger.
+## Instructions for deploying a custom template
 After selecting a playbook, in the Azure portal:
 1. Search for deploy a custom template
 2. Click build your own template in the editor
-3. Paste the conents from the GitHub playbook 
-4. Click Save
-5. Fill in needed data and click purchase
+3. Paste the contents from the GitHub playbook 
+4. Click **Save**
+5. Fill in needed data and click **Purchase**
 
 Once deployment is complete, you will need to authorize each connection.
 1. Click the Azure Sentinel connection resource
@@ -23,15 +23,15 @@ You can now edit the playbook in Logic apps.
 ## Instructions for templatizing a playbook
 Once you have created a playbook that you want to export to share, go to the Logic App resource in Azure.
 > Note: this is the generic instructions there may be other steps depending how complex or what connectors are used for the playbook.
-1. Click Export Template from the resource menu
-2. Copy the contents of the template
-3. Usig VS code, create a new JSON file
-4. Paste the code into the new file
-5. In the parameters section, you can remove all parameters and add the following:
+1. Click **Export Template** from the resource menu in Azure Portal.
+2. Copy the contents of the template.
+3. Using VS code, create a JSON file with the name "azuredeploy.json".
+4. Paste the code into the new file.
+5. In the parameters section, you can remove all parameters and add the following minimum fields. Users can edit the parameters when deploying your template. You can add more parameters based on your playbook requirements.
 ```json
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "PlaybookName",
+            "defaultValue": "<PlaybookName>",
             "type": "string"
         },
         "UserName": {
@@ -40,16 +40,24 @@ Once you have created a playbook that you want to export to share, go to the Log
         }
     },
 ```
-* You need a playbook name and username that will be used for the connections.
-6. In the variables section, you will need to create a variable for each connection the playbook is using like,
+* Playbook name and username are minimum requirements that will be used for the connections.
+6. In the variables section, create a variable for each connection the playbook is using. 
+* To construct a string variable, use this following snippet. Make sure to replace the <connectorname> with actual name of the connector.
+
+```
+    [concat('<connectorname>-', parameters('PlaybookName'))]
+```
+
+* For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
+
 ```json
     "variables": {
         "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
 ```
-* The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
-7. Next,, you will need to add resources to be created for each connection.
+
+7. Next, you will need to add resources to be created for each connection.
 ```json
    "resources": [
         {
@@ -66,8 +74,13 @@ Once you have created a playbook that you want to export to share, go to the Log
             }
         },
 ```
-* The name is using the variable we created.  The location is using the resource group that was selected as part of the deployment.  The displayname is using the Username parameter. Lastly, you can build the string for the id using strings plus properties of the subscription and resource group. Repeat for each connection needed.
-8. In the `Microsoft.Logic/workflows` resource under `paramters / $connections`, there will be a `value` for each connection.  You will need to update each like the following.
+* The name is using the variable we created.  
+* The location is using the resource group that was selected as part of the deployment.  
+* The displayname is using the Username parameter. 
+* Lastly, you can build the string for the id using strings plus properties of the subscription and resource group. 
+* Repeat for each connection needed.
+
+8. In the `Microsoft.Logic/workflows` resource under `parameters / $connections`, there will be a `value` for each connection.  You will need to update each like the following.
 ```json
 "parameters": {
                     "$connections": {
@@ -87,8 +100,28 @@ Once you have created a playbook that you want to export to share, go to the Log
                 }
 
 ```
-* The connectionId will use a string and variable.  The Connection name is the variable/.  The id is the string we used early for the id when creating the resource.
-9.  Save the JSON and contribute to the repository.
+* The connectionId will use a string and variable.  
+* The Connection name is the variable.  
+* The id is the string we used early for the id when creating the resource.
+
+9. In the `Microsoft.Logic/workflows` resource, you will also need the `dependsOn` field, which is a list of `resourceId`. The string for each `resourceId` is contructed using this snippet, followed by an example which contains Azure AD and Azure Sentinel connections.
+
+```
+    [resourceId('Microsoft.Web/connections', <ConnectionVariableName>)]
+``` 
+
+```
+    "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+    ]
+```
+
+10. Save the JSON.
+11. Create a Readme.md file with a brief description of the playbook.
+12. Test deployment of your template following [Instructions for deploying a custom template](#Instructions-for-deploying-a-custom-template). Make sure the deployment succeeds.
+13. If you need samples of a playbook template, refer to an existing playbooks' azuredeploy.json sample file in the repo.
+14. Contribute the playbook template to the repository.
 
 # Suggestions and feedback
 We value your feedback. Let us know if you run into any problems or share your suggestions and feedback by sending email to AzureSentinel@microsoft.com
