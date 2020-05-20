@@ -1,5 +1,5 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
         "comments": "This playbook will collect data from the Office 365 Management Activity API and write it to a Custom Log in Azure Sentinel",
@@ -14,6 +14,9 @@
             "type": "string"
         },
         "AADAppSecret": {
+            "type": "string"
+        },
+        "TenantId": {
             "type": "string"
         },
         "workspaceId": {
@@ -68,13 +71,14 @@
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                 },
                 "parameterValues": {
-                    "username": "[parameters('workspaceId')]"
+                    "username": "[parameters('workspaceId')]",
+                    "password": "[parameters('workSpaceKey')]"
                 }
             }
         },
         {
             "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2017-07-01",
+            "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "tags": {
@@ -105,14 +109,44 @@
                                 "actions": {
                                     "For_each_3": {
                                         "actions": {
-                                            "Set_variable": {
-                                                "inputs": {
-                                                    "name": "StartTime",
-                                                    "value": "@items('For_each_3')?['TimeGenerated']"
+                                            "Condition_2": {
+                                                "actions": {
+                                                    "Set_variable_5": {
+                                                        "inputs": {
+                                                            "name": "StartTime",
+                                                            "value": "@{addHours(body('Current_time'), -24)}"
+                                                        },
+                                                        "runAfter": {
+                                                        },
+                                                        "type": "SetVariable"
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_variable": {
+                                                            "inputs": {
+                                                                "name": "StartTime",
+                                                                "value": "@items('For_each_3')?['TimeGenerated']"
+                                                            },
+                                                            "runAfter": {
+                                                            },
+                                                            "type": "SetVariable"
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@items('For_each_3')?['TimeGenerated']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    ]
                                                 },
                                                 "runAfter": {
                                                 },
-                                                "type": "SetVariable"
+                                                "type": "If"
                                             }
                                         },
                                         "foreach": "@body('Run_query_and_list_results')?['value']",
@@ -187,7 +221,7 @@
                                     {
                                         "name": "AvailbleUri",
                                         "type": "string",
-                                        "value": "[concat('https://manage.office.com/api/v1.0/', parameters('O365Publisher'), '/activity/feed/subscriptions/content?contentType=Audit.General&startTime=@{variables(''StartTime'')}&endTime=@{body(''Current_time'')}')]"
+                                        "value": "[concat('https://manage.office.com/api/v1.0/', parameters('TenantId'), '/activity/feed/subscriptions/content?contentType=Audit.General&PublisherIdentifier=', parameters('O365Publisher'), '&startTime=@{variables(''StartTime'')}&endTime=@{body(''Current_time'')}')]"
                                     }
                                 ]
                             },
@@ -200,7 +234,7 @@
                         },
                         "Run_query_and_list_results": {
                             "inputs": {
-                                "body": "O365_CL\n| summarize arg_max(TimeGenerated, *)",
+                                "body": "O365API_CL\n| summarize arg_max(CreationTime_t, *)",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -212,7 +246,7 @@
                                     "resourcegroups": "[parameters('workspaceResourceGroup')]",
                                     "resourcename": "[parameters('workspaceName')]",
                                     "resourcetype": "Log Analytics Workspace",
-                                    "subscriptions": "[parameters('workspaceSubscriptionId')]",
+                                    "subscriptions": "[subscription().id]",
                                     "timerange": "Last 24 hours"
                                 }
                             },
@@ -232,43 +266,13 @@
                                         "actions": {
                                             "For_each": {
                                                 "actions": {
-                                                    "For_each_2": {
-                                                        "actions": {
-                                                            "Send_Data": {
-                                                                "inputs": {
-                                                                    "body": "@{items('For_each_2')}",
-                                                                    "headers": {
-                                                                        "Log-Type": "O365",
-                                                                        "time-generated-field": "@items('For_each_2')['CreationTime']"
-                                                                    },
-                                                                    "host": {
-                                                                        "connection": {
-                                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                                        }
-                                                                    },
-                                                                    "method": "post",
-                                                                    "path": "/api/logs"
-                                                                },
-                                                                "runAfter": {
-                                                                },
-                                                                "type": "ApiConnection"
-                                                            }
-                                                        },
-                                                        "foreach": "@body('Parse_JSON_2')",
-                                                        "runAfter": {
-                                                            "Parse_JSON_2": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Foreach"
-                                                    },
                                                     "HTTP_2": {
                                                         "inputs": {
                                                             "authentication": {
                                                                 "audience": "https://manage.office.com",
                                                                 "clientId": "[parameters('AADAppClientID')]",
                                                                 "secret": "[parameters('AADAppSecret')]",
-                                                                "tenant": "[subscription().tenantId]",
+                                                                "tenant": "[parameters('TenantId')]",
                                                                 "type": "ActiveDirectoryOAuth"
                                                             },
                                                             "headers": {
@@ -282,30 +286,26 @@
                                                         },
                                                         "type": "Http"
                                                     },
-                                                    "Parse_JSON_2": {
+                                                    "Send_Data": {
                                                         "inputs": {
-                                                            "content": "@body('HTTP_2')",
-                                                            "schema": {
-                                                                "items": {
-                                                                    "properties": {
-                                                                        "CreationTime": {
-                                                                            "type": "string"
-                                                                        }
-                                                                    },
-                                                                    "required": [
-                                                                        "CreationTime"
-                                                                    ],
-                                                                    "type": "object"
-                                                                },
-                                                                "type": "array"
-                                                            }
+                                                            "body": "@{body('HTTP_2')}",
+                                                            "headers": {
+                                                                "Log-Type": "O365API"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/logs"
                                                         },
                                                         "runAfter": {
                                                             "HTTP_2": [
                                                                 "Succeeded"
                                                             ]
                                                         },
-                                                        "type": "ParseJson"
+                                                        "type": "ApiConnection"
                                                     }
                                                 },
                                                 "foreach": "@body('Parse_JSON')",
@@ -423,7 +423,7 @@
                                             "audience": "https://manage.office.com",
                                             "clientId": "[parameters('AADAppClientID')]",
                                             "secret": "[parameters('AADAppSecret')]",
-                                            "tenant": "[subscription().tenantId]",
+                                            "tenant": "[parameters('TenantId')]",
                                             "type": "ActiveDirectoryOAuth"
                                         },
                                         "headers": {
