@@ -12,4 +12,4 @@ This Logic App connector will act as a Webhook listener, Prisma can then send an
 
 **Additional Post Install Notes:**
 
-Prisma configuration can be found: https://docs.paloaltonetworks.com/prisma/prisma-cloud/prisma-cloud-admin/configure-external-integrations-on-prisma-cloud/integrate-prisma-cloud-with-webhooks.html
+Prisma webhook implementation details can be found here: https://techcommunity.microsoft.com/t5/azure-sentinel/connecting-prisma-to-sentinel/m-p/1408693
