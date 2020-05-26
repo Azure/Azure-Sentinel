@@ -2,9 +2,9 @@
 
 Azure Sentinel provides a new output plugin for Logstash. Using this output plugin, you will be able to send any log you want using Logstash to the Azure Sentinel/Log Analytics workspace
 Today you will be able to send messages to custom logs table that you will define in the output plugin. 
-Getting started with Logstash 
+[Getting started with Logstash](<https://www.elastic.co/guide/en/logstash/current/getting-started-with-logstash.html>) 
 
-Azure Sentinel output plugin uses the rest API integration to Log Analytics, in order to ingest the logs into custom logs tables [What are custom logs tables] 
+Azure Sentinel output plugin uses the rest API integration to Log Analytics, in order to ingest the logs into custom logs tables [What are custom logs tables](<https://docs.microsoft.com/en-us/azure/azure-monitor/platform/data-sources-custom-logs>)
 
 Plugin version: v1.0.0 
 Released on: 2020-04-30 
@@ -12,8 +12,8 @@ Released on: 2020-04-30
 ## Installation
 
 Azure Sentinel provides Logstash output plugin to Log analytics workspace. 
-Install the microsoft-logstash-output-azure-loganalytics, use Logstash Working with plugins document. 
-For offline setup follow Logstash Offline Plugin Management instruction. 
+Install the microsoft-logstash-output-azure-loganalytics, use [Logstash Working with plugins](<https://www.elastic.co/guide/en/logstash/current/working-with-plugins.html>) document. 
+For offline setup follow [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 ## Configuration
 
