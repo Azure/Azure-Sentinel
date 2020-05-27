@@ -16,4 +16,6 @@ Once the Prisma Webhook Listener has been configure, in the Alert/Alert Rules se
 
 **Additional Post Install Notes:**
 
+
 Prisma configuration can be found: https://docs.paloaltonetworks.com/prisma/prisma-cloud/prisma-cloud-admin/configure-external-integrations-on-prisma-cloud/integrate-prisma-cloud-with-webhooks.html
+Prisma webhook implementation details can be found here: https://techcommunity.microsoft.com/t5/azure-sentinel/connecting-prisma-to-sentinel/m-p/1408693
