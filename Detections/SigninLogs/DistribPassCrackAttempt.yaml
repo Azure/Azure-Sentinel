@@ -33,9 +33,14 @@ query: |
   | where ResultType in ("50126", "50053" , "50055", "50056")
   | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
   | extend LocationString= strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]))
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), SigninCount=count(), LocationCount=dcount(LocationString) by UserPrincipalName, IPAddress, LocationString, AppDisplayName, ResultDescription, tostring(Browser), tostring(OS)
+  UserSignIns
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), SigninCount=count(), LocationCount=dcount(LocationString) by UserPrincipalName
   // Setting a generic threshold - Can be different for different environment
   | where SigninCount > s_threshold                                     
-  // Setting a generic threshold for location  - Can be different for different environment
-  | where LocationCount >= l_threshold
+  // Setting a generic threshold - Can be different for different environment
+  | where SigninCount > s_threshold  
+  | summarize by UserPrincipalName
+  | join (UserSignIns
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), SigninCount=count(), LocationCount=dcount(LocationString) by UserPrincipalName, IPAddress, LocationString, AppDisplayName, ResultDescription, tostring(Browser), tostring(OS)
+  ) on UserPrincipalName 
   | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
