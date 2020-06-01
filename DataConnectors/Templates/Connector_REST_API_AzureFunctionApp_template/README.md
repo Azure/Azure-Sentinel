@@ -1,8 +1,11 @@
-# Create an ARM Template to deploy a Function App
-This guide provides instructions to create a single-click deployment of a Azure Function App using an ARM Template.
+# Create an Azure Function app and an ARM Template to deploy a Function App for ingesting data into Azure Sentinel
+This guide provides instructions to leverage templates to create an Azure Function app and create a single-click deployment of a Azure Function App using an ARM Template. 
 
 ### Prerequisites 
-- Function App files - Leverage the [Azure Function App code templates](https://aka.ms/sentinelazurefunctioncode) in either PowerShell or Python to develop the Azure Function App. Follow guidanec within the template. 
+- Function App files - Leverage the [Azure Function App code templates](https://aka.ms/sentinelazurefunctioncode) in either PowerShell or Python to develop the Azure Function App. Follow guidance within the template. The Azure Function app does the following and the Azure Function code template provides blocks for the following with comments/guidelines:
+  - Pull logs from your <PROVIDER NAME APPLIANCE NAME> API
+  - Transform the data logs into a Azure Sentinel acceptable format (JSON) - The Azure Sentinel Log Analytics Data Collector API accepts the request in [JSON format](https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api#request-body). Refer to the [Record type and properties formatting details and examples](https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api#record-type-and-properties) and format the data received into JSON before progressing to the next step of posting the logs to the Azure Sentinel workspace.
+  - POST the logs to the Azure Sentinel workspace using the [Azure Log Analytics Data Collector API](https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api).
 - [**azuredeploy_DataConnector_API_AzureFunctionApp_template.json** template file](https://aka.ms/sentinelazurefunctiondeploymentfiletemplate)
 - **GitHub repository** to store the Function App files - The Azure Function files can be in [Azure Sentinel GitHub](https://aka.ms/threathunters) repository
 - **PowerShell** to create an encoded URL
