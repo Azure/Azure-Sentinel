@@ -110,9 +110,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 <# Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
     For example:
-    Foreach ($log in $json) {
-        Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($log)) -logType $LogType"
-        }
+    Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType"
             
 #>
 
