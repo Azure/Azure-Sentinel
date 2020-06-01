@@ -199,6 +199,10 @@ Once the data connector is in public preview for at least a month, send an email
 ## Evolve the data experience 
 ### Workbooks 
 [Follow the steps](https://aka.ms/azuresentinelgithubworkbooks) to build your workbook and submit your workbook json file, two screenshots of the workbook view one each in white and black background theme settings, logo and entry in the ‘workbooksMetadata.json’ file by a PR as mentioned in the instructions. 
+
+### Analytic Rule Templates
+[Follow the steps](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries) to build and submit your analytic rule template or detection pertaining to this data connector. Ensure to fill in the requiredDataConnectors parameter with the right data connector ID(s) to establish relation of this analytic rule template with the data connector. 
+
 ### Logic Apps Connectors
 Build logic apps connectors to enable automation capabilities for customers in the following areas:
 1.	Incident management – for e.g. assign a ticket to an analyst, keep ticket status in sync, …
