@@ -21,17 +21,18 @@ query: |
   let EndRunTime = StartTime - RunTime;
   let EndLearningTime = StartTime + LearningPeriod;
   let GitHubRepositoryDestroyEvents = (GitHub_CL
+  | extend TimeGenerated = node_createdAt_t
   | where action_s == "repo.destroy");
   GitHubRepositoryDestroyEvents
-  | where createdAt_t between (ago(EndLearningTime) .. ago(StartTime))
-  | summarize count() by bin(createdAt_t, BinTime)
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
+  | summarize count() by bin(TimeGenerated, BinTime)
   | summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)
   | extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)
   | extend Dummy = 1
   | join kind=innerunique (
     GitHubRepositoryDestroyEvents
-    | where createdAt_t between (ago(StartTime) .. ago(EndRunTime))
-    | summarize CountInRunTime = count() by bin(createdAt_t, BinTime)
+    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+    | summarize CountInRunTime = count() by bin(TimeGenerated, BinTime)
     | extend Dummy = 1
   ) on Dummy
   | project-away Dummy
