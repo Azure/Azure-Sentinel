@@ -1,0 +1,30 @@
+id: c3237d88-fdc4-4dee-8b90-118ded2c507c
+name: GitHub First Time Invite Member and Add Member to Repo
+description: |
+  'This hunting query identifies GitHub activites where a user was invited and added to a repo for the first time that may be a sign of compromise.'
+requiredDataConnectors:
+  - connectorId: CustomConnector
+    dataTypes:
+      - GitHub_CL
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+
+  let LearningPeriod = 7d;
+  let RunTime = 1h;
+  let StartTime = 1h;
+  let EndRunTime = StartTime - RunTime;
+  let EndLearningTime = StartTime + LearningPeriod;
+  let GitHubOrgMemberLogs = (GitHub_CL
+  | where action_s == "org.invite_member" or action_s == "org.update_member" or action_s == "org.add_member");
+  GitHubOrgMemberLogs
+  | where createdAt_t between (ago(EndLearningTime) .. ago(StartTime))
+  | distinct actorLogin_s
+  | join kind=rightanti (
+    GitHubOrgMemberLogs
+    | where createdAt_t between (ago(StartTime) .. ago(EndRunTime))
+    | distinct actorLogin_s
+  ) on actorLogin_s
+

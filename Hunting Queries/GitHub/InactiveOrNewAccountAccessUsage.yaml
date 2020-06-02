@@ -1,0 +1,49 @@
+id: b8508e24-47a6-4f8e-9066-3cc937197e7f
+name: GitHub Inactive or New Account Access or Usage
+description: |
+  'This hunting query identifies Accounts that are new or inactive and have accessed or used GitHub that may be a sign of compromise.'
+requiredDataConnectors:
+  - connectorId: CustomConnector
+    dataTypes:
+      - GitHub_CL
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+
+  let LearningPeriod = 7d;
+  let RunTime = 1h;
+  let StartTime = 1h;
+  let EndRunTime = StartTime - RunTime;
+  let EndLearningTime = StartTime + LearningPeriod;
+  let GitHubActorLogin = (GitHub_CL
+  | where actorLogin_s != "");
+  let GitHubUser = (GitHub_CL
+  | where userLogin_s != "");
+  let GitHubNewActorLogin = (  GitHubActorLogin
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
+  | summarize makeset(actorLogin_s)
+  | extend Dummy = 1
+  | join kind=innerunique (
+    GitHubActorLogin
+    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+    | distinct actorLogin_s
+    | extend Dummy = 1
+  ) on Dummy
+  | project-away Dummy
+  | where set_actorLogin_s  !contains actorLogin_s);
+  let GitHubNewUser = (  GitHubUser
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
+  | summarize makeset(userLogin_s)
+  | extend Dummy = 1
+  | join kind=innerunique (
+    GitHubUser
+    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+    | distinct userLogin_s
+    | extend Dummy = 1
+  ) on Dummy
+  | project-away Dummy
+  | where set_userLogin_s   !contains userLogin_s);
+  union GitHubNewActorLogin, GitHubNewUser
+

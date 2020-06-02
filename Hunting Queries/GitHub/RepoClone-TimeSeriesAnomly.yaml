@@ -1,0 +1,23 @@
+id: ccef3c74-4b4f-445b-8109-06d38687e4a4
+name: GitHub Repo Clone - Time Series Anomly
+description: |
+  'This hunting query identifies anomolies GitHub repo clones that may be a sign of compromise.'
+requiredDataConnectors:
+  - connectorId: CustomConnector
+    dataTypes:
+      - GithubTrafficLogs_CL
+tactics:
+  - Collection
+relevantTechniques:
+  - T1213
+query: |
+
+  let min_t = toscalar(GithubTrafficLogs_CL
+  | summarize min(timestamp_t));
+  let max_t = toscalar(GithubTrafficLogs_CL
+  | summarize max(timestamp_t));
+  GithubTrafficLogs_CL
+  | where LogType_s == "clones"
+  | make-series num=count(count_d) default=0 on timestamp_t in range(min_t, max_t, 1h) by Repository_s 
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(num, 1.5, -1, 'linefit')
+  | render timechart
