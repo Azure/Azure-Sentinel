@@ -1,5 +1,8 @@
 # Deploy Function App for Uploading Files to Azure Blob Storage
-This function app will downwload files from Urls and upload to Blog storage for centralized whitelisting.
+This function app will downwload files from Urls and upload to Blob storage for centralized whitelisting.
+
+## Architecture
+![](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/whitelist-azurefunction.png)
 
 ## Deployment and Configuration
 
@@ -16,7 +19,7 @@ There are 2 deployment Options.
 </a>
 
 #### 2: Deploy via VS Code
-Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
+Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-powershell#prerequisites
 1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/UploadToBlob-Whitelist/UploadToBlob-Whitelist.zip?raw=true)  file of the Azure Funciton app from Github.
 2. Extract to location on your machine.
 3. Open VS Code
