@@ -27,12 +27,12 @@ query: |
   let logTimeWindow = 7d;
   // Define script extensions that suit your web application environment - a sample are provided below
   let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]); 
-  let alertData = SecurityAlert 
+  let alertData = materialize(SecurityAlert 
   | where TimeGenerated > ago(alertTimeWindow) 
   | where ProviderName == "MDATP" 
   // Parse and expand the alert JSON 
   | extend alertData = parse_json(Entities) 
-  | mvexpand alertData;
+  | mvexpand alertData);
   let fileData = alertData
   // Extract web script files from MDATP alerts - our malicious web scripts - candidate webshells
   | where alertData.Type =~ "file" 
@@ -59,6 +59,6 @@ query: |
   // Summarize potential attacker activity
   | summarize count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), RequestUserAgents=make_set(csUserAgent), ReqestMethods=make_set(csMethod), RequestStatusCodes=make_set(scStatus), RequestCookies=make_set(csCookie), RequestReferers=make_set(csReferer), RequestQueryStrings=make_set(csUriQuery) by AttackerIP=cIP, SiteName=sSiteName, ShellLocation=csUriStem, tostring(FileName), HostName  
   ) on FileName, HostName
-  | project StartTime, EndTime, AttackerIP, RequestUserAgents, SiteName, ShellLocation, ReqestMethods, RequestStatusCodes, RequestCookies, RequestReferers, RequestQueryStrings, RequestCount = count_
+  | project StartTime, EndTime, AttackerIP, RequestUserAgents, HostName, SiteName, ShellLocation, ReqestMethods, RequestStatusCodes, RequestCookies, RequestReferers, RequestQueryStrings, RequestCount = count_
   // Expose the attacker ip address as a custom entity
-  | extend timestamp=StartTime, IPCustomEntity = AttackerIP 
+  | extend timestamp=StartTime, IPCustomEntity = AttackerIP, HostCustomEntity = HostName
