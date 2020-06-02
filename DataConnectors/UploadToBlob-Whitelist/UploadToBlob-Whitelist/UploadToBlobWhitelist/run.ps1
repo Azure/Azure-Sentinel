@@ -11,16 +11,18 @@ function ParseUrlfromHTML {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [string]$Url
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Url,
+        [Parameter(Mandatory = $true, Position = 1)]
+        [string]$Pattern
     )
         # Create WebResponseObject from Download URL
         $WebResponseObj = Invoke-WebRequest -Uri $Url -UseBasicParsing
 
         # Find all href tags and match for json string in URL
-        $JsonUrl = $WebResponseObj.Links  | Where-Object {$_.href -like "*json"} | Get-Unique | % href
+        $OutputUrl = $WebResponseObj.Links  | Where-Object {$_.href -like $Pattern} | Get-Unique | % href
 
-        return $JsonUrl
+        return $OutputUrl
 }
 
 
@@ -37,11 +39,11 @@ function UploadtoBlob {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true, Position = 0)]
         [string]$ConnectionString,
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true, Position = 1)]
         [string]$Container,
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true, Position = 2)]
         [string]$InputFile
     )
 
@@ -66,32 +68,30 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 
-       
-$InputUrl = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519'
-$OutputUrl = ParseUrlfromHTML -Url $InputUrl
-
-#Additional Parsing of Dates from Url string to compare date for conditional logic
-$JsonDate = $OutputUrl.Split('_')[2].Split('.')[0]
-
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 
 $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
 $Container = 'whitelist'
-$InputFile = "$env:TEMP\ServiceTags_Public.json"
 
-# Download Output JSON URL to Temp directory and normalize file name with out Date
-Invoke-WebRequest -Uri $OutputUrl -OutFile $env:TEMP\ServiceTags_Public.json 
-#Upload Json file to blob storage
-UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $InputFile
+$azurepublic = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519'
+$msftpublic = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=53602'
+$awsipranges = 'https://ip-ranges.amazonaws.com/ip-ranges.json'
 
-$Tracker = 'processedtracker'
-# Write Date of Url to File
-$JsonDate | Out-File "$env:TEMP\ServiceTagsLastProcessed.log"
-$TrackerFile = "$env:TEMP\ServiceTagsLastProcessed.log"
 
-# Upload Tracker File
-UploadtoBlob -ConnectionString $azstoragestring -Container $Tracker -InputFile $TrackerFile
+#Additional Parsing for MSFT and Azure Urls
+$azurepublicjson = ParseUrlfromHTML -Url $azurepublic -Pattern '*json'
+$msftpubliccsv = ParseUrlfromHTML -Url $msftpublic -Pattern '*csv'
+
+# Download Output URL to Temp directory and normalize file name with out Date
+Invoke-WebRequest -Uri $azurepublicjson -OutFile $env:TEMP\ServiceTags_Public.json 
+Invoke-WebRequest -Uri $msftpubliccsv -OutFile $env:TEMP\MSFT-Public-IPs.csv
+Invoke-WebRequest -Uri $awsipranges -OutFile $env:TEMP\AWS-IP-Ranges.json
+
+# Upload Files to Blob Storage
+UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\ServiceTags_Public.json
+UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\MSFT-Public-IPs.csv
+UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\AWS-IP-Ranges.json
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
