@@ -2,11 +2,9 @@
 This function app will downwload files from Urls and upload to Blob storage for centralized whitelisting.
 
 ## Architecture
-![](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/whitelist-azurefunction.png)
+![Diagram](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/whitelist-azurefunction.png)
 
 ## Deployment and Configuration
-
-```
 
 ### Deploy the Function App
 There are 2 deployment Options.
