@@ -37,7 +37,7 @@ Once you have decided on the type of data connector you plan to support, set the
 
 ### REST API Connectors
 
-1. Use the [Azure Monitor Data Collector API](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/data-collector-api) to send data to Azure Log Analytics. [This blog](https://zimmergren.net/building-custom-data-collectors-for-azure-log-analytics/) covers step by step instructions with screenshots to do so. If on prem, open port 443 (HTTPS/TLS) on your environment to talk to Azure Sentinel.
+1. Use the [Azure Monitor Data Collector API](https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api) to send data to Azure Log Analytics. [This blog](https://zimmergren.net/building-custom-data-collectors-for-azure-log-analytics/) covers step by step instructions with screenshots to do so. If on prem, open port 443 (HTTPS/TLS) on your environment to talk to Azure Sentinel.
 2. Ensure the schema used for structuring the data in Log Analytics is locked. Any changes to the schema after the data connector is published will have a compatibility impact, hence need to have a new name for the connector data type.
 3. Design a configuration mechanism in your product experience via product settings or via your product website, where your customers can go and enter the following information to send their logs into Log Analytics for Azure Sentinel.
     1. [**Required**] Azure Sentinel workspace ID
@@ -125,9 +125,9 @@ To use TLS communication between the security solution and the Syslog machine, y
 
 ### Syslog Connector
 
-**Note:** If your product supports CEF, the connection is more complete and you should choose CEF and follow the instructions in [Connecting data from CEF](https://docs.microsoft.com/en-us/azure/sentinel/connect-common-event-format) and data connector building steps detailed in the CEF connector section.
+**Note:** If your product supports CEF, the connection is more complete and you should choose CEF and follow the instructions in [Connecting data from CEF](https://docs.microsoft.com/azure/sentinel/connect-common-event-format) and data connector building steps detailed in the CEF connector section.
 
-1. Follow the steps outlined in the [Connecting data from Syslog](https://docs.microsoft.com/en-us/azure/sentinel/connect-syslog) to use the Azure Sentinel syslog connector to connect your product.
+1. Follow the steps outlined in the [Connecting data from Syslog](https://docs.microsoft.com/azure/sentinel/connect-syslog) to use the Azure Sentinel syslog connector to connect your product.
 2. Set your security solution to send Syslog messages to the proxy machine. This varies from product to product and follow the process for your product.
 3. Outline specific steps custom for sending your product logs along with link to your (partner) product documentation on how customers should configure their agent to send Syslog logs from the respective product into Azure Sentinel.
 4. Design and validate a few key queries that lands the value of the data stream using Kusto Query Language. Share these as sample queries in the data connector.
@@ -163,13 +163,13 @@ Once you have a working POC, you are ready to build, validate the data connector
 
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
 
-4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized sample data for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. This is the test validation set that can be used to build other contribution types on top of this data connector. The format for this file can be a spreadsheet or json with the column names / property names adhering to the data type property names. The data file name can the same name as the data connector. Submit the sample data file via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata).
+4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized sample data for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. This is the test validation set that can be used to build other contribution types on top of this data connector. The format for this file can be json / csv (json preferred) file with the column names / property names adhering to the data type property names. The data file name needs to be the same name as the data type name. Submit the sample data file via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector.
 5.	**Submit your data connector** - Do a PR for:
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
-    2.	The sample data file in the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
+    2.	The sample data file in the right subfolder of ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
     3.	The company logo adhering to the following requirements in the ['Logo' folder](https://aka.ms/azuresentinelgithublogos)
         1.	Logo needs to be in SVG format
-        2.	Ensure raw file of logo doesn’t have cls style formats
+        2.	Ensure raw file of logo doesn’t have: a. cls style formats b. embedded png formats
         3.  Logo scales well to fit in a 75 px square
 
 6. **Prepare and submit your data connector documentation** – Besides Azure Sentinel gallery discoverability, the connectors can also be discovered out of product in documentation. 
@@ -199,6 +199,10 @@ Once the data connector is in public preview for at least a month, send an email
 ## Evolve the data experience 
 ### Workbooks 
 [Follow the steps](https://aka.ms/azuresentinelgithubworkbooks) to build your workbook and submit your workbook json file, two screenshots of the workbook view one each in white and black background theme settings, logo and entry in the ‘workbooksMetadata.json’ file by a PR as mentioned in the instructions. 
+
+### Analytic Rule Templates
+[Follow the steps](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries) to build and submit your analytic rule template or detection pertaining to this data connector. Ensure to fill in the requiredDataConnectors parameter with the right data connector ID(s) to establish relation of this analytic rule template with the data connector. 
+
 ### Logic Apps Connectors
 Build logic apps connectors to enable automation capabilities for customers in the following areas:
 1.	Incident management – for e.g. assign a ticket to an analyst, keep ticket status in sync, …

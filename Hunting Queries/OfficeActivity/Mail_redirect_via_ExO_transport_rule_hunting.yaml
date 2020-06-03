@@ -1,0 +1,47 @@
+id: 9891684a-1e3a-4546-9403-3439513cbc70
+name: Mail redirect via ExO transport rule
+description: |
+  'Identifies when Exchange Online transport rule configured to forward emails.
+  This could be an adversary mailbox configured to collect mail from multiple user accounts.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+
+  let timeframe = 14d;
+  OfficeActivity
+  | where TimeGenerated >= ago(timeframe)
+  | where OfficeWorkload == "Exchange"
+  | where Operation in~ ("New-TransportRule", "Set-TransportRule")
+  | extend p = parse_json(Parameters)
+  | extend RuleName = case(
+    Operation =~ "Set-TransportRule", tostring(OfficeObjectId),
+    Operation =~ "New-TransportRule", tostring(p[1].Value),
+    "Unknown"
+    ) 
+  | mvexpand p
+  | where (p.Name =~ "BlindCopyTo" or p.Name =~ "RedirectMessageTo") and isnotempty(p.Value)
+  | extend RedirectTo = p.Value
+  | extend ClientIPOnly = case( 
+    ClientIP has "." and ClientIP has ":", tostring(split(ClientIP,":")[0]), 
+    ClientIP has "." and ClientIP has "-", tostring(split(ClientIP,"-")[0]), 
+    ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+    ClientIP
+    )  
+  | extend Port = case(
+    ClientIP has "." and ClientIP has ":", (split(ClientIP,":")[1]),
+    ClientIP has "." and ClientIP has "-", (split(ClientIP,"-")[1]),
+    ClientIP has "[" and ClientIP has ":", tostring(split(ClientIP,"]:")[1]),
+    ClientIP has "[" and ClientIP has "-", tostring(split(ClientIP,"]-")[1]),
+    ClientIP
+    )
+  | extend ClientIP = ClientIPOnly
+  | project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP 

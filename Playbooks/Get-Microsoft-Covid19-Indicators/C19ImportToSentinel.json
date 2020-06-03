@@ -1,0 +1,126 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "C19ImportToSentinel",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+                    "GraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]"
+                },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('GraphSecurityConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+              "displayName": "[parameters('UserName')]",
+              "customParameterValues": {},
+              "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+              }
+            }
+          },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('GraphSecurityConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Batch_messages": {
+                            "type": "Batch",
+                            "inputs": {
+                                "configurations": {
+                                    "tiIndicators": {
+                                        "releaseCriteria": {
+                                            "messageCount": 10,
+                                            "recurrence": {
+                                                "frequency": "Hour",
+                                                "interval": 1
+                                            }
+                                        }
+                                    }
+                                },
+                                "mode": "Inline"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Select": {
+                            "runAfter": {},
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@triggerBody()['items']",
+                                "select": "@item()['content']"
+                            }
+                        },
+                        "Submit_multiple_tiIndicators": {
+                            "runAfter": {
+                                "Select": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "value": "@body('Select')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/beta/security/tiIndicators/submitTiIndicators",
+                                "retryPolicy": {
+                                    "count": 90,
+                                    "interval": "PT60S",
+                                    "type": "fixed"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftgraphsecurity": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('GraphSecurityConnectionName'))]",
+                                "connectionName": "[variables('GraphSecurityConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,36 @@
+id: 2be4ef67-a93f-4d8a-981a-88158cb73abd
+name: Microsoft COVID-19 file hash indicator matches
+description: |
+  'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed - as described at https://www.microsoft.com/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv"] with (format="csv"));
+  let fileHashIndicators = covidIndicators
+  | where isnotempty(FileHashValue);
+  // Handle matches against both lower case and uppercase versions of the hash:
+  ( fileHashIndicators | extend FileHashValue = tolower(FileHashValue)
+    | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  |  join (
+     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) 
+     | where isnotempty(FileHash)
+     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  )
+  on $left.FileHashValue == $right.FileHash
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by FileHashValue
+  | project LatestIndicatorTime, FileHashValue, FileHashType, Description, ThreatType,  
+  CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, 
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
+  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName
