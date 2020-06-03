@@ -1,5 +1,5 @@
 # Deploy Function App for Uploading Files to Azure Blob Storage
-This function app will downwload files from Urls and upload to Blob storage for centralized whitelisting.
+This function app will download files from Urls and upload to Blob storage for centralized whitelisting or enrichment.
 
 ## Architecture
 ![Diagram](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/whitelist-azurefunction.png)

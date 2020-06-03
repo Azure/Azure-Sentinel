@@ -8,4 +8,4 @@ For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expr
 
 ## Learn more
 
-[Documentation](https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer?tabs=csharp)
+[Documentation](https://docs.microsoft.com/azure/azure-functions/functions-bindings-timer?tabs=csharp)
