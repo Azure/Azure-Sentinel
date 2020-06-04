@@ -6,8 +6,8 @@
             "defaultValue": "Get-GitHubAuditEntry",
             "type": "String"
         },
-        "TrafficPlaybookName": {
-            "defaultValue": "Get-GitHubTrafficLogs",
+        "RepoPlaybookName": {
+            "defaultValue": "Get-GitHubRepoLogs",
             "type": "String"
         },
         "PersonalAccessToken": {
@@ -56,12 +56,14 @@
                         "tenantId": "[subscription().tenantId]",
                         "objectId": "[parameters('principalId')]",
                         "permissions": {
-                            "keys": [],
+                            "keys": [
+                            ],
                             "secrets": [
                                 "Get",
                                 "List"
                             ],
-                            "certificates": []
+                            "certificates": [
+                            ]
                         }
                     }
                 ],
@@ -123,7 +125,7 @@
                 "accessTier": "Hot"
             }
         },
-         {
+        {
             "type": "Microsoft.Storage/storageAccounts/blobServices",
             "apiVersion": "2019-06-01",
             "name": "[concat(variables('StorageAccountName'), '/default')]",
@@ -162,7 +164,7 @@
             "name": "[variables('AzureBlobConnectionName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-"[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "properties": {
                 "displayName": "github",
@@ -734,7 +736,7 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('TrafficPlaybookName')]",
+            "name": "[parameters('RepoPlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
@@ -851,6 +853,66 @@
                                             },
                                             "type": "Foreach"
                                         },
+                                        "For_each_7": {
+                                            "foreach": "@body('Parse_JSON_8')",
+                                            "actions": {
+                                                "Append_to_array_variable_6": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Collaborators",
+                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_7'), 'Repository', items('For_each')['name']), 'LogType', 'Collaborators'), 'Organization', variables('OrgName'))"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_8": {
+                                            "foreach": "@body('Parse_JSON_7')",
+                                            "actions": {
+                                                "Append_to_array_variable_5": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Commits",
+                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_8'), 'Repository', items('For_each')['name']), 'LogType', 'Commits'), 'Organization', variables('OrgName'))"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_9": {
+                                            "foreach": "@body('Parse_JSON_9')",
+                                            "actions": {
+                                                "Append_to_array_variable_7": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Forks",
+                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_9'), 'Repository', items('For_each')['name']), 'LogType', 'Forks'), 'Organization', variables('OrgName'))"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_9": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
                                         "HTTP_2": {
                                             "runAfter": {
                                             },
@@ -910,6 +972,54 @@
                                                 },
                                                 "method": "GET",
                                                 "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/clones"
+                                            }
+                                        },
+                                        "HTTP_6": {
+                                            "runAfter": {
+                                                "Send_Data_4": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Get_secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/commits"
+                                            }
+                                        },
+                                        "HTTP_7": {
+                                            "runAfter": {
+                                                "Send_Data_5": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Get_secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/collaborators"
+                                            }
+                                        },
+                                        "HTTP_8": {
+                                            "runAfter": {
+                                                "Send_Data_6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Get_secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/forks"
                                             }
                                         },
                                         "Parse_JSON_2": {
@@ -1012,6 +1122,57 @@
                                                 }
                                             }
                                         },
+                                        "Parse_JSON_7": {
+                                            "runAfter": {
+                                                "HTTP_6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_6')",
+                                                "schema": {
+                                                    "items": {
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_8": {
+                                            "runAfter": {
+                                                "HTTP_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_7')",
+                                                "schema": {
+                                                    "items": {
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_9": {
+                                            "runAfter": {
+                                                "HTTP_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_8')",
+                                                "schema": {
+                                                    "items": {
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
                                         "Send_Data": {
                                             "runAfter": {
                                                 "For_each_2": [
@@ -1022,7 +1183,7 @@
                                             "inputs": {
                                                 "body": "@{variables('Referrers')}",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1043,7 +1204,7 @@
                                             "inputs": {
                                                 "body": "@variables('Paths')",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1064,7 +1225,7 @@
                                             "inputs": {
                                                 "body": "@variables('Views')",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1085,7 +1246,70 @@
                                             "inputs": {
                                                 "body": "@variables('Clones')",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Send_Data_5": {
+                                            "runAfter": {
+                                                "For_each_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@variables('Commits')",
+                                                "headers": {
+                                                    "Log-Type": "GitHubRepoLogs"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Send_Data_6": {
+                                            "runAfter": {
+                                                "For_each_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@variables('Collaborators')",
+                                                "headers": {
+                                                    "Log-Type": "GitHubRepoLogs"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Send_Data_7": {
+                                            "runAfter": {
+                                                "For_each_9": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@variables('Forks')",
+                                                "headers": {
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1104,33 +1328,9 @@
                                     },
                                     "type": "Foreach"
                                 },
-                                "Get_secret": {
-                                    "runAfter": {
-                                        "Set_variable": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
-                                            }
-                                        },
-                                        "method": "get",
-                                        "path": "[concat('/secrets/@{encodeURIComponent(''', variables('SecretName'), ''')}/value')]"
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "outputs"
-                                            ]
-                                        }
-                                    }
-                                },
                                 "HTTP": {
                                     "runAfter": {
-                                        "Get_secret": [
+                                        "Set_variable": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1184,11 +1384,16 @@
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
                         },
                         "Get_blob_content": {
                             "runAfter": {
-                                "Initialize_variable_5": [
+                                "Get_secret": [
                                     "Succeeded"
                                 ]
                             },
@@ -1203,6 +1408,30 @@
                                 "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/ORGS.json'))}/content",
                                 "queries": {
                                     "inferContentType": true
+                                }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Initialize_variable_8": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('PersonalAccessToken')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
                                 }
                             }
                         },
@@ -1278,6 +1507,54 @@
                                 "variables": [
                                     {
                                         "name": "Clones",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_6": {
+                            "runAfter": {
+                                "Initialize_variable_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Commits",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_7": {
+                            "runAfter": {
+                                "Initialize_variable_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Collaborators",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_8": {
+                            "runAfter": {
+                                "Initialize_variable_7": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Forks",
                                         "type": "array"
                                     }
                                 ]
