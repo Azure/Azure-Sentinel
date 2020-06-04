@@ -1,0 +1,66 @@
+// Name: Azure DevOps Administrator Group Monitoring
+//
+// Id: 89e6adbd-612c-4fbe-bc3d-32f81baf3b6c
+//
+// Description: This detection monitors for addtions to project or project collection administration groups in an Azure DevOps Organization.
+//
+// DataSource: #AzureDevOpsAuditing
+//
+// Severity: High
+//
+// QueryFrequency: 2h
+//
+// QueryPeriod: 14d+
+//
+// AlertTriggerOperator: gt
+//
+// AlertTriggerThreshold: 0
+//
+// Tactics: #Persistence #Escalation
+//
+// Monitor for Project Administrator adds to *any* project
+let MontiorAllProjects = false;
+// If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects
+let ProjectsToMonitor = datatable(ProjectName:string)
+[
+'ProjectA',
+'ProjectC'
+];
+AzureDevOpsAuditing
+| where OperationName == "Group.UpdateGroupMembership.Add" and
+  Area == "Group" and 
+  (
+    Details contains "was added as a member of group" and 
+    (
+      Details endswith '\\Project Administrators' or 
+      Details endswith "\\Project Collection Administrators"
+    )
+  )
+| parse Details with AddedIdentity ' was added as a member of group [' EntityName ']\\' GroupName
+| extend 
+  Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), 
+  AddedIdentityId = Data.MemberId
+| extend 
+  Severity = iif(Level == 'Organization', 'High', 'Medium'), 
+  AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added ', AddedIdentity, ' to the ', EntityName, ' ', Level)
+| where
+  (
+    MontiorAllProjects == true or 
+    EntityName in (ProjectsToMonitor)
+  )
+  or Level == 'Organization'
+| project 
+  TimeGenerated, 
+  Severity, 
+  Adder = ActorUPN, 
+  AddedIdentity, 
+  AddedIdentityId, 
+  AlertDetails, 
+  Level, 
+  EntityName, 
+  GroupName, 
+  ActorAuthType = AuthenticationMechanism, 
+  ActorIpAddress = IpAddress, 
+  ActorUserAgent = UserAgent, 
+  RawDetails = Details
+| extend IPCustomEntity = ActorIpAddress
