@@ -185,7 +185,7 @@ Once the connector is deployed in production, we will share a link for you to pr
 1.	Ensure data flows as expected and the data appears in the expected format in the right Log Analytics table
 2.	Ensure sample queries shared with the connector execute as expected and all the other queries that appear in the json file like the graphQueries, dataTypes etc. 
 3.	Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos, formatting and logo rendering aspects. 
-4.	If you have Kusto functions included / your sample queries and workbooks take a dependency on certain Kusto function, ensure those work as expected and that dependency is called out in the connector UX (in the next steps section of the connector)<p>
+4.	If you have Kusto functions included / your sample queries and workbooks take a dependency on certain Kusto function, ensure those work as expected and that dependency is called out in the connector UX (in the Configuration at the beginning and in the next steps section of the connector as a banner)<p>
 Once everything looks as expected, send an email to [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) of your sign off to get your connector shipped in public preview.
 
 ## Connector ships in public preview
