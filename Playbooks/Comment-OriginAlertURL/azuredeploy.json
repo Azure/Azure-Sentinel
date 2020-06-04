@@ -1,0 +1,283 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Comment-OriginAlertURL",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "For_each": {
+                            "actions": {
+                                "For_each_3": {
+                                    "actions": {
+                                        "Check_the_Alert_URL_path": {
+                                            "actions": {
+                                                "Add_Original_Product's_Alert_URL_to_the_Sentinel_Incident_Comments": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "Value": "Original Alert URL: @{variables('AlertURL')}"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Comment/@{encodeURIComponent(variables('SubscriptionId'))}/@{encodeURIComponent(variables('WorkspaceId'))}/@{encodeURIComponent(variables('RG'))}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(items('For_each')?['SystemAlertId'])}"
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_the_Alert_URL": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection"
+                                                },
+                                                "Set_the_Alert_URL": {
+                                                    "inputs": {
+                                                        "name": "AlertURL",
+                                                        "value": "@items('For_each_3')?['Href']"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "description": "Does the URL navigate to the original product's alert page",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@items('For_each_3')?['Href']",
+                                                            "alert"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "description": "For Each URL found in the Alert in the Extended Links column, check if the URL is for the original product's alert page",
+                                    "foreach": "@body('Parse_JSON')",
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_JSON": {
+                                    "description": "Reformat the Extended Links column of the Security Alerts to distinguish the Alert URLs",
+                                    "inputs": {
+                                        "content": "@items('For_each')?['ExtendedLinks']",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "Category": {},
+                                                    "Href": {
+                                                        "type": "string"
+                                                    },
+                                                    "Label": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Href"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "description": "Run through all the MCAS, AATP, and MDATP Alerts in Sentinel and review for the original product's respective alert URL",
+                            "foreach": "@body('Run_query_and_list_results')?['value']",
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_Alert_URL_": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AlertURL",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Insert_Resource_Group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Insert_Resource_Group": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RG",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Insert_WorkspaceId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Insert_SubscriptionId": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SubscriptionId",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Insert_WorkspaceId": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "WorkspaceId",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Insert_SubscriptionId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Run_query_and_list_results": {
+                            "description": "Get all Security Alerts from Sentinel that came from a MCAS, AATP, or MDATP alert",
+                            "inputs": {
+                                "body": "SecurityAlert | where ProviderName == \"MCAS\" or ProviderName == \"MDATP\" or ProviderName == \"Azure Advanced Threat Protection\"",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "",
+                                    "resourcename": "",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "",
+                                    "timerange": "Last 4 hours"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Alert_URL_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                            }
+                        },
+                        "contentVersion": "1.0.0.0",
+                        "outputs": {},
+                        "parameters": {
+                            "$connections": {
+                                "defaultValue": {},
+                                "type": "Object"
+                            }
+                        },
+                        "triggers": {
+                            "Recurrence": {
+                                "recurrence": {
+                                    "frequency": "Hour",
+                                    "interval": 4
+                                },
+                                "type": "Recurrence"
+                            }
+                        }
+                    },
+                    "parameters": {
+                        "$connections": {
+                            "value": {
+                                "azuresentinel": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                    "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                },
+                                "azuremonitorlogs": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                    "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                                }
+                                }
+                            }
+                        }
+            }   
+        }
+    ]
+}

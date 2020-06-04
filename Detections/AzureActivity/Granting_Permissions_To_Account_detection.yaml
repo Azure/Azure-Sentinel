@@ -1,0 +1,38 @@
+﻿id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
+name: Suspicious granting of permissions to an account
+description: |
+  'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+query: |
+
+  let starttime = 14d;
+  let endtime = 1d;
+  // The number of operations below which an IP address is considered an unusual source of role assignment operations
+  let alertOperationThreshold = 5;
+  let createRoleAssignmentActivity = AzureActivity
+  | where OperationName == "Create role assignment";
+  createRoleAssignmentActivity 
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | summarize count() by CallerIpAddress, Caller
+  | where count_ >= alertOperationThreshold
+  | join kind = rightanti ( 
+  createRoleAssignmentActivity
+  | where TimeGenerated > ago(endtime)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+  OperationIds = makelist(OperationId), CorrelationId = makelist(CorrelationId), ActivityCountByCallerIPAddress = count()  
+  by ResourceId, CallerIpAddress, Caller, OperationName, Resource, ResourceGroup
+  ) on CallerIpAddress, Caller
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress

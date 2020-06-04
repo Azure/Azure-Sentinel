@@ -1,0 +1,53 @@
+﻿Id: dd8f30e4-8171-452e-84a0-99bcd570bd08
+DisplayName: Services created by account
+Description: Any service created on any system by the given account during the time of or recently after compromise (set time range to +-6h when running the query)
+InputEntityType: Account
+InputFields:
+  - Name
+  - NTDomain
+OutputEntityTypes:
+  - Process
+QueryPeriodBefore: 6h
+QueryPeriodAfter: 6h
+DataSources:
+  - SecurityEvent
+Tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetServiceCreationsByAccount = (v_Account_Name:string, v_Account_NTDomain:string){
+  Event
+  | where EventID == 7045
+  | extend p_Account_Name = case(
+  // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
+  v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+  v_Account_Name
+  )
+  | extend p_Account_NTDomain = case(
+  v_Account_NTDomain has '\\', tostring(split(v_Account_NTDomain, '\\')[0]),
+  // Handles UPN scenario of AccountName@UPNSuffix to pull potential NTDomain from
+  v_Account_NTDomain has '@', tostring(split(tostring(split(v_Account_NTDomain, '@')[1]),'.')[0]),
+  v_Account_NTDomain
+  )
+  | extend Account_Name = tostring(split(UserName, '\\')[1]), Account_NTDomain = tostring(split(UserName, '\\')[0])
+  | where Account_Name =~ p_Account_Name and Account_NTDomain =~ p_Account_NTDomain
+  | extend EventDataParse = parse_xml(EventData)
+  | extend ServiceName = tostring(EventDataParse.DataItem.EventData.Data.[0].['#text'])
+  | extend ImagePath = tostring(EventDataParse.DataItem.EventData.Data.[1].['#text'])
+  | extend ServiceType = tostring(EventDataParse.DataItem.EventData.Data.[2].['#text'])
+  | extend StartType = tostring(EventDataParse.DataItem.EventData.Data.[3].['#text'])
+  | extend ServiceAccount = tostring(EventDataParse.DataItem.EventData.Data.[4].['#text'])
+  | where ImagePath !has '\\ProgramData\\Microsoft\\Windows Defender\\Definition Updates\\'
+  | extend Process_Aux_Account_info = pack('ServiceName', ServiceName, 'ServiceType', ServiceType, 'StartType', StartType, 'ServiceAccount', ServiceAccount)
+  | summarize Host_Aux_StartTimeUtc = min(TimeGenerated), Host_Aux_EndTimeUtc = max(TimeGenerated) by Process_Host_UnstructuredName = Computer, Account_Name, 
+  Account_NTDomain, Process_Account_UnstructuredName = UserName, Process_ImageFile_FullPath = ImagePath, tostring(Process_Aux_Account_info)
+  | top 10 by Host_Aux_StartTimeUtc desc nulls last
+  };
+  // <Name> is the user name of john from contoso\john and <Domain> is the domain of contoso from contoso\john
+  GetServiceCreationsByAccount('<Name>', '<NTDomain>')
+

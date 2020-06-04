@@ -1,0 +1,28 @@
+id: 088d30e9-c02b-46b1-bd1f-d5b6d6b782f0
+name: Least Common Processes by Command Line
+description: |
+  'Looks across your environment for least common Process Command Lines, may be noisy and require whitelisting.  By ZanCo'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+
+  let Whitelist = dynamic (['foo.exe', 'baz.exe']);
+  let Sensitivity = 5;
+  let StartDate = ago(7d);
+  let Duration = 7d;
+  SecurityEvent
+  | where EventID == 4688 and TimeGenerated > StartDate and TimeGenerated < (StartDate + Duration) and NewProcessName !endswith 'conhost.exe'
+  | extend ProcArray = split(NewProcessName, '\\')
+  // ProcArrayLength is Folder Depth
+  | extend ProcArrayLength = arraylength(ProcArray)
+  | extend LastIndex = ProcArrayLength - 1
+  | extend Proc = ProcArray[LastIndex]
+  | where Proc !in (Whitelist)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = makeset(Computer), UserCount = dcount(SubjectUserName), Users = makeset(SubjectUserName) by CommandLine
+  | where TimesSeen < Sensitivity
+  | extend timestamp = StartTimeUtc
+  

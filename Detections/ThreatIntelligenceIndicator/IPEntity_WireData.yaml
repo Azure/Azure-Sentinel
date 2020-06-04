@@ -1,0 +1,43 @@
+id: a50766a7-0674-4ccb-8845-15dc55a80ba1
+name: (Preview) TI map IP entity to WireData
+description: |
+  'Identifies a match in WireData from any IP IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureMonitor(WireData)
+    dataTypes:
+      - WireData
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | join (
+      WireData | where TimeGenerated >= ago(dt_lookBack)
+      | where isnotempty(RemoteIP)
+      // renaming time column so it is clear the log this came from
+      | extend WireData_TimeGenerated = TimeGenerated
+  )
+  on $left.TI_ipEntity == $right.RemoteIP
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, WireData_TimeGenerated, 
+  TI_ipEntity, Computer, LocalIP, RemoteIP, ProcessName, ApplicationProtocol, LocalPortNumber, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = WireData_TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = Computer, URLCustomEntity = Url

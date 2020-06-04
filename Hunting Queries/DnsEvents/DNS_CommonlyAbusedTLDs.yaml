@@ -1,0 +1,31 @@
+id: 8e9c4680-8c0b-4885-b183-3b09efd8fc2c
+name: DNS commonly abused TLDs
+description: |
+  'Some top level domains (TLDs) are more commonly associated with malware for a range of 
+  reasons - including how easy domains on these TLDs are to obtain. Many of these may be undesirable 
+  from an enterprise policy perspective. 
+  The NameCount column provides an initial insight into how widespread the domain usage is across the environment.'
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1483
+  - T1008
+  - T1048
+query: |
+
+  let timeframe = 7d;
+  let abusedTLD = dynamic(["click", "club", "download",  "xxx", "xyz"]);
+  DnsEvents
+  | where TimeGenerated >= ago(timeframe) 
+  | where Name has "." 
+  | extend tld = tostring(split(Name, ".")[-1])
+  | where tld in~ (abusedTLD)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), NameCount = count() by Name, ClientIP, tld
+  | order by NameCount desc
+  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP
+

@@ -1,0 +1,43 @@
+id: 36a9c9e5-3dc1-4ed9-afaa-1d13617bfc2b
+name: (Preview) TI map URL entity to OfficeActivity data
+description: |
+  'Identifies a match in OfficeActivity data from any URL IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+     - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+     - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  | join (
+   OfficeActivity
+    | where TimeGenerated >= ago(dt_lookBack)
+    //Extract the Url from a number of potential fields
+    | extend Url = iif(OfficeWorkload == "AzureActiveDirectory",extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,ModifiedProperties),tostring(parse_json(ModifiedProperties)[12].NewValue))
+    | where isnotempty(Url)
+    // Ensure we get a clean URL
+    | extend Url = tostring(split(Url, ';')[0])
+    | extend Office_TimeGenerated = TimeGenerated
+    // Project a single user identity that we can use for entity mapping
+    | extend User = iif(isnotempty(UserId), UserId, iif(isnotempty(Actor), tostring(parse_json(Actor)[0].ID), tostring(parse_json(Parameters)[0].Vlaue))) 
+  ) on Url
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, 
+  UserType, OfficeWorkload, Parameters, Office_TimeGenerated, Url, User
+  | extend timestamp = Office_TimeGenerated, AccountCustomEntity = User, URLCustomEntity = Url
