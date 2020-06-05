@@ -72,11 +72,12 @@ if ($Timer.IsPastDue) {
 $currentUTCtime = (Get-Date).ToUniversalTime()
 
 $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
-$Container = 'whitelist'
+$Container = 'lookuptables'
 
 $azurepublic = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519'
 $msftpublic = 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=53602'
 $awsipranges = 'https://ip-ranges.amazonaws.com/ip-ranges.json'
+$officeworldwide = 'https://endpoints.office.com/endpoints/worldwide?clientrequestid=b10c5ed1-bad1-445f-b386-b919946339a7'
 
 
 #Additional Parsing for MSFT and Azure Urls
@@ -87,11 +88,13 @@ $msftpubliccsv = ParseUrlfromHTML -Url $msftpublic -Pattern '*csv'
 Invoke-WebRequest -Uri $azurepublicjson -OutFile $env:TEMP\ServiceTags_Public.json 
 Invoke-WebRequest -Uri $msftpubliccsv -OutFile $env:TEMP\MSFT-Public-IPs.csv
 Invoke-WebRequest -Uri $awsipranges -OutFile $env:TEMP\AWS-IP-Ranges.json
+Invoke-WebRequest -Uri $officeworldwide -OutFile $env:TEMP\Office-WorldWide.json
 
 # Upload Files to Blob Storage
 UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\ServiceTags_Public.json
 UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\MSFT-Public-IPs.csv
 UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\AWS-IP-Ranges.json
+UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\Office-WorldWide.json    
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"

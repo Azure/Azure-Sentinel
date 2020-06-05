@@ -12,13 +12,13 @@ There are 2 deployment Options.
 #### 1: Deploy via Azure ARM Template
 1.  Deploy the template.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FUploadToBlob-Whitelist%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FUploadToBlobLookupTables%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 
 #### 2: Deploy via VS Code
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-powershell#prerequisites
-1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/UploadToBlob-Whitelist/UploadToBlob-Whitelist.zip?raw=true)  file of the Azure Function app from Github.
+1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/UploadToBlobLookupTables/UploadToBlobLookupTables.zip?raw=true)  file of the Azure Function app from Github.
 2. Extract to location on your machine.
 3. Open VS Code
 4. Click File -> Open Folder
@@ -26,7 +26,7 @@ Note: You will need to prepare VS code for Azure function development.  See http
 6. Type Crtl+Shift+P.
 7. Click Azure Functions: Deploy to function app.  You maybe asked to sign in to azure.
 8. Click Create New function app in Azure (advanced)
-9. Provide a unique name like "WhitelistinAzureBlobStorage".  Press Enter
+9. Provide a unique name like "uploadToBlobLookupTables".  Press Enter
 10. Click Windows
 11. Click Consumption
 12. Click PowerShell
