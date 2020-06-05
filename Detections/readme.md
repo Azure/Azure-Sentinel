@@ -11,4 +11,5 @@ More Specific to Detections:
 * To enable these detections in your environment follow the [out of the box guidance](https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-built-in).
 * The rule created will run the query on the scheduled time that was defined, and trigger an alert that will be seen both in the **SecurityAlert** table and in a case in the **Incidents** tab
 
+# Feedback
 For questions or feedback, please contact AzureSentinel@microsoft.com
