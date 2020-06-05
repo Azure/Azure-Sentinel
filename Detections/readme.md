@@ -1,13 +1,14 @@
 # About
 
-* This folder contains Detections based on different types of data sources that you can leverage in order to create alerts and respond to threats in your environment.
-* These detections are written using [KQL query langauge](https://docs.microsoft.com/en-us/azure/kusto/query/index) and will provide you a starting point to protect your environment and get familiar with the different data tables.
-* To create the detection in your environment - 
-  - go to the 'Analytics' section
-  - copy the required query
-  - update the alert rule parameters according to the detection parameters - copy the name, the description, lookback time, threshold and severity.
-  - the query will be simulated and you will be able to immediately see if a you have hits based on the detection.
-  - create the alert rule
-* The rule created will run the query on the scheduled time that was defined, and trigger an alert that will be seen both in the **SecurityAlert** table and in a case in the **Cases** page
- 
- For questions or feedback, please contact AzureSentinel@microsoft.com
+This folder contains Detections based on different types of data sources that you can leverage in order to create alerts and respond to threats in your environment.
+
+For general information please start with the [Wiki](https://github.com/Azure/Azure-Sentinel/wiki) pages.
+
+More Specific to Detections:
+* [Contribute](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries) to Analytic Templates (Detections) and Hunting queries
+* Specifics on what is required for Detections and Hunting queries is in the [Query Style Guide](https://github.com/Azure/Azure-Sentinel/wiki/Query-Style-Guide )
+* These detections are written using [KQL query langauge](https://docs.microsoft.com/azure/kusto/query/index) and will provide you a starting point to protect your environment and get familiar with the different data tables.
+* To enable these detections in your environment follow the [out of the box guidance](https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-built-in).
+* The rule created will run the query on the scheduled time that was defined, and trigger an alert that will be seen both in the **SecurityAlert** table and in a case in the **Incidents** tab
+
+For questions or feedback, please contact AzureSentinel@microsoft.com
