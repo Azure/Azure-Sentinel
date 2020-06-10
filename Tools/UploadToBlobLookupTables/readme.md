@@ -12,13 +12,13 @@ There are 2 deployment Options.
 #### 1: Deploy via Azure ARM Template
 1.  Deploy the template.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FUploadToBlobLookupTables%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FUploadToBlobLookupTables%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 
 #### 2: Deploy via VS Code
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-powershell#prerequisites
-1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/UploadToBlobLookupTables/UploadToBlobLookupTables.zip?raw=true)  file of the Azure Function app from Github.
+1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/UploadToBlobLookupTables/UploadToBlobLookupTables.zip?raw=true)  file of the Azure Function app from Github.
 2. Extract to location on your machine.
 3. Open VS Code
 4. Click File -> Open Folder
