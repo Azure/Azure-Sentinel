@@ -50,7 +50,7 @@ This option allows users to post the readily available sample custom data in the
 
 ### Setup
 1) Clone Azure Sentinel repository by running this command: git clone https://github.com/Azure/Azure-Sentinel.git
-2) In the cloned repo, navigate to the Solutions directory, and open **SampleDataIngestTool** solution.
+2) In the cloned repo, navigate to the **Tools** directory, and open **SampleDataIngestTool** solution.
 3) Install necessary dependencies: In Visual Studio, right click the **SampleDataIngestTool** solution.
 Click **Restore NuGet Packages**.
 4) Open **config.txt** file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
