@@ -1,7 +1,7 @@
 # Ingest GitHub AuditLog and API Data
 Author: Nicholas DiCola
 
-Get-GitHubAuditEntry playbook ingests GitHub AuditLog via (GraphQL)[https://developer.github.com/v4/interface/auditentry/] events and writes them to a custom log table called GitHub_CL.  Get-GitHubTrafficLogs playbook ingests GitHub (Traffic Logs)[https://developer.github.com/v3/repos/traffic/] data and writes them to a custom log table called GitHubTraffic_CL. 
+Get-GitHubAuditEntry playbook ingests GitHub AuditLog via (GraphQL)[https://developer.github.com/v4/interface/auditentry/] events and writes them to a custom log table called GitHub_CL.  Get-GitHubRepoLogs playbook ingests GitHub (Traffic Logs)[https://developer.github.com/v3/repos/traffic/] data and writes them to a custom log table called GitHubRepoLogs_CL. Get-GitHubVulnerabilityAlerts playbook ingests GitHub (Security Vulnerability)[https://developer.github.com/v4/object/securityvulnerability/] data and writes them to a custom log table called GitHubRepoLogs_CL
 
 There are a number of configuration steps required to deploy the Logic App playbooks.
 
@@ -17,13 +17,15 @@ This user will be used to grant access to the Key Vault secret.
 "workspaceId": The Sentinel Workspace ID​
 "workSpaceKey": The Sentinel Workspace Key
  ```
-4. There are two json files (ORGS.json and lastrun.json).
+4. There are two json files (ORGS.json and lastrun-Audit.json).
 5. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name.  If you have addtional orgs, add another line {"org": "sampleorg"} for each org.
-6. Upload the ORGS.json and lastrun.json to the storage account githublogicapp container.
+6. Upload the ORGS.json, and lastrun-Audit.json to the storage account githublogicapp container.
 7. Go to the keyvault-GitHubPlaybooks connection resource.
 8. Click Edit API Connection.
 9. Click Authorize.  Sign in as the user.  Click Save.
 10. The playbooks are deployed as disabled since the json files and connection has to be authorized.  Go to each playbook and click Enable.
+
+Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHub] to make the logs useful
 
 ## Deploy the Logic App template
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGitHub%2Fazuredeploy.json" target="_blank">

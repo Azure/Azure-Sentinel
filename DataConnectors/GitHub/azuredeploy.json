@@ -6,8 +6,12 @@
             "defaultValue": "Get-GitHubAuditEntry",
             "type": "String"
         },
-        "TrafficPlaybookName": {
-            "defaultValue": "Get-GitHubTrafficLogs",
+        "RepoPlaybookName": {
+            "defaultValue": "Get-GitHubRepoLogs",
+            "type": "String"
+        },
+        "VulnerabilityAlertPlaybookName": {
+            "defaultValue": "Get-GitHubVulnerabilityAlerts",
             "type": "String"
         },
         "PersonalAccessToken": {
@@ -56,12 +60,14 @@
                         "tenantId": "[subscription().tenantId]",
                         "objectId": "[parameters('principalId')]",
                         "permissions": {
-                            "keys": [],
+                            "keys": [
+                            ],
                             "secrets": [
                                 "Get",
                                 "List"
                             ],
-                            "certificates": []
+                            "certificates": [
+                            ]
                         }
                     }
                 ],
@@ -123,7 +129,7 @@
                 "accessTier": "Hot"
             }
         },
-         {
+        {
             "type": "Microsoft.Storage/storageAccounts/blobServices",
             "apiVersion": "2019-06-01",
             "name": "[concat(variables('StorageAccountName'), '/default')]",
@@ -162,7 +168,7 @@
             "name": "[variables('AzureBlobConnectionName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-"[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "properties": {
                 "displayName": "github",
@@ -293,7 +299,7 @@
                                             {
                                                 "equals": [
                                                     "@body('Parse_JSON')?['lastContext']",
-                                                    "@null"
+                                                    ""
                                                 ]
                                             }
                                         ]
@@ -314,33 +320,9 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/lastrun.json'))}/content",
+                                        "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/lastrun-Audit.json'))}/content",
                                         "queries": {
                                             "inferContentType": true
-                                        }
-                                    }
-                                },
-                                "Get_secret": {
-                                    "runAfter": {
-                                        "Condition": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
-                                            }
-                                        },
-                                        "method": "get",
-                                        "path": "[concat('/secrets/@{encodeURIComponent(''', variables('SecretName'), ''')}/value')]"
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "outputs"
-                                            ]
                                         }
                                     }
                                 },
@@ -391,12 +373,12 @@
                                                             }
                                                         },
                                                         "method": "put",
-                                                        "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/lastrun.json'))}"
+                                                        "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/lastrun-Audit.json='))}"
                                                     }
                                                 }
                                             },
                                             "runAfter": {
-                                                "Set_variable_6": [
+                                                "Set_variable_5": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -408,19 +390,7 @@
                                                         "type": "SetVariable",
                                                         "inputs": {
                                                             "name": "AuditQuery",
-                                                            "value": "{\"query\": \"{organization(login:\\\"@{variables('OrgName')}\\\") {auditLog(first: 10 orderBy: {direction: ASC field: CREATED_AT} after: \\\"@{body('Parse_JSON_2')?['data']?['organization']?['auditLog']?['pageInfo']?['endCursor']}\\\"){edges{node{... on AuditEntry {action actorIp actorLocation {city country countryCode region regionCode} actorLogin actorResourcePath actorUrl createdAt operationType user {email} userLogin userResourcePath}}}pageInfo {endCursor hasNextPage hasPreviousPage startCursor}}}}\"}"
-                                                        }
-                                                    },
-                                                    "Set_variable_5": {
-                                                        "runAfter": {
-                                                            "Set_variable_4": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "lastContext",
-                                                            "value": "@{body('Parse_JSON_2')?['data']?['organization']?['auditLog']?['pageInfo']?['endCursor']}"
+                                                            "value": "{\"query\": \"{organization(login:\\\"@{variables('OrgName')}\\\") {auditLog(first: 100 orderBy: {direction: ASC field: CREATED_AT} after: \\\"@{body('Parse_JSON_2')?['data']?['organization']?['auditLog']?['pageInfo']?['endCursor']}\\\"){edges{node{... on AuditEntry {action actorIp actorLocation {city country countryCode region regionCode} actorLogin actorResourcePath actorUrl createdAt operationType user {email} userLogin userResourcePath}}}pageInfo {endCursor hasNextPage hasPreviousPage startCursor}}}}\"}"
                                                         }
                                                     }
                                                 }
@@ -564,6 +534,18 @@
                                                 }
                                             }
                                         },
+                                        "Set_variable_5": {
+                                            "runAfter": {
+                                                "Set_variable_6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "lastContext",
+                                                "value": "@{body('Parse_JSON_2')?['data']?['organization']?['auditLog']?['pageInfo']?['endCursor']}"
+                                            }
+                                        },
                                         "Set_variable_6": {
                                             "runAfter": {
                                                 "Condition_3": [
@@ -578,9 +560,6 @@
                                         }
                                     },
                                     "runAfter": {
-                                        "Get_secret": [
-                                            "Succeeded"
-                                        ]
                                     },
                                     "expression": "@equals(variables('hasNextPage'), false)",
                                     "limit": {
@@ -595,11 +574,16 @@
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
                         },
                         "Get_blob_content": {
                             "runAfter": {
-                                "Initialize_variable_4": [
+                                "Get_secret": [
                                     "Succeeded"
                                 ]
                             },
@@ -615,6 +599,23 @@
                                 "queries": {
                                     "inferContentType": true
                                 }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Initialize_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', variables('SecretName'), ''')}/value')]"
                             }
                         },
                         "Initialize_variable": {
@@ -734,7 +735,7 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('TrafficPlaybookName')]",
+            "name": "[parameters('RepoPlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
@@ -851,6 +852,66 @@
                                             },
                                             "type": "Foreach"
                                         },
+                                        "For_each_7": {
+                                            "foreach": "@body('Parse_JSON_8')",
+                                            "actions": {
+                                                "Append_to_array_variable_6": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Collaborators",
+                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_7'), 'Repository', items('For_each')['name']), 'LogType', 'Collaborators'), 'Organization', variables('OrgName'))"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_8": {
+                                            "foreach": "@body('Parse_JSON_7')",
+                                            "actions": {
+                                                "Append_to_array_variable_5": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Commits",
+                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_8'), 'Repository', items('For_each')['name']), 'LogType', 'Commits'), 'Organization', variables('OrgName'))"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_9": {
+                                            "foreach": "@body('Parse_JSON_9')",
+                                            "actions": {
+                                                "Append_to_array_variable_7": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Forks",
+                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_9'), 'Repository', items('For_each')['name']), 'LogType', 'Forks'), 'Organization', variables('OrgName'))"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_9": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
                                         "HTTP_2": {
                                             "runAfter": {
                                             },
@@ -910,6 +971,54 @@
                                                 },
                                                 "method": "GET",
                                                 "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/clones"
+                                            }
+                                        },
+                                        "HTTP_6": {
+                                            "runAfter": {
+                                                "Send_Data_4": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Get_secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/commits"
+                                            }
+                                        },
+                                        "HTTP_7": {
+                                            "runAfter": {
+                                                "Send_Data_5": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Get_secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/collaborators"
+                                            }
+                                        },
+                                        "HTTP_8": {
+                                            "runAfter": {
+                                                "Send_Data_6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Get_secret')?['value']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/forks"
                                             }
                                         },
                                         "Parse_JSON_2": {
@@ -1012,6 +1121,57 @@
                                                 }
                                             }
                                         },
+                                        "Parse_JSON_7": {
+                                            "runAfter": {
+                                                "HTTP_6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_6')",
+                                                "schema": {
+                                                    "items": {
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_8": {
+                                            "runAfter": {
+                                                "HTTP_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_7')",
+                                                "schema": {
+                                                    "items": {
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
+                                        "Parse_JSON_9": {
+                                            "runAfter": {
+                                                "HTTP_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_8')",
+                                                "schema": {
+                                                    "items": {
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
                                         "Send_Data": {
                                             "runAfter": {
                                                 "For_each_2": [
@@ -1022,7 +1182,7 @@
                                             "inputs": {
                                                 "body": "@{variables('Referrers')}",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1043,7 +1203,7 @@
                                             "inputs": {
                                                 "body": "@variables('Paths')",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1064,7 +1224,7 @@
                                             "inputs": {
                                                 "body": "@variables('Views')",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1085,7 +1245,70 @@
                                             "inputs": {
                                                 "body": "@variables('Clones')",
                                                 "headers": {
-                                                    "Log-Type": "GitHubTraffic"
+                                                    "Log-Type": "GitHubRepoLogs"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Send_Data_5": {
+                                            "runAfter": {
+                                                "For_each_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@variables('Commits')",
+                                                "headers": {
+                                                    "Log-Type": "GitHubRepoLogs"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Send_Data_6": {
+                                            "runAfter": {
+                                                "For_each_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@variables('Collaborators')",
+                                                "headers": {
+                                                    "Log-Type": "GitHubRepoLogs"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Send_Data_7": {
+                                            "runAfter": {
+                                                "For_each_9": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@variables('Forks')",
+                                                "headers": {
+                                                    "Log-Type": "GitHubRepoLogs"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -1104,33 +1327,9 @@
                                     },
                                     "type": "Foreach"
                                 },
-                                "Get_secret": {
-                                    "runAfter": {
-                                        "Set_variable": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
-                                            }
-                                        },
-                                        "method": "get",
-                                        "path": "[concat('/secrets/@{encodeURIComponent(''', variables('SecretName'), ''')}/value')]"
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "outputs"
-                                            ]
-                                        }
-                                    }
-                                },
                                 "HTTP": {
                                     "runAfter": {
-                                        "Get_secret": [
+                                        "Set_variable": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1184,11 +1383,16 @@
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
                         },
                         "Get_blob_content": {
                             "runAfter": {
-                                "Initialize_variable_5": [
+                                "Get_secret": [
                                     "Succeeded"
                                 ]
                             },
@@ -1203,6 +1407,30 @@
                                 "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/ORGS.json'))}/content",
                                 "queries": {
                                     "inferContentType": true
+                                }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Initialize_variable_8": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', variables('SecretName'), ''')}/value')]"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
                                 }
                             }
                         },
@@ -1283,7 +1511,806 @@
                                 ]
                             }
                         },
+                        "Initialize_variable_6": {
+                            "runAfter": {
+                                "Initialize_variable_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Commits",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_7": {
+                            "runAfter": {
+                                "Initialize_variable_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Collaborators",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_8": {
+                            "runAfter": {
+                                "Initialize_variable_7": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Forks",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
                         "Parse_JSON_6": {
+                            "runAfter": {
+                                "Get_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@json(body('Get_blob_content'))",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "org": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "org"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                                "connectionName": "[variables('AzureBlobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                                "connectionName": "[variables('KeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('VulnerabilityAlertPlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('StorageAccountName'), 'default', 'githublogicapp')]",
+                "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('SecretName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "For_each_2": {
+                                    "foreach": "@body('Parse_JSON_2')",
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Create_blob": {
+                                                    "runAfter": {
+                                                        "Set_variable_3": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": "{\"lastcontext\": \"\", \"lastrun\":\"\"}",
+                                                        "headers": {
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/datasets/default/files",
+                                                        "queries": {
+                                                            "folderPath": "/githublogicapp",
+                                                            "name": "lastrun-@{variables('OrgName')}​-@{variables('RepoName')}​.json",
+                                                            "queryParametersSingleEncoded": true
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_variable_3": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "vulnerabilityAlertsQuery",
+                                                        "value": "{\"query\": \"query {organization(login: \\\"@{variables('OrgName')}\\\") {repository(name: \\\"@{variables('RepoName')}\\\") { vulnerabilityAlerts(first: 100) { nodes { createdAt dismissReason dismissedAt id vulnerableManifestFilename vulnerableManifestPath vulnerableRequirements securityAdvisory { databaseId description ghsaId id origin permalink publishedAt severity summary withdrawnAt } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } } }\"}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_array": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Get_blob_content_2": {
+                                                        "runAfter": {
+                                                        },
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "get",
+                                                            "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/lastrun-',variables('OrgName'),'-',variables('RepoName'),'.json'))}/content",
+                                                            "queries": {
+                                                                "inferContentType": true
+                                                            }
+                                                        }
+                                                    },
+                                                    "Parse_JSON_3": {
+                                                        "runAfter": {
+                                                            "Get_blob_content_2": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ParseJson",
+                                                        "inputs": {
+                                                            "content": "@json(body('Get_blob_content_2'))",
+                                                            "schema": {
+                                                                "properties": {
+                                                                    "lastContext": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "lastRun": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Set_variable_4": {
+                                                        "runAfter": {
+                                                            "Parse_JSON_3": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "lastContext",
+                                                            "value": "@body('Parse_JSON_3')?['lastContext']"
+                                                        }
+                                                    },
+                                                    "Set_variable_5": {
+                                                        "runAfter": {
+                                                            "Set_variable_4": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "vulnerabilityAlertsQuery",
+                                                            "value": "{\"query\": \"query {organization(login: \\\"@{variables('OrgName')}\\\") {repository(name: \\\"@{variables('RepoName')}\\\") { vulnerabilityAlerts(first: 100, after: \\\"@{variables('lastContext')}\\\") { nodes { createdAt dismissReason dismissedAt id vulnerableManifestFilename vulnerableManifestPath vulnerableRequirements securityAdvisory { databaseId description ghsaId id origin permalink publishedAt severity summary withdrawnAt } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } } }\"}"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('Filter_array'))",
+                                                            "@true"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Filter_array": {
+                                            "runAfter": {
+                                                "Set_variable_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('List_blobs')?['value']",
+                                                "where": "@equals(item()?['Name'], concat('lastrun-', variables('OrgName'), '-', variables('RepoName'), '.json'))"
+                                            }
+                                        },
+                                        "Set_variable_2": {
+                                            "runAfter": {
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "RepoName",
+                                                "value": "@items('For_each_2')['name']"
+                                            }
+                                        },
+                                        "Until": {
+                                            "actions": {
+                                                "Condition_2": {
+                                                    "actions": {
+                                                        "For_each_3": {
+                                                            "foreach": "@body('Parse_JSON_4')?['data']?['organization']?['repository']?['vulnerabilityAlerts']?['nodes']",
+                                                            "actions": {
+                                                                "Append_to_array_variable": {
+                                                                    "runAfter": {
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "vulnerabilityAlertsArray",
+                                                                        "value": "@addProperty(addProperty(addProperty(items('For_each_3'), 'Repository', variables('RepoName')), 'LogType', 'vulnerabilityAlerts'), 'Organization', variables('OrgName'))"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                            },
+                                                            "type": "Foreach"
+                                                        },
+                                                        "Send_Data": {
+                                                            "runAfter": {
+                                                                "For_each_3": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "@{variables('vulnerabilityAlertsArray')}",
+                                                                "headers": {
+                                                                    "Log-Type": "GitHubRepoLogs"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/api/logs"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_4": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@length(body('Parse_JSON_4')?['data']?['organization']?['repository']?['vulnerabilityAlerts']?['nodes'])",
+                                                                        0
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Condition_3": {
+                                                    "actions": {
+                                                        "Update_blob": {
+                                                            "runAfter": {
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "{\n  \"lastRun\": \"@{utcNow()}\",\n  \"lastContext\": \"@{variables('lastContext')}\"\n}",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/lastrun-',variables('OrgName'),'-',variables('RepoName'),'.json'))}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable_7": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_variable_8": {
+                                                                "runAfter": {
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "vulnerabilityAlertsQuery",
+                                                                    "value": "{\"query\": \"query {organization(login: \\\"@{variables('OrgName')}\\\") {repository(name: \\\"@{variables('RepoName')}\\\") { vulnerabilityAlerts(first: 100, after: \\\"@{variables('lastContext')}\\\") { nodes { createdAt dismissReason dismissedAt id vulnerableManifestFilename vulnerableManifestPath vulnerableRequirements securityAdvisory { databaseId description ghsaId id origin permalink publishedAt severity summary withdrawnAt } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } } }\"}"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@variables('hasNextPage')",
+                                                                    ""
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "HTTP_2": {
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "body": "@variables('vulnerabilityAlertsQuery')",
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{body('Get_secret')?['value']}",
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "method": "POST",
+                                                        "uri": "https://api.github.com/graphql"
+                                                    }
+                                                },
+                                                "Parse_JSON_4": {
+                                                    "runAfter": {
+                                                        "HTTP_2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_2')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "data": {
+                                                                    "properties": {
+                                                                        "organization": {
+                                                                            "properties": {
+                                                                                "repository": {
+                                                                                    "properties": {
+                                                                                        "vulnerabilityAlerts": {
+                                                                                            "properties": {
+                                                                                                "nodes": {
+                                                                                                    "items": {
+                                                                                                        "properties": {
+                                                                                                            "createdAt": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "dismissReason": {
+                                                                                                            },
+                                                                                                            "dismissedAt": {
+                                                                                                            },
+                                                                                                            "id": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "securityAdvisory": {
+                                                                                                                "properties": {
+                                                                                                                    "databaseId": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "description": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "ghsaId": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "id": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "origin": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "permalink": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "publishedAt": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "severity": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "summary": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "withdrawnAt": {
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "type": "object"
+                                                                                                            },
+                                                                                                            "vulnerableManifestFilename": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "vulnerableManifestPath": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "vulnerableRequirements": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "type": "object"
+                                                                                                    },
+                                                                                                    "type": "array"
+                                                                                                },
+                                                                                                "pageInfo": {
+                                                                                                    "properties": {
+                                                                                                        "endCursor": {
+                                                                                                            "type": [
+                                                                                                                "string",
+                                                                                                                "null"
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        "hasNextPage": {
+                                                                                                            "type": "boolean"
+                                                                                                        },
+                                                                                                        "hasPreviousPage": {
+                                                                                                            "type": "boolean"
+                                                                                                        },
+                                                                                                        "startCursor": {
+                                                                                                            "type": [
+                                                                                                                "string",
+                                                                                                                "null"
+                                                                                                            ]
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_variable_6": {
+                                                    "runAfter": {
+                                                        "Condition_2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "hasNextPage",
+                                                        "value": "@body('Parse_JSON_4')?['data']?['organization']?['repository']?['vulnerabilityAlerts']?['pageInfo']?['hasNextPage']"
+                                                    }
+                                                },
+                                                "Set_variable_7": {
+                                                    "runAfter": {
+                                                        "Set_variable_6": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "lastContext",
+                                                        "value": "@body('Parse_JSON_4')?['data']?['organization']?['repository']?['vulnerabilityAlerts']?['pageInfo']?['endCursor']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": "@equals(variables('hasNextPage'), false)",
+                                            "limit": {
+                                                "count": 60,
+                                                "timeout": "PT1H"
+                                            },
+                                            "type": "Until"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP": {
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Get_secret')?['value']}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://api.github.com/orgs/@{variables('OrgName')}/repos"
+                                    }
+                                },
+                                "Parse_JSON_2": {
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "OrgName",
+                                        "value": "@items('For_each')['org']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Get_blob_content": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent('/githublogicapp/ORGS.json'))}/content",
+                                "queries": {
+                                    "inferContentType": true
+                                }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "List_blobs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', variables('SecretName'), ''')}/value')]"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "OrgName",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RepoName",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_3": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vulnerabilityAlertsQuery",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_4": {
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "lastContext",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_5": {
+                            "runAfter": {
+                                "Initialize_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "hasNextPage",
+                                        "type": "boolean",
+                                        "value": true
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_6": {
+                            "runAfter": {
+                                "Initialize_variable_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vulnerabilityAlertsArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "List_blobs": {
+                            "runAfter": {
+                                "Initialize_variable_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/datasets/default/foldersV2/@{encodeURIComponent(encodeURIComponent('/githublogicapp'))}",
+                                "queries": {
+                                    "nextPageMarker": "",
+                                    "useFlatListing": false
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
                             "runAfter": {
                                 "Get_blob_content": [
                                     "Succeeded"

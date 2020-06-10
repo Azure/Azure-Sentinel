@@ -1,7 +1,7 @@
-id: 
-name: (Preview) TI map Domain entity to CommonSecurityLog
+id: aac495a9-feb1-446d-b08e-a1164a539452
+name: TI map IP entity to GitHub_CL
 description: |
-  'Identifies a match in CommonSecurityLog table from any Domain IOC from TI'
+  'Identifies a match in GitHub_CL table from any IP IOC from TI'
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
@@ -15,7 +15,7 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - ????
+  - Impact
 query: |
 
   ThreatIntelligenceIndicator
@@ -28,12 +28,11 @@ query: |
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
   | join (
-    GitHub_CL 
-    // renaming time column so it is clear the log this came from
-    | extend GitHubActivity_TimeGenerated = TimeGenerated
-    | extend TimeGenerated = node_createdAt_t
+    GitHubAudit
     | where TimeGenerated >= ago(24h)
+    | extned GitHubAudit_TimeGenerated = TimeGenerated
   )
-  on on $left.TI_ipEntity == $right.node_actorIp_s
+  on on $left.TI_ipEntity == $right.IPaddress
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubActivity_TimeGenerated, TI_ipEntity, actorIp_s, actorLogin_s, action_s, actorLocation_country_s, operationType_s, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = GitHubAudit_TimeGenerated, IPCustomEntity = IPaddress, AccountCustomEntity = Actor
