@@ -7,10 +7,9 @@ Author: Yaniv Shasha
 
 Deploy the solution
 1.	Create an Event Hub using the article "Create an event hub using Azure portal" <br>
-https://docs.microsoft.com/en-us/azure/event-hubs/event-hubs-create  or use an existing Event Hub.
-2.	Go to the Playbook GitHub page.<br>
-3.	Press the “deploy to azure” button.<br>
-
+https://docs.microsoft.com/azure/event-hubs/event-hubs-create or use an existing Event Hub.
+2. Go to the Playbook GitHub page.<br>
+3. Press the "deploy to azure" button.<br>
 4. Fill the above information:<br>
 - Azure Sentinel Workspace Name<br>
 - Azure Sentinel Workspace resource group name<br>
