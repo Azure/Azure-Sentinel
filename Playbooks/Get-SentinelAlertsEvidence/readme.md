@@ -11,10 +11,10 @@ https://docs.microsoft.com/en-us/azure/event-hubs/event-hubs-create  or use an e
 2.	Go to the Playbook GitHub page.<br>
 3.	Press the “deploy to azure” button.<br>
 
-4. fill the above information:<br>
+4. Fill the above information:<br>
 - Azure Sentinel Workspace Name<br>
 - Azure Sentinel Workspace resource group name<br>
-- number of event you want to bring(default value is 10 last events )<br>
+- Number of events to pulls from Azure Sentinel (default value is 10 latest events )<br>
 
 4.	Once the playbook is deployed, Modify the “Run query and list results” actions and point it to your Azure sentinel workspace.<br>
 5.	Next, configure the "send event" actions to use your Event Hub that created earlier.<br>
