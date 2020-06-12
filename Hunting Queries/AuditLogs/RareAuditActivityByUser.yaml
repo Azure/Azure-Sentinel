@@ -1,0 +1,51 @@
+id: ea107ccc-2b80-410e-96e1-be6607ce293b
+name: Rare Audit activity initiated by User
+description: |
+  'Compares the current day to the last 14 days of audits to identify new audit activities by 
+  OperationName, InitiatedByUser, UserPrincipalName, PropertyName, newValue
+  This can be useful when attempting to track down malicious activity related to additions of 
+  new users, additions to groups, removal from groups by specific users.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - LateralMovement
+relevantTechniques:
+  - T1136
+query: |
+
+  let current = 1d;
+  let auditLookback = 14d;
+  let AuditTrail = AuditLogs 
+  | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current) 
+  | extend InitiatedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | where isnotempty(InitiatedByUser)
+  | extend InitiatedByIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend ModProps = TargetResources.[0].modifiedProperties
+  | extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
+  | mvexpand ModProps
+  | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
+  | summarize count() by OperationName, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, PropertyName, newValue, TargetResourceName;
+  let AccountMods = AuditLogs 
+  | where TimeGenerated >= ago(current)
+  | extend InitiatedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | where isnotempty(InitiatedByUser)
+  | extend InitiatedByIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend ModProps = TargetResources.[0].modifiedProperties
+  | extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
+  | mvexpand ModProps
+  | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
+  | where PropertyName !in ("TargetId.UserType", "StsRefreshTokensValidFrom", "LastDirSyncTime") and (PropertyName != "Action Client Name" and newValue != "\"DirectorySync\"") and (PropertyName != "Included Updated Properties" and newValue != "\"LastDirSyncTime\"")
+  | extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, Category, OperationName, PropertyName, newValue, TargetResourceName;
+  let RareAudits = AccountMods | join kind= leftanti (
+     AuditTrail 
+  ) on OperationName, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, PropertyName, newValue;
+  RareAudits 
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), make_set(Activity) by InitiatedByUser, InitiatedByIPAddress, OperationName, UserPrincipalName, TargetResourceName
+  | order by UserPrincipalName asc, StartTimeUtc asc
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = InitiatedByUser, HostCustomEntity = TargetResourceName, IPCustomEntity = InitiatedByIPAddress

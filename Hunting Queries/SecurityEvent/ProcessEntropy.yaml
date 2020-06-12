@@ -1,0 +1,92 @@
+id: 05208917-82de-46f7-a190-a65739a690f4
+name: Entropy for Processes for a given Host
+description: |
+  'Entropy calculation used to help identify Hosts where they have a high variety of processes(a high entropy process list on a given Host over time).
+  This helps us identify rare processes on a given Host. Rare here means a process shows up on the Host relatively few times in the the last 7days.
+  The Weight is calculated based on the Entropy, Process Count and Distinct Hosts with that Process. The lower the Weight/ProcessEntropy the, more interesting.
+  The Weight calculation increases the Weight if the process executes more than once on the Host or has executed on more than 1 Hosts.
+  In general, this should identify processes on a Host that are rare and rare for the environment.
+  References: https://medium.com/udacity/shannon-entropy-information-gain-and-picking-balls-from-buckets-5810d35d54b4
+  https://en.wiktionary.org/wiki/Shannon_entropy'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+
+  // May need to reduce the number of days if the environment is very large.  Try 3-5 days, but less accuracy.
+  let end = startofday(now());
+  let start = end - 7d;
+  let Exclude = SecurityEvent
+  // Timeframe is set so that results do not change during the same day (UTC time)
+  | where TimeGenerated >= start and TimeGenerated <= end
+  | where EventID == 4688
+  | summarize ExcludeCompCount = dcount(Computer),  ExcludeProcCount = count() by Process 
+  // Removing noisy processes for an environment, adjust as needed
+  | where ExcludeProcCount >= 2000 and ExcludeCompCount > 2
+  ;
+  let AllSecEvents = SecurityEvent
+  | where TimeGenerated >= start and TimeGenerated <= end
+  | where EventID == 4688
+  // excluding well known processes
+  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+  | where ParentProcessName !endswith ":\\Windows\\System32\\wuauclt.exe" and NewProcessName !startswith "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_"
+  | where ParentProcessName !has ":\\WindowsAzure\\GuestAgent_" and NewProcessName !has ":\\WindowsAzure\\GuestAgent_"
+  | where ParentProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_" and NewProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_"
+  | where ParentProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and ParentProcessName !endswith "\\MpCmdRun.exe" 
+  | project Computer, Process;
+  // Removing noisy process from full list
+  let Include = Exclude | join kind= rightanti (
+  AllSecEvents
+  ) on Process;
+  // Identifying prevalence for a given process in the environment
+  let DCwPC = Include | summarize DistinctComputersWithProcessCount = dcount(Computer) by Process
+  | join kind=inner (
+  Include 
+  ) on Process
+  | distinct Computer, Process, DistinctComputersWithProcessCount;
+  // Getting the Total process count on each host to use as the denominator in the entropy calc
+  let TPCoH = Include | summarize TotalProcessCountOnHost = count(Process) by Computer
+  | join kind=inner (
+  Include 
+  ) on Computer
+  | distinct Computer, Process, TotalProcessCountOnHost
+  //Getting a decimal value for later computation
+  | extend TPCoHValue = todecimal(TotalProcessCountOnHost);
+  // Need the count of each class in my bucket or also said as count of ProcName(Class) per Host(Bucket) for use in the entropy calc
+  let PCoH = Include | summarize ProcessCountOnHost = count(Process) by Computer, Process
+  | join kind=inner (
+  Include
+  ) on Computer,Process
+  | distinct Computer, Process, ProcessCountOnHost
+  //Getting a decimal value for later computation
+  | extend PCoHValue = todecimal(ProcessCountOnHost);
+  let Combined = DCwPC | join ( TPCoH ) on Computer, Process | join ( PCoH ) on Computer, Process; 
+  let Results = Combined
+  // Entropy calculation
+  | extend ProcessEntropy = -log2(PCoHValue/TPCoHValue)*(PCoHValue/TPCoHValue)
+  | extend AdjustedProcessEntropy = toreal(ProcessEntropy*10000)
+  // Calculating Weight, see details in description
+  | extend Weight = toreal((ProcessEntropy*10000)*ProcessCountOnHost*DistinctComputersWithProcessCount)
+  // Remove or increase value to see processes with low entropy, meaning more common.
+  | where Weight <= 75
+  | project Computer, Process, Weight , ProcessEntropy, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount, AdjustedProcessEntropy;
+  // Join back full entry
+  Results | join kind= inner (
+      SecurityEvent
+      | where TimeGenerated >= start and TimeGenerated <= end
+      | where EventID == 4688
+      // excluding well known processes
+      | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+      | where ParentProcessName !endswith ":\\Windows\\System32\\wuauclt.exe" and NewProcessName !startswith "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_"
+      | where ParentProcessName !has ":\\WindowsAzure\\GuestAgent_" and NewProcessName !has ":\\WindowsAzure\\GuestAgent_"
+      | where ParentProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_" and NewProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_"
+      | where ParentProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and ParentProcessName !endswith "\\MpCmdRun.exe" 
+      | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName
+  ) on Computer, Process
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, Weight, AdjustedProcessEntropy, FullDecimalProcessEntropy = ProcessEntropy, Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
+  | sort by Weight asc, AdjustedProcessEntropy asc, NewProcessName asc
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  

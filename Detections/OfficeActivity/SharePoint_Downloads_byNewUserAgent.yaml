@@ -1,0 +1,54 @@
+﻿id: 5dd76a87-9f87-4576-bab3-268b0e2b338b
+name: SharePointFileOperation via devices with previously unseen user agents
+description: |
+  'Identifies if the number of documents uploaded or downloaded from device(s) associated
+  with a previously unseen user agent exceeds a threshold (default is 5).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let threshold = 5;
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  let starttime = 14d;
+  let endtime = 1d;
+  let historicalActivity =
+  OfficeActivity
+  | where TimeGenerated between(ago(starttime)..ago(endtime))
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ (szOperations)
+  | where isnotempty(UserAgent)
+  | summarize historicalCount = count() by UserAgent, RecordType, Operation;
+  let recentActivity = OfficeActivity
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ (szOperations)
+  | where TimeGenerated > ago(endtime)
+  | where isnotempty(UserAgent)
+  | summarize min(Start_Time), max(Start_Time), recentCount = count() by UserAgent, RecordType, Operation;
+  let RareUserAgent = recentActivity | join kind = leftanti (historicalActivity) on UserAgent
+  | order by recentCount desc, UserAgent
+  // More than 3 downloads/uploads from a new user agent today
+  | where recentCount > threshold;
+  OfficeActivity 
+  | where TimeGenerated > ago(endtime) 
+  | where RecordType =~ szSharePointFileOperation 
+  | where Operation in~ (szOperations)
+  | where isnotempty(UserAgent)
+  | join kind= inner (RareUserAgent)
+  on UserAgent, RecordType, Operation    
+  | where Start_Time between(min_Start_Time .. max_Start_Time)
+  | summarize StartTimeUtc = min(min_Start_Time), EndTimeUtc = max(max_Start_Time) by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url, OfficeObjectId, UserAgentSeenCount = recentCount
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Site_Url
+  | order by UserAgentSeenCount desc, UserAgent asc, Operation asc, UserId asc
+

@@ -1,0 +1,63 @@
+﻿id: 1572e66b-20a7-4012-9ec4-77ec4b101bc8
+name: Potential Kerberoasting
+description: |
+  'A service principal name (SPN) is used to uniquely identify a service instance in a Windows environment. 
+  Each SPN is usually associated with a service account. Organizations may have used service accounts with weak passwords in their environment. 
+  An attacker can try requesting Kerberos ticket-granting service (TGS) service tickets for any SPN from a domain controller (DC) which contains 
+  a hash of the Service account. This can then be used for offline cracking. This hunting query looks for accounts that are generating excessive 
+  requests to different resources within the last hour compared with the previous 24 hours.  Normal users would not make an unusually large number 
+  of request within a small time window. This is based on 4769 events which can be very noisy so environment based tweaking might be needed.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1208
+query: |
+
+  let starttime = 1d;
+  let endtime = 1h;
+  let prev23hThreshold = 4;
+  let prev1hThreshold = 15;
+  let Kerbevent =
+  SecurityEvent
+  | where TimeGenerated >= ago(starttime)
+  | where EventID == 4769
+  | parse EventData with * 'TicketEncryptionType">' TicketEncryptionType "<" *
+  | where TicketEncryptionType == '0x17'
+  | parse EventData with * 'TicketOptions">' TicketOptions "<" *
+  | where TicketOptions == '0x40810000'
+  | parse EventData with * 'Status">' Status "<" *
+  | where Status == '0x0'
+  | parse EventData with * 'ServiceName">' ServiceName "<" *
+  | where ServiceName !contains "$" and ServiceName !contains "krbtgt" 
+  | parse EventData with * 'TargetUserName">' TargetUserName "<" *
+  | where TargetUserName !contains "$@" and TargetUserName !contains ServiceName
+  | parse EventData with * 'IpAddress">::ffff:' ClientIPAddress "<" *;
+  let Kerbevent23h = Kerbevent
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
+  | summarize ServiceNameCountPrev23h = dcount(ServiceName), ServiceNameSet23h = makeset(ServiceName) 
+  by Computer, TargetUserName, ClientIPAddress, TicketOptions, TicketEncryptionType, Status
+  | where ServiceNameCountPrev23h < prev23hThreshold;
+  let Kerbevent1h = 
+  Kerbevent
+  | where TimeGenerated >= ago(endtime)
+  | summarize min(TimeGenerated), max(TimeGenerated), ServiceNameCountPrev1h = dcount(ServiceName), ServiceNameSet1h = makeset(ServiceName) 
+  by Computer, TargetUserName, ClientIPAddress, TicketOptions, TicketEncryptionType, Status;
+  Kerbevent1h 
+  | join kind=leftanti
+  (
+  Kerbevent23h
+  ) on TargetUserName
+  // Threshold value set above is based on testing, this value may need to be changed for your environment.
+  | where ServiceNameCountPrev1h > prev1hThreshold
+  | project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, TargetUserName, Computer, ClientIPAddress, TicketOptions, 
+  TicketEncryptionType, Status, ServiceNameCountPrev1h, ServiceNameSet1h
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = TargetUserName, HostCustomEntity = Computer, IPCustomEntity = ClientIPAddress

@@ -1,0 +1,37 @@
+id: a7427ed7-04b4-4e3b-b323-08b981b9b4bf
+name: (Preview) TI map File Hash to Security Event
+description: |
+  'Identifies a match in Security Event data from any File Hash IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  | where isnotempty(FileHashValue)
+  |  join (
+    SecurityEvent | where TimeGenerated >= ago(dt_lookBack)
+        | where EventID in ("8003","8002","8005")
+        | where isnotempty(FileHash)
+        | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID
+  )
+  on $left.FileHashValue == $right.FileHash
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, 
+  SecurityEvent_TimeGenerated, Process, FileHash, Computer, Account, Event
+  | extend timestamp = SecurityEvent_TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, URLCustomEntity = Url

@@ -1,0 +1,41 @@
+id: 75fd68a2-9ed4-4a1c-8bd7-18efe4c99081
+name: Login attempt by Blocked MFA user
+description: |
+  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Azure AD.'
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let timeRange = 1d;
+  let lookBack = 7d;
+  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
+  let MFABlocked = SigninLogs
+  | where TimeGenerated >= ago(timeRange)
+  | where ResultType != "0" 
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), Status = strcat(ResultType, ": ", ResultDescription)
+  | where StatusDetails =~ "MFA denied; user is blocked"
+  | extend Unresolved = iff(Identity matches regex isGUID, true, false);
+  // Lookup up resolved identities from last 7 days
+  let identityLookup = SigninLogs
+  | where TimeGenerated >= ago(lookBack)
+  | where not(Identity matches regex isGUID)
+  | summarize by UserId, lu_UserDisplayName = UserDisplayName, lu_UserPrincipalName = UserPrincipalName;
+  // Join resolved names to unresolved list from MFABlocked signins
+  let unresolvedNames = MFABlocked | where Unresolved == true | join kind= inner (
+   identityLookup 
+  ) on UserId
+  | extend UserDisplayName = lu_UserDisplayName, UserPrincipalName = lu_UserPrincipalName
+  | project-away lu_UserDisplayName, lu_UserPrincipalName;
+  // Join Signins that had resolved names with list of unresolved that now have a resolved name
+  let u_MFABlocked = MFABlocked | where Unresolved == false | union unresolvedNames;
+  u_MFABlocked 
+  | extend OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
+  | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
+  | summarize TimeGenerated = makelist(TimeGenerated), Status = makelist(Status), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress), 
+    AttemptCount = count() by UserPrincipalName, UserId, UserDisplayName, AppDisplayName, Browser, OS, FullLocation , CorrelationId 
+  | mvexpand TimeGenerated, IPAddresses, Status
+  | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses), Status = tostring(Status)
+  | project-away IPAddresses
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status,  IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress

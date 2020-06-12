@@ -1,0 +1,42 @@
+id: f15370f4-c6fa-42c5-9be4-1d308f40284e
+name: (Preview) TI map IP entity to OfficeActivity
+description: |
+  'Identifies a match in OfficeActivity from any IP IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | join (
+      OfficeActivity | where TimeGenerated >= ago(dt_lookBack)
+      // renaming time column so it is clear the log this came from
+      | extend OfficeActivity_TimeGenerated = TimeGenerated
+  )
+  on $left.TI_ipEntity == $right.ClientIP
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, OfficeActivity_TimeGenerated, 
+  TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = OfficeActivity_TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId, URLCustomEntity = Url

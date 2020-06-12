@@ -1,0 +1,36 @@
+﻿Id: 37fdc179-d35c-4dcd-b6ff-6cf02248d8f9
+DisplayName: Accounts which logged onto this host and their IPs
+Description: Accounts which logged onto this host and their IPs (set time range to +-1d when running the query)
+InputEntityType: Host
+InputFields:
+  - HostName
+OutputEntityTypes:
+  - Account
+  - Ip
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+  - SigninLogs
+Tactics:
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAccountsFromHost = (v_Host_HostName:string){
+  SigninLogs
+  | extend RemoteHost = tolower(tostring(DeviceDetail.displayName))
+  | where RemoteHost == tolower(v_Host_HostName)
+  | extend OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser), TrustType = tostring(DeviceDetail.trustType)
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+  | extend Latitude = tostring(LocationDetails.geoCoordinates.latitude), Longitude = tostring(LocationDetails.geoCoordinates.longitude)
+  | extend info = pack('UserPrincipalName', UserPrincipalName, 'AppDisplayName', AppDisplayName, 'ClientAppUsed', ClientAppUsed, 'Browser', tostring(Browser), 'ResultType', ResultType, 'ResultDescription', ResultDescription, 'Location', Location, 'StatusCode', StatusCode, 'StatusDetails', StatusDetails)
+  | summarize min(TimeGenerated), max(TimeGenerated), count(), Account_Aux_info = makeset(info) by RemoteHost , UserDisplayName, OS, IPAddress, State, City, Latitude, Longitude
+  | extend IP_Aux_info = Account_Aux_info
+  | project StartTimeUtc = min_TimeGenerated, EndTimeUtc = max_TimeGenerated, RemoteHost, UserDisplayName, OS, IPAddress, State, City, Latitude, Longitude, Account_Aux_info, IP_Aux_info
+  | top 10 by StartTimeUtc desc nulls last             
+  | project-rename Account_UnstructuredName=UserDisplayName, Account_Host_UnstructuredName=RemoteHost, Account_Host_OSVersion=OS, IP_Address=IPAddress, IP_Location_State=State, IP_Location_City=City, IP_Location_Latitude=Latitude, IP_Location_Longitude=Longitude
+  };
+  // change <HostName> value below
+  GetAccountsFromHost('<HostName>')

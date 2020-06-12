@@ -1,0 +1,43 @@
+id: 4d500e6d-c984-43a3-9f39-7edec8dcc04d
+name: Request for single resource on domain
+description: |
+  'This will look for connections to a domain where only a single file is requested, this is unusual as most modern web applications require additional recources. This type of activity is often assocaited with malware beaconing or tracking URL's delivered in emails. Developed for Zscaler but applicable to any outbound web logging.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1102
+  - T1071
+query: |
+
+  let timeRange = 1d;
+  //The number of URI's seen to be suspicious, higher = less likely to be suspicious
+  let uriThreshold = 1;
+  let suspiciousURLs =
+  CommonSecurityLog
+  | where TimeGenerated >= ago(timeRange)
+  // Only look at connections that were allowed through the web proxy. Comment line out for all events including those which were blocked
+  | where DeviceVendor =~ "Zscaler" and DeviceAction =~ "Allowed"
+  // Only look where some data was exchanged. Comment out to see 0 byte connections
+  | where SentBytes > 0 and ReceivedBytes > 0
+  // Extract the Domain
+  | extend Domain = iff(countof(DestinationHostName,'.') >= 2, strcat(split(DestinationHostName,'.')[-2], '.',split(DestinationHostName,'.')[-1]), DestinationHostName)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makelist(RequestURL), makelist(DestinationIP), makelist(SourceIP), numOfConnections = count() by Domain
+  // Determine the number of URIs that have been visited for the domain
+  | extend destinationURI = arraylength(list_RequestURL)
+  | where destinationURI <= uriThreshold
+  | where tostring(list_RequestURL) has_any (".php",".aspx")
+  ;
+  suspiciousURLs
+  | mvexpand list_RequestURL, list_DestinationIP
+  | extend RequestURL = tostring(list_RequestURL), DestinationIP = tostring(list_DestinationIP), ClientIP = tostring(list_SourceIP)
+  | extend timestamp = StartTimeUtc, IPCustomEntity = DestinationIP
+  | project-away list_RequestURL, list_DestinationIP, list_SourceIP, destinationURI, Domain, StartTimeUtc, EndTimeUtc, numOfConnections 

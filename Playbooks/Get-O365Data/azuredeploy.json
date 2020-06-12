@@ -1,0 +1,493 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will collect data from the Office 365 Management Activity API and write it to a Custom Log in Azure Sentinel",
+        "author": "Pete Bryan"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-O365Data",
+            "type": "string"
+        },
+        "AADAppClientID": {
+            "type": "string"
+        },
+        "AADAppSecret": {
+            "type": "string"
+        },
+        "TenantId": {
+            "type": "string"
+        },
+        "workspaceId": {
+            "type": "string"
+        },
+        "workSpaceKey": {
+            "type": "string"
+        },
+        "O365Publisher": {
+            "type": "string"
+        },
+        "workspaceResourceGroup": {
+            "type": "string"
+        },
+        "workspaceName": {
+            "type": "string"
+        },
+        "workspaceSubscriptionId": {
+            "type": "string",
+            "defaultValue": "[subscription().id]"
+        }
+
+    },
+    "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "AzurMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzurMonitorLogsConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                },
+                "displayName": "O365Data"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "O365Data",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('workspaceId')]",
+                    "password": "[parameters('workSpaceKey')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzurMonitorLogsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition_4": {
+                            "actions": {
+                                "Set_variable_2": {
+                                    "inputs": {
+                                        "name": "StartTime",
+                                        "value": "@{addHours(body('Current_time'), -24)}"
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "For_each_3": {
+                                        "actions": {
+                                            "Condition_2": {
+                                                "actions": {
+                                                    "Set_variable_5": {
+                                                        "inputs": {
+                                                            "name": "StartTime",
+                                                            "value": "@{addHours(body('Current_time'), -24)}"
+                                                        },
+                                                        "runAfter": {
+                                                        },
+                                                        "type": "SetVariable"
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_variable": {
+                                                            "inputs": {
+                                                                "name": "StartTime",
+                                                                "value": "@items('For_each_3')?['TimeGenerated']"
+                                                            },
+                                                            "runAfter": {
+                                                            },
+                                                            "type": "SetVariable"
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@items('For_each_3')?['TimeGenerated']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "runAfter": {
+                                                },
+                                                "type": "If"
+                                            }
+                                        },
+                                        "foreach": "@body('Run_query_and_list_results')?['value']",
+                                        "runAfter": {
+                                        },
+                                        "type": "Foreach"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Run_query_and_list_results')?['value']",
+                                            null
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Current_time": {
+                            "inputs": {
+                            },
+                            "kind": "CurrentTime",
+                            "runAfter": {
+                            },
+                            "type": "Expression"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "NextPage",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Current_time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_2": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "StartTime",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_3": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AvailbleUri",
+                                        "type": "string",
+                                        "value": "[concat('https://manage.office.com/api/v1.0/', parameters('TenantId'), '/activity/feed/subscriptions/content?contentType=Audit.General&PublisherIdentifier=', parameters('O365Publisher'), '&startTime=@{variables(''StartTime'')}&endTime=@{body(''Current_time'')}')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Run_query_and_list_results": {
+                            "inputs": {
+                                "body": "O365API_CL\n| summarize arg_max(CreationTime_t, *)",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('workspaceResourceGroup')]",
+                                    "resourcename": "[parameters('workspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().id]",
+                                    "timerange": "Last 24 hours"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Until": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "For_each": {
+                                                "actions": {
+                                                    "HTTP_2": {
+                                                        "inputs": {
+                                                            "authentication": {
+                                                                "audience": "https://manage.office.com",
+                                                                "clientId": "[parameters('AADAppClientID')]",
+                                                                "secret": "[parameters('AADAppSecret')]",
+                                                                "tenant": "[parameters('TenantId')]",
+                                                                "type": "ActiveDirectoryOAuth"
+                                                            },
+                                                            "headers": {
+                                                                "Accept": "application/json",
+                                                                "Content-Type": "application/json"
+                                                            },
+                                                            "method": "GET",
+                                                            "uri": "@items('For_each')['contentUri']"
+                                                        },
+                                                        "runAfter": {
+                                                        },
+                                                        "type": "Http"
+                                                    },
+                                                    "Send_Data": {
+                                                        "inputs": {
+                                                            "body": "@{body('HTTP_2')}",
+                                                            "headers": {
+                                                                "Log-Type": "O365API"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/logs"
+                                                        },
+                                                        "runAfter": {
+                                                            "HTTP_2": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ApiConnection"
+                                                    }
+                                                },
+                                                "foreach": "@body('Parse_JSON')",
+                                                "runAfter": {
+                                                    "Parse_JSON": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Foreach"
+                                            },
+                                            "Parse_JSON": {
+                                                "inputs": {
+                                                    "content": "@body('HTTP')",
+                                                    "schema": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "contentCreated": {
+                                                                    "type": "string"
+                                                                },
+                                                                "contentExpiration": {
+                                                                    "type": "string"
+                                                                },
+                                                                "contentId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "contentType": {
+                                                                    "type": "string"
+                                                                },
+                                                                "contentUri": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "contentType",
+                                                                "contentId",
+                                                                "contentUri",
+                                                                "contentCreated",
+                                                                "contentExpiration"
+                                                            ],
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                },
+                                                "type": "ParseJson"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@length(body('HTTP'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_3": {
+                                    "actions": {
+                                        "Set_variable_3": {
+                                            "inputs": {
+                                                "name": "AvailbleUri",
+                                                "value": "@{outputs('HTTP')['headers']?['NextPageUri']}"
+                                            },
+                                            "runAfter": {
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_4": {
+                                                "inputs": {
+                                                    "name": "NextPage",
+                                                    "value": 0
+                                                },
+                                                "runAfter": {
+                                                },
+                                                "type": "SetVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@outputs('HTTP')['headers']?['NextPageUri']",
+                                                        null
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Condition": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP": {
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://manage.office.com",
+                                            "clientId": "[parameters('AADAppClientID')]",
+                                            "secret": "[parameters('AADAppSecret')]",
+                                            "tenant": "[parameters('TenantId')]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "headers": {
+                                            "Accept": "application/json",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@variables('AvailbleUri')"
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "Http"
+                                }
+                            },
+                            "expression": "@equals(variables('NextPage'), 0)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {
+                    },
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "azuremonitorlogs": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzurMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzurMonitorLogsConnectionName')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
