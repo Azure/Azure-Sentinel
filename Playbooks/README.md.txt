@@ -1,32 +1,25 @@
 Description:
-This Playbook runs on a daily schedule and moves 89 day old logs per data type to Blob storage either in hourly incremements or daily blocks. The results of this Playbook is a structured file explorer within a data container in Azure that allows for easy file exploration and the ability to query the data from storage within a Log Analytics workspace.
+This Playbook runs on a daily schedule and moves 89 day old logs per data type to Blob storage in hourly incremements. The result of this Playbook is a structured file explorer within a data container in Azure that allows for easy file exploration and the ability to query the data from storage within a Log Analytics workspace.
 
 To deploy the template: 
 - Go to the Azure Portal
 - In the top search bar, type deploy
 - Choose 'deploy a custom template'
 - Choose 'Build my own template in the editor'
-- Copy and paste the JSON from the Github template
+- Copy and paste the JSON from the GitHub template
 - Click save
-- Enter the subscription and resource gorup that you would like to use
+- Enter your resource group, workspace name, workspace subscription ID, workspace resource group, your email address, the name of the storage account that is going to be created, the SKU for the storage account, the storage account type, and a name for the container that is going to be built
 - Leave the name as is unless you would like to change it
-- Enter the names of the table sthat you do not want to back up to storage. We recommend any tables that you do not find useful or that are noisy. An example would be Heartbeat. The format should be 'Table1', 'Table2', etc
+- Enter the names of the table that you do not want to back up to storage. We recommend any tables that you do not find useful or that are noisy. An example would be Heartbeat. The format should be 'Table1', 'Table2', etc
 - Click purchase
 
-
-You will need to make validate workspace and blob connections:
+You will need to authenticate a connection for Azure Monitor within the Playbook:
 
 - Click on the Azure Monitor actions
-- Authenticate your account if prompted
-- Choose your workspace, resource group, set resource type to Log Analytics workspace, and choose your workspace (if you can't select the resource type, hit the x at the end of the box first)
-- Click on the blob storage actions under the condition at the bottom, start with the brach for if true
-- Authenticate your account to create the connnection to the API if prompted
-- To set the connection, choose your storage account and give the connection a name
-- Click create
-- For the path name, make sure that the name is: /'YOUR BLOB NAME/ 'Dynamic content for data type'
-- For the blob name, make sure that the name is: DataType-startDate-endDate.json
-
-Repeat the process for the opposite branch but make sure that the file name to be DataType-StartDate-Daily.json
+- Chances are that the connection didn't establish, click the information icon next to the connection name to authorize the connection, it will bring up a login screen
+- Log in to your account
+- Confirm that the subscription, resource group, and workspace are all correct based on what you entered for the template
+- Make sure that the container that you named is listed under the Azure Blob option so that the logs are routed properly when the Playbook is run
 
 Note: 
 - The Logic App will not save if there are any errors so make sure any issue is resolved before saving.
