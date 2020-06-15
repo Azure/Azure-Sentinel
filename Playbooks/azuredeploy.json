@@ -1,38 +1,130 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
-        "comments": "This playbook will will export log analytics data into blob storage",
-        "author": "Matt Lowe, Rin Ure, Matt Egen, Chris Boehm"
-    },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Move-LogAnalytics-to-Storage",
-            "type": "string"
+            "type": "String"
         },
         "ExclusionTable": {
-        "defaultValue": "<yourtable>",
-        "type": "string"
+            "defaultValue": "\"Heartbeat\", \"ConfigurationChange\", \"ConfigurationData\", \"ThreatIntelligenceIndicator\", \"IntuneDeviceComplianceOrg\", \"Perf\", \"Update\", \"UpdateSummary\", \"SecurityBaseline\", \"SecurityBaselineSummary\"",
+            "type": "String"
+        },
+        "WorkspaceName": {
+            "type": "String"
+        },
+        "WorkspaceSubscription": {
+            "defaultValue": "Your subscription id",
+            "type": "String"
+        },
+        "WorkspaceResourceGroup": {
+            "type": "String"
+        },
+        "EmailAddress": {
+            "defaultValue": "Your email address",
+            "type": "string"
+        },
+        "StorageAccount": {
+            "defaultValue": "<New storage account name>",
+            "type": "String"
+        },
+        "storageAccountSku": {
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Standard_ZRS",
+                "Premium_LRS",
+                "Premium_ZRS",
+                "Standard_GZRS",
+                "Standard_RAGZRS"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Sku on which to run the Azure Storage account."
+            }
+        },
+        "storageAccountKind": {
+            "defaultValue": "StorageV2",
+            "allowedValues": [
+                "Storage",
+                "StorageV2",
+                "BlobStorage",
+                "FileStorage",
+                "BlockBlobStorage"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Indicates the type of storage account."
+            }
+        },
+        "storageAccountContainerName": {
+            "defaultValue": "my-container",
+            "type": "String",
+            "metadata": {
+                "description": "Set the name of the container to create in the Storage account."
+            }
         }
     },
     "variables": {
-        "azureblob_1": "[concat('azureblob_1', parameters('PlaybookName'))]",
-        "azuremonitorlogs": "[concat('azuremonitorlogs', parameters('PlaybookName'))]"
-
-
+        "azureblob": "[concat('azureblob-', parameters('PlaybookName'))]",
+        "azuremonitorlogs": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "storageaccount": "[concat('storageaccount-', parameters('StorageAccount'))]",
+        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('StorageAccount'))]",
+        "storagecontainer": "[concat('/', parameters('storageAccountContainerName'), '/')]"
     },
-    "resources":  [
+    "resources": [
         {
             "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('azureblob_1')]",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('storageaccount')]",
             "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('StorageAccount'))]"
+            ],
             "properties": {
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
-                }
+                },
+                "parameterValues": {
+                    "accountName": "[parameters('StorageAccount')]",
+                    "accessKey": "[listKeys(variables('storageAccountId'), '2019-04-01').keys[0].value]"
+                },
+                "testLinks": [
+                    {
+                        "requestUri": "[uri('https://management.azure.com:443/', concat('subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', variables('storageaccount'), '/extensions/proxy/testconnection?api-version=2018-07-01-preview'))]",
+                        "method": "get"
+                    }
+                ]
             }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-04-01",
+            "name": "[parameters('StorageAccount')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "[parameters('storageAccountSku')]"
+            },
+            "kind": "[parameters('storageAccountKind')]",
+            "properties": {
+                "accessTier": "Cool",
+                "supportsHttpsTrafficOnly": true
+            },
+            "resources": [
+                {
+                    "type": "blobServices/containers",
+                    "apiVersion": "2019-06-01",
+                    "name": "[concat('default/', parameters('storageAccountContainerName'))]",
+                    "dependsOn": [
+                      "[parameters('StorageAccount')]"
+                    ],
+                    "properties": {
+                        "publicAccess": "Container"
+                    }
+                }
+            ]
         },
         {
             "type": "Microsoft.Web/connections",
@@ -40,7 +132,8 @@
             "name": "[variables('azuremonitorlogs')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "customParameterValues": {},
+                        "displayName": "[parameters('EmailAddress')]",
+                        "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
                 }
@@ -51,13 +144,13 @@
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('storageaccount'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]"
+            ],
             "tags": {
                 "LogicAppsCategory": "security"
             },
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('azureblob_1'))]",
-                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]"
-            ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -65,7 +158,7 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": {
-                            "defaultValue": {},
+							"defaultValue": {},
                             "type": "Object"
                         }
                     },
@@ -88,112 +181,101 @@
                             "type": "Compose",
                             "inputs": "@body('Run_query_and_list_results')"
                         },
-                        "Condition": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')?['value']",
                             "actions": {
-                                "For_Each_DataType": {
-                                    "foreach": "@body('Parse_JSON')?['value']",
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Until": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "HoursCount",
+                                        "value": 0
+                                    }
+                                },
+                                "Until": {
                                     "actions": {
-                                        "Set_variable": {
+                                        "Compose": {
                                             "runAfter": {
-                                                "Until": [
+                                                "Run_query_and_list_results_2": [
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "HoursCount",
-                                                "value": 0
-                                            }
+                                            "type": "Compose",
+                                            "inputs": "@body('Run_query_and_list_results_2')?['value']"
                                         },
-                                        "Until": {
-                                            "actions": {
-                                                "Compose": {
-                                                    "runAfter": {
-                                                        "Run_query_and_list_results_2": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "Compose",
-                                                    "inputs": "@body('Run_query_and_list_results_2')?['value']"
-                                                },
-                                                "Create_blob_2": {
-                                                    "runAfter": {
-                                                        "Compose": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "body": "@outputs('Compose')",
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azureblob_1']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "path": "/datasets/default/files",
-                                                        "queries": {
-                                                            "folderPath": "@{items('For_Each_DataType')?['DataType']}",
-                                                            "name": "@{items('For_Each_DataType')?['DataType']}-@{variables('StartDate')}- @{variables('HoursCount')}.json",
-                                                            "queryParametersSingleEncoded": true
-                                                        }
-                                                    },
-                                                    "runtimeConfiguration": {
-                                                        "contentTransfer": {
-                                                            "transferMode": "Chunked"
-                                                        }
+                                        "Create_blob": {
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@outputs('Compose')",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
                                                     }
                                                 },
-                                                "Increment_variable": {
-                                                    "runAfter": {
-                                                        "Create_blob_2": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "IncrementVariable",
-                                                    "inputs": {
-                                                        "name": "HoursCount",
-                                                        "value": 1
-                                                    }
-                                                },
-                                                "Run_query_and_list_results_2": {
-                                                    "runAfter": {},
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "body": "@{items('For_Each_DataType')?['DataType']}\n| where ingestion_time() between(datetime(@{formatDateTime(addHours(variables('StartDate'),variables('HoursCount')))}) .. datetime(@{formatDateTime(addHours(variables('StartDate'),add(int(variables('HoursCount')),1)))}))",
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "path": "/queryData",
-                                                        "queries": {
-                                                            "resourcegroups": "",
-                                                            "resourcename": "",
-                                                            "resourcetype": "Log Analytics Workspace",
-                                                            "subscriptions": "",
-                                                            "timerange": "between(datetime(@{formatDateTime(addHours(variables('StartDate'),variables('HoursCount')))}) .. datetime(@{formatDateTime(addHours(variables('StartDate'),add(int(variables('HoursCount')),1)))})"
-                                                        }
-                                                    }
+                                                "method": "post",
+                                                "path": "/datasets/default/files",
+                                                "queries": {
+                                                    "folderPath": "[concat(variables('storagecontainer'), '@{items(''For_each'')?[''DataType'']}')]",
+                                                    "name": "@{items('For_each')?['DataType']}-@{variables('StartDate')}-@{variables('HoursCount')}.json",
+                                                    "queryParametersSingleEncoded": true
                                                 }
                                             },
-                                            "runAfter": {},
-                                            "expression": "@equals(variables('HoursCount'), 24)",
-                                            "limit": {
-                                                "count": 60,
-                                                "timeout": "PT1H"
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            }
+                                        },
+                                        "Increment_variable": {
+                                            "runAfter": {
+                                                "Create_blob": [
+                                                    "Succeeded"
+                                                ]
                                             },
-                                            "type": "Until"
+                                            "type": "IncrementVariable",
+                                            "inputs": {
+                                                "name": "HoursCount",
+                                                "value": 1
+                                            }
+                                        },
+                                        "Run_query_and_list_results_2": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{items('For_each')?['DataType']}\n| where ingestion_time() between(datetime(@{formatDateTime(addHours(variables('StartDate'),variables('HoursCount')))}) .. datetime(@{formatDateTime(addHours(variables('StartDate'),add(int(variables('HoursCount')),1)))}))",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/queryData",
+                                                "queries": {
+                                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                                    "resourcename": "[parameters('WorkspaceName')]",
+                                                    "resourcetype": "Log Analytics Workspace",
+                                                    "subscriptions": "[parameters('WorkspaceSubscription')]",
+                                                    "timerange": "between(datetime(@{formatDateTime(addHours(variables('StartDate'),variables('HoursCount')))}) .. datetime(@{formatDateTime(addHours(variables('StartDate'),add(int(variables('HoursCount')),1)))})"
+                                                }
+                                            }
                                         }
                                     },
                                     "runAfter": {},
-                                    "type": "Foreach",
-                                    "runtimeConfiguration": {
-                                        "concurrency": {
-                                            "repetitions": 1
-                                        }
-                                    }
+                                    "expression": "@equals(variables('HoursCount'), 24)",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
                                 }
                             },
                             "runAfter": {
@@ -201,86 +283,12 @@
                                     "Succeeded"
                                 ]
                             },
-                            "else": {
-                                "actions": {
-                                    "For_each": {
-                                        "foreach": "@body('Parse_JSON')?['value']",
-                                        "actions": {
-                                            "Compose_Blob_Body": {
-                                                "runAfter": {
-                                                    "Query_Each_Table_and_Return_Results": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "Compose",
-                                                "inputs": "@body('Query_Each_Table_and_Return_Results')?['value']"
-                                            },
-                                            "Create_blob": {
-                                                "runAfter": {
-                                                    "Compose_Blob_Body": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": "@outputs('Compose_Blob_Body')",
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azureblob_1']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/datasets/default/files",
-                                                    "queries": {
-                                                        "folderPath": "@{items('For_each')?['DataType']}",
-                                                        "name": "@{items('For_each')?['DataType']}-@{variables('StartDate')}.Daily.json",
-                                                        "queryParametersSingleEncoded": true
-                                                    }
-                                                },
-                                                "runtimeConfiguration": {
-                                                    "contentTransfer": {
-                                                        "transferMode": "Chunked"
-                                                    }
-                                                }
-                                            },
-                                            "Query_Each_Table_and_Return_Results": {
-                                                "runAfter": {},
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": "@{items('For_each')?['DataType']}\n| where ingestion_time() between(datetime(@{variables('StartDate')}) .. datetime(@{variables('EndDate')}))\n",
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/queryData",
-                                                    "queries": {
-                                                        "resourcegroups": "",
-                                                        "resourcename": "",
-                                                        "resourcetype": "Log Analytics Workspace",
-                                                        "subscriptions": "",
-                                                        "timerange": "between(datetime(@{variables('StartDate')})..datetime(@{variables('EndDate')}))"
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        "runAfter": {},
-                                        "type": "Foreach"
-                                    }
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
                                 }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@variables('RunHourly')",
-                                            true
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
+                            }
                         },
                         "Initialize_EndDate_variable": {
                             "runAfter": {
@@ -294,7 +302,7 @@
                                     {
                                         "name": "EndDate",
                                         "type": "string",
-                                        "value": "@{formatDateTime(addDays(utcNow(), -88),'yyyy-MM-dd')}"
+                                        "value": "@{formatDateTime(addDays(utcNow(), -28),'yyyy-MM-dd')}"
                                     }
                                 ]
                             }
@@ -311,7 +319,7 @@
                                     {
                                         "name": "ExcludedDataTypes",
                                         "type": "string",
-                                        "value":"[parameters('ExclusionTable')]"
+                                        "value": "[parameters('ExclusionTable')]"
                                     }
                                 ]
                             }
@@ -333,25 +341,8 @@
                                 ]
                             }
                         },
-                        "Initialize_variable": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "RunHourly",
-                                        "type": "boolean",
-                                        "value": true
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_variable_2": {
-                            "runAfter": {
-                                "Initialize_variable": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -410,10 +401,10 @@
                                 "method": "post",
                                 "path": "/queryData",
                                 "queries": {
-                                    "resourcegroups": "",
-                                    "resourcename": "",
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
                                     "resourcetype": "Log Analytics Workspace",
-                                    "subscriptions": "",
+                                    "subscriptions": "[parameters('WorkspaceSubscription')]",
                                     "timerange": "between(datetime(@{variables('StartDate')})..datetime(@{variables('EndDate')}))"
                                 }
                             },
@@ -425,9 +416,9 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azureblob_1": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureblob_1'))]",
-                                "connectionName": "[variables('azureblob_1')]",
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('storageaccount'))]",
+                                "connectionName": "[variables('storageaccount')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
                             },
                             "azuremonitorlogs": {
