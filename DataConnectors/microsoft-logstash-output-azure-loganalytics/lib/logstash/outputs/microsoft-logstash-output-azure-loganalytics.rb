@@ -102,6 +102,9 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
       keys_intersection.each do |key|
         document[key] = event_hash[key]
       end
+      if document.keys.length < 1
+        @logger.warn("No keys found, message is dropped. Plugin keys: #{@key_names}, Event keys: #{event_hash}.")
+      end
     else
       document = event_hash
     end
