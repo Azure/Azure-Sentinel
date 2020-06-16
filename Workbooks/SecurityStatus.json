@@ -63,7 +63,7 @@
     {
       "type": 1,
       "content": {
-        "json": "# Computer Security Status"
+        "json": "# Computer Security Status\r\n<br>\r\n### This report shows various security status messages from Azure Resource Graph and Log Analytics"
       },
       "conditionalVisibility": {
         "parameterName": "ContextFree",
@@ -86,9 +86,6 @@
             "name": "Subscriptions",
             "type": 6,
             "isRequired": true,
-            "multiSelect": true,
-            "quote": "'",
-            "delimiter": ",",
             "query": "summarize by subscriptionId\r\n| project value = strcat('/subscriptions/', subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ todynamic('{Selection}').sub, true, false)",
             "crossComponentResources": [
               "value::selected"
@@ -97,8 +94,7 @@
               "additionalResourceOptions": []
             },
             "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources",
-            "value": []
+            "resourceType": "microsoft.resourcegraph/resources"
           },
           {
             "id": "9732eff8-fb57-4cbd-8ade-5ae746f33760",
@@ -110,7 +106,7 @@
             "crossComponentResources": [
               "{Subscriptions}"
             ],
-            "value": "/subscriptions/82931e73-05c6-4da8-a666-bc4a7dd1bd3e/resourceGroups/fabrikamltdprodrg/providers/Microsoft.OperationalInsights/workspaces/fabrikamltdprod",
+            "value": "/subscriptions/<subs_ID>/resourcegroups/<rg_name>/providers/microsoft.operationalinsights/workspaces/<workspace_name>",
             "typeSettings": {
               "resourceTypeFilter": {
                 "microsoft.operationalinsights/workspaces": true
@@ -227,6 +223,9 @@
                 }
               ],
               "allowCustom": true
+            },
+            "value": {
+              "durationMs": 604800000
             }
           },
           {
@@ -251,7 +250,7 @@
             "crossComponentResources": [
               "{Workspaces}"
             ],
-            "value": null,
+            "value": "default",
             "typeSettings": {
               "additionalResourceOptions": []
             },
@@ -280,35 +279,89 @@
     {
       "type": 1,
       "content": {
-        "json": "⚠ A specified time period was not selected (`{TimeRange:label}`). Either try a broader time range, select a different workspace, or onboard virtual machines to the selected workspace `{Workspaces:label}`.\r\n\r\n"
-      },
-      "conditionalVisibility": {
-        "parameterName": "Test",
-        "comparison": "isEqualTo",
-        "value": null
-      },
-      "name": "text - 3"
-    },
-    {
-      "type": 1,
-      "content": {
         "json": "---"
       },
       "name": "text - 4"
     },
     {
-      "type": 1,
+      "type": 11,
       "content": {
-        "json": "<h2 style=\"margin-bottom:0;padding-bottom:0;\">Security Status for {Computer}</h2>"
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Status",
+            "subTarget": "Status",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Events",
+            "subTarget": "Events",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Azure Arc",
+            "subTarget": "Arc",
+            "style": "link"
+          }
+        ]
       },
-      "name": "text - 5"
+      "name": "links - 20"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n| where type == \"microsoft.security/securitystatuses\" or type == \"microsoft.security/securitystatuses/servers\" or type == \"microsoft.security/assessments\" \r\n| where name startswith '{Computer}'\r\n| extend p=array_length(properties.resourceDetails) \r\n| mvexpand prop=properties.resourceDetails\r\n| extend type = iif (name has \".\",  \"Azure-Arc\",\"Azure-Compute\") \r\n| extend Status = iif (isempty(prop.value),Status = \"See Arc & Securtity asessment section below\",prop.value)\r\n| project ComputerName = name, Resource= prop.name, Status , type",
+        "query": "securityresources\r\n| where type == \"microsoft.security/securitystatuses\" or type == \"microsoft.security/securitystatuses/servers\" or type == \"microsoft.security/assessments\" \r\n//| where name startswith '{Computer}'\r\n| extend compute = tostring(properties.type)\r\n| where compute =~\"virtualmachine\"\r\n| summarize count() by name",
+        "size": 4,
+        "title": "Count of Computers with Securtity status info",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Workspaces}"
+        ],
+        "visualization": "piechart",
+        "chartSettings": {
+          "showMetrics": false
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 20 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union withsource = TableName *\r\n| where TableName in (\"Syslog\",\"SecurityEvent\",\"CommonSecurityLog\")\r\n| summarize count(EventID) by TableName",
+        "size": 4,
+        "title": "Count of log entries by Type",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspaces}"
+        ],
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query - 20"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/securitystatuses\" or type == \"microsoft.security/securitystatuses/servers\" or type == \"microsoft.security/assessments\" \r\n| where name startswith '{Computer}'\r\n| extend p=array_length(properties.resourceDetails) \r\n| extend compute = tostring(properties.type)\r\n| where compute =~\"virtualmachine\"\r\n| mvexpand prop=properties.resourceDetails\r\n| project ComputerName = name, Resource= prop.name, Status = prop.value ",
         "size": 0,
+        "title": "Security Status for {Computer}",
         "queryType": 1,
         "resourceType": "microsoft.resourcegraph/resources",
         "crossComponentResources": [
@@ -340,14 +393,71 @@
           ]
         }
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Status"
+      },
       "name": "query - 7"
     },
     {
-      "type": 1,
+      "type": 3,
       "content": {
-        "json": "<br>\r\n### Securtity Events for: {Computer} "
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| where properties contains '{Computer}'\r\n| project Resource = properties.displayName, Status = trim(@\"[^\\w]+\",tostring(split(properties.status,\":\",1))), Location =  trim(@\"[^\\w]+\",tostring(split(properties.resourceDetails,\":\",1)))\r\n| extend Status  = iif(Status has \",\",trim(@\"[^\\w]+\",tostring(split(Status,\",\",0))),Status)\r\n| extend Location = iif(Location has \"\\\\\",trim(@\"[^\\w]+\",tostring(split(Location,\"\\\\\",0))),Location)\r\n| summarize count() by Status, tostring(Resource), Location",
+        "size": 1,
+        "title": "Security Asessment findings for {Computer}",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Workspaces}"
+        ],
+        "visualization": "piechart",
+        "gridSettings": {
+          "filter": true
+        }
       },
-      "name": "text - 9"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Status"
+      },
+      "name": "query - 18"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| where properties contains '{Computer}'\r\n| project Resource = properties.displayName, Status = trim(@\"[^\\w]+\",tostring(split(properties.status,\":\",1))), Location =  trim(@\"[^\\w]+\",tostring(split(properties.resourceDetails,\":\",1)))\r\n| extend Status   = iif(Status has \",\",trim(@\"[^\\w]+\",tostring(split(Status,\",\",0))),Status)\r\n| extend Location = iif(Location has \"\\\\\",trim(@\"[^\\w]+\",tostring(split(Location,\"\\\\\",0))),Location)\r\n| summarize count() by Status, tostring(Resource), Location\r\n| order by count_ desc",
+        "size": 0,
+        "title": "Security Asessment findings for {Computer}",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Workspaces}"
+        ],
+        "gridSettings": {
+          "filter": true,
+          "sortBy": [
+            {
+              "itemKey": "Status",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "Status",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Status"
+      },
+      "name": "query - 18 - Copy"
     },
     {
       "type": 3,
@@ -355,6 +465,7 @@
         "version": "KqlItem/1.0",
         "query": "SecurityEvent\r\n| where Computer startswith \"{Computer}\"\r\n| summarize count() by Activity\r\n",
         "size": 1,
+        "title": "Securtity Events for: {Computer} ",
         "timeContext": {
           "durationMs": 0
         },
@@ -416,14 +527,12 @@
           "hivesMargin": 5
         }
       },
-      "name": "query - 8"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "<br>\r\n### Syslog for: {Computer}"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Events"
       },
-      "name": "text - 9 - Copy"
+      "name": "query - 8"
     },
     {
       "type": 3,
@@ -431,6 +540,7 @@
         "version": "KqlItem/1.0",
         "query": "Syslog\r\n| where Computer startswith \"{Computer}\"\r\n| summarize count() by Facility, SeverityLevel\r\n",
         "size": 1,
+        "title": "Syslog for: {Computer}",
         "timeContext": {
           "durationMs": 0
         },
@@ -442,14 +552,12 @@
         ],
         "visualization": "piechart"
       },
-      "name": "query - 10"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "<br>\r\n### CEF Events for: {Computer}"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Events"
       },
-      "name": "text - 9 - Copy - Copy"
+      "name": "query - 10"
     },
     {
       "type": 3,
@@ -457,6 +565,7 @@
         "version": "KqlItem/1.0",
         "query": "CommonSecurityLog\r\n| where Computer startswith \"{Computer}\"\r\n| summarize count() by DeviceVendor, DeviceEventClassID, Message\r\n",
         "size": 1,
+        "title": "CommonSecurityEvent (CEF) for: {Computer}",
         "timeContext": {
           "durationMs": 0
         },
@@ -468,21 +577,20 @@
         ],
         "visualization": "piechart"
       },
-      "name": "query - 11"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "<br>\r\n### Potential Source Location: {Computer}"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Events"
       },
-      "name": "text - 9 - Copy - Copy - Copy"
+      "name": "query - 11"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "union isfuzzy=true     (W3CIISLog\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),     (DnsEvents\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country= RemoteIPCountry, Latitude = RemoteIPLatitude, Longitude = RemoteIPLongitude),     (WireData\r\n| extend TrafficDirection = iff(Direction != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),     (WindowsFirewall\r\n| extend TrafficDirection = iff(CommunicationDirection != \"SEND\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),     (CommonSecurityLog\r\n| extend TrafficDirection = iff(CommunicationDirection != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription),     (VMConnection\r\n| where Type == \"VMConnection\"\r\n| extend TrafficDirection = iff(Direction != \"outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteCountry, Latitude=RemoteLatitude, Longitude=RemoteLongitude)\r\n| where isnotempty(MaliciousIP) and isnotempty(Country) and isnotempty(Latitude) and isnotempty(Longitude)\r\n| where Computer startswith \"{Computer}\"\r\n",
+        "query": "union isfuzzy=true     (W3CIISLog\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),     (DnsEvents\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country= RemoteIPCountry, Latitude = RemoteIPLatitude, Longitude = RemoteIPLongitude),     (WireData\r\n| extend TrafficDirection = iff(Direction != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),     (WindowsFirewall\r\n| extend TrafficDirection = iff(CommunicationDirection != \"SEND\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),     (CommonSecurityLog\r\n| extend TrafficDirection = iff(CommunicationDirection != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription),     (VMConnection\r\n| where Type == \"VMConnection\"\r\n| extend TrafficDirection = iff(Direction != \"outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteCountry, Latitude=RemoteLatitude, Longitude=RemoteLongitude)\r\n| where isnotempty(MaliciousIP) and isnotempty(Country) and isnotempty(Latitude) and isnotempty(Longitude)\r\n| where Computer startswith \"{Computer}\"\r\n| summarize MaliciousIPcount = count(MaliciousIP) by Country//, Latitude, Longitude\r\n| order by MaliciousIPcount desc\r\n| top 10 by Country\r\n",
         "size": 0,
+        "title": "Potential Locations for: {Computer}",
         "timeContext": {
           "durationMs": 0
         },
@@ -493,43 +601,108 @@
           "{Workspaces}"
         ],
         "visualization": "map",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "MaliciousIPcount",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "MaliciousIPcount",
+            "sortOrder": 2
+          }
+        ],
         "mapSettings": {
-          "locInfo": "LatLong",
+          "locInfo": "CountryRegion",
+          "locInfoColumn": "Country",
           "latitude": "Latitude",
           "longitude": "Longitude",
-          "sizeSettings": "EventCount",
+          "sizeSettings": "MaliciousIPcount",
           "sizeAggregation": "Sum",
+          "defaultSize": 0,
           "labelSettings": "MaliciousIP",
           "legendAggregation": "Sum",
           "itemColorSettings": {
-            "nodeColorField": "Confidence",
+            "nodeColorField": "MaliciousIPcount",
             "colorAggregation": "Sum",
-            "type": "thresholds",
-            "thresholdsGrid": [
-              {
-                "operator": "Default",
-                "thresholdValue": null,
-                "representation": "blue"
-              }
-            ]
+            "type": "heatmap",
+            "heatmapPalette": "greenRed"
           }
         }
       },
-      "name": "query - 14"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "## Azure Arc"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Events"
       },
-      "name": "text - 19"
+      "name": "query - 14"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": " resources\r\n| where type == \"microsoft.hybridcompute/machines\"\r\n| extend p=array_length(properties.provisioningState) \r\n| mvexpand prop=properties.provisioningState\r\n| project id, ComputerName = name, Resource= prop.name, Status = properties.status, State=prop, location, resourceGroup, type",
+        "query": "union isfuzzy=true     (W3CIISLog\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),     (DnsEvents\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country= RemoteIPCountry, Latitude = RemoteIPLatitude, Longitude = RemoteIPLongitude),     (WireData\r\n| extend TrafficDirection = iff(Direction != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude),     (WindowsFirewall\r\n| extend TrafficDirection = iff(CommunicationDirection != \"SEND\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude),     (CommonSecurityLog\r\n| extend TrafficDirection = iff(CommunicationDirection != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription),     (VMConnection\r\n| where Type == \"VMConnection\"\r\n| extend TrafficDirection = iff(Direction != \"outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteCountry, Latitude=RemoteLatitude, Longitude=RemoteLongitude)\r\n| where isnotempty(MaliciousIP) and isnotempty(Country) and isnotempty(Latitude) and isnotempty(Longitude)\r\n| where Computer startswith \"{Computer}\"\r\n| summarize MaliciousIPcount = dcount(MaliciousIP), TableSource = make_set(Type) by Country, TrafficDirection\r\n| top 10 by MaliciousIPcount\r\n| order by MaliciousIPcount desc\r\n\r\n",
         "size": 0,
+        "title": "Top10: Potential Locations for: {Computer}",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspaces}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "MaliciousIPcount",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "MaliciousIPcount",
+            "sortOrder": 2
+          }
+        ],
+        "mapSettings": {
+          "locInfo": "CountryRegion",
+          "locInfoColumn": "Code",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "sizeSettings": "count_",
+          "sizeAggregation": "Sum",
+          "defaultSize": 0,
+          "labelSettings": "MaliciousIP",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "MaliciousIPcount",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Events"
+      },
+      "name": "query - 14 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": " resources\r\n| where type == \"microsoft.hybridcompute/machines\"\r\n//| extend p=array_length(properties.provisioningState) \r\n| mvexpand prop=properties.provisioningState\r\n| project ComputerName = id,  Status = properties.status, State=prop, location, resourceGroup, type",
+        "size": 1,
+        "title": "All Azure Arc resources",
         "queryType": 1,
         "resourceType": "microsoft.resourcegraph/resources",
         "crossComponentResources": [
@@ -537,31 +710,75 @@
         ],
         "sortBy": []
       },
-      "name": "query - 18"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "## Security Asessment findings for {Computer}"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Arc"
       },
-      "name": "text - 19"
+      "name": "query - 18"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| where properties contains '{Computer}'\r\n| project Resource = properties.displayName, Status = trim(@\"[^\\w]+\",tostring(split(properties.status,\":\",1))), Location =  trim(@\"[^\\w]+\",tostring(split(properties.resourceDetails,\":\",1)))\r\n| extend Status  = iif(Status has \",\",trim(@\"[^\\w]+\",tostring(split(Status,\",\",0))),Status)\r\n| extend Location = iif(Location has \"\\\\\",trim(@\"[^\\w]+\",tostring(split(Location,\"\\\\\",0))),Location)",
-        "size": 0,
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| where properties has '{Computer}'\r\n| project Resource = properties.displayName, Status = trim(@\"[^\\w]+\",tostring(split(properties.status,\":\",1))), Location =  trim(@\"[^\\w]+\",tostring(split(properties.resourceDetails,\":\",1)))\r\n| extend Status   = iif(Status has \",\",trim(@\"[^\\w]+\",tostring(split(Status,\",\",0))),Status)\r\n| extend Location = iif(Location has \"\\\\\",trim(@\"[^\\w]+\",tostring(split(Location,\"\\\\\",0))),Location)\r\n| where Location == \"OnPremise\"\r\n| summarize count() by Status, tostring(Resource), Location=\"Azure Arc\"\r\n| order by count_ desc",
+        "size": 1,
+        "title": "Azure Arc Security Status for: {Computer}",
         "queryType": 1,
         "resourceType": "microsoft.resourcegraph/resources",
         "crossComponentResources": [
-          "{Workspaces}"
-        ]
+          "{Subscriptions}"
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Status",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Resource",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Location",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "id",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Resource",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ]
+        },
+        "sortBy": []
       },
-      "name": "query - 18"
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Arc"
+      },
+      "name": "query - 18 - Copy"
     }
   ],
-  "styleSettings": {},
   "fromTemplateId": "sentinel-SecurityStatus",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
