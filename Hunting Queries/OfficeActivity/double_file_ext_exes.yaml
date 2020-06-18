@@ -14,23 +14,22 @@ relevantTechniques:
 query: |
 
   let timeframe = 14d;
-  let known_ext=dynamic(["lnk","log","option","config", "manifest", "partial"]);
+  let known_ext = dynamic(["lnk","log","option","config", "manifest", "partial"]);
+  let excluded_users = dynamic(["app@sharepoint"]);
   OfficeActivity
   | where TimeGenerated > ago(timeframe)
-  | where RecordType =~ "SharePointFileOperation"
-  | where SourceFileExtension !in~ (known_ext)
-  | where OfficeObjectId contains ".exe."
+  | where RecordType =~ "SharePointFileOperation" and isnotempty(SourceFileName)
+  | where OfficeObjectId has ".exe." and SourceFileExtension !in~ (known_ext)
   | extend Extension = extract("[^.]*.[^.]*$",0, OfficeObjectId)
   | join kind= leftouter ( 
     OfficeActivity
       | where TimeGenerated > ago(timeframe)
-      | where RecordType =~ "SharePointFileOperation"
-      | where Operation =~ "FileDownloaded" or Operation =~ "FileAccessed" 
+      | where RecordType =~ "SharePointFileOperation" and (Operation =~ "FileDownloaded" or Operation =~ "FileAccessed") 
       | where SourceFileExtension !in~ (known_ext)
   ) on OfficeObjectId 
-  | where UserId1 !~ "app@sharepoint"
+  | where UserId1 !in~ (excluded_users)
   | extend userBag = pack(UserId1, ClientIP1) 
-  | summarize makeset(UserId1), make_bag(userBag) by TimeGenerated, UserId, OfficeObjectId, SourceFileName, Extension
-  | extend NumberUsers = array_length(bag_keys(bag_userBag))
-  | project UploadTime=TimeGenerated, Uploader=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, Extension, NumberUsers
-  | extend timestamp = UploadTime, AccountCustomEntity = UserId
+  | summarize makeset(UserId1), make_bag(userBag), Start=max(TimeGenerated), End=min(TimeGenerated) by UserId, OfficeObjectId, SourceFileName, Extension 
+  | extend NumberOfUsers = array_length(bag_keys(bag_userBag))
+  | project UploadTime=Start, Uploader=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, Extension, NumberOfUsers
+  | extend timestamp = UploadTime, AccountCustomEntity = Uploader
