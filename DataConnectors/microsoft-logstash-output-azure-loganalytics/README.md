@@ -75,7 +75,6 @@ output {
 }
 ```
 
-
 <u>Advencaed Configuration</u>
 ```
 input {
