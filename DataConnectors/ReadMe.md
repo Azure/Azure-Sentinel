@@ -173,6 +173,7 @@ Once you have a working POC, you are ready to build, validate the data connector
         2.	Ensure raw file of logo doesn’t have: a. cls style formats b. embedded png formats
         3.  Logo scales well to fit in a 75 px square
     4.  For Syslog data connector, the Kusto function parser is in the right subfolder (PROVIDERNAME) of ['Parsers' folder](https://aka.ms/sentinelgithubparsers)
+    5.  If you are bringing in detections or hunting queries, requiredDataConnectors section of the YAML template must be populated.  Details of what to reference in the YAML template from the connector JSON are in the Query Style Guide under [requiredDataConnectors](https://github.com/Azure/Azure-Sentinel/wiki/Query-Style-Guide#requireddataconnectors)
 
 6. **Prepare and submit your data connector documentation** – Besides Azure Sentinel gallery discoverability, the connectors can also be discovered out of product in documentation. 
     1.	Download one of the following templates depending on the type of data connector and <i>PROVIDER NAME APPLIANCE NAME.md</i> and fill out the template per the guidance mentioned in the template. Replace the guidance in the template with relevant steps.
