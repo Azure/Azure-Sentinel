@@ -15,7 +15,7 @@ namespace SampleDataIngestTool
             try
             {
                 var currentDirectory = System.IO.Directory.GetCurrentDirectory();
-                var basePath = currentDirectory.Split(new string[] { "\\Solutions" }, StringSplitOptions.None)[0];
+                var basePath = currentDirectory.Split(new string[] { "\\Tools" }, StringSplitOptions.None)[0];
                 var dirPath = basePath + subDirPath;
 
                 return dirPath;
