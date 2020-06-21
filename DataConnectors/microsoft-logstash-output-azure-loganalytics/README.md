@@ -19,8 +19,8 @@ For offline setup follow [Logstash Offline Plugin Management instruction](<https
 
 in your Logstash configuration file, add the Azure Sentinel output plugin to the configuration with following values: 
 - workspace_id – your workspace ID guid 
-- workspace_key – your workspace primary key guid 
-- custom_log_table_name – table name, in which the logs will be ingested, limited to one table, the log table will be presented in the logs blade under the custom logs label, with a _CL suffix. 
+- workspace_key (primary key) – your workspace primary key guid. You can find your workspace key and id the following path: Home > Log Analytics workspace > Advanced settings
+- custom_log_table_name – table name, in which the logs will be ingested, limited to one table, the log table will be presented in the logs blade under the custom logs label, with a _CL suffix. Table name must be only alpha characters.
 - endpoint – Optional field by default set as log analytics endpoint.  
 - time_generated_field – Optional field, this property is used to override the default TimeGenerated field in Log Analytics. Populate this property with the name of the sent data time field. 
 - key_names – list of Log analytics output schema fields. 
@@ -34,7 +34,48 @@ Note: View the GitHub to learn more about the sent message’s configuration, pe
 Here is an example configuration who parse Syslog incoming data into a custom table named "logstashCustomTableName".
 
 ### Example Configuration
-<u>Configuration</u>
+
+<u>Basic configuration</u>
+
+- Using filebeat input pipe
+
+```
+input {
+    beats {
+        port => "5044"
+    }
+}
+ filter {
+}
+output {
+    logstash-output-azure {
+      workspace_id => "4g5tad2b-a4u4-147v-a4r7-23148a5f2c21" # <your workspace id>
+      workspace_key => "u/saRtY0JGHJ4Ce93g5WQ3Lk50ZnZ8ugfd74nk78RPLPP/KgfnjU5478Ndh64sNfdrsMni975HJP6lp==" # <your workspace key>
+      custom_log_table_name => "tableName"
+    }
+}
+```
+- Or using the tcp imput pipe
+
+```
+input {
+    tcp {
+        port => "514"
+        type => syslog #optional, will effect log type in table
+    }
+}
+ filter {
+}
+output {
+    logstash-output-azure {
+      workspace_id => "4g5tad2b-a4u4-147v-a4r7-23148a5f2c21" # <your workspace id>
+      workspace_key => "u/saRtY0JGHJ4Ce93g5WQ3Lk50ZnZ8ugfd74nk78RPLPP/KgfnjU5478Ndh64sNfdrsMni975HJP6lp==" # <your workspace key>
+      custom_log_table_name => "tableName"
+    }
+}
+```
+
+<u>Advencaed Configuration</u>
 ```
 input {
   tcp {
@@ -66,4 +107,10 @@ For example:
 ```
 logger -p local4.warn -t CEF: "0|Microsoft|Device|cef-test|example|data|1|here is some more data for the example" -P 514 -d -n 127.0.0.1
 
+```
+
+Alternativly you can use netcat to test your configuration:
+
+```
+echo "test string" | netcat localhost 514
 ```
