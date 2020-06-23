@@ -395,7 +395,7 @@ def get_daemon_configuration_content(daemon_name, omsagent_incoming_port):
 
 def get_rsyslog_daemon_configuration_content(omsagent_incoming_port):
     '''Rsyslog accept every message containing CEF'''
-    rsyslog_daemon_configuration_content = ":rawmsg, regex, \"CEF\|ASA\" ~\n*.* @@127.0.0.1:"+ omsagent_incoming_port
+    rsyslog_daemon_configuration_content = ":rawmsg, regex, \"CEF\"|\"ASA\" \n*.* @@127.0.0.1:"+ omsagent_incoming_port
     print("Rsyslog daemon configuration content:")
     content = rsyslog_daemon_configuration_content
     print_command_response(content)
