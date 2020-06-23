@@ -19,7 +19,8 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
   config :workspace_key, :validate => :string, :required => true
 
   # The name of the event type that is being submitted to Log Analytics. 
-  # This must be only alpha characters.
+  # This must be only alpha characters, numbers and underscore.
+  # This must not exceed 100 characters.
   # Table name under custom logs in which the data will be inserted
   config :custom_log_table_name, :validate => :string, :required => true
 
