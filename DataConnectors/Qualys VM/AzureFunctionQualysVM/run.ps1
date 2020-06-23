@@ -45,8 +45,11 @@ Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body 
 # ISO:8601-compliant DateTime required.
 $startDate = [System.DateTime]::UtcNow.AddMinutes(-$($time))
 
+# Forming URL
+$newurl = $uri + $startDate
+
 # Invoke the API Request and assign the response to a variable ($response)
-$response = (Invoke-RestMethod -Headers $hdrs -Uri "$uri$($startDate.ToString('yyyy-MM-ddTHH:mm:ssZ'))" -WebSession $LogonSession)
+$response = (Invoke-RestMethod -Headers $hdrs -Uri $newurl -WebSession $LogonSession)
 
 # Iterate through each detection recieved from the API call and assign the variables (Column Names in LA) to each XML variable
 if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
