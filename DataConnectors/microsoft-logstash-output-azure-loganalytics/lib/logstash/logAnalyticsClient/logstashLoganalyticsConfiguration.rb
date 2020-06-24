@@ -28,8 +28,11 @@ class LogstashLoganalyticsOutputConfiguration
         elsif @workspace_id.empty? or @workspace_key.empty? or @custom_log_table_name.empty? 
             raise ArgumentError, "Malformed configuration , the following arguments can not be null or empty.[workspace_id=#{@workspace_id} , workspace_key=#{@workspace_key} , custom_log_table_name=#{@custom_log_table_name}]"
 
-        elsif not @custom_log_table_name.match(/^[[:alpha:]]+$/)
-            raise ArgumentError, 'custom_log_table_name must be only alpha characters.' 
+        elsif not @custom_log_table_name.match(/^[[:alpha:][:digit:]_]+$/)
+            raise ArgumentError, 'custom_log_table_name must be only alpha characters, numbers and underscore.'
+
+        elsif @custom_log_table_name.length > 100
+            raise ArgumentError, 'custom_log_table_name must not exceed 100 characters.'
 
         elsif custom_log_table_name.empty?
             raise ArgumentError, 'custom_log_table_name should not be empty.' 
