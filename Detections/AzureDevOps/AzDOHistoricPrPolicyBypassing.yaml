@@ -10,9 +10,12 @@ triggerThreshold: 0
 tactics:
   - Execution
   - Impact
-  - Escalation
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
 query: |
 
+  let timeframe = 14d;
   // Add full UPN (user@domain.com) to Authorized Bypassers to ignore policy bypasses by certain authorized users
   let AuthorizedBypassers = datatable(UPN:string)[
   'foo@baz.com'
@@ -20,7 +23,7 @@ query: |
   let historicBypassers = AzureDevOpsAuditing
   | where 
     OperationName == 'Git.RefUpdatePoliciesBypassed' and 
-    TimeGenerated > ago(14d) and TimeGenerated < ago(3h) 
+    TimeGenerated > ago(timeframe) and TimeGenerated < ago(3h) 
   | distinct ActorUPN;
   AzureDevOpsAuditing
   | where 
@@ -42,3 +45,4 @@ query: |
     Branch = Data.Name,
     BypassReason = Data.BypassReason,
     PRLink = strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_git/', Data.RepoName, '/pullrequest/', Data.PullRequestId)
+	| extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress

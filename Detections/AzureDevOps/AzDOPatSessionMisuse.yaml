@@ -13,8 +13,11 @@ triggerThreshold: 0
 tactics:
   - Execution
   - Impact
+relevantTechniques:
+  - T1528
 query: |
 
+  let timeframe = 3h;
   // Allowlisted UPNs should likely stay empty
   let AllowlistedUpns = datatable(UPN:string)[
   'foo@bar.com'
@@ -36,9 +39,11 @@ query: |
   ];
   AzureDevOpsAuditing
   | where AuthenticationMechanism startswith "PAT" and
+    TimeGenerated > ago(timeframe) and
     (
       OperationName has_any (HasAnyBlocklist) or
       OperationName in (HasExactBlocklist)
     )
     and ActorUPN !in (AllowlistedUpns)
   | project TimeGenerated, ProjectName, ActorUPN, ActorDisplayName, IpAddress, UserAgent, OperationName, Details, Data
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress

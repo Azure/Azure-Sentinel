@@ -9,9 +9,12 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Persistence
-  - Escalation
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
 query: |
 
+  let timeframe = 4h;
   // Monitor for Project Administrator adds to *any* project
   let MontiorAllProjects = false;
   // If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects
@@ -22,6 +25,7 @@ query: |
   ];
   AzureDevOpsAuditing
   | where OperationName == "Group.UpdateGroupMembership.Add" and
+    TimeGenerated > ago(timeframe) and
     Area == "Group" and 
     (
       Details contains "was added as a member of group" and 
@@ -44,7 +48,7 @@ query: |
     )
     or Level == 'Organization'
   | project 
-    TimeGenerated, 
+    timestamp = TimeGenerated, 
     Severity, 
     Adder = ActorUPN, 
     AddedIdentity, 
@@ -57,4 +61,4 @@ query: |
     ActorIpAddress = IpAddress, 
     ActorUserAgent = UserAgent, 
     RawDetails = Details
-  | extend IPCustomEntity = ActorIpAddress
+  | extend AccountCustomEntity = Adder, IPCustomEntity = ActorIpAddress
