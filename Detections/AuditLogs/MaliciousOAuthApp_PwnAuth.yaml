@@ -1,0 +1,55 @@
+﻿id: 39198934-62a0-4781-8416-a81265c03fd6
+name: Suspicious application consent for PwnAuth
+description: |
+  'This will alert when a user consents to provide a previously-unknown Azure application with OAuth permissions used by the FireEye PwnAuth toolkit (https://github.com/fireeye/PwnAuth).
+  The default permissions/scope for the PwnAuth toolkit are user.read, offline_access, mail.readwrite, mail.send, and files.read.all.
+  Consent to applications with these permissions should be rare, especially as the knownApplications list is expanded. Public contributions to expand this filter are welcome!
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1528
+  - T1550
+query: |
+Proposing modification:
+  let timeframe = 14d;
+  AuditLogs
+  | where TimeGenerated > ago(timeframe)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Consent to application"
+  | where TargetResources has "offline"
+  | extend AppDisplayName = tostring(TargetResources.[0].displayName)
+  | extend AppClientId = tolower(tostring(TargetResources.[0].id))
+  | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName: string)[@"https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv")))
+  | extend ConsentFull = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[4].newValue)))
+  | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 "]" *
+  | where ConsentFull contains "user.read" and ConsentFull contains "offline_access" and ConsentFull contains "mail.readwrite" and ConsentFull contains "mail.send" and ConsentFull contains "files.read.all"
+  | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
+  | extend GrantIpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+  tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend GrantInitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)),
+  tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+  | mv-expand AdditionalDetails
+  | where tostring(parse_json(AdditionalDetails).key) =~ "User-Agent"
+  | extend GrantUserAgent = tostring(parse_json(AdditionalDetails).value)
+  | join kind = leftouter (AuditLogs
+  | where TimeGenerated > ago(timeframe)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | extend AppClientId = tolower(tostring(TargetResources[0].id))
+  | extend AppReplyURLs = parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].newValue))
+  )
+  on AppClientId // replace with CorrelationId to show only first addition event
+  | where OperationName1 =~ "Add service principal"
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull
