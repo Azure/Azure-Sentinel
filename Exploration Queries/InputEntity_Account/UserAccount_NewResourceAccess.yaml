@@ -1,0 +1,31 @@
+Id: 82cdcee5-cc2e-4e9f-a235-357159c60c8c
+DisplayName: User account new resource access 
+Description: New resource access by a given user
+InputEntityType: Account
+InputFields:
+  - Name
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+  - BehaviorAnalytics
+Tactics:
+  - Collection
+  - LateralMovement
+query: |
+
+  let GetAllNewResourceAccessForUser = (v_Account_Name:string)
+  {
+    BehaviorAnalytics
+    | extend v_Account_Name = case(
+           v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+           v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+           v_Account_Name)
+    | where ActionType == "ResourceAccess" and 
+            tobool(ActivityInsights.FirstTimeUserConnectedToDestinationDevice) and
+            UserName =~ v_Account_Name
+    | project Host_Aux_TimeGenerated=TimeGenerated, Host_UnstructuredName=DestinationDevice
+    | top 10 by Host_Aux_TimeGenerated asc nulls last
+  };
+  GetAllNewResourceAccessForUser('<Name>')
