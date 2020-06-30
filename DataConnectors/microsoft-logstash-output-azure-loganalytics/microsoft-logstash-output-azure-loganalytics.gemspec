@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name = 'microsoft-logstash-output-azure-loganalytics'
   s.version    =  File.read("VERSION").strip
-  s.authors = ["Ron Marsiano"]
+  s.authors = ["Ron Marsiano", "Haim Rubinstein"]
   s.email = "romarsia@outlook.com"
   s.summary = %q{Azure Sentinel provides a new output plugin for Logstash. Using this output plugin, you will be able to send any log you want using Logstash to the Azure Sentinel/Log Analytics workspace}
   s.description = s.summary
