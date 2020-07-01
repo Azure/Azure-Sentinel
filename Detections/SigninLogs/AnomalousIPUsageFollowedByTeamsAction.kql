@@ -23,82 +23,86 @@ relevantTechniques:
 query: |
 
   //The bigger the window the better the data sample size, as we use IP prevalence, more sample data is better.
-  let timeRange = 7d;
+  let timeRange = 30d;
   //The minimum number of countries that the account has been accessed from [default: 2]
   let minimumCountries = 2;
   //The delta (%) between the largest in-use IP and the smallest [default: 90]
-  let deltaThreshold = 90;
+  let deltaThreshold = 95;
   //The maximum (%) threshold that the country appears in login data [default: 10]
   let countryPrevalenceThreshold = 10;
   //The time to project forward after the last login activity [default: 60min]
   let projectedEndTime = 60min; 
+  //Get Teams successful signins globally
+  let signinData =
+    SigninLogs
+    | where TimeGenerated >= ago(timeRange)
+    | where AppDisplayName has "Teams"
+    | where ConditionalAccessStatus =~ "success"
+    | extend country = tostring(LocationDetails['countryOrRegion'])
+    | where isnotempty(country) and isnotempty(IPAddress);
   // Collect successful signins to teams
-  SigninLogs
-  | where TimeGenerated >= ago(timeRange)
-  | where AppDisplayName contains "Teams"
-  | where ConditionalAccessStatus =~ "success"
-  //Uncomment to only look for accounts which used single factor authentication
-  //| where AuthenticationRequirement =~ "singlefactorauthentication"
-  //Uncomment to limit domain, use this on very large tenants to reduce match volume
-  //| where UserPrincipalName endswith "@onmicrosoft.com"
-  | where IPAddress != ""
-  //Get the country information for the successful login
-  | extend country = LocationDetails['countryOrRegion']
-  | summarize count(), any(tostring(country)), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) by IPAddress, UserPrincipalName
-  //Make a JSON object that contains the summarised IP login evens, including the country the logins were from, start and end time
-  | extend p = pack(tostring(count_), pack("IP",tostring(IPAddress), "Country", any_country, "Start", StartTime, "End", EndTime))
-  //Summarise down the events based on the users email address
-  | summarize make_bag(p), max(count_), min(count_), make_set(any_country), dcount(any_country) by UserPrincipalName
-  //Calculate the delta between the most used IP, and the least used IP. This will find accounts where an IP was used for a small proportion of logins
-  | extend delta = toreal(max_count_ - min_count_) / max_count_ * 100
-  //Where the delta between the largest and smallest IP is >= 90% (configurable) and more than one country is seen (optional)
-  | where delta >= deltaThreshold and dcount_any_country >= minimumCountries
-  //Extract the country code for the IP with the smallest number of logins. To further reduce hits we will use this to check for 
-  //how common that country is as a login location for our tenant.
-  | extend country = tostring(bag_p.[tostring(min_count_)].["Country"])
-  | join (
-      //Get all successful login events to teams from each country
-      SigninLogs
-      | where TimeGenerated > ago(timeRange)
-      | where AppDisplayName contains "Teams"
-      | where ConditionalAccessStatus =~ "success"
-      | extend country = LocationDetails['countryOrRegion']
-      | where country != ""
-      | summarize count() by tostring(country)
-      | join (
-          //Now get the total number of logins from any country and join it to the previous count in a single table
-          SigninLogs
-          | where TimeGenerated > ago(timeRange)
-          | where AppDisplayName contains "Teams"
-          | where ConditionalAccessStatus =~ "success"
-          | extend country = LocationDetails['countryOrRegion']
-          | where country != ""
-          | summarize count(), make_list(tostring(country))
-          | mv-expand list_country
-          | extend country = tostring(list_country)
-      ) on country
-      | summarize by country, count_, count_1
-      //Now calculate each countries prevalence within login events
-      | extend prevalence = toreal(count_) / toreal(count_1) * 100
-      | project-away count_1
+  let loginEvents = 
+    signinData
+    | summarize count(), country=any(tostring(country)), make_list(TimeGenerated) by IPAddress, UserPrincipalName;
+  //Calcualte delta between logins
+  let loginDelta =
+    loginEvents
+    | summarize max(count_), min(count_) by UserPrincipalName
+    | extend delta = toreal(max_count_ - min_count_) / max_count_ * 100
+    | where delta >= deltaThreshold;
+  //Count number of countries used to sign in
+  let countryCount =
+    loginEvents
+    | summarize Countries = dcount(country) by UserPrincipalName;
+  //Join delta and sign in counts to successful logins
+  loginDelta
+  | join kind=rightouter  (
+    loginEvents
+  ) on UserPrincipalName
+  | join kind=rightouter (
+    countryCount
+  ) on UserPrincipalName
+  //Check where the record meets the minimum required countries
+  | where Countries >= minimumCountries
+  | join kind=leftouter (
+        signinData
+        | summarize count() by tostring(country)
+        | join (
+            //Now get the total number of logins from any country and join it to the previous count in a single table
+            signinData
+            | summarize count() by tostring(country)
+            | summarize sum(count_), make_list(tostring(country))
+            | mv-expand list_country
+            | extend country = tostring(list_country)
+        ) on country
+        | summarize by country, count_, sum_count_
+        //Now calculate each countries prevalence within login events
+        | extend prevalence = toreal(count_) / toreal(sum_count_) * 100
+        | project-away sum_count_
+        | order by prevalence
   ) on country
-  //Login start and end times from the JSON object, this is the activity window the suspicious IP was active within
-  | extend LoginStartTime = make_datetime(tostring(bag_p.[tostring(min_count_)].["Start"]))
-  | extend LoginEndTime = make_datetime(tostring(bag_p.[tostring(min_count_)].["End"]))
-  | extend SuspiciousIP = tostring(bag_p.[tostring(min_count_)].["IP"])
-  | project UserPrincipalName, SuspiciousIP, UserIPs = bag_p, IPCountryMapping = set_any_country, UserIPDelta = delta, SuspiciousLoginCountry = country, SuspiciousCountryPrevalence = prevalence, LoginStartTime, LoginEndTime 
   //The % that suspicious country is prevalent in data, this can be configured, less than 10% is uncommon
-  | where SuspiciousCountryPrevalence < countryPrevalenceThreshold
+  | where prevalence < countryPrevalenceThreshold
+  | where min_count_ == count_
+  //Login start and end times from the JSON object, this is the activity window the suspicious IP was active within
+  | extend EventTimes = list_TimeGenerated
+  | extend SuspiciousIP = IPAddress
+  | project UserPrincipalName, SuspiciousIP, UserIPDelta = delta, SuspiciousLoginCountry = country, SuspiciousCountryPrevalence = prevalence, EventTimes
   //Teams join to collect operations the user account has performed within the given time range
   | join kind=inner( 
-  TeamsData 
-  | where TimeGenerated >= ago(timeRange) 
-  | project Operation, UserId=tolower(UserId), OperationTime=TimeGenerated
+    TeamsData 
+    | where TimeGenerated >= ago(timeRange)
+    | where Operation in~ ("TeamsAdminAction", "MemberAdded", "MemberRemoved", "MemberRoleChanged", "AppInstalled", "BotAddedToTeam")
+    | project Operation, UserId=tolower(UserId), OperationTime=TimeGenerated
   ) on $left.UserPrincipalName == $right.UserId
+  | mv-expand StartTime = EventTimes
+  | extend StartTime = make_datetime(StartTime)
   //The end time is projected 60 minutes forward, in case actions took place within the last hour of the final login for the suspicious IP
-  | extend ProjectedEndTime = LoginEndTime + projectedEndTime
+  | extend ProjectedEndTime = make_datetime(StartTime + projectedEndTime)
   //Limit to operations carried out by the user account in the timeframe the IP was active
-  | where OperationTime between (LoginStartTime .. ProjectedEndTime)
+  | where OperationTime between (StartTime .. ProjectedEndTime)
+  | project UserPrincipalName, SuspiciousIP, StartTime, ProjectedEndTime, OperationTime, Operation, SuspiciousLoginCountry, SuspiciousCountryPrevalence
   //Filter on suspicious actions
-  | project UserPrincipalName, SuspiciousIP, IPCountryMapping, LoginStartTime, LoginEndTime, Operation, IPCustomEntity=SuspiciousIP, AccountCustomEntity=UserPrincipalName
-  | where Operation in~ ("TeamsAdminAction", "MemberAdded", "MemberRoleChanged", "AppInstalled", "BotAddedToTeam")
+  | extend activitySummary = pack(tostring(StartTime), pack("Operation",tostring(Operation), "OperationTime", OperationTime))
+  | summarize make_bag(activitySummary) by UserPrincipalName, SuspiciousIP, SuspiciousLoginCountry, SuspiciousCountryPrevalence
+  | extend IPCustomEntity = SuspiciousIP, AccountCustomEntity = UserPrincipalName
