@@ -1,10 +1,10 @@
 <#  
     Title:          Qualys Vulnerability Management (VM) Host Detection Data Connector
     Language:       PowerShell    
-    Version:        1.0
+    Version:        1.1
     Author(s):      Microsoft
-    Last Modified:  6/02/2020
-    Comment:        Inital Release
+    Last Modified:  6/30/2020
+    Comment:        Minor fixes to reduce execution time
 
     DESCRIPTION
     This Function App calls the Qualys Vulnerability Management (VM) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) specifically for Host List Detection data (/api/2.0/fo/asset/host/vm/detection/).
@@ -87,7 +87,6 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
 
         # Add the custom object as a child object to the parent
         Add-Member -InputObject $customObject -MemberType NoteProperty -Name "Detections" -Value $detections
-
         $customObjects += $customObject
     }
 
@@ -151,8 +150,8 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
         # Calculate the kbytes/record
         $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($json)).Count/1024         
             # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host                          
-            if ($kbytes -gt 30){  
-                $newcustomObjects = @()                                                                                                                                                                          
+        $newcustomObjects = @() 
+            if ($kbytes -gt 30){                                                                                                                                                                           
                 $newObject = @()
                 # The new object will consist of only a single detection with all the parent/host record information
                 ForEach ($QID in $_.Detections){
@@ -201,7 +200,6 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
         # Convert the array containing all the records to JSON and API POST to Log Analytics Workspace                                                                 
         $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3                                                            
         Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName
-        Write-Output $json
     }
 else
     {
