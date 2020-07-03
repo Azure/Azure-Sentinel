@@ -24,25 +24,41 @@ query: |
   OfficeActivity
   | where TimeGenerated >= ago(timeframe)
   | where Operation =~ "Set-Mailbox"
-  | where Parameters contains "ForwardingSmtpAddress"
+  | where Parameters has "ForwardingSmtpAddress"
   | extend parsed = parse_json(Parameters)
-  | extend parameterName = parsed[1].Name, fwdingDestination = tostring(parsed[1].Value)
+  | mv-expand parsed
+  | where parsed.Name == "ForwardingSmtpAddress"
+  | extend parameterName = tostring(parsed.Name), fwdingDestination = tostring(parsed.Value)
   | where isnotempty(fwdingDestination)
   | extend ClientIPOnly = case( 
-  ClientIP has ".", tostring(split(ClientIP,":")[0]), 
-  ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  ClientIP has "." and ClientIP has ':', tostring(split(ClientIP,":")[0]), 
+  ClientIP has "." and ClientIP has '-', tostring(split(ClientIP,"-")[0]), 
+  ClientIP has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  ClientIP has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has ':', tostring(split(ClientIP_,":")[0]), 
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has '-', tostring(split(ClientIP_,"-")[0]), 
+  isempty(ClientIP) and ClientIP_ has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP_,"]")[0]))),
+  isempty(ClientIP) and ClientIP_ has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP_,"]")[0]))),
   ClientIP
   )  
   | extend Port = case(
-  ClientIP has ".", (split(ClientIP,":")[1]),
-  ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
-  ClientIP
+  ClientIP has "." and ClientIP has ':', tostring(split(ClientIP,":")[1]), 
+  ClientIP has "." and ClientIP has '-', tostring(split(ClientIP,"-")[1]), 
+  ClientIP has ']-', tostring(split(ClientIP,"]-")[1]), 
+  ClientIP has ']:', tostring(split(ClientIP,"]:")[1]), 
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has ':', tostring(split(ClientIP_,":")[1]), 
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has '-', tostring(split(ClientIP_,"-")[1]), 
+  isempty(ClientIP) and ClientIP_ has ']-', tostring(split(ClientIP_,"]-")[1]),
+  isempty(ClientIP) and ClientIP_ has ']:', tostring(split(ClientIP_,"]:")[1]),
+  isnotempty(ClientIP), ClientIP,
+  isnotempty(ClientIP_), ClientIP_,
+  "IP Not Available"
   )
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = makeset(UserId), 
-  Ports = makeset(Port), EventCount = count() by fwdingDestination, ClientIP = ClientIPOnly 
+  | extend UserId = iff(isempty(UserId), UserId_, UserId)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId), 
+  Ports = make_set(Port), EventCount = count() by fwdingDestination, ClientIP = ClientIPOnly 
   | where DistinctUserCount > 1
   | mvexpand UserId
   | extend UserId = tostring(UserId), Ports = tostring(Ports)
   | distinct StartTimeUtc, EndTimeUtc, UserId, DistinctUserCount, ClientIP, Ports, fwdingDestination, EventCount
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP 
-
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
