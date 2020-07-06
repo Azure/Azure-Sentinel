@@ -2,31 +2,59 @@
     "id": "EsetSMC",
     "title": "Eset Security Management Center",
     "publisher": "Eset",
-    "descriptionMarkdown": "Connector to bring Eset SMC data into Sentnel using custom table for easy quering. Data is sent from Eset SMB in JSON format to syslog connector VM and FluentD parsing is used so data are sent structured to Sentinel.",
+    "descriptionMarkdown": "Connector for [Eset SMC](https://help.eset.com/esmc_admin/70/en-US/) threat events, audit logs, firewall events and web sites filter.",
     "graphQueries": [
         {
             "metricName": "Total data received",
-            "legend": "DATATYPE_NAME",
-            "baseQuery": "DATATYPE_NAME"
+            "legend": "eset_CL",
+            "baseQuery": "eset_CL"
         }
     ],
     "sampleQueries": [
         {
-            "description" : "Get your Eset SMC logs",
-            "query": "eset_CL\r\n| sort by TimeGenerated desc"
+            "description" : "Query Eset firewall events",
+            "query": "eset_CL\r\n| where event_type_s == 'FirewallAggregated_Event'\r\n| sort by TimeGenerated desc"
+        },
+        {
+            "description" : "Query Eset threat events",
+            "query": "eset_CL\r\n| where event_type_s == 'Threat_Event'\r\n| sort by TimeGenerated desc"
+        },
+        {
+            "description" : "Query Eset threat events from Real-time file system protection",
+            "query": "eset_CL\r\n| where event_type_s == 'Threat_Event'\r\n| where scanner_id_s == 'Real-time file system protection'\r\n| sort by TimeGenerated desc"
+        },
+        {
+            "description" : "Query Eset threat events from On-demand scanner",
+            "query": "eset_CL\r\n| where event_type_s == 'Threat_Event'\r\n| where scanner_id_s == 'On-demand scanner'\r\n| sort by TimeGenerated desc"
+        },
+        {
+            "description" : "Top hosts by number of threat events",
+            "query": "eset_CL\r\n| where event_type_s == 'Threat_Event'\r\n| summarize threat_events_count = count() by hostname_s\r\n| sort by threat_events_count desc"
+        },
+        {
+            "description" : "Top threats",
+            "query": "eset_CL\r\n| where event_type_s == 'Threat_Event'\r\n| summarize threat_events_count = count() by threat_name_s\r\n| sort by threat_events_count desc"
+        },
+        {
+            "description" : "Query Eset web sites filter",
+            "query": "eset_CL\r\n| where event_type_s == 'FilteredWebsites_Event'\r\n| sort by TimeGenerated desc"
+        },
+        {
+            "description" : "Query Eset audit events",
+            "query": "eset_CL\r\n| where event_type_s == 'Audit_Event'\r\n| sort by TimeGenerated desc"
         }
     ],
     "dataTypes": [
         {
-            "name": "DATATYPE_NAME",
-            "lastDataReceivedQuery": "Eset_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            "name": "eset_CL",
+            "lastDataReceivedQuery": "eset_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
         }
     ],
     "connectivityCriterias": [
         {
             "type": "IsConnectedQuery",
             "value": [
-                "Eset_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                "eset_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
             ]
         }
     ],
@@ -95,15 +123,15 @@
       },
       {
           "title": "2. Configure the logs to be collected",
-          "description": "Configure rsyslog to accept logs from your Eset SMC IP address.\n\n```\nsudo -i\r\n\r\n# Set ESET SMC source IP address\r\nexport ESETIP=1.2.3.4\r\n\r\n# Create rsyslog configuration file\r\ncat > \/etc\/rsyslog.d\/80-remote.conf << EOF\r\n\\$ModLoad imudp\r\n\\$UDPServerRun 514\r\n\\$ModLoad imtcp\r\n\\$InputTCPServerRun 514\r\n\\$AllowedSender TCP, 127.0.0.1, $ESETIP\r\n\\$AllowedSender UDP, 127.0.0.1, $ESETIP\r\nuser.=alert;user.=crit;user.=debug;user.=emerg;user.=err;user.=info;user.=notice;user.=warning  @127.0.0.1:25224\r\nEOF\r\n\r\n# Restart rsyslog\r\nsystemctl restart rsyslog```"
+          "description": "Configure rsyslog to accept logs from your Eset SMC IP address.\n\n```\nsudo -i\r\n\r\n# Set ESET SMC source IP address\r\nexport ESETIP={Enter your IP address}\r\n\r\n# Create rsyslog configuration file\r\ncat > \/etc\/rsyslog.d\/80-remote.conf << EOF\r\n\\$ModLoad imudp\r\n\\$UDPServerRun 514\r\n\\$ModLoad imtcp\r\n\\$InputTCPServerRun 514\r\n\\$AllowedSender TCP, 127.0.0.1, $ESETIP\r\n\\$AllowedSender UDP, 127.0.0.1, $ESETIP\r\nuser.=alert;user.=crit;user.=debug;user.=emerg;user.=err;user.=info;user.=notice;user.=warning  @127.0.0.1:25224\r\nEOF\r\n\r\n# Restart rsyslog\r\nsystemctl restart rsyslog```"
       },
       {
-          "title": "3. Configure OMS agent to pass EsetSMC data in API format",
-          "description": "In order to easily recognize Eset data we will push it to separated table. To make it simple we will just modify match oms. section to send data as API objects by changing type to out_oms_api. Modify file on \/etc\/opt\/microsoft\/omsagent\/(REPLACEyourworkspaceid)\/conf\/omsagent.conf. Full match oms. section looks like this:\r\n\r\n```\r\n<match oms.** docker.**>\r\n  type out_oms_api\r\n  log_level info\r\n  num_threads 5\r\n  run_in_background false\r\n\r\n  omsadmin_conf_path \/etc\/opt\/microsoft\/omsagent\/2ce631ed-7e1a-4fe4-acdc-d8594412519c\/conf\/omsadmin.conf\r\n  cert_path \/etc\/opt\/microsoft\/omsagent\/2ce631ed-7e1a-4fe4-acdc-d8594412519c\/certs\/oms.crt\r\n  key_path \/etc\/opt\/microsoft\/omsagent\/2ce631ed-7e1a-4fe4-acdc-d8594412519c\/certs\/oms.key\r\n\r\n  buffer_chunk_limit 15m\r\n  buffer_type file\r\n  buffer_path \/var\/opt\/microsoft\/omsagent\/2ce631ed-7e1a-4fe4-acdc-d8594412519c\/state\/out_oms_common*.buffer\r\n\r\n  buffer_queue_limit 10\r\n  buffer_queue_full_action drop_oldest_chunk\r\n  flush_interval 20s\r\n  retry_limit 10\r\n  retry_wait 30s\r\n  max_retry_wait 9m\r\n<\/match>\r\n```\r\n"
+          "title": "3. Configure OMS agent to pass Eset SMC data in API format",
+          "description": "In order to easily recognize Eset data we will push it to separate table and parse at agent so query in Sentinel is easier and fast. To make it simple we will just modify ```match oms.**``` section to send data as API objects by changing type to out_oms_api. Modify file on \/etc\/opt\/microsoft\/omsagent\/{REPLACEyourworkspaceid}\/conf\/omsagent.conf. Full ```match oms.**``` section looks like this:\r\n\r\n```\r\n<match oms.** docker.**>\r\n  type out_oms_api\r\n  log_level info\r\n  num_threads 5\r\n  run_in_background false\r\n\r\n  omsadmin_conf_path \/etc\/opt\/microsoft\/omsagent\/{REPLACEyourworkspaceid}\/conf\/omsadmin.conf\r\n  cert_path \/etc\/opt\/microsoft\/omsagent\/{REPLACEyourworkspaceid}\/certs\/oms.crt\r\n  key_path \/etc\/opt\/microsoft\/omsagent\/{REPLACEyourworkspaceid}\/certs\/oms.key\r\n\r\n  buffer_chunk_limit 15m\r\n  buffer_type file\r\n  buffer_path \/var\/opt\/microsoft\/omsagent\/{REPLACEyourworkspaceid}\/state\/out_oms_common*.buffer\r\n\r\n  buffer_queue_limit 10\r\n  buffer_queue_full_action drop_oldest_chunk\r\n  flush_interval 20s\r\n  retry_limit 10\r\n  retry_wait 30s\r\n  max_retry_wait 9m\r\n<\/match>\r\n```\r\n"
       },
       {
           "title": "4. Change OMS agent configuration to catch tag oms.api.eset and parse structured data",
-          "description": "Modify file /etc/opt/microsoft/omsagent/(REPLACEyourworkspaceid)/conf/omsagent.d/syslog.conf\n```\r\n<source>\r\n  type syslog\r\n  port 25224\r\n  bind 127.0.0.1\r\n  protocol_type udp\r\n  tag oms.api.eset\r\n<\/source>\r\n\r\n<filter oms.api.**>\r\n  @type parser\r\n  key_name message\r\n  format \/(?<message>.*?{.*})\/\r\n<\/filter>\r\n\r\n<filter oms.api.**>\r\n  @type parser\r\n  key_name message\r\n  format json\r\n<\/filter>\r\n```"
+          "description": "Modify file /etc/opt/microsoft/omsagent/{REPLACEyourworkspaceid}/conf/omsagent.d/syslog.conf\n```\r\n<source>\r\n  type syslog\r\n  port 25224\r\n  bind 127.0.0.1\r\n  protocol_type udp\r\n  tag oms.api.eset\r\n<\/source>\r\n\r\n<filter oms.api.**>\r\n  @type parser\r\n  key_name message\r\n  format \/(?<message>.*?{.*})\/\r\n<\/filter>\r\n\r\n<filter oms.api.**>\r\n  @type parser\r\n  key_name message\r\n  format json\r\n<\/filter>\r\n```"
       },
       {
           "title": "5. Disable automatic configuration and restart agent",
@@ -111,7 +139,7 @@
       },
       {
           "title": "6. Configure Eset SMC to send logs to connector",
-          "description": "Configure Eset Logs using BSD style and JSON format.\r\n- Go to server settings\r\n- Advanced Settings\r\n- Syslog server\r\n- Host (your connector), Format BSD, Transport TCP\r\n- Logging -> Export logs to Syslog, Format JSON"
+          "description": "Configure Eset Logs using BSD style and JSON format.\r\n- Go to Syslog server configuration as described in [Eset documentation](https://help.eset.com/esmc_admin/70/en-US/admin_server_settings.html?admin_server_settings_syslog.html) and configure Host (your connector), Format BSD, Transport TCP\r\n- Go to Logging section as described in [Eset documentation](https://help.eset.com/esmc_admin/70/en-US/admin_server_settings.html?admin_server_settings_export_to_syslog.html) and enable JSON"
       }
   ]
 }
