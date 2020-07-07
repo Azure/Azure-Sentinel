@@ -1,6 +1,6 @@
 Id: b66ab2aa-cd31-43b9-82a2-dd5f0ee9ca81
 DisplayName: User account remote interactive logon
-Description: New remote interactive logon by a given user
+Description: Hosts a given user performed remote logon to for the first time
 InputEntityType: Account
 InputFields:
   - Name
@@ -15,18 +15,29 @@ Tactics:
   - LateralMovement
 query: |
 
-  let GetAllNewRemoteInteractiveLogonForUser = (v_Account_Name:string)
+  let GetAllNewRemoteInteractiveLogonForUser = (v_Account_Name:string, v_Account_Sid:string, v_Account_AadUserId:string)
   {
     BehaviorAnalytics
     | extend v_Account_Name = case(
-           v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
-           v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
-           v_Account_Name)
+        v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+        v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+        v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+        v_Account_Name)
     | where ActionType == "RemoteInteractiveLogon" and 
-            tobool(ActivityInsights.FirstTimeUserConnectedToDestinationDevice) and
-            UserName =~ v_Account_Name
-    | project Host_Aux_TimeGenerated=TimeGenerated, Host_UnstructuredName=DestinationDevice
+            tobool(ActivityInsights.FirstTimeUserConnectedToDestinationDevice) and 
+            (
+                (isnotempty(UserName) and UserName =~ v_Account_Name) or                                                  
+                (isnotempty(UsersInsights.AccountObjectId) and UsersInsights.AccountObjectId == v_Account_AadUserId) or   
+                (isnotempty(UsersInsights.OnPremSid) and UsersInsights.OnPremSid =~ v_Account_Sid)
+            )
+    | extend device_info = pack('DevicesInsights', DevicesInsights, 'ActivityInsights', ActivityInsights)
+    | project Host_Aux_TimeGenerated = TimeGenerated,
+              Host_UnstructuredName = DestinationDevice,
+              Host_Aux_Insights = device_info,
+              Account_Name = UserName,
+              Account_Sid = v_Account_Sid,
+              Account_AadUserId = UsersInsights.AccountObjectId,
+              Account_Aux_Insights = UsersInsights
     | top 10 by Host_Aux_TimeGenerated asc nulls last
   };
-  GetAllNewRemoteInteractiveLogonForUser('<Name>')
-  
+  GetAllNewRemoteInteractiveLogonForUser('<Name>', '<Sid>', '<AadUserId>')
