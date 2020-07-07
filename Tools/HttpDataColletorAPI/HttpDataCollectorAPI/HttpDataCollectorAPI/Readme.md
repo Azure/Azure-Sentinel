@@ -27,8 +27,8 @@ To configure the tool, the following assembly is required to post custom data to
 
 ## Setup
 1) Clone Azure Sentinel repository by running this command: git clone https://github.com/Azure/Azure-Sentinel.git
-2) In the cloned repo, navigate to the **Tools** directory, and open **SampleDataIngestTool** solution.
-3) Install necessary dependencies: In Visual Studio, right click the **SampleDataIngestTool** solution.
+2) In the cloned repo, navigate to the **Tools** directory, and open **HttpDataCollectorAPI** solution.
+3) Install necessary dependencies: In Visual Studio, right click the **HttpDataCollectorAPI** solution.
 Click **Restore NuGet Packages**.
 4) Open **Program.cs** file, fill in the values of the following variables using the information you've saved from the [Prerequisites](#Prerequisites) section.
 The TimeStampField is optional from the data. If the time field is not specified, Azure Monitor assumes the time is the message ingestion time.
