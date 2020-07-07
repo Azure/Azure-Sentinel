@@ -144,13 +144,14 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
 
     }
 
-	# Convert to JSON and API POST to Log Analytics Workspace
+    # Convert to JSON and API POST to Log Analytics Workspace
+    $newcustomObjects = @()
+    $under30kbObjects = @()
 	$customObjects | ForEach-Object {  
-        $json = $_ | ConvertTo-Json -Compress -Depth 3
+        $records = $_ | ConvertTo-Json -Compress -Depth 3
         # Calculate the kbytes/record
-        $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($json)).Count/1024         
-            # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host                          
-        $newcustomObjects = @() 
+        $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024         
+            # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host                           
             if ($kbytes -gt 30){                                                                                                                                                                           
                 $newObject = @()
                 # The new object will consist of only a single detection with all the parent/host record information
@@ -194,12 +195,23 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             }
             else {
             # The record is less than 30kb, add to the array to be posted
-            $newcustomObjects += $_
+            $under30kbObjects += $_
             }
         }
-        # Convert the array containing all the records to JSON and API POST to Log Analytics Workspace                                                                 
-        $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3                                                            
+
+        # Convert the arrays containing all the records to JSON                                                                
+        $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3 
+        $under30kbjson = $under30kbObjects | ConvertTo-Json -Compress -Depth 3
+
+        # Check POST payload sizes in MB (30MB limit per API POST)
+        $mbytes = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($json)).Count/1024/1024,2) 
+        $mbytes2 = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)).Count/1024/1024,2)
+        Write-Host $mbytes "MB payload size for records > 30kb"
+        Write-Host $mbytes2 "MB payload size for records < 30kb"
+
+        # API POST to Log Analytics Workspace 
         Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName
+        Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)) -logType $TableName
     }
 else
     {
@@ -207,6 +219,3 @@ else
     Invoke-RestMethod -Headers $hdrs -Uri "$($base)/session/" -Method Post -Body "action=logout" -WebSession $LogonSession
     Write-Host "No new results found for this interval"
 } 
-
-# Write an information log with the current time.
-Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
