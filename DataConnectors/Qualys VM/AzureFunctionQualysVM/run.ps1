@@ -199,19 +199,15 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             }
         }
 
-        # Convert the arrays containing all the records to JSON                                                                
-        $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3 
-        $under30kbjson = $under30kbObjects | ConvertTo-Json -Compress -Depth 3
-
-        # Check POST payload sizes in MB (30MB limit per API POST)
-        $mbytes = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($json)).Count/1024/1024,2) 
-        $mbytes2 = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)).Count/1024/1024,2)
-        Write-Host $mbytes "MB payload size for records > 30kb"
-        Write-Host $mbytes2 "MB payload size for records < 30kb"
-
-        # API POST to Log Analytics Workspace 
-        Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName
-        Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)) -logType $TableName
+        # Convert the arrays containing all the records to JSON and send API POST to Log Analytics Workspace
+        if($newcustomObjects.Length -gt 0){
+            $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3
+            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName 
+        }
+        if($under30kbObjects.Length -gt 0){
+            $under30kbjson = $under30kbObjects | ConvertTo-Json -Compress -Depth 3
+            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)) -logType $TableName
+        }
     }
 else
     {
