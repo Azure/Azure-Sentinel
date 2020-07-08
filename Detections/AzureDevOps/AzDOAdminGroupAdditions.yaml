@@ -1,0 +1,68 @@
+id: 89e6adbd-612c-4fbe-bc3d-32f81baf3b6c
+name: Azure DevOps Administrator Group Monitoring
+description: |
+  'This detection monitors for additions to project or project collection administration groups in an Azure DevOps Organization.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor
+    dataTypes:
+      - AzureDevOpsAuditing
+severity: High
+queryFrequency: 2h
+queryPeriod: 4h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+query: |
+
+  let timeframe = 4h;
+  // Monitor for Project Administrator adds to *any* project
+  let MontiorAllProjects = false;
+  // If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects
+  let ProjectsToMonitor = datatable(ProjectName:string)
+  [
+  'ProjectA',
+  'ProjectC'
+  ];
+  AzureDevOpsAuditing
+  | where OperationName == "Group.UpdateGroupMembership.Add" and
+    TimeGenerated > ago(timeframe) and
+    Area == "Group" and 
+    (
+      Details contains "was added as a member of group" and 
+      (
+        Details endswith '\\Project Administrators' or 
+        Details endswith "\\Project Collection Administrators"
+      )
+    )
+  | parse Details with AddedIdentity ' was added as a member of group [' EntityName ']\\' GroupName
+  | extend 
+    Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), 
+    AddedIdentityId = Data.MemberId
+  | extend 
+    Severity = iif(Level == 'Organization', 'High', 'Medium'), 
+    AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added ', AddedIdentity, ' to the ', EntityName, ' ', Level)
+  | where
+    (
+      MontiorAllProjects == true or 
+      EntityName in (ProjectsToMonitor)
+    )
+    or Level == 'Organization'
+  | project 
+    timestamp = TimeGenerated, 
+    Severity, 
+    Adder = ActorUPN, 
+    AddedIdentity, 
+    AddedIdentityId, 
+    AlertDetails, 
+    Level, 
+    EntityName, 
+    GroupName, 
+    ActorAuthType = AuthenticationMechanism, 
+    ActorIpAddress = IpAddress, 
+    ActorUserAgent = UserAgent, 
+    RawDetails = Details
+  | extend AccountCustomEntity = Adder, IPCustomEntity = ActorIpAddress
