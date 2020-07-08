@@ -4,10 +4,12 @@ Azure Sentinel provides a new output plugin for Logstash. Using this output plug
 Today you will be able to send messages to custom logs table that you will define in the output plugin. 
 [Getting started with Logstash](<https://www.elastic.co/guide/en/logstash/current/getting-started-with-logstash.html>) 
 
-Azure Sentinel output plugin uses the rest API integration to Log Analytics, in order to ingest the logs into custom logs tables [What are custom logs tables](<https://docs.microsoft.com/en-us/azure/azure-monitor/platform/data-sources-custom-logs>)
+Azure Sentinel output plugin uses the rest API integration to Log Analytics, in order to ingest the logs into custom logs tables [What are custom logs tables](<https://docs.microsoft.com/azure/azure-monitor/platform/data-sources-custom-logs>)
 
-Plugin version: v1.0.0 
-Released on: 2020-04-30 
+Plugin version: v0.3.0 
+Released on: 2020-06-23 
+
+This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
 ## Installation
 
@@ -20,7 +22,8 @@ For offline setup follow [Logstash Offline Plugin Management instruction](<https
 in your Logstash configuration file, add the Azure Sentinel output plugin to the configuration with following values: 
 - workspace_id – your workspace ID guid 
 - workspace_key (primary key) – your workspace primary key guid. You can find your workspace key and id the following path: Home > Log Analytics workspace > Advanced settings
-- custom_log_table_name – table name, in which the logs will be ingested, limited to one table, the log table will be presented in the logs blade under the custom logs label, with a _CL suffix. Table name must be only alpha characters.
+- custom_log_table_name – table name, in which the logs will be ingested, limited to one table, the log table will be presented in the logs blade under the custom logs label, with a _CL suffix. 
+	Table name must be only alpha characters, and shoud not exceed 100 characters.
 - endpoint – Optional field by default set as log analytics endpoint.  
 - time_generated_field – Optional field, this property is used to override the default TimeGenerated field in Log Analytics. Populate this property with the name of the sent data time field. 
 - key_names – list of Log analytics output schema fields. 
@@ -55,7 +58,7 @@ output {
     }
 }
 ```
-- Or using the tcp imput pipe
+- Or using the tcp input pipe
 
 ```
 input {

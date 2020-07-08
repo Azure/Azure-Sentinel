@@ -1,8 +1,8 @@
 // Title:           Pulse Connect Secure Data Parser
 // Author:          Microsoft
-// Version:         1.0
-// Last Updated:    06/01/2020
-// Comment:         Inital Release
+// Version:         1.1
+// Last Updated:    06/16/2020
+// Comment:         Added support for version 8.0R7 and above
 //  
 // DESCRIPTION:
 // This parser takes raw Pulse Connect Secure logs from a Syslog data stream and parses the data into a normalized schema
@@ -29,6 +29,7 @@
 //
 Syslog
 | where Computer in ("datasource") and Facility == "local7"
+//Version 8.0R7 and below
 | extend Parser = extract_all(@'^(\d{4}\-\d{2}-\d{2})\s(\d{2}\:\d{2}:\d{2})\s(\S+)\s(\S+)\s(\S+)\s\[(\S+)\]\s(\S+)\((.*)?\)\[(.*)\]\s\-\s(.*)',dynamic([1,2,3,4,5,6,7,8,9,10]),SyslogMessage)
 | mv-expand Parser
 | extend LogTime = todatetime(strcat(tostring(Parser[0]),'T',tostring(Parser[1]))), 
@@ -39,3 +40,14 @@ Syslog
     EventID = tostring(Parser[8]), 
     Messages = tostring(Parser[9])
 | project-away Parser
+//Version 8.0R7 and above
+| extend User = extract(@'user=(\S+)',1,SyslogMessage),
+    EventID = extract(@'id=(\S+)',1,SyslogMessage),
+    Pri = extract(@'pri=(\S+)',1,SyslogMessage),
+    Node = extract(@'vpn=\"(\S+)\"',1,SyslogMessage),
+    Realm = extract(@'realm=\"([\w\s\:\.]+)\"',1,SyslogMessage),
+    Roles = extract(@'roles=\"([\w\s\:\.]+)\"',1,SyslogMessage),
+    Type = extract(@'type=(\S+)',1,SyslogMessage),
+    Messages = extract(@'msg=\"([\w\s\:\.]+)\"',1,SyslogMessage),
+    Source_IP = extract(@'fw=([\d\.]+)',1,SyslogMessage),
+
