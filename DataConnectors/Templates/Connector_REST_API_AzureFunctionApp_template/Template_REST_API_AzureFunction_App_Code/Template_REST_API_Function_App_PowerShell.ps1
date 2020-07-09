@@ -1,12 +1,12 @@
 <#  
-    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel   
+    Title:          Azure Function App TEMPLATE - <Data Source> API Ingestion to Azure Sentinel API 
     Language:       PowerShell
     Version:        1.0
-    Last Modified:  5/30/2020
+    Last Modified:  5/15/2020
     Comment:        Inital Release
 
-    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
-                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format.  
+    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your <Data Source> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs the 
+                    Azure Sentil workspace via the Log Analytics Data Connector API.
 
 #>
 
@@ -21,7 +21,7 @@ if ($Timer.IsPastDue) {
     
 }
 
-# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <PROVIDER NAME APPLIANCE NAME> API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
+# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <Data Source> API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
 $username = $env:apiUserName 
 $password = $env:apiPassword
 $uri = $env:uri
@@ -32,7 +32,7 @@ $SharedKey = $env:workspaceKey
 $TimeStampField = "DateValue"  
 $LogType = $env:tableName      
 
-<# Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
+<# Used this block to build the <Data Source> REQUEST header needed to call the API. Refer to the <Data Source> API Documentation.
 
     For example:
     $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $username,$password)))
@@ -42,21 +42,21 @@ $LogType = $env:tableName
 
 #>
 
-<# Used this block to send a GET REQUEST to the <PROVIDER NAME APPLIANCE NAME> API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
+<# Used this block to send a GET REQUEST to the <Data Source> API. Refer to the <Data Source> API Documentation.
 
     For example:
     $response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
 
 #>
 
-<# Used this block to transform the data recieved from the <PROVIDER NAME APPLIANCE NAME> API into JSON format, which is acceptable format for the Log Anlaytics Data Collector API
+<# Used this block to transform the data recieved from the <Data Source> API into JSON format, which is acceptable format for the Log Anlaytics Data Collector API
 
     For example:
     $json = $response | ConvertTo-Json -Compress -Depth 3 
 
 #>
 
-# Required Function to build the Authorization signature for the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api
+# Required Function to build the Authorization signature for the Log Analytics Data Connector API. Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell#environment-variables
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
 {
     $xHeaders = "x-ms-date:" + $date
@@ -77,7 +77,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     return $authorization
 }
 
-# Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. References: https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api and https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables
+# Required Function to create and invoke an API POST request to the Log Analytics Data Connector API. Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell#environment-variables
 Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 {
     $method = "POST"
@@ -107,10 +107,15 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 
 }
 
-<# Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
+<# Use this block to post the JSON formated data into Log Analytics via the Log Analytics Data Connector API
 
     For example:
+    if($json.Length -gt 0) {
     Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType"
+    }
+    else {
+        Write-Output "No records were found."
+    }
             
 #>
 
