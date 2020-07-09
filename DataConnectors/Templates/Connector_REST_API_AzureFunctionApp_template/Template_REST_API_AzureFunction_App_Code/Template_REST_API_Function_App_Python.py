@@ -1,12 +1,12 @@
 /*  
-    Title:          Azure Function App TEMPLATE - <Data Source> API Ingestion to Azure Sentinel API 
+    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API 
     Language:       Python
     Version:        1.0
-    Last Modified:  5/15/2020
+    Last Modified:  5/30/2020
     Comment:        Inital Release
 
-    DESCRIPTION:    The following Python Function App code is a generic data connector to pull logs from your <Data Source> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs the 
-                    Azure Sentil workspace via the Log Analytics Data Connector API.
+    DESCRIPTION:    The following Python Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
+                     Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format.
 */
 
 # Modules to support run the script
@@ -30,14 +30,14 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
 
 
-# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <Data Source> API Key(s) or Token, URI, and/or Other variables. Reference:  https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-python 
+# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <Data Source> API Key(s) or Token, URI, and/or Other variables. Reference:  https://docs.microsoft.com/azure/azure-functions/functions-reference-python 
 
-# The following variables are required by the Log Analytics Data Collector API functions below
+# The following variables are required by the Log Analytics Data Collector API functions below. Reference: https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api
 customer_id = os.environ['workspaceId'] 
 shared_key = os.envviron['workspaceKey']
 log_type = os.envviron['tableName']
 
-/* Used this block to build the <Data Source> REQUEST header needed to call the API. Refer to the <Data Source> API Documentation.
+/* Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
 For example:
 apikey =  os.environ['api_id']
@@ -51,7 +51,7 @@ headers = {
 }
 */
 
-/* Used this block to send a GET REQUEST to the <Data Source> API. Refer to the <Data Source> API Documentation.
+/* Used this block to send a GET REQUEST to the <PROVIDER NAME APPLIANCE NAME> API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
 For example:
 response = requests.request("GET", url, headers=headers, data = payload)
@@ -60,7 +60,7 @@ json_data = response.text.encode('utf8')
 
 */
 
-/* Used this block to transform the data recieved from the <Data Source> API into JSON format, which is acceptable format for the Log Anlaytics Data Collector API
+/* Used this block to transform the data recieved from the <PROVIDER NAME APPLIANCE NAME> API into JSON format, which is acceptable format for the Azure Log Analytics Data Collector API
 
 For example:
 body = json.dumps(json_data)
@@ -68,7 +68,7 @@ body = json.dumps(json_data)
 */
 
 
-# Required Function to build the Authorization signature for the Log Analytics Data Connector API. Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-python#environment-variables
+# Required Function to build the Authorization signature for the Azure Log Analytics Data Collector API. References: https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api and https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
     x_headers = 'x-ms-date:' + date
@@ -79,7 +79,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
     authorization = "SharedKey {}:{}".format(customer_id,encoded_hash)
     return authorization
 
-# Required Function to create and invoke an API POST request to the Log Analytics Data Connector API. Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-python#environment-variables
+# Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
 
 def post_data(customer_id, shared_key, body, log_type):
     method = 'POST'
@@ -103,7 +103,7 @@ def post_data(customer_id, shared_key, body, log_type):
     else:
         print "Response code: {}".format(response.status_code)
 
-/* Use this block to post the JSON formated data into Log Analytics via the Log Analytics Data Connector API
+/* Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
 For example:
 if (len(response) > 0):
