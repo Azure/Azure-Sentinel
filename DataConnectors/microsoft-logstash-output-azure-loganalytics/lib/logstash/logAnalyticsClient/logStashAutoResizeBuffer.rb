@@ -72,19 +72,19 @@ class LogStashAutoResizeBuffer
     # We would like to do it until we reached to the duration 
     def resend_message(documents_json, amount_of_documents, remaining_duration)
         if remaining_duration > 0
-            @logger.info("Resending #{amount_of_documents} documents as log type #{@logstashLoganalyticsConfiguration.custom_log_table_name} to DataCollector API in #{@logstashLoganalyticsConfiguration.RETRANSMITION_DELAY} seconds.")
+            @logger.info("Resending #{amount_of_documents} documents as log type #{@logstashLoganalyticsConfiguration.custom_log_table_name} to DataCollector API in #{@logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY} seconds.")
             sleep @logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY
             begin
                 response = @client.post_data(documents_json)
                 if is_successfully_posted(response)
                     @logger.info("Successfully sent #{amount_of_documents} logs into custom log analytics table[#{@logstashLoganalyticsConfiguration.custom_log_table_name}] after resending.")
                 else
-                    @logger.debug("Resending #{amount_of_documents} documents failed, will try to resend for #{(remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMITION_DELAY)}")
-                    resend_message(documents_json, amount_of_documents, (remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMITION_DELAY))
+                    @logger.debug("Resending #{amount_of_documents} documents failed, will try to resend for #{(remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY)}")
+                    resend_message(documents_json, amount_of_documents, (remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY))
                 end
             rescue Exception => ex
-                @logger.debug("Resending #{amount_of_documents} documents failed, will try to resend for #{(remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMITION_DELAY)}")
-                resend_message(documents_json, amount_of_documents, (remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMITION_DELAY))
+                @logger.debug("Resending #{amount_of_documents} documents failed, will try to resend for #{(remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY)}")
+                resend_message(documents_json, amount_of_documents, (remaining_duration - @logstashLoganalyticsConfiguration.RETRANSMISSION_DELAY))
             end
         else 
             @logger.error("Could not resend #{amount_of_documents} documents, message is dropped.")

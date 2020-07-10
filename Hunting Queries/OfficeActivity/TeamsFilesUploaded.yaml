@@ -1,0 +1,34 @@
+id: 90e198a9-efb6-4719-ad89-81b8e93633a7
+name: Files uploaded to teams and access summary
+description: |
+  'Provides a summary of files uploaded to teams chats and extracts 
+  the users and IP addresses that have accessed them.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1199
+  - T1102
+  - T1078
+query: |
+
+  OfficeActivity 
+  | where RecordType =~ "SharePointFileOperation" 
+  | where UserId != "app@sharepoint"
+  | where SourceRelativeUrl contains "Microsoft Teams Chat Files" 
+  | where Operation =~ "FileUploaded" 
+  | join kind= leftouter ( 
+     OfficeActivity 
+      | where RecordType =~ "SharePointFileOperation"
+      | where UserId != "app@sharepoint"
+      | where SourceRelativeUrl contains "Microsoft Teams Chat Files" 
+      | where Operation =~ "FileDownloaded" or Operation =~ "FileAccessed" 
+  ) on OfficeObjectId 
+  | extend userBag = pack(UserId1, ClientIP1) 
+  | summarize makeset(UserId1), make_bag(userBag) by TimeGenerated, UserId, OfficeObjectId, SourceFileName 
+  | extend NumberUsers = array_length(bag_keys(bag_userBag))
+  | project timestamp=TimeGenerated, AccountCustomEntity=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, NumberOfUsersAccessed=NumberUsers

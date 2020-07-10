@@ -1,18 +1,14 @@
 # About
-* This repo contains sample queries for Hunting to aid in the development of techniques for threat hunting leveraging logs from multiple sources.
-* With these sample queries, you can get a headstart in learning the Kusto Query Language (KQL) and understanding the different data sources.
-* To get started, simply paste a sample query into the user interface and run the query. 
 
-# Resources
-* [Azure Log Analytics Query Language Reference](https://docs.microsoft.com/en-us/azure/kusto/query/index)
-* [SQL to Log Analytics Query Cheat Sheet](https://docs.microsoft.com/en-us/azure/azure-monitor/log-query/sql-cheatsheet)
-* [Splunk to Log Analytics Query Cheat Sheet](https://docs.microsoft.com/en-us/azure/azure-monitor/log-query/splunk-cheatsheet)
-* [MITRE ATT&CK](https://attack.mitre.org/wiki/Main_Page)
-* [MITRE CAR](https://car.mitre.org/wiki/Main_Page)
+This folder contains Hunting Queries based on different types of data sources that you can leverage in order to perform broad threat hunting in your environment.
 
-# Contributing
-* The more queries and tools we add to the community the more effective we will be.
-* Utilize the QUERY_TEMPLATE format for Pull requests.
+For general information please start with the [Wiki](https://github.com/Azure/Azure-Sentinel/wiki) pages.
+
+More Specific to Hunting Queries:
+* [Contribute](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries) to Analytic Templates (Detections) and Hunting queries
+* Specifics on what is required for Detections and Hunting queries is in the [Query Style Guide](https://github.com/Azure/Azure-Sentinel/wiki/Query-Style-Guide)
+* These hunting queries are written using [KQL query langauge](https://docs.microsoft.com/azure/kusto/query/index) and will provide you a starting point to protect your environment and get familiar with the different data tables.
+* Get started and learn how to [hunt for threats in your environment with Azure Sentinel](https://docs.microsoft.com/azure/sentinel/hunting).
 
 # Feedback
 For questions or feedback, please contact AzureSentinel@microsoft.com
