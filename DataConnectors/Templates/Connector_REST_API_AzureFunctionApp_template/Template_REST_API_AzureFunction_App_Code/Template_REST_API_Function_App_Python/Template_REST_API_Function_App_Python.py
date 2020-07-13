@@ -106,6 +106,8 @@ def post_data(customer_id, shared_key, body, log_type):
 /* Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
 For example:
-post_data(customer_id, shared_key, body, log_type)
-            
+if (len(response) > 0):
+    post_data(customer_id, shared_key, body, log_type)
+else:
+    print "No records were found."
 */

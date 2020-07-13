@@ -110,8 +110,13 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 <# Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
     For example:
+    if($json.Length -gt 0) {
     Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType"
-            
+    }
+    else {
+        Write-Output "No records were found."
+    }
+                  
 #>
 
 # Write an information log with the current time.
