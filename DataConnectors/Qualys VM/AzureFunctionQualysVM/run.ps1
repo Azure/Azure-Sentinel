@@ -35,7 +35,8 @@ $TableName = "QualysHostDetection"
 $username = $env:apiUserName
 $password = $env:apiPassword
 $hdrs = @{"X-Requested-With"="PowerShell"}
-$uri = $env:uri       
+$uri = $env:uri
+$filterParameters = $env:filterParameters       
 $time = $env:timeInterval
 
 $base =  [regex]::matches($uri, '(https:\/\/[\w\.]+\/api\/\d\.\d\/fo)').captures.groups[1].value
@@ -46,7 +47,11 @@ Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body 
 $startDate = [System.DateTime]::UtcNow.AddMinutes(-$($time))
 
 # Invoke the API Request and assign the response to a variable ($response)
-$response = (Invoke-RestMethod -Headers $hdrs -Uri "$uri$($startDate.ToString('yyyy-MM-ddTHH:mm:ssZ'))" -WebSession $LogonSession)
+$response = (Invoke-RestMethod -Headers $hdrs -Uri "$uri$($startDate.ToString('yyyy-MM-ddTHH:mm:ssZ'))$($filterParameters)" -WebSession $LogonSession)
+
+# Identifies the number of hosts with detections were found in the API call
+$hostcount = $response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST.Count
+Write-Output "$($hostcount) hosts with detection found"
 
 # Iterate through each detection recieved from the API call and assign the variables (Column Names in LA) to each XML variable
 if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
@@ -144,13 +149,14 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
 
     }
 
-	# Convert to JSON and API POST to Log Analytics Workspace
+    # Convert to JSON and API POST to Log Analytics Workspace
+    $newcustomObjects = @()
+    $under30kbObjects = @()
 	$customObjects | ForEach-Object {  
-        $json = $_ | ConvertTo-Json -Compress -Depth 3
+        $records = $_ | ConvertTo-Json -Compress -Depth 3
         # Calculate the kbytes/record
-        $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($json)).Count/1024         
-            # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host                          
-        $newcustomObjects = @() 
+        $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024         
+            # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host                           
             if ($kbytes -gt 30){                                                                                                                                                                           
                 $newObject = @()
                 # The new object will consist of only a single detection with all the parent/host record information
@@ -194,12 +200,23 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             }
             else {
             # The record is less than 30kb, add to the array to be posted
-            $newcustomObjects += $_
+            $under30kbObjects += $_
             }
         }
-        # Convert the array containing all the records to JSON and API POST to Log Analytics Workspace                                                                 
-        $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3                                                            
-        Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName
+
+        # Convert the arrays containing all the records to JSON and send API POST to Log Analytics Workspace
+        if($newcustomObjects.Length -gt 0){
+            $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3
+            # $mbytes = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024/1024,2)
+            # Write-Output "$($mbytes) MB ALA API POST payload size)  
+            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName 
+        }
+        if($under30kbObjects.Length -gt 0){
+            # $mbytes2 = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024/1024,2)
+            # Write-Output "$($mbytes2) MB ALA API POST payload size)  
+            $under30kbjson = $under30kbObjects | ConvertTo-Json -Compress -Depth 3
+            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)) -logType $TableName
+        }
     }
 else
     {
@@ -207,6 +224,3 @@ else
     Invoke-RestMethod -Headers $hdrs -Uri "$($base)/session/" -Method Post -Body "action=logout" -WebSession $LogonSession
     Write-Host "No new results found for this interval"
 } 
-
-# Write an information log with the current time.
-Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
