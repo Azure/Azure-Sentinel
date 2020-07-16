@@ -8,7 +8,7 @@ requiredDataConnectors:
     dataTypes:
       - AzureDevOpsAuditing
 severity: High
-queryFrequency: 2h
+queryFrequency: 6h
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
@@ -22,13 +22,13 @@ relevantTechniques:
   - T1003
 query: |
 
-  let timeframe = 14d;
-  let recentTimeframe = 6h;
+  let starttime = 14d;
+  let endtime = 6h;
   // Ignore Build/Releases with less/equal this number
   let ServiceConnectionThreshold = 3;
   // New Connections need to exhibit execution of more "new" connections than this number.
   let NewConnectionThreshold = 1;
-  // List of Builds/Releases to ignore
+  // List of Builds/Releases to ignore in your space
   let BypassDefIds = datatable(DefId:string, Type:string, ProjectName:string)
   [
   //"103", "Release", "ProjectA",
@@ -36,19 +36,25 @@ query: |
   //"122", "Build", "ProjectB"
   ];
   let HistoricDefs = AzureDevOpsAuditing
-  | where TimeGenerated > ago(timeframe) and TimeGenerated < ago(recentTimeframe)
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
   | where OperationName == "Library.ServiceConnectionExecuted" 
   | extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)
-  | summarize HistoricCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)) by tostring(DefId), tostring(Type), ProjectId, ProjectName;
+  | summarize HistoricCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)) 
+    by DefId = tostring(DefId), Type = tostring(Type), ProjectId, ProjectName, ActorUPN;
   AzureDevOpsAuditing
-  | where TimeGenerated >= ago(recentTimeframe)
+  | where TimeGenerated >= ago(endtime)
   | where OperationName == "Library.ServiceConnectionExecuted" 
   | extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)
   | parse ScopeDisplayName with OrganizationName ' (Organization)'
-  | summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by OrganizationName, tostring(DefId), tostring(Type), ProjectId, ProjectName
+  | summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) 
+    by OrganizationName, DefId = tostring(DefId), Type = tostring(Type), ProjectId, ProjectName, ActorUPN
   | where CurrentCount > ServiceConnectionThreshold
-  | join (HistoricDefs) on ProjectId, DefId, Type
+  | join (HistoricDefs) on ProjectId, DefId, Type, ActorUPN
   | join kind=anti BypassDefIds on $left.DefId==$right.DefId and $left.Type == $right.Type and $left.ProjectName == $right.ProjectName
-  | extend link = iif(Type == "Build", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId) ,strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))
+  | extend link = iff(
+  Type == "Build", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId),
+  strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))
   | where CurrentCount >= HistoricCount + NewConnectionThreshold
-  | project OrganizationName, ProjectName, DefId, link, RecentDistinctServiceConnections = CurrentCount, HistoricDistinctServiceConnections = HistoricCount, RecentConnections = ConnectionNames, HistoricConnections = ConnectionNames1, timestamp = StartTime
+  | project StartTime, OrganizationName, ProjectName, DefId, link, RecentDistinctServiceConnections = CurrentCount, HistoricDistinctServiceConnections = HistoricCount, 
+    RecentConnections = ConnectionNames, HistoricConnections = ConnectionNames1, ActorUPN
+  | extend timestamp = StartTime, AccountCustomEntity = ActorUPN

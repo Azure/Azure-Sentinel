@@ -7,7 +7,7 @@ requiredDataConnectors:
     dataTypes:
       - AzureDevOpsAuditing
 severity: High
-queryFrequency: 2h
+queryFrequency: 4h
 queryPeriod: 4h
 triggerOperator: gt
 triggerThreshold: 0
@@ -19,7 +19,7 @@ relevantTechniques:
 query: |
 
   let timeframe = 4h;
-  // Monitor for Project Administrator adds to *any* project
+  // Change to true to monitor for Project Administrator adds to *any* project
   let MontiorAllProjects = false;
   // If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects
   let ProjectsToMonitor = datatable(ProjectName:string)
@@ -28,41 +28,14 @@ query: |
   'ProjectC'
   ];
   AzureDevOpsAuditing
-  | where OperationName == "Group.UpdateGroupMembership.Add" and
-    TimeGenerated > ago(timeframe) and
-    Area == "Group" and 
-    (
-      Details contains "was added as a member of group" and 
-      (
-        Details endswith '\\Project Administrators' or 
-        Details endswith "\\Project Collection Administrators"
-      )
-    )
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName == "Group.UpdateGroupMembership.Add" and Area == "Group"
+  | where Details has 'Administrators'
+  | where Details has "was added as a member of group" and (Details endswith '\\Project Administrators' or Details endswith '\\Project Collection Administrators')
   | parse Details with AddedIdentity ' was added as a member of group [' EntityName ']\\' GroupName
-  | extend 
-    Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), 
-    AddedIdentityId = Data.MemberId
-  | extend 
-    Severity = iif(Level == 'Organization', 'High', 'Medium'), 
-    AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added ', AddedIdentity, ' to the ', EntityName, ' ', Level)
-  | where
-    (
-      MontiorAllProjects == true or 
-      EntityName in (ProjectsToMonitor)
-    )
-    or Level == 'Organization'
-  | project 
-    timestamp = TimeGenerated, 
-    Severity, 
-    Adder = ActorUPN, 
-    AddedIdentity, 
-    AddedIdentityId, 
-    AlertDetails, 
-    Level, 
-    EntityName, 
-    GroupName, 
-    ActorAuthType = AuthenticationMechanism, 
-    ActorIpAddress = IpAddress, 
-    ActorUserAgent = UserAgent, 
-    RawDetails = Details
-  | extend AccountCustomEntity = Adder, IPCustomEntity = ActorIpAddress
+  | extend Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), AddedIdentityId = Data.MemberId
+  | extend Severity = iif(Level == 'Organization', 'High', 'Medium'), AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added ', AddedIdentity, ' to the ', EntityName, ' ', Level)
+  | where (MontiorAllProjects == true or EntityName in (ProjectsToMonitor)) or Level == 'Organization'
+  | project TimeGenerated, Severity, Adder = ActorUPN, AddedIdentity, AddedIdentityId, AlertDetails, Level, EntityName, GroupName, ActorAuthType = AuthenticationMechanism, 
+    ActorIpAddress = IpAddress, ActorUserAgent = UserAgent, RawDetails = Details
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Adder, IPCustomEntity = ActorIpAddress
