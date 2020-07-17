@@ -1,0 +1,86 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+BaseQuery: |
+  let UserClearedEventLog = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_SID:string){
+  SecurityEvent
+  // 1102 - This event generates every time Windows Security audit log was cleared
+  | where EventID == 1102 and EventSourceName =~ 'Microsoft-Windows-Eventlog'
+  | parse EventData with * 'SubjectUserName>' SubjectUserName '<' *
+  | parse EventData with * 'SubjectUserSid>' SubjectUserSid '<' * 
+  | parse EventData with * 'SubjectLogonId>' SubjectLogonId '<' * 
+  | parse EventData with * 'SubjectDomainName>' SubjectDomainName '<' * 
+  | extend ClearedLog = Type
+  | project-rename Account_Name = SubjectUserName, Account_NTDomain = SubjectDomainName
+  | union isfuzzy=true 
+  ( Event
+  // 104 - This event generates every time Windows Event log was cleared
+  | where EventID == 104 and Source == "Microsoft-Windows-Eventlog"
+  | parse EventData with * 'SubjectUserName>' SubjectUserName '<' *
+  | parse EventData with * 'SubjectUserSid>' SubjectUserSid '<' * 
+  | parse EventData with * 'SubjectLogonId>' SubjectLogonId '<' * 
+  | parse EventData with * 'SubjectDomainName>' SubjectDomainName '<' * 
+  | parse RenderedDescription with * 'The' ClearedLog 'log' *
+  | project-rename Account_Name = SubjectUserName, Account_NTDomain = SubjectDomainName
+  )
+  | project TimeGenerated, Computer, EventID, Account_Name, SubjectUserSid, SubjectLogonId, Account_NTDomain, SourceComputerId, 
+  EventOriginId, _ResourceId, ClearedLog 
+  | extend p_Account_Name = case(
+  // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
+  v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+  v_Account_Name
+  )
+  | extend p_Account_NTDomain = case(
+  v_Account_NTDomain has '\\', tostring(split(v_Account_NTDomain, '\\')[0]),
+  // Handles UPN scenario of AccountName@UPNSuffix to pull potential NTDomain from
+  v_Account_NTDomain has '@', tostring(split(tostring(split(v_Account_NTDomain, '@')[1]),'.')[0]),
+  v_Account_NTDomain
+  )
+  | where (Account_Name =~ p_Account_Name and Account_NTDomain =~ p_Account_NTDomain) or SubjectUserSid =~ v_Account_SID
+  };
+  UserClearedEventLog('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_SID}}')
+Type: KQL
+Provider: Sentinel
+RequiredInputFieldsSets:
+  - - Account_Name
+Insights:
+  Id: 5a70a68d-25d4-4012-b73e-4f302a16c06a
+  DisplayName: User Cleared Logs
+  Description: |
+    Provides the datetime & count of number of times the event logs were cleared
+    by the user.
+  DefaultTimeRange:
+    BeforeRange: 7d
+    AfterRange: 7d
+  TableQuery:
+    ColumnsDefinitions:
+      - Header: "Cleared Event Log"
+        OutputType: String
+      - Header: "Times Cleared"
+        OutputType: Number
+      - Header: "Host Count"
+        OutputType: Number
+    QueriesDefinitions:
+      - Filter: "where ClearedLog =~ 'SecurityEvent'"
+        Summarize: "summarize HostCount = dcount(Computer), EventCount = count() by ClearedLog"
+        Project: "project Title = ClearedLog, EventCount, HostCount"
+      - Filter: "where ClearedLog !~ 'SecurityEvent'"
+        Summarize: "summarize HostCount = dcount(Computer), EventCount = count() by ClearedLog"
+        Project: "project Title = ClearedLog, EventCount, HostCount"
+  ChartQuery:
+    Title: Cleared over time
+    DataSets:
+      - Query: "summarize EventCount = count() by bin(TimeGenerated, 1d) | extend Legend = 'EventCount'"
+        XColumnName: TimeGenerated
+        YColumnName: EventCount
+        LegendColumnName: Legend
+      - Query: "summarize HostCount = dcount(Computer) by bin(TimeGenerated, 1d) | extend Legend = 'HostCount'"
+        XColumnName: TimeGenerated
+        YColumnName: HostCount
+        LegendColumnName: Legend
+    Type: LineChart
+  AdditionalQuery:
+    Text:  See All Log Clear Activity
+    Query: "project TimeGenerated, Computer, EventID, Account_Name, SubjectUserSid, SubjectLogonId, Account_NTDomain, SourceComputerId, EventOriginId, _ResourceId, ClearedLog"

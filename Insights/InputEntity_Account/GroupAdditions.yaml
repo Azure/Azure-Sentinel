@@ -1,0 +1,148 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+BaseQuery: |
+  let WellKnownLocalSID = 'S-1-5-32-5[0-9][0-9]$';
+  let WellKnownGroupSID = 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$';
+  let GetGroupAddForUser = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_DnsDomain:string, v_Account_UPNSuffix:string, v_Account_SID:string){
+  SecurityEvent
+  | where EventID in (4728, 4732, 4756)
+  | where AccountType =~ 'User'
+  | extend PassedInName = v_Account_Name, PassedInNTDomain = v_Account_NTDomain, PassedInDnsDomain = v_Account_DnsDomain, PassedInUPNSuffix = v_Account_UPNSuffix, PassedInSID = v_Account_SID
+  | extend PassedInName = case( PassedInName has '@', tostring(split(PassedInName, '@')[0]), PassedInName has '\\', tostring(split(PassedInName, '\\')[1]), PassedInName has '.', tostring(split(PassedInName, '.')[0]), PassedInName )
+  | extend PassedInNTDomain = case( 
+  PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]),  
+  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]),  
+  PassedInNTDomain )
+  | extend PassedInDnsDomain = case( 
+  PassedInDnsDomain has '\\', tostring(split(PassedInDnsDomain, '\\')[0]),  
+  PassedInDnsDomain has '.', strcat_array(array_slice(split(PassedInDnsDomain,'.'),-2,-1),'.'),  
+  PassedInDnsDomain )
+  | extend PassedInUPNSuffix = case( 
+  PassedInUPNSuffix has '\\', tostring(split(PassedInUPNSuffix, '\\')[0]),  
+  PassedInUPNSuffix has '@', tostring(split(PassedInUPNSuffix, '@')[1]),  
+  PassedInUPNSuffix )
+  | extend MemberAdded = case( MemberName has 'CN=', tostring(split(tostring(split(MemberName, ',')[0]),'CN=')[1]), MemberName == '-', MemberSid, MemberName)
+  | extend MemberNameMatch = iff(isnotempty(PassedInName) and MemberAdded has PassedInName, true, false)
+  | extend MemberNTDomainMatch = iff(isnotempty(PassedInNTDomain) and MemberAdded has PassedInNTDomain, true, false)
+  | extend MemberDnsDomainMatch = iff(isnotempty(PassedInDnsDomain) and MemberAdded has PassedInDnsDomain, true, false)
+  | extend MemberUPNSuffixMatch = iff(isnotempty(PassedInUPNSuffix) and MemberAdded has PassedInUPNSuffix, true, false)
+  | extend MemberSidMatch = iff(isnotempty(PassedInSID) and MemberSid has PassedInSID, true, false)
+  | extend SubjectNameMatch = iff(isnotempty(PassedInName) and SubjectAccount has PassedInName, true, false)
+  | extend SubjectNTDomainMatch = iff(isnotempty(PassedInNTDomain) and SubjectAccount has PassedInNTDomain, true, false)
+  | extend SubjectDnsDomainMatch = iff(isnotempty(PassedInDnsDomain) and SubjectAccount has PassedInDnsDomain, true, false)
+  | extend SubjectUPNSuffixMatch = iff(isnotempty(PassedInUPNSuffix) and SubjectAccount has PassedInUPNSuffix, true, false)
+  | extend SubjectSidMatch = iff(isnotempty(PassedInSID) and SubjectUserSid has PassedInSID, true, false)
+  | where (MemberNameMatch == true and (MemberNTDomainMatch == true or MemberDnsDomainMatch == true or MemberUPNSuffixMatch == true)) or MemberSidMatch == true or (SubjectNameMatch == true and (SubjectNTDomainMatch == true or SubjectDnsDomainMatch == true or SubjectUPNSuffixMatch == true)) or SubjectSidMatch == true 
+  | project TimeGenerated, EventID, Activity, Computer, MemberName, MemberAdded, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectAccount, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, 
+  PassedInName, PassedInNTDomain, PassedInDnsDomain, PassedInUPNSuffix, PassedInSID, MemberNameMatch, MemberNTDomainMatch, MemberDnsDomainMatch, MemberUPNSuffixMatch,MemberSidMatch,
+  SubjectNameMatch, SubjectNTDomainMatch, SubjectDnsDomainMatch, SubjectUPNSuffixMatch, SubjectSidMatch  
+  | extend GroupName = TargetUserName, AddedBy = SubjectUserName
+  //support for Activities
+  | extend timestamp = TimeGenerated, AccountCustomEntity = PassedInName
+  };
+  GetGroupAddForUser('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_DnsDomain}}','{{Account_UPNSuffix}}', '{{Account_SID}}')
+RequiredInputFieldsSets:
+  - - Account_Name
+    - Account_NTDomain
+  - - Account_Name
+    - Account_DnsDomain
+  - - Account_Name
+    - Account_UPNSuffix
+  - - Account_SID
+# The queries for the insights.
+Insights:
+ Id: bec9d204-c96c-4a34-8042-b49e89dbff89
+ DisplayName: Group Additions
+ Description: |
+   Summary of user additions to Groups for the specific user. Specifically, we provide the count of All Groups, [Privileged Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) and Remote Desktop Users Group.
+ DefaultTimeRange: 
+   BeforeRange: 12h
+   AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Groups"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: GroupCount
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: HostCount
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+
+  # UserAddedToPrivilegedGroups
+  - Filter:    "where ((MemberNameMatch == true and (MemberNTDomainMatch == true or MemberDnsDomainMatch == true or MemberUPNSuffixMatch == true)) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID)"
+    Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer)"
+    Project:   "project Title = 'Privileged', GroupCount, HostCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToRemoteDesktopGroup
+  - Filter:    "where ((MemberNameMatch == true and (MemberNTDomainMatch == true or MemberDnsDomainMatch == true or MemberUPNSuffixMatch == true)) or MemberSidMatch == true) and TargetSid in ('S-1-5-32-555')"
+    Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer)"
+    Project:   "project Title = 'Remote Desktop', GroupCount, HostCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToPrivilegedGroupsExcludeRDP
+  - Filter:    "where ((MemberNameMatch == true and (MemberNTDomainMatch == true or MemberDnsDomainMatch == true or MemberUPNSuffixMatch == true)) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID) | where TargetSid !in ('S-1-5-32-555')"
+    Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer)"
+    Project:   "project Title = 'Privileged(non-RDP)', GroupCount, HostCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToGroups
+  - Filter:    "where (MemberNameMatch == true and (MemberNTDomainMatch == true or MemberDnsDomainMatch == true or MemberUPNSuffixMatch == true)) or MemberSidMatch == true"
+    Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer)"
+    Project:   "project Title = 'All Groups', GroupCount, HostCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # GroupsAddedUsersTo
+  - Filter:    "where (SubjectNameMatch == true and (SubjectNTDomainMatch == true or SubjectDnsDomainMatch == true or SubjectUPNSuffixMatch == true)) or SubjectSidMatch == true "
+    Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer)"
+    Project:   "project Title = 'Groups this user added users to', GroupCount, HostCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UsersAddedToGroups
+  - Filter:    "where (SubjectNameMatch == true and (SubjectNTDomainMatch == true or SubjectDnsDomainMatch == true or SubjectUPNSuffixMatch == true)) or SubjectSidMatch == true "
+    Summarize: "summarize GroupCount = dcount(MemberAdded), HostCount = dcount(Computer)"
+    Project:   "project Title = 'Users this user added to Groups', GroupCount, HostCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Group Additions per Hour"
+  DataSets: 
+   - Query: "summarize Count = count() by bin(TimeGenerated, 1h) | extend Legend = 'Total'"
+     XColumnName: "TimeGenerated"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+  Type: LineChart
+
+ AdditionalQuery:
+  Text: "See All Group Additions related to User"
+  Query: "project TimeGenerated, EventID, Activity, Computer, MemberName, MemberAdded, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectAccount, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID | order by TimeGenerated desc"

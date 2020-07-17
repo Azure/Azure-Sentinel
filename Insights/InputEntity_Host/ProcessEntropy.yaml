@@ -1,0 +1,179 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+BaseQuery: |
+  // exclude when over # of machines have the process
+  let excludeThreshold = 10;
+  // exclude when more than percent (default 10%)
+  let ratioHighCount = 0.1;
+  // exclude when less than percent (default 3%)
+  let ratioMidCount = 0.03;
+  // Process count limit in one day, perf improvement (default every minute for 24 hours - 60*24 = 1440)
+  let procLimit = 60*24;
+  let SecEvents = SecurityEvent
+  | where EventID == 4688;
+  let EntropyCalc = (v_Host_Name:string)
+  {
+  let Exclude = SecEvents
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(Computer), ExcludeProcCount = count() by Process
+  // Removing general limit for noise in one day
+  | extend timediff = iff(datetime_diff('day', EndTime, StartTime) > 0, datetime_diff('day', EndTime, StartTime), 1)
+  // Default exclude of 1440 (1 per min) or more executions in 24 hours on a given machine
+  | where ExcludeProcCount < procLimit*timediff
+  // Removing noisy processes for an environment, adjust as needed
+  | extend compRatio = ExcludeCompCount/toreal(ExcludeProcCount)
+  | where compRatio == 0 or (ExcludeCompCount > excludeThreshold and compRatio < ratioHighCount) or (ExcludeCompCount between (2 .. excludeThreshold) and compRatio < ratioMidCount);
+  let AllSecEvents = SecEvents
+  // Removing general limit for noise in one day
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), procCount = count() by Computer, Process
+  | extend timediff = iff(datetime_diff('day', EndTime, StartTime) > 0, datetime_diff('day', EndTime, StartTime), 1)
+  // Default include the 1440 (1 per min) or more executions in 24 hours on a given machine to remove them from overall comparison list
+  | where procCount > procLimit*timediff
+  | join kind= rightanti ( 
+  SecEvents | project Computer, Process
+  ) on Computer, Process
+  | project Computer, Process;
+  // Removing noisy process from full list
+  let Include = materialize(Exclude
+  | join kind= rightanti (
+  AllSecEvents
+  ) on Process);
+  // Identifying prevalence for a given process in the environment
+  let DCwPC = materialize(Include
+  | summarize DistinctComputersWithProcessCount = dcount(Computer) by Process
+  | join kind=inner (
+  Include
+  ) on Process
+  | distinct Computer, Process, DistinctComputersWithProcessCount);
+  // Getting the Total process count on each host to use as the denominator in the entropy calc
+  let TPCoH = materialize(Include
+  | summarize TotalProcessCountOnHost = count(Process) by Computer
+  | join kind=inner (
+  Include
+  ) on Computer
+  | distinct Computer, Process, TotalProcessCountOnHost
+  //Getting a decimal value for later computation
+  | extend TPCoHValue = todecimal(TotalProcessCountOnHost));
+  // Need the count of each class in my bucket or also said as count of ProcName(Class) per Host(Bucket) for use in the entropy calc
+  let PCoH = Include
+  | summarize ProcessCountOnHost = count(Process) by Computer, Process
+  | join kind=inner (
+  Include
+  ) on Computer,Process
+  | distinct Computer, Process, ProcessCountOnHost
+  //Getting a decimal value for later computation
+  | extend PCoHValue = todecimal(ProcessCountOnHost);
+  let Combined = DCwPC
+  | join (
+  TPCoH
+  ) on Computer, Process
+  | join (
+  PCoH
+  ) on Computer, Process;
+  let Results = Combined
+  // Entropy calculation
+  | extend ProcessEntropy = -log2(PCoHValue/TPCoHValue)*(PCoHValue/TPCoHValue)
+  | extend NormalizedProcessEntropy = toreal(ProcessEntropy*10000)
+  // Calculating Weight, see details in description
+  | extend Weight = toreal((ProcessEntropy*10000)*ProcessCountOnHost*DistinctComputersWithProcessCount)
+  // Remove or increase value to see processes with low entropy, meaning more common.
+  | where Weight <= 1000
+  | project Computer, Process, Weight , ProcessEntropy, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount, NormalizedProcessEntropy;
+  // Join back full entry
+  Results
+  | join kind= inner (
+  SecEvents 
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName
+  ) on Computer, Process
+  | where Computer has v_Host_Name
+  // removing common items that may still show up in small environments, add here is you have additional exclusions
+  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+  | where ParentProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !startswith 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_'
+  | where ParentProcessName !has ':\\WindowsAzure\\GuestAgent_' and NewProcessName !has ':\\WindowsAzure\\GuestAgent_'
+  | where ParentProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' and NewProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_'
+  | where ParentProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\'
+  | where NewProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\'
+  | where NewProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(NewProcessName endswith '\\ngentask.exe' or NewProcessName endswith '\\ngen.exe') and not(ParentProcessName endswith ':\\Windows\\System32\\taskhostw.exe')
+  | where NewProcessName !endswith '\\MpSigStub.exe' and ParentProcessName !has ':\\Windows\\SoftwareDistribution\\Download\\Install\\'
+  | where ParentProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe'
+  | where NewProcessName !endswith ':\\Windows\\servicing\\trustedinstaller.exe'
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Weight, NormalizedProcessEntropy, FullDecimalProcessEntropy = ProcessEntropy, 
+  Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
+  | sort by Weight asc, NormalizedProcessEntropy asc, NewProcessName asc
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  };
+  EntropyCalc('{{Host_HostName}}')
+
+RequiredInputFieldsSets: 
+  - - Host_HostName
+Insights:
+ Id: 2b59ee1f-5098-4061-a868-e49c39ed2245
+ DisplayName: Process Rarity via Entropy calculation
+ Description: |
+   Entropy calculation used to help identify Hosts where they have a high variety of processes(a high entropy process list on a given Host over time).
+   This helps us identify rare processes on a given Host. Rare here means a process shows up on the Host relatively few times in the the last 7days.
+   The Weight is calculated based on the Entropy, Process Count and Distinct Hosts with that Process. The lower the Weight/ProcessEntropy the, more interesting.
+   The Weight calculation increases the Weight if the process executes more than once on the Host or has executed on more than 1 Hosts.
+   In general, this should identify processes on a Host that are rare and rare for the environment.  A Weight lower than 100 is considered very rare.
+   References: https://medium.com/udacity/shannon-entropy-information-gain-and-picking-balls-from-buckets-5810d35d54b4
+   https://en.wiktionary.org/wiki/Shannon_entropy
+ DefaultTimeRange: 
+  BeforeRange: 7d
+  AfterRange: 7d
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: Label
+    OutputType: String
+  - Header: "Rare Process(es)"
+    OutputType: String
+  - Header: "Entropy Weight"
+    OutputType: Number
+  - Header: "Process Count"
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+
+  # TrulyRareProcess
+  - Filter:    "extend Weight = round(Weight, 3) | where Weight <= 75"
+    Summarize: "summarize Weight = make_list(Weight), avgWeight = avg(round(Weight, 3)), Process = make_list(Process), ProcessCountOnHost = sum(ProcessCountOnHost) by Computer "
+    Project:   "project Title = 'Rare Process(es)', Process = case(array_length(Process) > 1, 'Many', array_length(Process) == 1, tostring(Process[0]), 'None'), EntropyWeight = case(array_length(Weight) > 1, strcat(tostring(round(avgWeight, 3)), ' avg'), array_length(Weight) == 1, tostring(Weight[0]), 'None'), ProcessCountOnHost = iff(isempty(Process), 0, ProcessCountOnHost)"
+
+  # LeastPrevalentProcesses
+  - Filter:    "extend Weight = round(Weight, 3)"
+    Summarize: "sort by Weight asc, ProcessCountOnHost asc, TimeGenerated desc | take 3 | extend row = row_number()"
+    Project:   "project Title = case(row == 1, strcat(row,'st Least prevalent'), row == 2, strcat(row,'nd Least prevalent'), row == 3, strcat(row,'rd Least prevalent'), 'None'), Process = case(row == 1, Process, row == 2, Process, row == 3, Process, 'None'), EntropyWeight = tostring(case(row == 1, Weight, row == 2, Weight, row == 3, Weight, 0.000)), ProcessCountOnHost = case(row == 1, ProcessCountOnHost, row == 2, ProcessCountOnHost, row == 3, ProcessCountOnHost, 0) | sort by Title"
+
+  # ServiceParentProcesses
+  - Filter:    "where ParentProcessName has_any (':\\\\windows\\\\system32\\\\svchost.exe',':\\\\windows\\\\system32\\\\services.exe')"
+    Summarize: "summarize Process = make_set(Process), Weight = make_set(round(Weight, 3)), avgWeight = avg(round(Weight, 3)), ProcessCountOnHost = count(Process) by Computer"
+    Project:   "project Title = 'Services as Parent', Process = case(array_length(Process) > 1, 'Many', array_length(Process) == 1, tostring(Process[0]), 'None'), EntropyWeight = case(array_length(Weight) > 1, strcat(tostring(round(avgWeight, 3)), ' avg'), array_length(Weight) == 1, tostring(Weight[0]), 'None'), ProcessCountOnHost = iff(isempty(Process), 0, ProcessCountOnHost)"
+
+  # MachineExecutions
+  - Filter:    "where AccountType =~ 'machine'"
+    Summarize: "summarize Weight = make_set(round(Weight, 3)), avgWeight = avg(round(Weight, 3)), Process = make_set(Process), ProcessCountOnHost = count(Process) by Computer"
+    Project:   "project Title = 'Execution by Machine Accounts', Process = case(array_length(Process) > 1, 'Many', array_length(Process) == 1, tostring(Process[0]), 'None'), EntropyWeight = case(array_length(Weight) > 1, strcat(tostring(round(avgWeight, 3)), ' avg'), array_length(Weight) == 1, tostring(Weight[0]), 'None'), ProcessCountOnHost = iff(isempty(Process), 0, ProcessCountOnHost)"
+
+  # UserExecutions
+  - Filter:    "where AccountType =~ 'user'"
+    Summarize: "summarize Weight = make_set(round(Weight, 3)), avgWeight = avg(round(Weight, 3)), Process = make_set(Process), ProcessCountOnHost = count(Process) by Computer"
+    Project:   "project Title = 'Execution by User Accounts', Process = case(array_length(Process) > 1, 'Many', array_length(Process) == 1, tostring(Process[0]), 'None'), EntropyWeight = case(array_length(Weight) > 1, strcat(tostring(round(avgWeight, 3)), ' avg'), array_length(Weight) == 1, tostring(Weight[0]), 'None'), ProcessCountOnHost = iff(isempty(Process), 0, ProcessCountOnHost)"
+
+ ChartQuery: 
+  Title: "Rare Processes over Time (Weight <= 75)"
+  DataSets: 
+   - Query: "where Weight <= 75 | summarize RareProcessCount = sum(ProcessCountOnHost) by Time = bin(TimeGenerated, 6h), Process"
+     XColumnName: Time
+     YColumnName: RareProcessCount
+     LegendColumnName: Process
+  Type: BarChart
+ AdditionalQuery: 
+  Text: "See Entropy Weight levels 1000 and under"
+  Query: "where Weight <= 1000 | project-away timestamp, HostCustomEntity, AccountCustomEntity"
+#Activity:
+# Title: "Rare process executions based on Process Entropy"
+# Query: "where Weight <= 75 | project TimeGenerated, HostCustomEntity, AccountCustomEntity, Process, NewProcessName, ParentProcessName, Weight, NormalizedProcessEntropy"

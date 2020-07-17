@@ -1,0 +1,94 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: AuditLogs
+BaseQuery: |
+  let GetAccountActions = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_NTDomain:string, v_Account_AADUserId:string, v_Account_SID:string){
+  AuditLogs
+  | where OperationName in~ ('Delete user', 'Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)','Update user')
+  | extend UserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+  | extend Account_Name = tostring(split(UserPrincipalName, '@')[0])
+  | extend Account_UPNSuffix = tostring(split(UserPrincipalName, '@')[1])
+  | extend Action = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0])))
+  | extend ModifiedProperty = parse_json(Action).displayName
+  | extend ModifiedValue = parse_json(Action).newValue
+  | extend AADUserId = tostring(TargetResources[0].id)
+  | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')
+  | union isfuzzy=true (SecurityEvent
+  | where EventID in (4726, 4740, 4720, 4725, 4724, 4723)
+  | extend OperationName = tostring(EventID)
+  | where AccountType =~ "user" or isempty(AccountType)
+  | project-rename Account_Name = TargetUserName, Account_NTDomain = TargetDomainName)
+  | extend p_Account_Name = case(
+  // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
+  v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+  v_Account_Name
+  )
+  | extend p_Account_UPNSuffix = case(
+  v_Account_UPNSuffix has '@', tostring(split(v_Account_UPNSuffix, '@')[1]),
+  v_Account_UPNSuffix has '\\', tostring(split(v_Account_UPNSuffix, '\\')[0]),
+  v_Account_UPNSuffix
+  )
+  | extend p_Account_NTDomain = case(
+  v_Account_NTDomain has '\\', tostring(split(v_Account_NTDomain, '\\')[0]),
+  // Handles UPN scenario of AccountName@UPNSuffix to pull potential NTDomain from
+  v_Account_NTDomain has '@', tostring(split(tostring(split(v_Account_NTDomain, '@')[1]),'.')[0]),
+  v_Account_NTDomain
+  )
+  | where (Account_Name =~ p_Account_Name and (Account_UPNSuffix =~ p_Account_UPNSuffix or Account_NTDomain =~ p_Account_NTDomain)) or AADUserId =~ v_Account_AADUserId or TargetSid =~ v_Account_SID
+  };
+  GetAccountActions('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_NTDomain}}', '{{Account_AADUserId}}', '{{Account_SID}}')
+Type: KQL
+Provider: Sentinel
+RequiredInputFieldsSets:
+  - - Account_Name
+# The queries for the insights.
+Insights:
+ Id: 78a0936c-10a8-4a7b-bb22-ac11f8eb90b7
+ DisplayName: Account Actions
+ Description: |
+  Provides the count of actions taken on the specified account. Specifically the number of password reset attempts, the number of password changes, the number of times the account was locked out either by policy or an admin, and the number of times the account was created or deleted..
+ DefaultTimeRange:
+  BeforeRange: 7d
+  AfterRange: 7d
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Account Actions"
+    OutputType: String
+  - Header: "Most recent"
+    OutputType: Date
+  - Header: "Count"
+    OutputType: Number
+  QueriesDefinitions:
+  # Account Password Resets
+    - Filter:     "where OperationName in~ ('Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', '4724', '4723')"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
+      Project:    "project Title = 'Account Password Resets', MostRecent, Count"
+  # Account Disabled by Policy
+    - Filter:     "where OperationName in~ ('Blocked from self-service password reset', '4740')"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
+      Project:    "project Title = 'Account Disabled by Policy', MostRecent, Count"
+  # Account Disabled by Admin
+    - Filter:     "where OperationName  == '4725' or (OperationName  =~ 'Update user' and DisableUser =~ 'True')"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
+      Project:    "project Title = 'Account Disabled by Admin', MostRecent, Count"
+  # Account Created
+    - Filter:     "where OperationName in~ ('Add user', '4720')"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
+      Project:    "project Title = 'Account Created', MostRecent, Count"
+  # Account Deleted
+    - Filter:     "where OperationName in~ ('Delete user', '4726')"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
+      Project:    "project Title = 'Account Deleted', MostRecent, Count"
+ ChartQuery:
+  Title: "User actions by type"
+  DataSets:
+   - Query: "where OperationName in~ ('Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', '4724', '4723') or (OperationName  =~ 'Update user' and DisableUser =~ 'True') | summarize Count = count() by OperationName"
+     XColumnName: OperationName
+     YColumnName: Count
+     LegendColumnName: OperationName
+  Type: BarChart
+ AdditionalQuery:
+  Text: "See All Account Activity"
+  Query: "project TimeGenerated, UserPrincipalName, Account_Name, OperationName, Activity, DisableUser, TargetSid, AADUserId, InitiatedBy, AADTenantId, AccountType, Computer, SubjectAccount, SubjectUserSid, EventData"

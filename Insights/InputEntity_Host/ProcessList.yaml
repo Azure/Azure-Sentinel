@@ -1,0 +1,62 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+BaseQuery: |
+  //let end = startofday(now());
+  //let start = end - 7d;
+  let AllProcs=() {
+  SecurityEvent
+  //| where TimeGenerated >= start and TimeGenerated <= end
+  | where EventID == 4688
+  | project TimeGenerated, Computer, Process, NewProcessName, ParentProcessName
+  };
+  let countProcs = (v_Host_Name:string) {
+  AllProcs
+  | where Computer has v_Host_Name
+  };
+  countProcs('{{Host_HostName}}')
+RequiredInputFieldsSets: 
+  - - Host_HostName
+Insights:
+ Id: 37a420dc-8d03-4a1f-b579-d96d5c5f5fe4
+ DisplayName: Process List
+ Description: |
+   General Process List, mainly for deriving distinct processes and parent processes
+ DefaultTimeRange: 
+  BeforeRange: 7d
+  AfterRange: 7d
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: Label
+    OutputType: String
+  - Header: "Process Count"
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+
+  # DistinctProcessCount
+  - Filter:    "project Process, Computer"
+    Summarize: "summarize DistinctCount = dcount(Process) by Computer"
+    Project:   "project Title = 'Distinct Process Count', DistinctCount"
+
+  # DistinctParentProcessCount
+  - Filter:    "project ParentProcessName, Computer"
+    Summarize: "summarize DistinctCount = dcountif(ParentProcessName, isnotempty(ParentProcessName)) by Computer"
+    Project:   "project Title = 'Distinct Parent Process Count', DistinctCount"
+
+ ChartQuery: 
+  Title: "Process Executions over time"
+  DataSets: 
+   - Query: "summarize ProcessCountOnHost = count(Process) by bin(TimeGenerated, 1h) | extend Legend = 'Process Count'"
+     XColumnName: TimeGenerated
+     YColumnName: ProcessCountOnHost
+     LegendColumnName: Legend
+  Type: LineChart
+ AdditionalQuery: 
+  Text: "See Process only information"
+  Query: "project TimeGenerated, Computer, Process, NewProcessName, ParentProcessName"

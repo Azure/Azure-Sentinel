@@ -1,0 +1,106 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+BaseQuery: |
+  let WellKnownLocalSID = 'S-1-5-32-5[0-9][0-9]$';
+  let WellKnownGroupSID = 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$';
+  let GetGroupAddForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  SecurityEvent
+  | where EventID in (4728, 4732, 4756)
+  | extend PassedInName = v_Host_Name, PassedInNTDomain = v_Host_NTDomain, PassedInDNSDomain = v_Host_DnsDomain
+  | extend PassedInName = case(
+  PassedInName has '@', tostring(split(PassedInName, '@')[0]),
+  PassedInName has '\\', tostring(split(PassedInName, '\\')[1]),
+  PassedInName has '.', tostring(split(PassedInName, '.')[0]),
+  PassedInName
+  )
+  | extend PassedInNTDomain = case( PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]), 
+  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]), 
+  PassedInNTDomain )
+  | extend PassedInDNSDomain = case( PassedInDNSDomain has '\\', tostring(split(PassedInDNSDomain, '\\')[0]), 
+  PassedInDNSDomain has '.', strcat_array(array_slice(split(PassedInDNSDomain,'.'),-2,-1),'.'), 
+  PassedInDNSDomain )
+  | where (Computer has PassedInName and Computer has PassedInNTDomain) or (Computer has PassedInName and Computer has PassedInDNSDomain)
+  | extend MemberAdded = case( MemberName has 'CN=', tostring(split(tostring(split(MemberName, ',')[0]),'CN=')[1]), MemberName == '-', MemberSid, MemberName) 
+  | project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, PassedInName, PassedInNTDomain, PassedInDNSDomain
+  | extend GroupName = TargetUserName, AddedBy = SubjectUserName
+  //support for Activities
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+  };
+  GetGroupAddForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+# The queries for the insights.
+Insights:
+ Id: 44c9d0fe-c131-4080-a34f-da0e349da336
+ DisplayName: Group Additions
+ Description: |
+   Summary of user additions to Groups on the specific host. Specifically, we provide the count of All Groups, [Privileged Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) and Remote Desktop Users Group.
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Groups"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: GroupCount
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: UsersAddedCount
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+
+  # UserAddedToPrivilegedGroups
+  - Filter:    "where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded)"
+    Project:   "project Title = 'Privileged', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UsersAddedCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToRemoteDesktopGroup
+  - Filter:    "where TargetSid in ('S-1-5-32-555')"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded)"
+    Project:   "project Title = 'Remote Desktop', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToPrivilegedGroupsExcludeRDP
+  - Filter:    "where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID | where TargetSid !in ('S-1-5-32-555')"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded)"
+    Project:   "project Title = 'Privileged(non-RDP)', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UsersAddedToGroups
+  - Filter:    "order by GroupName"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded)"
+    Project:   "project Title = 'All', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}}"
+
+ ChartQuery: 
+  Title: "Group Additions per Hour"
+  DataSets: 
+   - Query: "summarize Count = count() by bin(TimeGenerated, 1h) | extend Legend = 'Total'"
+     XColumnName: "TimeGenerated"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+  Type: LineChart
+
+ AdditionalQuery:
+  Text: "See All Group Additions"
+  Query: "project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID | order by TimeGenerated desc"
+ 

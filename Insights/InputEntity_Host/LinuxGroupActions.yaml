@@ -1,0 +1,95 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: Syslog
+EntitiesFilter: {}
+RequiredInputFieldsSets: 
+  - - Host_HostName
+Type: KQL
+Provider: Sentinel
+BaseQuery: |
+  let AllUserEvents = (v_Host_Name:string) {
+  Syslog
+  | where Computer == v_Host_Name
+  | where Facility == 'authpriv'
+  | where SyslogMessage !startswith "omsagent"
+  | where SyslogMessage has 'COMMAND' or ProcessName in~ ('gpasswd', 'useradd', 'userdel')
+  | parse SyslogMessage with * 'user ' User ' ' Verb ' by ' AcctMakingChange ' ' Preposition ' group ' Group
+  | extend Group = case(
+  SyslogMessage startswith 'removed group' or SyslogMessage startswith 'removed shadow group', tostring(split(SyslogMessage, "'")[1]), 
+  SyslogMessage startswith 'new group', tostring(split(tostring(split(SyslogMessage, '=')[1]),',')[0]),
+  Group)
+  | extend Action = case(
+  isnotempty(Verb) or isnotempty(Preposition), strcat(Verb, ' ', Preposition),
+  SyslogMessage startswith 'new group', 'new group',
+  SyslogMessage startswith 'removed group', 'removed group',
+  SyslogMessage startswith 'removed shadow group', 'removed shadow group',
+  'None')
+  | where isnotempty(Action) and Action != 'None' and isnotempty(Group)
+  | project TimeGenerated, Computer, HostIP, User, Action, Group, Facility, ProcessName, AcctMakingChange, SyslogMessage
+  };
+  AllUserEvents('{{Host_HostName}}')
+Insights:
+  Id: f1607751-8784-4a69-a91b-45b56683bc77
+  DisplayName: Linux Group Actions on Host
+  Description: |
+    'Summary of additions or removals to groups by Sudo on the specified host, specifically the count for Sudo Group, Any group, Group creations and deletions'
+  DefaultTimeRange: 
+    BeforeRange: 7d
+    AfterRange: 7d
+  SingleValuesQuery: {}
+  TableQuery:
+   ColumnsDefinitions:
+   - Header: Action
+     OutputType: String
+   - Header: Group(s)
+     OutputType: String
+   - Header: GroupCount
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: UserCount
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: User(s)
+     OutputType: String
+   QueriesDefinitions: 
+   # UsersAddedtoSudoGroup
+   - Filter:    "where Action =~ 'added to' and Group =~ 'sudo' | extend Action = strcat('users ', Action)"
+     Summarize: "summarize UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = 'Sudo', GroupCount = 1, UserCount, Users = case(UserCount == 1, tostring(UsersAdded[0]), UserCount > 1, 'Many', 'None')"
+   # UsersRemovedFromSudoGroup
+   - Filter:    "where Action =~ 'removed from' and Group =~ 'sudo' | extend Action = strcat('users ', Action)"
+     Summarize: "summarize UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = 'Sudo', GroupCount = 1, UserCount, Users = case(UserCount == 1, tostring(UsersAdded[0]), UserCount > 1, 'Many', 'None')" 
+   # UsersAddedtoAnyGroup
+   - Filter:    "where Action =~ 'added to' | extend Action = strcat('users ', Action)"
+     Summarize: "summarize GroupCount = dcount(Group), UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = 'Any', GroupCount, UserCount, Users = case(UserCount == 1, tostring(UsersAdded[0]), UserCount > 1, 'Many', 'None')"
+   # UsersRemovedFromAnyGroup
+   - Filter:    "where Action =~ 'removed from' | extend Action = strcat('users ', Action)"
+     Summarize: "summarize GroupCount = dcount(Group), UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = 'Any', GroupCount, UserCount, Users = case(UserCount == 1, tostring(UsersAdded[0]), UserCount > 1, 'Many', 'None')"
+   # GroupAdded
+   - Filter:    "where Action =~ 'new group' | extend Action = strcat(Action, 's created')"
+     Summarize: "summarize Groups = make_set(Group), GroupCount = dcount(Group), UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = case(GroupCount == 1, tostring(Groups[0]), GroupCount > 1, 'Many', 'None'), GroupCount, UserCount = 0, Users = 'None'"
+   # GroupDeleted
+   - Filter:    "where Action =~ 'removed group'"
+     Summarize: "summarize Groups = make_set(Group), GroupCount = dcount(Group), UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = case(GroupCount == 1, tostring(Groups[0]), GroupCount > 1, 'Many', 'None'), GroupCount, UserCount = 0, Users = 'None'"
+   # ShadowGroupDeleted
+   - Filter:    "where Action =~ 'removed shadow group'"
+     Summarize: "summarize Groups = make_set(Group), GroupCount = dcount(Group), UserCount = dcount(User), UsersAdded = makeset(User) by Computer, Action"
+     Project:   "project Action, Groups = case(GroupCount == 1, tostring(Groups[0]), GroupCount > 1, 'Many', 'None'), GroupCount, UserCount = 0, Users = 'None'"
+  ChartQuery: 
+   Title: "Group actions over time"
+   DataSets: 
+    - Query: "summarize SudoUsage = count(User) by Time = bin(TimeGenerated, 1h), Action | extend Legend = Action"
+      XColumnName: Time
+      YColumnName: SudoUsage
+      LegendColumnName: Legend
+   Type: BarChart
+  AdditionalQuery: 
+   Text: "See all group actions"
+   Query: "project TimeGenerated, Computer, HostIP, User, Action, Group, Facility, ProcessName, AcctMakingChange, SyslogMessage"

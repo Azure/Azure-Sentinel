@@ -1,0 +1,66 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: Syslog
+EntitiesFilter: {}
+RequiredInputFieldsSets: 
+  - - Host_HostName
+Type: KQL
+Provider: Sentinel
+BaseQuery: |
+  let AllUserEvents = (v_Host_Name:string) {
+  Syslog
+  | where Computer == v_Host_Name
+  | where Facility == 'authpriv'
+  | where ProcessName in~ ('useradd','userdel')
+  | where SyslogMessage startswith 'new user:' or SyslogMessage startswith 'delete user '
+  | extend User = case(SyslogMessage startswith 'new user:', tostring(split(tostring(split(SyslogMessage, 'name=')[1]), ',')[0]),
+  SyslogMessage startswith 'delete user ', tostring(split(SyslogMessage, "'")[1]),
+  'Not Available')
+  | extend Action = case( SyslogMessage startswith 'new user', 'new user', SyslogMessage startswith 'delete user', 'delete user', 'None')
+  | project TimeGenerated, Computer, HostIP, User, Facility, ProcessName, Action, SyslogMessage
+  };
+  AllUserEvents('{{Host_HostName}}')
+Insights:
+  Id: e7144614-84b3-4884-bc14-cba1b9bac0de
+  DisplayName: Linux New or Deleted Users on Host
+  Description: |
+    'Summary of actions taken by Sudo on the specified host grouped by newly created or deleted users'
+  DefaultTimeRange: 
+    BeforeRange: 7d
+    AfterRange: 7d
+  SingleValuesQuery: {}
+  TableQuery:
+   ColumnsDefinitions:
+   - Header: Action
+     OutputType: String
+   - Header: User
+     OutputType: String
+   - Header: UserCount
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: ActionCount
+     OutputType: Number
+     SupportDeepLink: true
+   QueriesDefinitions: 
+   # UsersCreated
+   - Filter:    "where Action == 'new user'"
+     Summarize: "summarize UserCount = dcount(User), NewUsers = makeset(User), ActionCount = count() by Computer, Action"
+     Project:   "project Action, User = case(UserCount == 1, tostring(NewUsers[0]), UserCount > 1, 'Many', 'None'), UserCount, ActionCount"
+   # UsersDeleted
+   - Filter:    "where Action == 'delete user'"
+     Summarize: "summarize UserCount = dcount(User), DelUsers = makeset(User), ActionCount = count() by Computer, Action"
+     Project:   "project Action, User = case(UserCount == 1, tostring(DelUsers[0]), UserCount > 1, 'Many', 'None'), UserCount, ActionCount"
+
+  ChartQuery: 
+   Title: "New or Deleted users over time"
+   DataSets: 
+    - Query: "summarize SudoUsage = count(User) by Time = bin(TimeGenerated, 1h), Action | extend Legend = Action"
+      XColumnName: Time
+      YColumnName: SudoUsage
+      LegendColumnName: Legend
+   Type: BarChart
+  AdditionalQuery: 
+   Text: "See all new or deleted users"
+   Query: "project TimeGenerated, Computer, HostIP, User, Facility, ProcessName, Action, SyslogMessage"
