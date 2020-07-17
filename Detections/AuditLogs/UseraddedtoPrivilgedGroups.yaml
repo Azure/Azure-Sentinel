@@ -24,7 +24,7 @@ query: |
   let OperationList = dynamic(["Add member to role","Add member to role in PIM requested (permanent)"]);
   let PrivilegedGroups = dynamic(["UserAccountAdmins","PrivilegedRoleAdmins","TenantAdmins"]);
   AuditLogs
-  | where TimeGenerated > ago(timeframe)
+  | where TimeGenerated >= ago(timeframe)
   | where LoggedByService =~ "Core Directory"
   | where Category =~ "RoleManagement"
   | where OperationName in~ (OperationList)
@@ -33,9 +33,9 @@ query: |
   | mv-expand modifiedProperties
   | extend DisplayName = tostring(parse_json(modifiedProperties).displayName), GroupName =  trim(@'"',tostring(parse_json(modifiedProperties).newValue))
   | extend AppId = tostring(parse_json(parse_json(InitiatedBy).app).appId), InitiatedByDisplayName = tostring(parse_json(parse_json(InitiatedBy).app).displayName), ServicePrincipalId = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalId), ServicePrincipalName = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalName)
-  | where DisplayName == "Role.WellKnownObjectName"
+  | where DisplayName =~ "Role.WellKnownObjectName"
   | where GroupName in~ (PrivilegedGroups)
-  // If you are using PIM and want to only alert for operations from non-PIM, 
-  // apply filtering as InitiatedByDisplayName != "MS-PIM"
+  // If you want to still alert for operations from PIM, remove below filtering for MS-PIM.
+  | where InitiatedByDisplayName != "MS-PIM"
   | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = ServicePrincipalName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ServicePrincipalName
