@@ -1,20 +1,20 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
-# variables to authenticate and generate OCI Access Token
+# variables to authenticate and generate Oracle IDCS Access Token
 $b64clientidsecret = $env:b64clientidsecret
 $IDCS = $env:IDCS
 $siguri = "https://" + $IDCS + "/oauth2/v1/token"
 
-# variables to Invoke and search for OCIAudit_CL latest table entry \ and HTTP DATA Collector API
+# variables to Invoke and search for OIDCSAudit_CL latest table entry \ and HTTP DATA Collector API
 $workspaceID = $env:workspaceID
 $CustomerId = $env:workspaceID
 $workspaceKey = $env:workspaceKey
 $SharedKey = $env:workspaceKey
-$LogType = "OCIAudit_CL"
+$LogType = "OIDCSAudit_CL"
 $timeStampField = "timestamp"
 
-# Form the Header and Body Request to obtain OCI Access Token
+# Form the Header and Body Request to obtain Oracle IDCS Access Token
 $sigHeaders = @{
     'Authorization' = 'Basic ' + $b64clientidsecret
     'Content-Type' = 'application/x-www-form-urlencoded;charset=UTF-8'
@@ -22,16 +22,16 @@ $sigHeaders = @{
 
 $sigBody = "grant_type=client_credentials&scope=urn:opc:idm:__myscopes__"
 
-# Invoke to obtain OCI access token
+# Invoke to obtain Orcle IDCS access token
 $sig = (Invoke-RestMethod -Uri $siguri -Method POST -Headers $sigHeaders -Body $sigBody -Verbose).access_token
 
-# Invoke and search for OCIAudit_CL latest table entry if found pass datetime value, if not pass a time generated from 5 days ago.
-$starttime = (Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceID -Query "union isfuzzy=true (OCIAudit_CL |  summarize arg_max(TimeGenerated , TimeGenerated ) |project TimeGenerated ) | summarize arg_max(TimeGenerated , TimeGenerated ) | project TimeGenerated" -ErrorAction SilentlyContinue).Results.TimeGenerated
+# Invoke and search for OIDCSAudit_CL latest table entry if found pass datetime value, if not pass a time generated from 5 days ago.
+$starttime = (Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceID -Query "union isfuzzy=true (OIDCSAudit_CL |  summarize arg_max(TimeGenerated , TimeGenerated ) |project TimeGenerated ) | summarize arg_max(TimeGenerated , TimeGenerated ) | project TimeGenerated" -ErrorAction SilentlyContinue).Results.TimeGenerated
 
-# Conditional check if OCIAudit_CL table does not exist need to prime and pump, set starttime a day ago
+# Conditional check if OIDCSAudit_CL table does not exist need to prime and pump, set starttime a day ago
 If (!$starttime) {
 
-    #some additional if \ then to spot check if OCIAudit_CL table exists ?
+    #some additional if \ then to spot check if OIDCSAudit_CL table exists ?
     $starttime = (Get-date).AddDays(-1).ToString('yyyy-MM-ddThh:mm:ssZ') #.ffffZ   
 
 }
@@ -87,20 +87,20 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 
 }
 
-# Invoke to OCI AuditEvents using start time from tableresult
+# Invoke to Oracle IDCS AuditEvents using start time from tableresult
 $headers = @{
     'Authorization' = 'Bearer ' + $sig
     'Content-Type' = 'application/scim+json'
 }
 
-# get the datetime from current run and format for OCI API Call to end the lookup range
+# get the datetime from current run and format for Oracle IDCS API Call to end the lookup range
 $endtime = (Get-date -UFormat %Y-%m-%dT%R:%SZ) 
 
 
-# Create the URI needed to invoke AuditEvents in OCI | BASE URI for testing #$audituri = "https://" + $IDCS + "/admin/v1/AuditEvents"
+# Create the URI needed to invoke AuditEvents in Oracle IDCS | BASE URI for testing #$audituri = "https://" + $IDCS + "/admin/v1/AuditEvents"
 $audituri = "https://" + $IDCS + "/admin/v1/AuditEvents" + "?sortBy=timestamp&sortOrder=descending&filter=timestamp ge " + '"' + $starttime + '"' + " and timestamp le " + '"' + $endtime + '"'
 
-# Invoke OCI AuditEvents API to obtain results
+# Invoke Oracle IDCS AuditEvents API to obtain results
 $auditresults = (Invoke-WebRequest -Uri $audituri -Method GET -Headers $headers).Content | ConvertFrom-Json
 
 # define loop end upper boundary of pagination in this call 
@@ -112,7 +112,7 @@ $counter = 1
 # Conditional check are the total results less than the pagination (defualtr 50 results per query, using index to start at), do we need to loop ?, default is 50 items per page but can be changed to 1000 in URI | count=1000
 if ($loopend -le $auditresults.itemsPerPage) {
 
-    # format the the first OCI AuditEvents API call into a JSON body
+    # format the the first Oracle IDCS AuditEvents API call into a JSON body
     $jsonbody = $auditresults.Resources | ConvertTo-Json
     
     # Use for testing uncomment below to writeout files to ensure while loop for pagination is working correctly. BE SURE TO COMMENT OUT Post-LogAnalyticsData line when tshooting.
@@ -126,13 +126,13 @@ if ($loopend -le $auditresults.itemsPerPage) {
 # Conditional chekc found that there are more results that per query result, leading to pagination. We will loop through and update the StartIndex each time to get the next batch of 50 results untill finished
 do {
 
-    # Create the URI needed to invoke AuditEvents in OCI using the StartIndex=$counter
+    # Create the URI needed to invoke AuditEvents in Oracle IDCS using the StartIndex=$counter
     $audituri = "https://" + $IDCS + "/admin/v1/AuditEvents?startIndex=" + $counter + "&sortBy=timestamp&sortOrder=descending&filter=timestamp ge " + '"' + $starttime + '"' + " and timestamp le " + '"' + $endtime + '"'
     
-    # Invoke OCI AuditEvents API to obtain results
+    # Invoke Oracle IDCS AuditEvents API to obtain results
     $auditresults = (Invoke-WebRequest -Uri $audituri -Method GET -Headers $headers).Content | ConvertFrom-Json
     
-    # format the the first OCI AuditEvents API call into a JSON body
+    # format the the first Oracle IDCS AuditEvents API call into a JSON body
     $jsonbody = $auditresults.Resources | ConvertTo-Json
 
         # Use for testing uncomment below to writeout files to ensure while loop for pagination is working correctly. BE SURE TO COMMENT OUT Post-LogAnalyticsData line when tshooting.
