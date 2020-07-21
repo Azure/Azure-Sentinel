@@ -1,0 +1,28 @@
+id: 0454c8d8-d0a6-42a4-8d03-f5b4fdcbd173
+name: Anomalous AAD Account Creation
+description: |
+  'All users performing user creation for the first time and the target users that were created.'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+       - BehaviorAnalytics
+       - AuditLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+
+ BehaviorAnalytics
+ | where ActionType == "Add user"
+ | where ActivityInsights.FirstTimeUserPerformedAction == True or ActivityInsights.FirstTimeTenantPerformedAction == True
+ | join(
+ AuditLogs
+ ) on $left.SourceRecordId == $right._ItemId
+ | mv-expand TargetResources
+ | extend Target =  iff(tostring(TargetResources.userPrincipalName) contains "#EXT#",replace("_","@",tostring(split(TargetResources.userPrincipalName, "#")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)
+ | extend DisplayName = tostring(UsersInsights.AccountDisplayName),
+ UserPrincipalName = iff(UserPrincipalName contains "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserPrincipalName),
+ UserName = iff(UserName contains "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName)
+ | sort by TimeGenerated desc	
+ | project TimeGenerated, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, ["TargetUser"]=Target,ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights
