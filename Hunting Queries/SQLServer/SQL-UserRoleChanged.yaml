@@ -8,13 +8,21 @@ description: |
 requiredDataConnectors:
   - connectorId: AzureMonitor(WindowsEventLogs)
     dataTypes:
-      - Events
+      - Event
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
 query: |
 
+        // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
+        // The underlying table where the data exists is the Event table.
         // This query looking for Alter role commands and extracts username which was altered and target objectName
-        //
         SQLEvent
+        | where TimeGenerated >= ago(1d)
         | where Statement contains "Alter role" and Statement has "add member"
-        | parse Statement with * "ADD MEMBER [" TargetUser:string
-                              "]" *
+        | parse Statement with * "ADD MEMBER [" TargetUser:string "]" *
         | project TimeGenerated, Computer, Action, ClientIP, CurrentUser, DatabaseName, TargetUser, ObjectName, Statement
+        | extend timestamp = TimeGenerated, AccountCustomEntity = CurrentUser, IPCustomEntity = ClientIP  

@@ -8,16 +8,21 @@ description: |
 requiredDataConnectors:
   - connectorId: AzureMonitor(WindowsEventLogs)
     dataTypes:
-      - Events
+      - Event
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
 query: |
 
+        // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
+        // The underlying table where the data exists is the Event table.
         // the timeframe and threshold can be changed below as per requirement
         //
-        let TimeFrame = 10m;
-        let failedThreshold = 3;
         SQLEvent
-        | where TimeGenerated > ago(TimeFrame) 
+        | where TimeGenerated >= ago(TimeFrame) 
         | where LogonResult has "failed"
-        | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TotalFailedLogons = count() by CurrentUser
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TotalFailedLogons = count() by CurrentUser, ClientIP
         | where TotalFailedLogons >= failedThreshold
-        | project CurrentUser, TotalFailedLogons
+        | project StartTime, CurrentUser, TotalFailedLogons, ClientIP
+        | extend timestamp = StartTime, AccountCustomEntity = CurrentUser, IPCustomEntity = ClientIP

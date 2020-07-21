@@ -8,13 +8,24 @@ description: |
 requiredDataConnectors:
   - connectorId: AzureMonitor(WindowsEventLogs)
     dataTypes:
-      - Events
+      - Event
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - Impact
+relevantTechniques:
+  - T1098
+  - T1078
+  - T1496
 query: |
 
+        // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
+        // The underlying table where the data exists is the Event table.
         // This query checks for user removed from SecurityAdmin Role
         SQLEvent
+        | where TimeGenerated >= ago(1d)
         | where Statement has "Alter Server role" and Statement has "drop member"
-        | parse Statement with * "DROP MEMBER [" TargetUser:string
-                              "]" *
+        | parse Statement with * "DROP MEMBER [" TargetUser:string "]" *
         | where ObjectName has "securityadmin"
         | project TimeGenerated, Computer, Action, ClientIP, CurrentUser, DatabaseName, TargetUser, ObjectName, Statement 
+        | extend timestamp = TimeGenerated, AccountCustomEntity = CurrentUser, IPCustomEntity = ClientIP  
