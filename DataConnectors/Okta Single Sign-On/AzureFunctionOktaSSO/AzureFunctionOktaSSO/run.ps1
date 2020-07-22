@@ -1,10 +1,10 @@
 ﻿<#  
     Title:          Okta Data Connector
     Language:       PowerShell
-    Version:        1.0
+    Version:        1.1
     Author(s):      Microsoft
-    Last Modified:  5/12/2020
-    Comment:        Inital Release
+    Last Modified:  7/22/2020
+    Comment:        Hardcoded table name
 
     DESCRIPTION
     This Function App calls the Okta System Log API (https://developer.okta.com/docs/reference/api/system-log/) to pull the Okta System logs. The response from the Okta API is recieved in JSON format. This function will build the signature and authorization header 
@@ -34,7 +34,7 @@ $response = Invoke-RestMethod -uri "$uri$($startDate)"  -Method 'GET' -Headers $
 # Define the Log Analytics Workspace ID and Key and Custom Table Name
 $customerId = $env:workspaceId
 $sharedKey =  $env:workspaceKey
-$LogType = $env:tableName
+$LogType = "Okta"
 $TimeStampField = "DateValue"
 
 # Function to create the authorization signature
