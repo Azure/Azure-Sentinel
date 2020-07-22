@@ -1,0 +1,144 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: SecurityEvent
+EntitiesFilter: {}
+RequiredInputFieldsSets: 
+  - - Host_HostName
+Type: KQL
+Provider: Sentinel
+BaseQuery: |
+  let starttime = todatetime('{{Start_Time_ISO}}');
+  let endtime = todatetime('{{End_Time_ISO}}');
+  let includeScope = 1d;
+  let historicalScope = 14d;
+  let Procs=(v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  // removing common items that may still show up in small environments, add here if you have additional exclusions
+  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+  | where ParentProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !startswith 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_'
+  | where ParentProcessName !has ':\\WindowsAzure\\GuestAgent_' and NewProcessName !has ':\\WindowsAzure\\GuestAgent_'
+  | where ParentProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' and NewProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_'
+  | where ParentProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\'
+  | where NewProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\'
+  | where NewProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(NewProcessName endswith '\\ngentask.exe' or NewProcessName endswith '\\ngen.exe') and not(ParentProcessName endswith ':\\Windows\\System32\\taskhostw.exe')
+  | where NewProcessName !endswith '\\MpSigStub.exe' and ParentProcessName !has ':\\Windows\\SoftwareDistribution\\Download\\Install\\'
+  | where ParentProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe'
+  | where NewProcessName !endswith ':\\Windows\\servicing\\trustedinstaller.exe'
+  | where NewProcessName !endswith ':\\Windows\\System32\\WerFault.exe'
+  // parsing for Host to handle variety of conventions passed into the query
+  | extend PassedInName = v_Host_Name, PassedInNTDomain = v_Host_NTDomain, PassedInDNSDomain = v_Host_DnsDomain
+  | extend PassedInName = case(
+  PassedInName has '@', tostring(split(PassedInName, '@')[0]),
+  PassedInName has '\\', tostring(split(PassedInName, '\\')[1]),
+  PassedInName has '.', tostring(split(PassedInName, '.')[0]),
+  PassedInName
+  )
+  | extend PassedInNTDomain = case(
+  PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]),
+  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]),
+  isempty(v_Host_NTDomain) and v_Host_Name has '@', tostring(split(tostring(split(v_Host_Name, '@')[1]), '.')[0]),
+  isempty(v_Host_NTDomain) and v_Host_Name has '\\', tostring(split(v_Host_Name, '\\')[0]),
+  isempty(v_Host_NTDomain) and v_Host_Name has '.', tostring(split(v_Host_Name, '.')[-2]),
+  PassedInNTDomain
+  )
+  | extend PassedInDNSDomain = case( 
+  PassedInDNSDomain has '\\', tostring(split(PassedInDNSDomain, '\\')[0]),
+  PassedInDNSDomain has '.', strcat_array(array_slice(split(PassedInDNSDomain,'.'),-2,-1),'.'),
+  isempty(PassedInDNSDomain) and v_Host_Name has '@', tostring(split(v_Host_Name, '@')[1]),
+  isempty(PassedInDNSDomain) and v_Host_Name has '\\', tostring(split(v_Host_Name, '\\')[0]),
+  isempty(PassedInDNSDomain) and v_Host_Name has '.', strcat_array(array_slice(split(v_Host_Name,'.'),-2,-1),'.'),
+  PassedInDNSDomain
+  )
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ PassedInName and Host_NTDomain =~ PassedInNTDomain) or (Host_HostName =~ PassedInName and Host_DnsDomain =~ PassedInDNSDomain)
+  | project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess = tostring(split(ParentProcessName, '\\')[-1]);
+  let processes = processEvents
+  | where TimeGenerated >= endtime - includeScope
+  | join kind=leftanti (
+      processEvents
+      | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
+      | distinct NewProcessName
+  ) on NewProcessName
+  | extend ExecType = 'Processes';
+  let parents = processEvents
+  | where TimeGenerated >= endtime - includeScope
+  | join kind=leftanti (
+      processEvents
+      | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
+      | distinct ParentProcessName
+  ) on ParentProcessName
+  | extend ExecType = 'Parents';
+  union processes, parents
+  };
+  Procs('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
+RequiredInputFieldsSets: 
+  - - Host_HostName
+Insights:
+  Id: 37a420dc-8d03-4a1f-b579-d96d5c5f5fe4
+  DisplayName: Windows Process Execution Info
+  Description: |
+    'Identifies new processes and new parent processes, along with low or high execution counts.'
+  DefaultTimeRange:
+    BeforeRange: 12h
+    AfterRange: 12h
+  SingleValuesQuery: {}
+  TableQuery:
+   ColumnsDefinitions:
+   - Header: ProcessType
+     OutputType: String
+   - Header: ProcessName
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: Executions
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: User(s)
+     OutputType: string
+   QueriesDefinitions:
+  # NewProcessExec
+   - Filter:    "where ExecType == 'Processes'"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(Process), ProcCount = count() by Computer"
+     Project:   "project Title = 'New Process(es)', Processes = case(array_length(Processes) == 1, tostring(Processes[0]), array_length(Processes) > 1, 'Many', 'None'), ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+  # NewParentProcessExec
+   - Filter:    "where ExecType == 'Parents'"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(ParentProcess), ProcCount = count() by Computer"
+     Project:   "project Title = 'New Parent(s)', Processes = case(array_length(Processes) == 1, tostring(Processes[0]), array_length(Processes) > 1, 'Many', 'None'), ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+  # LeastNewProcessExecs
+   - Filter:    "where ExecType == 'Processes' | project TimeGenerated, Computer, SubjectAccount, Process"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), ProcCount = count() by Process | order by ProcCount, UserCount asc | top 1 by ProcCount"
+     Project:   "project Title = 'Least New Process Executions', Processes = Process, ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+  # MostNewProcessExecs
+   - Filter:    "where ExecType == 'Processes' | project TimeGenerated, Computer, SubjectAccount, Process"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), ProcCount = count() by Process | order by ProcCount, UserCount desc | top 1 by ProcCount"
+     Project:   "project Title = 'Most New Process Executions', Processes = Process, ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+
+  ChartQuery: 
+   Title: "Process Executions over time"
+   DataSets: 
+    - Query: "summarize ProcessCount = count() by Time = bin(TimeGenerated, 1h), Process | extend Legend = Process"
+      XColumnName: Time
+      YColumnName: ProcessCount
+      LegendColumnName: Legend
+   Type: BarChart
+  AdditionalQuery: 
+   Text: "See all new process information"
+   Query: "project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess, ExecType"
