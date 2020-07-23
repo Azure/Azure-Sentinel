@@ -14,20 +14,24 @@ Tactics:
   - Persistence
   - Execution
 query: |
+
+  let exclude = dynamic([':\\Windows\\System32\\svchost.exe', ':\\Windows\\System32\\sppsvc.exe', ':\\Windows\\system32\\wbem\\WmiApSrv.exe', ':\\Windows\\System32\\conhost.exe', ':\\Windows\\System32\\wuauclt.exe', ':\\Windows\\SoftwareDistribution\\Download\\Install\\', ':\\WindowsAzure\\GuestAgent_', ':\\WindowsAzure\\WindowsAzureNetAgent_', 
+  ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\', ':\\Windows\\System32\\taskhostw.exe', '\\MpSigStub.exe',':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe', ':\\Windows\\servicing\\trustedinstaller.exe', ':\\Windows\\System32\\WerFault.exe', ':\\Windows\\CCM\\CcmExec.exe'
+  "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\"]);
   let ConfigChange = (v_Process_ImageFile_Name:string ) 
   {ConfigurationChange
-  | where ConfigChangeType != "Software" 
-  | extend Process = case(ConfigChangeType == "Registry" and ValueData contains ".exe", ValueData,
-    ConfigChangeType == "WindowsServices", SvcPath,
-    ConfigChangeType == "Files" and (FileSystemPath contains ".exe" or FileSystemPath contains ".bat" or FileSystemPath contains ".cmd"), FileSystemPath,
-    ConfigChangeType == "Daemons", SvcPath,
-    ""
-    )
+  | where ConfigChangeType != "Software"
+  | where isnotempty(ValueData) or isnotempty(SvcPath) or isnotempty(FileSystemPath)
+  | extend Process = case(
+  ConfigChangeType == "Registry" and (ValueData has ".exe" or ValueData has ".bat" or ValueData has ".cmd"), ValueData,
+  ConfigChangeType == "WindowsServices", SvcPath,
+  ConfigChangeType == "Files" and ((FileSystemPath has ".exe" or FileSystemPath has ".bat" or FileSystemPath has ".cmd") or FileSystemPath has '/'), FileSystemPath,
+  ConfigChangeType == "Daemons", SvcPath,
+  "ProcessNotAvailable"
+  )
   // Removing Common processes to improve query performance
-  | where Process !contains ":\\Windows\\System32\\svchost.exe" and Process !contains ":\\Windows\\system32\\wbem\\WmiApSrv.exe" 
-      and Process !contains ":\\Windows\\CCM\\CcmExec.exe" and Process !contains "Windows Defender Antivirus" 
-      and Process !contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\"
-  | where iff(v_Process_ImageFile_Name == "", false, Process contains v_Process_ImageFile_Name) 
+  | where not(Process has_any (exclude)) and (Process !has ':\\Windows\\Microsoft.NET\\Framework' and not(Process has_any ('\\ngentask.exe', '\\ngen.exe')))
+  | where iff(v_Process_ImageFile_Name == "", false, Process has v_Process_ImageFile_Name) 
   | parse FileContentChecksum with * "Hash=" Hash " " *
   | parse PreviousFileContentChecksum with * "Hash=" Hash " " *
   | extend Changes = case( 
