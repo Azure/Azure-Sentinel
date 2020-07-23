@@ -6,8 +6,6 @@ DataTypes:
 EntitiesFilter: {}
 RequiredInputFieldsSets: 
   - - Host_HostName
-Type: KQL
-Provider: Sentinel
 BaseQuery: |
   let starttime = todatetime('{{Start_Time_ISO}}');
   let endtime = todatetime('{{End_Time_ISO}}');
@@ -15,6 +13,7 @@ BaseQuery: |
   let historicalScope = 14d;
   let Procs=(v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
   let processEvents=SecurityEvent
+  | where TimeGenerated >= (starttime - historicalScope)
   | where EventID==4688
   // removing common items that may still show up in small environments, add here if you have additional exclusions
   | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
@@ -71,23 +70,23 @@ BaseQuery: |
   )
   | where (Host_HostName =~ PassedInName and Host_NTDomain =~ PassedInNTDomain) or (Host_HostName =~ PassedInName and Host_DnsDomain =~ PassedInDNSDomain)
   | project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess = tostring(split(ParentProcessName, '\\')[-1]);
-  let processes = processEvents
+  let processes = materialize(processEvents
   | where TimeGenerated >= endtime - includeScope
   | join kind=leftanti (
       processEvents
       | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
       | distinct NewProcessName
   ) on NewProcessName
-  | extend ExecType = 'Processes';
-  let parents = processEvents
+  | extend ExecType = 'Processes');
+  let parents = materialize(processEvents
   | where TimeGenerated >= endtime - includeScope
   | join kind=leftanti (
       processEvents
       | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
       | distinct ParentProcessName
   ) on ParentProcessName
-  | extend ExecType = 'Parents';
-  union processes, parents
+  | extend ExecType = 'Parents');
+  union isfuzzy=true processes, parents
   };
   Procs('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
 RequiredInputFieldsSets: 
@@ -116,11 +115,11 @@ Insights:
    QueriesDefinitions:
   # NewProcessExec
    - Filter:    "where ExecType == 'Processes'"
-     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(Process), ProcCount = count() by Computer"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(Process), ProcCount = count()"
      Project:   "project Title = 'New Process(es)', Processes = case(array_length(Processes) == 1, tostring(Processes[0]), array_length(Processes) > 1, 'Many', 'None'), ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
   # NewParentProcessExec
    - Filter:    "where ExecType == 'Parents'"
-     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(ParentProcess), ProcCount = count() by Computer"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(ParentProcess), ProcCount = count()"
      Project:   "project Title = 'New Parent(s)', Processes = case(array_length(Processes) == 1, tostring(Processes[0]), array_length(Processes) > 1, 'Many', 'None'), ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
   # LeastNewProcessExecs
    - Filter:    "where ExecType == 'Processes' | project TimeGenerated, Computer, SubjectAccount, Process"
