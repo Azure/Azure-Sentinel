@@ -5,52 +5,24 @@ DataTypes:
   - DataType: SecurityEvent
 EntitiesFilter: {}
 RequiredInputFieldsSets: 
-  - - Host_HostName
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
 BaseQuery: |
+  
+  let excludeProc = dynamic([':\\Windows\\System32\\svchost.exe', ':\\Windows\\System32\\sppsvc.exe', ':\\Windows\\system32\\wbem\\WmiApSrv.exe', ':\\Windows\\System32\\conhost.exe', ':\\Windows\\System32\\wuauclt.exe', ':\\Windows\\SoftwareDistribution\\Download\\Install\\', ':\\WindowsAzure\\GuestAgent_', ':\\WindowsAzure\\WindowsAzureNetAgent_', 
+  ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\', ':\\Windows\\System32\\taskhostw.exe', '\\MpSigStub.exe',':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe', ':\\Windows\\servicing\\trustedinstaller.exe', ':\\Windows\\System32\\WerFault.exe', ':\\Windows\\CCM\\CcmExec.exe']);
   let starttime = todatetime('{{Start_Time_ISO}}');
   let endtime = todatetime('{{End_Time_ISO}}');
   let includeScope = 1d;
   let historicalScope = 14d;
-  let Procs=(v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let Procs=(v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
   let processEvents=SecurityEvent
   | where TimeGenerated >= (starttime - historicalScope)
   | where EventID==4688
   // removing common items that may still show up in small environments, add here if you have additional exclusions
-  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
-  | where ParentProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !startswith 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_'
-  | where ParentProcessName !has ':\\WindowsAzure\\GuestAgent_' and NewProcessName !has ':\\WindowsAzure\\GuestAgent_'
-  | where ParentProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' and NewProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_'
-  | where ParentProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\'
-  | where NewProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\'
-  | where NewProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(NewProcessName endswith '\\ngentask.exe' or NewProcessName endswith '\\ngen.exe') and not(ParentProcessName endswith ':\\Windows\\System32\\taskhostw.exe')
-  | where NewProcessName !endswith '\\MpSigStub.exe' and ParentProcessName !has ':\\Windows\\SoftwareDistribution\\Download\\Install\\'
-  | where ParentProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe'
-  | where NewProcessName !endswith ':\\Windows\\servicing\\trustedinstaller.exe'
-  | where NewProcessName !endswith ':\\Windows\\System32\\WerFault.exe'
-  // parsing for Host to handle variety of conventions passed into the query
-  | extend PassedInName = v_Host_Name, PassedInNTDomain = v_Host_NTDomain, PassedInDNSDomain = v_Host_DnsDomain
-  | extend PassedInName = case(
-  PassedInName has '@', tostring(split(PassedInName, '@')[0]),
-  PassedInName has '\\', tostring(split(PassedInName, '\\')[1]),
-  PassedInName has '.', tostring(split(PassedInName, '.')[0]),
-  PassedInName
-  )
-  | extend PassedInNTDomain = case(
-  PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]),
-  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]),
-  isempty(v_Host_NTDomain) and v_Host_Name has '@', tostring(split(tostring(split(v_Host_Name, '@')[1]), '.')[0]),
-  isempty(v_Host_NTDomain) and v_Host_Name has '\\', tostring(split(v_Host_Name, '\\')[0]),
-  isempty(v_Host_NTDomain) and v_Host_Name has '.', tostring(split(v_Host_Name, '.')[-2]),
-  PassedInNTDomain
-  )
-  | extend PassedInDNSDomain = case( 
-  PassedInDNSDomain has '\\', tostring(split(PassedInDNSDomain, '\\')[0]),
-  PassedInDNSDomain has '.', strcat_array(array_slice(split(PassedInDNSDomain,'.'),-2,-1),'.'),
-  isempty(PassedInDNSDomain) and v_Host_Name has '@', tostring(split(v_Host_Name, '@')[1]),
-  isempty(PassedInDNSDomain) and v_Host_Name has '\\', tostring(split(v_Host_Name, '\\')[0]),
-  isempty(PassedInDNSDomain) and v_Host_Name has '.', strcat_array(array_slice(split(v_Host_Name,'.'),-2,-1),'.'),
-  PassedInDNSDomain
-  )
+  | where not(NewProcessName has_any (excludeProc)) and not(ParentProcessName has_any (excludeProc))
   // parsing for Host to handle variety of conventions coming from data
   | extend Host_HostName = case(
   Computer has '@', tostring(split(Computer, '@')[0]),
@@ -68,8 +40,11 @@ BaseQuery: |
   Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
   Computer
   )
-  | where (Host_HostName =~ PassedInName and Host_NTDomain =~ PassedInNTDomain) or (Host_HostName =~ PassedInName and Host_DnsDomain =~ PassedInDNSDomain)
-  | project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess = tostring(split(ParentProcessName, '\\')[-1]);
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
+  | project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess = tostring(split(ParentProcessName, '\\')[-1]), _ResourceId, SourceComputerId;
   let processes = materialize(processEvents
   | where TimeGenerated >= endtime - includeScope
   | join kind=leftanti (
@@ -88,7 +63,7 @@ BaseQuery: |
   | extend ExecType = 'Parents');
   union isfuzzy=true processes, parents
   };
-  Procs('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
+  Procs('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 Insights:
   Id: 37a420dc-8d03-4a1f-b579-d96d5c5f5fe4
   DisplayName: Windows Process Execution Info
@@ -138,4 +113,4 @@ Insights:
    Type: BarChart
   AdditionalQuery: 
    Text: "See all new process information"
-   Query: "project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess, ExecType"
+   Query: "project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess, ExecType, _ResourceId, SourceComputerId"

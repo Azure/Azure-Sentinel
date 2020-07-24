@@ -4,25 +4,32 @@ DataTypes:
 Type: KQL
 Provider: Sentinel
 BaseQuery: |
-  let GetAllLogonsForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let GetAllLogonsForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
   let DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]);
   let AccountAllowList = dynamic(["SYSTEM","NETWORK SERVICE", "LOCAL SERVICE"]);
   let AllEvents = SecurityEvent
   | where EventID in (4624, 4625, 4672)
-  | extend PassedInName = v_Host_Name, PassedInNTDomain = v_Host_NTDomain, PassedInDNSDomain = v_Host_DnsDomain
-  | extend PassedInName = case(
-  PassedInName has '@', tostring(split(PassedInName, '@')[0]),
-  PassedInName has '\\', tostring(split(PassedInName, '\\')[1]),
-  PassedInName has '.', tostring(split(PassedInName, '.')[0]),
-  PassedInName
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
   )
-  | extend PassedInNTDomain = case( PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]), 
-  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]), 
-  PassedInNTDomain )
-  | extend PassedInDNSDomain = case( PassedInDNSDomain has '\\', tostring(split(PassedInDNSDomain, '\\')[0]), 
-  PassedInDNSDomain has '.', strcat_array(array_slice(split(PassedInDNSDomain,'.'),-2,-1),'.'), 
-  PassedInDNSDomain )
-  | where (Computer has PassedInName and Computer has PassedInNTDomain) or (Computer has PassedInName and Computer has PassedInDNSDomain)
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
   | extend RelatedRowSet = 'AllEvents'
   | extend HourOfLogin = hourofday(TimeGenerated), DayNumberofWeek = dayofweek(TimeGenerated)
   | extend DayofWeek = case(
@@ -90,23 +97,23 @@ BaseQuery: |
   EventID == 4624 or EventID == 4672, "Success",
   "See - https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
   )
-  | project TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc, RelatedRowSet 
+  | project TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc, RelatedRowSet, _ResourceId, SourceComputerId 
   ;
   let HostSigninToSystems = AllEvents
   | where EventID == 4624
   | project-away StatusDesc, SubStatusDesc, PrivilegeList
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
   | extend RelatedRowSet = 'HostSigninToSystems', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]) ;
   let HostFailedSigninToSystems = AllEvents
   | where EventID == 4625
   | project-away PrivilegeList
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
   | extend RelatedRowSet = 'HostFailedSigninToSystems' ;
   let HostSigninDuringAbnormalHours = AllEvents
   | where TimeGenerated between (ago(8d)..ago(2d))
   | where EventID in (4624,4625)
   | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
-  | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek) by Computer
+  | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek) by Computer, _ResourceId, SourceComputerId
   | join kind= inner
   (
       AllEvents
@@ -116,19 +123,19 @@ BaseQuery: |
   on Computer
   | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
   | extend historical_DayofWeek = tostring(historical_DayofWeek)
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek, _ResourceId, SourceComputerId
   | extend historical_DayofWeek = todynamic(historical_DayofWeek) 
   | extend RelatedRowSet = 'HostSigninDuringAbnormalHour', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]); 
   let HostHadPrivilegedLogonSessions = AllEvents
   | where EventID == 4672
   | where PrivilegeList contains 'SeDebugPrivilege'
   | project-away StatusDesc, SubStatusDesc
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, TargetDomainName, TargetUserName, PrivilegeList
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, TargetDomainName, TargetUserName, PrivilegeList, _ResourceId, SourceComputerId
   | extend RelatedRowSet = 'HostHadPrivilegedLogonSessions', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]);
   union isfuzzy=true AllEvents, HostSigninToSystems, HostFailedSigninToSystems, HostSigninDuringAbnormalHours, HostHadPrivilegedLogonSessions
   };
   // change {{Host_HostName}} value below to the HostName you are interested in
-  GetAllLogonsForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
+  GetAllLogonsForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 RequiredInputFieldsSets:
  - - Host_HostName
    - Host_NTDomain

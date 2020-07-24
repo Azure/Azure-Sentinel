@@ -17,7 +17,7 @@ BaseQuery: |
   let procLimit = 60*24;
   let SecEvents = SecurityEvent
   | where EventID == 4688;
-  let EntropyCalc = (v_Host_Name:string)
+  let EntropyCalc = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string)
   {
   let Exclude = SecEvents
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(Computer), ExcludeProcCount = count() by Process
@@ -88,9 +88,28 @@ BaseQuery: |
   Results
   | join kind= inner (
   SecEvents 
-  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId, SourceComputerId
   ) on Computer, Process
-  | where Computer has v_Host_Name
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
   // removing common items that may still show up in small environments, add here is you have additional exclusions
   | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
   | where ParentProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !endswith ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !startswith 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_'
@@ -103,11 +122,11 @@ BaseQuery: |
   | where ParentProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe'
   | where NewProcessName !endswith ':\\Windows\\servicing\\trustedinstaller.exe'
   | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Weight, NormalizedProcessEntropy, FullDecimalProcessEntropy = ProcessEntropy, 
-  Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount
+  Process, NewProcessName, CommandLine, ParentProcessName, TotalProcessCountOnHost, ProcessCountOnHost, DistinctComputersWithProcessCount, _ResourceId, SourceComputerId
   | sort by Weight asc, NormalizedProcessEntropy asc, NewProcessName asc
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
   };
-  EntropyCalc('{{Host_HostName}}')
+  EntropyCalc('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 
 RequiredInputFieldsSets: 
   - - Host_HostName
