@@ -4,10 +4,15 @@ DataTypes:
 Type: KQL
 Provider: Sentinel
 BaseQuery: |
+  let starttime = todatetime('{{Start_Time_ISO}}');
+  let endtime = todatetime('{{End_Time_ISO}}');
+  let includeScope = 2d;
+  let historicalScope = 8d;
   let GetAllLogonsForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
   let DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]);
   let AccountAllowList = dynamic(["SYSTEM","NETWORK SERVICE", "LOCAL SERVICE"]);
   let AllEvents = SecurityEvent
+  | where TimeGenerated >= (starttime - historicalScope)
   | where EventID in (4624, 4625, 4672)
   // parsing for Host to handle variety of conventions coming from data
   | extend Host_HostName = case(
@@ -97,42 +102,43 @@ BaseQuery: |
   EventID == 4624 or EventID == 4672, "Success",
   "See - https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
   )
-  | project TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc, RelatedRowSet, _ResourceId, SourceComputerId 
+  | project TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetAccount, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc, RelatedRowSet, _ResourceId, SourceComputerId 
   ;
-  let HostSigninToSystems = AllEvents
+  let HostSigninToSystems = materialize(AllEvents
   | where EventID == 4624
   | project-away StatusDesc, SubStatusDesc, PrivilegeList
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
-  | extend RelatedRowSet = 'HostSigninToSystems', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]) ;
-  let HostFailedSigninToSystems = AllEvents
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
+  | extend RelatedRowSet = 'HostSigninToSystems', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]));
+  let HostFailedSigninToSystems = materialize(AllEvents
   | where EventID == 4625
   | project-away PrivilegeList
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
-  | extend RelatedRowSet = 'HostFailedSigninToSystems' ;
-  let HostSigninDuringAbnormalHours = AllEvents
-  | where TimeGenerated between (ago(8d)..ago(2d))
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
+  | extend RelatedRowSet = 'HostFailedSigninToSystems');
+  let HostSigninDuringAbnormalHours = materialize(AllEvents
+  | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
   | where EventID in (4624,4625)
   | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
   | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek) by Computer, _ResourceId, SourceComputerId
   | join kind= inner
   (
       AllEvents
-      | where TimeGenerated > ago(2d)
+      | where TimeGenerated > endtime - includeScope
       | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
   )
   on Computer
   | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
   | extend historical_DayofWeek = tostring(historical_DayofWeek)
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek, _ResourceId, SourceComputerId
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek, _ResourceId, SourceComputerId
   | extend historical_DayofWeek = todynamic(historical_DayofWeek) 
-  | extend RelatedRowSet = 'HostSigninDuringAbnormalHour', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]); 
-  let HostHadPrivilegedLogonSessions = AllEvents
+  | extend RelatedRowSet = 'HostSigninDuringAbnormalHour', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"])); 
+  let HostHadPrivilegedLogonSessions = materialize(AllEvents
   | where EventID == 4672
   | where PrivilegeList contains 'SeDebugPrivilege'
   | project-away StatusDesc, SubStatusDesc
-  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, TargetDomainName, TargetUserName, PrivilegeList, _ResourceId, SourceComputerId
-  | extend RelatedRowSet = 'HostHadPrivilegedLogonSessions', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]);
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName, PrivilegeList, _ResourceId, SourceComputerId
+  | extend RelatedRowSet = 'HostHadPrivilegedLogonSessions', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]));
   union isfuzzy=true AllEvents, HostSigninToSystems, HostFailedSigninToSystems, HostSigninDuringAbnormalHours, HostHadPrivilegedLogonSessions
+  | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = TargetAccount
   };
   // change {{Host_HostName}} value below to the HostName you are interested in
   GetAllLogonsForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
@@ -239,4 +245,4 @@ Insights:
 
  AdditionalQuery:
   Text: "See All Windows Logons"
-  Query: "where RelatedRowSet =~ 'AllEvents' | extend SubjectUserName = columnifexists('SubjectUserName', 'EventDoesNotContain') | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName) by Activity, TargetDomainName, TargetUserName, ProcessName, LogonTypeName"
+  Query: "where RelatedRowSet =~ 'AllEvents' | extend SubjectUserName = columnifexists('SubjectUserName', 'EventDoesNotContain') | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName) by Activity, TargetDomainName, TargetUserName, ProcessName, LogonTypeName, timestamp, HostCustomEntity, AccountCustomEntity"
