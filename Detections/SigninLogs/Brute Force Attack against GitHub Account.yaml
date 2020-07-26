@@ -30,14 +30,14 @@ query: |
   | where ResultType == 50056); 
   GitHubFailedSSOLogins 
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
-  | summarize FailedLoginsCountInBinTime = count() by User = Identity, bin(TimeGenerated, BinTime) 
-  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User 
-  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold) 
+  | summarize FailedLoginsCountInBinTime = count() , make_set (IPAddress) by  UserPrincipalName, bin(TimeGenerated, BinTime) 
+  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName, tostring(set_IPAddress)
+  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)  
   | join kind=innerunique ( 
     GitHubFailedSSOLogins 
     | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
     | summarize FailedLoginsCountInRunTime = count() by User = Identity 
-  ) on User 
+  ) on UserPrincipalName 
   | where FailedLoginsCountInRunTime > LearningThreshold
-  | extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = set_IPAddress
   
