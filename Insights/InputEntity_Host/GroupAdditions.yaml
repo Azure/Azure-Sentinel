@@ -3,38 +3,47 @@ DataTypes:
   - DataType: SecurityEvent
 Type: KQL
 Provider: Sentinel
-BaseQuery: |
-  let WellKnownLocalSID = 'S-1-5-32-5[0-9][0-9]$';
-  let WellKnownGroupSID = 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$';
-  let GetGroupAddForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
-  SecurityEvent
-  | where EventID in (4728, 4732, 4756)
-  | extend PassedInName = v_Host_Name, PassedInNTDomain = v_Host_NTDomain, PassedInDNSDomain = v_Host_DnsDomain
-  | extend PassedInName = case(
-  PassedInName has '@', tostring(split(PassedInName, '@')[0]),
-  PassedInName has '\\', tostring(split(PassedInName, '\\')[1]),
-  PassedInName has '.', tostring(split(PassedInName, '.')[0]),
-  PassedInName
-  )
-  | extend PassedInNTDomain = case( PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]), 
-  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]), 
-  PassedInNTDomain )
-  | extend PassedInDNSDomain = case( PassedInDNSDomain has '\\', tostring(split(PassedInDNSDomain, '\\')[0]), 
-  PassedInDNSDomain has '.', strcat_array(array_slice(split(PassedInDNSDomain,'.'),-2,-1),'.'), 
-  PassedInDNSDomain )
-  | where (Computer has PassedInName and Computer has PassedInNTDomain) or (Computer has PassedInName and Computer has PassedInDNSDomain)
-  | extend MemberAdded = case( MemberName has 'CN=', tostring(split(tostring(split(MemberName, ',')[0]),'CN=')[1]), MemberName == '-', MemberSid, MemberName) 
-  | project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, PassedInName, PassedInNTDomain, PassedInDNSDomain
-  | extend GroupName = TargetUserName, AddedBy = SubjectUserName
-  //support for Activities
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
-  };
-  GetGroupAddForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
 RequiredInputFieldsSets: 
  - - Host_HostName
    - Host_NTDomain
  - - Host_HostName
    - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  let WellKnownLocalSID = 'S-1-5-32-5[0-9][0-9]$';
+  let WellKnownGroupSID = 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$';
+  let GetGroupAddForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
+  SecurityEvent
+  | where EventID in (4728, 4732, 4756)
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
+  | extend MemberAdded = case( MemberName has 'CN=', tostring(split(tostring(split(MemberName, ',')[0]),'CN=')[1]), MemberName == '-', MemberSid, MemberName) 
+  | project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, _ResourceId, SourceComputerId
+  | extend GroupName = TargetUserName, AddedBy = SubjectUserName
+  //support for Activities
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+  };
+  GetGroupAddForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 # The queries for the insights.
 Insights:
  Id: 44c9d0fe-c131-4080-a34f-da0e349da336
@@ -102,5 +111,22 @@ Insights:
 
  AdditionalQuery:
   Text: "See All Group Additions"
-  Query: "project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID | order by TimeGenerated desc"
- 
+  Query: "project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, _ResourceId, SourceComputerId, timestamp, HostCustomEntity | order by TimeGenerated desc"
+
+Activities:
+ enabledByDefault: true
+ items: 
+   - id: b880ad94-f905-4ba8-8a3f-9088b19b12fa
+     description: Account added to Local Administrators Group
+     title: "An account was added to the Local Administrators group"
+     content: "On '{{Computer}}' the user '{{MemberAdded}}' was added by '{{AddedBy}}' to group: '{{GroupName}}'"
+     queryDefinitions:
+       filter: where TargetSid == 'S-1-5-32-544'
+       summarizeBy: Computer
+   - id: 5ba7b064-c667-4bb9-b8ac-7e87872ae479
+     description: Account added to Privileged Group.
+     title: "Account added to a privileged group"
+     content: "On '{{Computer}}' the user '{{MemberAdded}}' was added by '{{AddedBy}}' to group: '{{GroupName}}'"
+     queryDefinitions:
+       filter: where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
+       summarizeBy: MemberAdded, AddedBy, GroupName 

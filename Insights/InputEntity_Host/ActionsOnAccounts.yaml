@@ -3,35 +3,44 @@ DataTypes:
   - DataType: SecurityEvent
 Type: KQL
 Provider: Sentinel
-BaseQuery: |
-  let GetAccountActions = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
-  SecurityEvent
-  | where EventID in (4725, 4726, 4767, 4720, 4722, 4723, 4724)
-  | extend PassedInName = v_Host_Name, PassedInNTDomain = v_Host_NTDomain, PassedInDNSDomain = v_Host_DnsDomain
-  | extend PassedInName = case(
-  PassedInName has '@', tostring(split(PassedInName, '@')[0]),
-  PassedInName has '\\', tostring(split(PassedInName, '\\')[1]),
-  PassedInName has '.', tostring(split(PassedInName, '.')[0]),
-  PassedInName
-  )
-  | extend PassedInNTDomain = case( PassedInNTDomain has '\\', tostring(split(PassedInNTDomain, '\\')[0]), 
-  PassedInNTDomain has '.', tostring(split(PassedInNTDomain, '.')[-2]), 
-  PassedInNTDomain )
-  | extend PassedInDNSDomain = case( PassedInDNSDomain has '\\', tostring(split(PassedInDNSDomain, '\\')[0]), 
-  PassedInDNSDomain has '.', strcat_array(array_slice(split(PassedInDNSDomain,'.'),-2,-1),'.'), 
-  PassedInDNSDomain )
-  | where (Computer has PassedInName and Computer has PassedInNTDomain) or (Computer has PassedInName and Computer has PassedInDNSDomain)
-  | project TimeGenerated, EventID, Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, TargetSid, SubjectUserName, SubjectUserSid, PassedInName, PassedInNTDomain, PassedInDNSDomain
-  | extend AddedBy = SubjectUserName
-  // Future support for Activities
-  | extend timestamp = TimeGenerated, HostCustomEntity = PassedInName, AccountCustomEntity = TargetAccount
-  };
-  GetAccountActions('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
 RequiredInputFieldsSets: 
  - - Host_HostName
    - Host_NTDomain
  - - Host_HostName
    - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  let GetAccountActions = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
+  SecurityEvent
+  | where EventID in (4725, 4726, 4767, 4720, 4722, 4723, 4724)
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
+  | project TimeGenerated, EventID, Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, TargetSid, SubjectUserName, SubjectUserSid, _ResourceId, SourceComputerId
+  | extend AddedBy = SubjectUserName
+  // Future support for Activities
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = TargetAccount
+  };
+  GetAccountActions('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 # The queries for the insights.
 Insights:
  Id: e29ee1ef-7445-455e-85f1-269f2d536d61
@@ -103,4 +112,22 @@ Insights:
  
  AdditionalQuery:
   Text: "See All Actions on Accounts"
-  Query: "project TimeGenerated, EventID, Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, TargetSid, SubjectUserName, SubjectUserSid | order by TimeGenerated desc"
+  Query: "project TimeGenerated, EventID, Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, TargetSid, SubjectUserName, SubjectUserSid, _ResourceId, SourceComputerId, timestamp, HostCustomEntity, AccountCustomEntity | order by TimeGenerated desc"
+
+Activities:
+ enabledByDefault: true
+ items: 
+   - id: 307c85ee-39a2-4da3-952e-4fd79aa46d3a
+     description: Account created on Host
+     title: "An account was created on this host"
+     content: "On '{{Computer}}' the account '{{TargetAccount}}' was created by '{{AddedBy}}'"
+     queryDefinitions:
+       filter: where EventID == 4720
+       summarizeBy: Computer
+   - id: 31529548-dbd2-4d5d-8270-710330cdcec7
+     description: Account deleted on Host
+     title: "An account was deleted on this host"
+     content: "On '{{Computer}}' the account '{{TargetAccount}}' was deleted by '{{AddedBy}}'"
+     queryDefinitions:
+       filter: where EventID == 4726
+       summarizeBy: Computer

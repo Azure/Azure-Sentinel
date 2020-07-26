@@ -6,12 +6,10 @@ DataTypes:
 EntitiesFilter: {}
 RequiredInputFieldsSets: 
   - - Host_HostName
-Type: KQL
-Provider: Sentinel
 BaseQuery: |
-  let AllUserEvents = (v_Host_Name:string) {
+  let AllUserEvents = (v_Host_Name:string, v_Host_AzureID:string) {
   Syslog
-  | where Computer == v_Host_Name
+  | where Computer == v_Host_Name or v_Host_AzureID == _ResourceId
   | where Facility == 'authpriv'
   | where SyslogMessage !startswith "omsagent"
   | where SyslogMessage has 'COMMAND' or ProcessName in~ ('gpasswd', 'useradd', 'userdel')
@@ -27,9 +25,10 @@ BaseQuery: |
   SyslogMessage startswith 'removed shadow group', 'removed shadow group',
   'None')
   | where isnotempty(Action) and Action != 'None' and isnotempty(Group)
-  | project TimeGenerated, Computer, HostIP, User, Action, Group, Facility, ProcessName, AcctMakingChange, SyslogMessage
+  | project TimeGenerated, Computer, HostIP, User, Action, Group, Facility, ProcessName, AcctMakingChange, SyslogMessage, _ResourceId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP, AccountCustomEntity = User
   };
-  AllUserEvents('{{Host_HostName}}')
+  AllUserEvents('{{Host_HostName}}', '{{Host_AzureID}}')
 Insights:
   Id: f1607751-8784-4a69-a91b-45b56683bc77
   DisplayName: Linux Group Actions on Host
@@ -92,4 +91,22 @@ Insights:
    Type: BarChart
   AdditionalQuery: 
    Text: "See all group actions"
-   Query: "project TimeGenerated, Computer, HostIP, User, Action, Group, Facility, ProcessName, AcctMakingChange, SyslogMessage"
+   Query: "project TimeGenerated, Computer, HostIP, User, Action, Group, Facility, ProcessName, AcctMakingChange, SyslogMessage, _ResourceId, timestamp, HostCustomEntity, AccountCustomEntity, IPCustomEntity"
+
+Activities:
+ enabledByDefault: true
+ items: 
+   - id: 46aeae2d-187c-41f9-b8d6-9d75c43bce0a
+     description: Account added to the sudo group
+     title: "An account was added to the sudo group"
+     content: "On '{{Computer}}' the user '{{User}}' was added by '{{AcctMakingChange}}' to group: '{{Group}}'"
+     queryDefinitions:
+       filter: where Action =~ 'added to' and Group =~ 'sudo'
+       summarizeBy: Computer
+   - id: e24dd437-c65e-40e1-8d59-cd303ad4496a
+     description: Account removed from sudo group
+     title: "An account was removed from the sudo group"
+     content: "On '{{Computer}}' the user '{{User}}' was added by '{{AcctMakingChange}}' to group: '{{Group}}'"
+     queryDefinitions:
+       filter: where Action =~ 'removed from' and Group =~ 'sudo'
+       summarizeBy: Computer

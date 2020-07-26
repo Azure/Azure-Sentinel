@@ -6,12 +6,10 @@ DataTypes:
 EntitiesFilter: {}
 RequiredInputFieldsSets: 
   - - Host_HostName
-Type: KQL
-Provider: Sentinel
 BaseQuery: |
-  let AllUserEvents = (v_Host_Name:string) {
+  let AllUserEvents = (v_Host_Name:string, v_Host_AzureID:string) {
   Syslog
-  | where Computer == v_Host_Name
+  | where Computer == v_Host_Name or v_Host_AzureID == _ResourceId
   | where Facility == 'authpriv'
   | where ProcessName in~ ('useradd','userdel')
   | where SyslogMessage startswith 'new user:' or SyslogMessage startswith 'delete user '
@@ -19,9 +17,10 @@ BaseQuery: |
   SyslogMessage startswith 'delete user ', tostring(split(SyslogMessage, "'")[1]),
   'Not Available')
   | extend Action = case( SyslogMessage startswith 'new user', 'new user', SyslogMessage startswith 'delete user', 'delete user', 'None')
-  | project TimeGenerated, Computer, HostIP, User, Facility, ProcessName, Action, SyslogMessage
+  | project TimeGenerated, Computer, HostIP, User, Facility, ProcessName, Action, SyslogMessage, _ResourceId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP, AccountCustomEntity = User
   };
-  AllUserEvents('{{Host_HostName}}')
+  AllUserEvents('{{Host_HostName}}', '{{Host_AzureID}}')
 Insights:
   Id: e7144614-84b3-4884-bc14-cba1b9bac0de
   DisplayName: Linux New or Deleted Users on Host
@@ -63,4 +62,22 @@ Insights:
    Type: BarChart
   AdditionalQuery: 
    Text: "See all new or deleted users"
-   Query: "project TimeGenerated, Computer, HostIP, User, Facility, ProcessName, Action, SyslogMessage"
+   Query: "project TimeGenerated, Computer, HostIP, User, Facility, ProcessName, Action, SyslogMessage, _ResourceId, timestamp, HostCustomEntity, AccountCustomEntity, IPCustomEntity"
+
+Activities:
+ enabledByDefault: true
+ items: 
+   - id: 290032e9-c52e-4e66-841a-7428f0b356bb
+     description: Account created on Host
+     title: "An account was created on this host"
+     content: "On '{{Computer}}' the account '{{User}}' was created by sudo"
+     queryDefinitions:
+       filter: where Action == 'new user'
+       summarizeBy: Computer
+   - id: ce9e87c7-2ffa-42cb-92e5-f1a4f21f007a
+     description: Account deleted on Host
+     title: "An account was deleted on this host"
+     content: "On '{{Computer}}' the account '{{User}}' was deleted by sudo"
+     queryDefinitions:
+       filter: where Action == 'delete user'
+       summarizeBy: Computer
