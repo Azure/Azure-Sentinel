@@ -7,10 +7,10 @@ Welcome to the Azure Sentinel repository! This repository contains out of the bo
 * [Getting started with GitHub](https://help.github.com/en#dotcom)
 
 We value your feedback. Here are some channels to help surface your questions or feedback:
-1. General product specific Q&A â€“ Join in the [Azure Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
-1. Product specific feature requests â€“ Upvote or post new on [Azure Sentinel feedback forums](https://feedback.azure.com/forums/920458-azure-sentinel)
-1. Report product or contribution bugs â€“ File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
-1. General feedback on community and contribution process â€“ File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
+1. General product specific Q&A – Join in the [Azure Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
+1. Product specific feature requests – Upvote or post new on [Azure Sentinel feedback forums](https://feedback.azure.com/forums/920458-azure-sentinel)
+1. Report product or contribution bugs – File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
+1. General feedback on community and contribution process – File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
 
 # Contributing
@@ -48,3 +48,6 @@ For more information see the [Code of Conduct FAQ](https://opensource.microsoft.
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 For information on what you can contribute and further details, refer to the ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) section on the project's [wiki](https://aka.ms/threathunters).
+
+
+..
