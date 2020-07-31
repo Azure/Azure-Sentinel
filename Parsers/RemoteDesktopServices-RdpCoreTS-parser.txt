@@ -1,0 +1,116 @@
+// KQL RemoteDesktopServices-RdpCoreTS Event Parser
+// Last Updated Date: May 23, 2020
+//
+// Purpose : 
+// This parser aims to help collecting data from Windows VM through the Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational events channel.
+// This might be usefull to detect success bruteforce attacks on RDP.
+// Note that this parser was initially created to monitor EventID 140 (RDP failed auth.). Thus, at the moment, not all EventID are supported.
+// Don't hesitate to update it or to ask for an update.
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. RDPCoreTS).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. RDPCoreTS | where EventID == 140).
+//
+// References : 
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+let RemoteDesktopServices = Event
+| where EventLog == "Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational"
+| project TimeGenerated, Source, EventID, Computer, UserName, EventData, RenderedDescription
+| extend EvData = parse_xml(EventData)
+| extend EventDetail = EvData.DataItem.EventData.Data
+| project-away EvData, EventData;
+let RemoteDesktopServices65=()
+{
+    let Event65 = RemoteDesktopServices
+    | where EventID == 65
+    | extend ConnectionName65 = EventDetail["#text"]
+    | project-away EventDetail;
+    Event65;
+};
+let RemoteDesktopServices66=()
+{
+    let Event66 = RemoteDesktopServices
+    | where EventID == 66
+    | extend ConnectionName66 = tostring(EventDetail[0]["#text"])
+    | extend SessionID = tostring(EventDetail[1]["#text"])
+    | project-away EventDetail;
+    Event66;
+};
+let RemoteDesktopServices98=()
+{
+    let Event98 = RemoteDesktopServices
+    | where EventID == 98
+    | project-away EventDetail;
+    Event98;
+};
+let RemoteDesktopServices101=()
+{
+    let Event101 = RemoteDesktopServices
+    | where EventID == 101
+    | extend ReasonString = tostring(EventDetail["#text"])
+    | project-away EventDetail;
+    Event101;
+};
+let RemoteDesktopServices102=()
+{
+    let Event102 = RemoteDesktopServices
+    | where EventID == 102
+    | project-away EventDetail;
+    Event102;
+};
+let RemoteDesktopServices103=()
+{
+    let Event103 = RemoteDesktopServices
+    | where EventID == 103
+    | extend ReasonCode = tostring(EventDetail["#text"])
+    | project-away EventDetail;
+    Event103;
+};
+let RemoteDesktopServices129=()
+{
+    let Event129 = RemoteDesktopServices
+    | where EventID == 129
+    | extend TransportProtocolName = tostring(EventDetail[0]["#text"])
+    | extend Port = tostring(EventDetail[1]["#text"])
+    | project-away EventDetail;
+    Event129;
+};
+let RemoteDesktopServices131=()
+{
+    let Event131 = RemoteDesktopServices
+    | where EventID == 131
+    | extend Protocol = tostring(EventDetail.[0]["#text"])
+    | extend RemoteIP131 = tostring(split(EventDetail.[1]["#text"],":")[0])
+    | extend RemotePort = tostring(split(EventDetail.[1]["#text"],":")[1])
+    | project-away EventDetail;
+    Event131;
+};
+let RemoteDesktopServices139=()
+{
+    let Event139 = RemoteDesktopServices
+    | where EventID == 139
+    | extend ResultCode = tostring(EventDetail[0]["#text"])
+    | extend IPString = tostring(EventDetail[1]["#text"])
+    | project-away EventDetail;
+    Event139;
+};
+let RemoteDesktopServices140=()
+{
+    let Event140 = RemoteDesktopServices
+    | where EventID == 140
+    | extend RemoteIP140 = tostring(EventDetail.["#text"])
+    | project-away EventDetail;
+    Event140;
+};
+let RemoteDesktopServicesUnparsed=()
+{
+    let Unparsed= RemoteDesktopServices
+    | where EventID !in (65,66,98,101,102,103,129,131,139,140);
+    Unparsed;
+};
+(union isfuzzy=true
+RemoteDesktopServices65, RemoteDesktopServices66, RemoteDesktopServices98, RemoteDesktopServices101, RemoteDesktopServices102, RemoteDesktopServices103, RemoteDesktopServices129, RemoteDesktopServices131, RemoteDesktopServices139, RemoteDesktopServices140, RemoteDesktopServicesUnparsed
+| project TimeGenerated, Computer, Source, EventID, RenderedDescription, ConnectionName65,ConnectionName66,SessionID,ReasonString,ReasonCode,TransportProtocolName,Port,Protocol,RemoteIP131,RemotePort,ResultCode,IPString,RemoteIP140
+| order by TimeGenerated asc)
