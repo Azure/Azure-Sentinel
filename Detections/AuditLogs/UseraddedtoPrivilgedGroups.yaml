@@ -1,0 +1,41 @@
+id: 4d94d4a9-dc96-410a-8dea-4d4d4584188b
+name: User added to Azure Active Directory Privileged Groups
+description: |
+  'This will alert when a user is added to any of the Privileged Groups.
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.
+  For Administrator role permissions in Azure Active Directory please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+  let timeframe = 1h;
+  let OperationList = dynamic(["Add member to role","Add member to role in PIM requested (permanent)"]);
+  let PrivilegedGroups = dynamic(["UserAccountAdmins","PrivilegedRoleAdmins","TenantAdmins"]);
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "RoleManagement"
+  | where OperationName in~ (OperationList)
+  | mv-expand TargetResources
+  | extend modifiedProperties = parse_json(TargetResources).modifiedProperties
+  | mv-expand modifiedProperties
+  | extend DisplayName = tostring(parse_json(modifiedProperties).displayName), GroupName =  trim(@'"',tostring(parse_json(modifiedProperties).newValue))
+  | extend AppId = tostring(parse_json(parse_json(InitiatedBy).app).appId), InitiatedByDisplayName = tostring(parse_json(parse_json(InitiatedBy).app).displayName), ServicePrincipalId = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalId), ServicePrincipalName = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalName)
+  | where DisplayName =~ "Role.WellKnownObjectName"
+  | where GroupName in~ (PrivilegedGroups)
+  // If you want to still alert for operations from PIM, remove below filtering for MS-PIM.
+  | where InitiatedByDisplayName != "MS-PIM"
+  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ServicePrincipalName
