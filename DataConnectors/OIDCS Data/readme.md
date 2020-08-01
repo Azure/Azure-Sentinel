@@ -3,7 +3,7 @@ This function app will poll Oracle Cloud Identity Audit Events API every 5 mins 
 
 ## Deployment and Configuration
 ### Add Oracle Confidential App, Generate Base 64 ClientID:ClientSecret string, and Find IDCS Uri
-1. Review: https://docs.oracle.com/en/cloud/paas/identity-cloud/17.3.6/rest-api/OATOAuthClientWebApp.html
+1. Review: https://aka.ms/AA94w2h
 
 #### : Deploy via Azure ARM Template
 1.  Deploy the template.
