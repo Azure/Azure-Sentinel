@@ -11,7 +11,7 @@ function Write-OMSLogfile {
     Given a  value pair hash table, this function will write the data to an OMS Log Analytics workspace.
     Certain variables, such as Customer ID and Shared Key are specific to the OMS workspace data is being written to.
     This function will not write to multiple OMS workspaces.  Build-signature and post-analytics function from Microsoft documentation
-    at https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-collector-api
+    at https://docs.microsoft.com/azure/log-analytics/log-analytics-data-collector-api
     .PARAMETER DateTime
     date and time for the log.  DateTime value
     .PARAMETER Type
