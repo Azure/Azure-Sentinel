@@ -7,11 +7,11 @@ This playbook will get vulnerability data from tenanble.io instance and sen
 # Pre-Requisites:
 
 
-- Onboarding Azure Sentinel. Ref https://docs.microsoft.com/en-us/azure/sentinel/quickstart-onboard<br>
+- Onboarding Azure Sentinel. Ref https://docs.microsoft.com/azure/sentinel/quickstart-onboard<br>
 - Tenable.io vulnerability management up and running
 - Tenable.io API Key: https://docs.tenable.com/tenableio/vulnerabilitymanagement/Content/Settings/GenerateAPIKey.htm
 - Tenable.io API Ref  https://developer.tenable.com/reference
-- Configuring Security Playbook using Azure Logic App. Ref https://docs.microsoft.com/en-us/azure/sentinel/tutorial-respond-threats-playbook
+- Configuring Security Playbook using Azure Logic App. Ref https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-TenableVlun%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
