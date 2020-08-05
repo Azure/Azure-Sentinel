@@ -1,11 +1,24 @@
+import fs from "fs";
+import { SchemaError, Validator } from 'jsonschema';
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
-import fs from "fs";
 import * as logger from "./utils/logger";
 
 export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
-  JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const json = JSON.parse(fs.readFileSync(filePath, "utf8")); 
+  if (filePath.endsWith('WorkbooksMetadata.json')) {
+    validateWorkbookSchema(json);
+  }
   return ExitCode.SUCCESS;
+}
+
+function validateWorkbookSchema(workbooksMetadataJson: object) {
+  const schema = JSON.parse(fs.readFileSync('.script/utils/WorkbooksMetadataSchema.json', 'utf8'));
+  var validationResult = new Validator().validate(workbooksMetadataJson, schema);
+  if (!validationResult.valid) {
+    let errorMsg = validationResult.errors.map(err => err.message).join(", ");
+    throw new SchemaError(errorMsg, schema)
+  }
 }
 
 let fileTypeSuffixes = ["json"];
