@@ -33,23 +33,23 @@ You might need –ProfileName if your configuration of .aws/credentials file doe
 
 ### Edit the Lambda Trigger
 1. Once created, login to the AWS console.   In Find services, search for Lambda.  Click on Lambda.
-[![](./Graphics/Picture1.png)]
+[!(./Graphics/Picture1.png)]
 2. Click on the lambda function name you used with the cmdlet. Click Add Trigger 
-[![](/Graphics/Picture2.png)]
+[!(./Graphics/Picture2.png)]
 3. Select S3.  Select the bucket.  Acknowledge the warning at the bottom.  Click Add. 
-[![](/Graphics/Picture3.png)]
+[!(./Graphics/Picture3.png)]
 4. Your lambda function is ready to send data to Log Analytics.   
 
 ### Test the function
 1. To test your function, upload a support file to the S3 bucket defined in the trigger. 
-[![](/Graphics/Picture4.png)]
+[!(./Graphics/Picture4.png)]
 2. To see the logs, go the Lambda function.  Click Monitoring tab.  Click view logs in CloudWatch. 
-[![](/Graphics/Picture5.png)]
+[!(./Graphics/Picture5.png)]
 3. In CloudWatch, you will see each log stream from the runs.  Select the latest.   
-[![](/Graphics/Picture6.png)]
+[!(./Graphics/Picture6.png)]
 4. Here you can see anything from the script from the Write-Host cmdlet. 
-[![](/Graphics/Picture7.png)]
+[!(./Graphics/Picture7.png)]
 5. Go to portal.azure.com and verify your data is in the custom log. 
-[![](/Graphics/Picture8.png)]
+[!(./Graphics/Picture8.png)]
 
   
