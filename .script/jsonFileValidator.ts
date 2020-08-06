@@ -7,14 +7,14 @@ import * as logger from "./utils/logger";
 export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {
   const json = JSON.parse(fs.readFileSync(filePath, "utf8")); 
   if (filePath.endsWith('WorkbooksMetadata.json')) {
-    validateWorkbookSchema(json);
+    let schema = JSON.parse(fs.readFileSync('.script/utils/schemas/WorkbooksMetadataSchema.json', 'utf8'))
+    validateSchema(json, schema);
   }
   return ExitCode.SUCCESS;
 }
 
-function validateWorkbookSchema(workbooksMetadataJson: object) {
-  const schema = JSON.parse(fs.readFileSync('.script/utils/WorkbooksMetadataSchema.json', 'utf8'));
-  var validationResult = new Validator().validate(workbooksMetadataJson, schema);
+function validateSchema(json: object, schema: object) {
+  var validationResult = new Validator().validate(json, schema);
   if (!validationResult.valid) {
     let errorMsg = validationResult.errors.map(err => err.message).join(", ");
     throw new SchemaError(errorMsg, schema)
