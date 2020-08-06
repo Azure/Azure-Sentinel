@@ -3,7 +3,7 @@ name: Squid commonly abused TLDs
 description: |
   'Some top level domains (TLDs) are more commonly associated with malware for a range of reasons - including how easy domains on these TLDs are to obtain. 
   Many of these may be undesirable from an enterprise policy perspective. The clientCount column provides an initial insight into how widespread the domain 
-  usage is across the estate. This query presumes the default squid log format is being used.'
+  usage is across the estate. This query presumes the default squid log format is being used. http://www.squid-cache.org/Doc/config/access_log/'
 requiredDataConnectors:
   - connectorId: Syslog
     dataTypes: 
@@ -15,6 +15,7 @@ relevantTechniques:
   - T1008
 query: |
 
+  let suspicious_tlds = dynamic([ ".click", ".club", ".download",  ".xxx", ".xyz"]);
   let timeframe = 14d;
   Syslog
   | where TimeGenerated >= ago(timeframe) 
@@ -27,7 +28,7 @@ query: |
            RemotePort = extract("(CONNECT |GET )([^ ]*)(:)([0-9]*)",4,SyslogMessage),
            Domain = extract("(([A-Z]+ [a-z]{4,5}:\\/\\/)|[A-Z]+ )([^ :\\/]*)",3,SyslogMessage)
   | extend TLD = extract("\\.[a-z]*$",0,Domain)
-  | where TLD in ( ".click", ".club", ".download",  ".xxx", ".xyz")
+  | where TLD in (suspicious_tlds)
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), clientCount = dcount(SourceIP) by TLD, User, URL
   | order by TLD asc, clientCount desc
   | extend timestamp = StartTimeUtc, AccountCustomEntity = User, URLCustomEntity = URL
