@@ -33,7 +33,7 @@ You might need –ProfileName if your configuration of .aws/credentials file doe
 
 ### Edit the Lambda Trigger
 1. Once created, login to the AWS console.   In Find services, search for Lambda.  Click on Lambda.
-[!(./Graphics/Picture1.png)]
+!(./Graphics/Picture1.png)
 2. Click on the lambda function name you used with the cmdlet. Click Add Trigger 
 [!(./Graphics/Picture2.png)]
 3. Select S3.  Select the bucket.  Acknowledge the warning at the bottom.  Click Add. 
