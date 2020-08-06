@@ -7,7 +7,7 @@ chai.use(chaiAsPromised);
 
 describe("jsonFileValidator", () => {
   it("should pass when json file is valid", async () => {
-    checkValid(".script/tests/jsonFileValidatorTest/validFile.json");
+    await checkValid(".script/tests/jsonFileValidatorTest/validFile.json");
   });
 
   it("should throw exception when json file is invalid", async () => {
@@ -15,7 +15,7 @@ describe("jsonFileValidator", () => {
   });
 
   it("should pass when workbooks metadata is valid", async () => {
-    checkValid(".script/tests/jsonFileValidatorTest/validWorkbooksMetadata.json");
+    await checkValid(".script/tests/jsonFileValidatorTest/validWorkbooksMetadata.json");
   });
 
   it("should throw an exception when WorkbooksMetadata contains an illegal property", async () => {
