@@ -1,3 +1,6 @@
+## 2.0.2
+- Added  ACN_CD_OktaIssue925 resolution to add domain to output records
+
 ## 2.0.1
 - Added CHANGELOG.md to track future code changes
 - Complete rewrite of Azure Function code to address the following

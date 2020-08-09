@@ -1,10 +1,14 @@
 ﻿<#  
     Title:          Okta Data Connector
     Language:       PowerShell
-    Version:        2.0
+    Version:        2.0.2
     Author(s):      Microsoft - Chris Abberley
-    Last Modified:  7/22/2020
-    Comment:        Fixes for the following issues with Version 1
+    Last Modified:  2020-08-09 - August 9th 2020
+    Comment:        Version 2.0.2
+                    -Added fix for ACN_CD_Issue925
+
+                    Version 2.01
+                    Fixes for the following issues with Version 1
                     -Potential Data loss due to code not processing linked pages
                     -Potential Data loss due to variations in execution of Triggers
                     -Corrected Timestamp field for Okta logs which use "published"
@@ -97,16 +101,24 @@ do {
     ELSE{
         $exitDoUntil = $true
     }
-    $responseCount = (ConvertFrom-Json $response.content).count
+    $responseObj = (ConvertFrom-Json $response.content)
+    $responseCount = $responseObj.count
     if($ResponseCount -gt 0) {
         #breakdown into steps as Powershell in Azure Functions doesn't always like multistep combinations
-        $responseDate = ConvertFrom-Json $response.content 
-        $responseDate = $responseDate.published.ticks | Sort-Object -Descending
+        $responseDate = $responseObj.published.ticks | Sort-Object -Descending
         $responseDate = $responseDate[0]
         $responseDate = Get-Date -Date $ResponseDate  
         $responsedate = $responsedate.tostring('yyyy-MM-ddTHH:mm:ss.fffZ')
+
+        #ACN_CD_OktaIssue925
+        $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
+        $responseObj = $response | ConvertFrom-Json
+        $responseObj | Add-Member -MemberType NoteProperty -Name "domain" -Value $domain
+        $json = $responseObj | ConvertTo-Json -Depth 5
  
-        $TotalRecordCount= $TotalRecordCount + $responseCount
+        IF($response.headers.RawContentLength -ieq 2){
+            $TotalRecordCount= $TotalRecordCount + $responseCount
+        }
 
         Function new-BuildSignature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
         {
@@ -125,7 +137,8 @@ do {
         $contentType = "application/json"
         $resource = "/api/logs"
         $rfc1123date = [DateTime]::UtcNow.ToString("r")
-        $body = ([System.Text.Encoding]::UTF8.GetBytes($response))
+        
+        $body = ([System.Text.Encoding]::UTF8.GetBytes($json))
         $contentLength = $body.Length
         $signature = new-BuildSignature `
             -customerId $customerId `
