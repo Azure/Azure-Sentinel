@@ -4,9 +4,9 @@ This Lambda function is desgined to read S3 Files on upload and send them to Azu
 ## Deployment
 ### Machine Setup
 To deploy this, you will need a machine prepared with the following:
- - PowerShell Core – I recommend PowerShell 7 found here 
- - .Net Core 3.1 SDK found here 
- - AWSLambdaPSCore module – You can install this either from the PowerShell Gallery, or you can install it by using the following PowerShell Core shell command:  
+ - PowerShell Core – I recommend PowerShell 7 [found here](https://github.com/PowerShell/PowerShell/releases)
+ - .Net Core 3.1 SDK [found here](https://dotnet.microsoft.com/download) 
+ - AWSLambdaPSCore module – You can install this either from the [PowerShell Gallery](https://www.powershellgallery.com/packages?q=AWSLambdaPSCore), or you can install it by using the following PowerShell Core shell command:  
 ```powershell
 Install-Module AWSLambdaPSCore -Scope CurrentUser
 ```
