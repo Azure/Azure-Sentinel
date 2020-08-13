@@ -1,0 +1,28 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+DataTypes: 
+- DataType: SigninLogs
+RequiredInputFieldsSets:
+- - Account_Name
+  - Account_UPNSuffix
+- - Account_AadUserId
+BaseQuery: |- 
+  let SignInsByResource = (acc_name:string, acc_upnsuffix:string, acc_aaduserid:string){
+  let acc_upn = iff(acc_name != "" and acc_upnsuffix != "" ,strcat(acc_name,"@" ,acc_upnsuffix),"");
+  SigninLogs
+  | where (acc_upn != "" and UserPrincipalName =~ acc_upn) or
+     (acc_aaduserid != "" and acc_aaduserid =~ UserId) // UserPrincipalName, UserId
+  | extend shortResourceId = tostring(split(ResourceId,"/")[-1])
+  };
+  SignInsByResource('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_AadUserId}}')
+
+Activities:
+     EnabledByDefault: true
+     Title: "The user signed in to {{shortResourceId}} {{Count}} times"
+     Content: "The user signed in to {{shortResourceId}} {{Count}} times"
+     Items: 
+        - Id: 1f82f263-d694-469a-9717-1b3edf9d3bb2
+          Description: This activity lists user's sign ins to Azure Resources
+          QueryDefinitions:
+            SummarizeBy: shortResourceId, ResourceId
