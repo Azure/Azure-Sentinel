@@ -1,0 +1,30 @@
+id: 72727649-6445-46a3-b249-997a009fad89
+name: Failed Logon on SQL Server from Same IPAddress in Short time Span
+description: |
+  This hunitng query identifies multiple failed logon attempts from same IP within short span of time.
+  This query is based on the SQLEvent KQL Parser function (link below)
+  SQLEvent KQL Parser provided at https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/SQLSever
+  Detailed blog post on Monitoring SQL Server with Azure Sentinel https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-sql-server-with-azure-sentinel/ba-p/1502960
+requiredDataConnectors:
+  - connectorId: AzureMonitor(WindowsEventLogs)
+    dataTypes:
+      - Event
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+
+        // SQLEvent is not the table name, it is the function name that should already be imported into your workspace.
+        // The underlying table where the data exists is the Event table.
+        // the timeframe and threshold can be changed below as per requirement.
+        //
+        let TimeFrame = 1d;
+        let failedThreshold = 3;
+        SQLEvent
+        | where TimeGenerated >= ago(TimeFrame) 
+        | where LogonResult has "failed"
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TotalFailedLogons = count() by ClientIP, CurrentUser, Computer
+        | where TotalFailedLogons >= failedThreshold
+        | project StartTime, ClientIP, TotalFailedLogons, CurrentUser, Computer
+        | extend timestamp = StartTime, AccountCustomEntity = CurrentUser, IPCustomEntity = ClientIP
