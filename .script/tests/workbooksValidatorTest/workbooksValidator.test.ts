@@ -22,15 +22,19 @@ describe("workbooksValidator", () => {
     await checkInvalid(".script/tests/workbooksValidatorTest/duplicateKeyWorkbooksMetadata.json", "WorkbookValidationError");
   });
 
-  it("should throw an exception when previewImagesFileNames are inconsistent with naming convention ", async () => {
-    await checkInvalid(".script/tests/workbooksValidatorTest/badPreviewImagesFileNamesWorkbooksMetadata.json", "WorkbookValidationError");
+  it("should throw an exception when preview image file names are not png files", async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/nonPngPreviewImagesWorkbooksMetadata.json", "WorkbookValidationError");
   });
 
-  it("should throw an exception when previewImagesFileNames is missing White filenames ", async () => {
+  it("should throw an exception when preview image file names do not include 'white' or 'black' keywords", async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/noColorPreviewImagesWorkbooksMetadata.json", "WorkbookValidationError");
+  });
+
+  it("should throw an exception when preview image file names are missing White images", async () => {
     await checkInvalid(".script/tests/workbooksValidatorTest/missingWhitePreviewImageWorkbooksMetadata.json", "WorkbookValidationError");
   });
 
-  it("should throw an exception when previewImagesFileNames is missing Black filenames ", async () => {
+  it("should throw an exception when preview image file names are missing Black images", async () => {
     await checkInvalid(".script/tests/workbooksValidatorTest/missingBlackPreviewImageWorkbooksMetadata.json", "WorkbookValidationError");
   });
 
