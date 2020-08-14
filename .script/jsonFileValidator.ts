@@ -1,6 +1,6 @@
-import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
+import fs from "fs";
 import * as logger from "./utils/logger";
 
 export async function IsValidJsonFile(filePath: string): Promise<ExitCode> {

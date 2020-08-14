@@ -36,7 +36,7 @@ async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: stri
 }
 
 export function runCheckOverChangedFiles(options: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPrefixes?: string[]) {
-  changedFilesValidator(options, fileKinds, fileTypeSuffixes, filePathFolderPrefixes).catch((e) => {
+  changedFilesValidator(options, fileKinds, fileTypeSuffixes, filePathFolderPrefixes).catch(e => {
     console.error(e);
     logger.logError(`Error. If issue persists - please open an issue`);
     process.exit(ExitCode.ERROR);
