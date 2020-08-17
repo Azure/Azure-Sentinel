@@ -1,6 +1,12 @@
 SchemaVersion: 1.0
+Type: KQL
+Provider: Sentinel
 DataTypes:
   - DataType: SecurityEvent
+RequiredInputFieldsSets:
+  - - Account_Name
+    - Account_NTDomain
+  - - Account_SID
 BaseQuery: |
   let UserClearedEventLog = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_SID:string){
   SecurityEvent
@@ -41,19 +47,16 @@ BaseQuery: |
   | where (Account_Name =~ p_Account_Name and Account_NTDomain =~ p_Account_NTDomain) or SubjectUserSid =~ v_Account_SID
   };
   UserClearedEventLog('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_SID}}')
-Type: KQL
-Provider: Sentinel
-RequiredInputFieldsSets:
-  - - Account_Name
+# The queries for the insights.
 Insights:
   Id: 5a70a68d-25d4-4012-b73e-4f302a16c06a
-  DisplayName: User Cleared Logs
+  DisplayName: Event Logs cleared by user
   Description: |
     Provides the datetime & count of number of times the event logs were cleared
     by the user.
   DefaultTimeRange:
-    BeforeRange: 7d
-    AfterRange: 7d
+    BeforeRange: 12h
+    AfterRange: 12h
   TableQuery:
     ColumnsDefinitions:
       - Header: "Cleared Event Log"
@@ -63,14 +66,16 @@ Insights:
       - Header: "Host Count"
         OutputType: Number
     QueriesDefinitions:
+    # SecurityEvent cleared
       - Filter: "where ClearedLog =~ 'SecurityEvent'"
         Summarize: "summarize HostCount = dcount(Computer), EventCount = count() by ClearedLog"
         Project: "project Title = ClearedLog, EventCount, HostCount"
+    # Other Event Cleared
       - Filter: "where ClearedLog !~ 'SecurityEvent'"
         Summarize: "summarize HostCount = dcount(Computer), EventCount = count() by ClearedLog"
         Project: "project Title = ClearedLog, EventCount, HostCount"
   ChartQuery:
-    Title: Cleared over time
+    Title: "Log clear activity over time"
     DataSets:
       - Query: "summarize EventCount = count() by bin(TimeGenerated, 1d) | extend Legend = 'EventCount'"
         XColumnName: TimeGenerated
