@@ -1,13 +1,13 @@
 ﻿<#  
     Title:          Okta Data Connector
     Language:       PowerShell
-    Version:        2.0.2
+    Version:        2.1.0
     Author(s):      Microsoft - Chris Abberley
-    Last Modified:  2020-08-09 - August 9th 2020
-    Comment:        Version 2.0.2
-                    -Added fix for ACN_CD_Issue925
-
-                    Version 2.01
+    Last Modified:  8/18/2020
+    Comment:        Changes from Version 2.0.0 to 2.1.0
+                    -Added fix for issue: ACN_CD_OktaIssue925
+                    -Modified Event log tracking to use OKTA Next URI to fix small quantity of duplicates that were occurring
+                    -Fixed Total Record Counter 
                     Fixes for the following issues with Version 1
                     -Potential Data loss due to code not processing linked pages
                     -Potential Data loss due to variations in execution of Triggers
@@ -23,8 +23,9 @@
     The Function App will post the Okta logs to the Okta_CL table in the Log Analytics workspace.
 
     NOTES:
-    Suggested timing trigger of no less than 10 minutes. Be aware that Azure Functions have a runtime execution time limit of 5 mins, at which point it will terminate the function.
-    If this occurs you may get some duplicate records in your Azure Logs as it will not commit the last datetime until the records are written to Azure logs.
+    Suggested timing trigger of no less than 10 minutes. Be aware that Azure Functions have a runtime execution time limit of 5 mins by default, at which point it will terminate the function.
+    Function Timeout has been changed to 10 minutes and Function will try to gracefully exit after 9 minutes.
+    If you reduce the timeout to less than 10 minutes this you may get some duplicate records in your Azure Logs as it will not commit the last datetime until the records are written to Azure logs.
 #>
 
 # Input bindings are passed in via param block.
@@ -43,7 +44,6 @@ else{
 $AzureWebJobsStorage =$env:AzureWebJobsStorage  #Storage Account to use for table to maintain state for log queries between executions
 $Tablename = "OKTA"                             #Tablename which will hold datetime record between executions
 $TotalRecordCount = 0
-$responseDate = $null
 
 # variables needed for the Okta API request
 $apiToken = $env:apiToken
@@ -56,6 +56,7 @@ $sharedKey =  $env:workspaceKey
 $LogType = "Okta"
 $TimeStampField = "published"
 
+
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
 $storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
@@ -63,63 +64,55 @@ $StorageTable = Get-AzStorageTable -Name $Tablename -Context $Storage -ErrorActi
 if($null -eq $StorageTable.Name){  
     $result = New-AzStorageTable -Name $Tablename -Context $storage
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
-    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"StartTime"=$StartDate} -UpdateExisting
+    $uri = "$uri$($StartDate)&limit=1000"
+    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
 }
 Else {
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
 }
 # retrieve the row
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
-if($null -eq $row.StartTime){
-    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"StartTime"=$StartDate} -UpdateExisting
+if($null -eq $row.uri){
+    $uri = "$uri$($StartDate)&limit=1000"
+    $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 }
-
-#set starting uri for requests from Okta
-$StartDate =  $row.StartTime
-$after=(Get-Date -Date $StartDate -UFormat %s)+$startdate.Substring(20,3)+'_1'
-$uri = "$uri$($StartDate)&limit=1000&after=$after"
+$uri = $row.uri
 
 #Setup uri Headers for requests to OKta
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("Content-Type", "application/json")
 $headers.Add("User-Agent", "AzureFunction")
 $headers.Add("Authorization", "SSWS $apiToken")
+$headers.Add("Accept-Encoding", "gzip, br")
 
 # begin looping through responses from OKTA until we get all available records
 $exitDoUntil = $false
 do {
     $body = $null
+    $uriself = $uri
     if($uri.length -gt 0){
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
     }
     if($response.headers.Keys -contains "link"){
-        $uri = $response.headers.link.split(",;")
-        $uri = $uri.split(";")
-        $uri = $uri[2] -replace "<|>", ""
+        $uritemp = $response.headers.link.split(",;")
+        $uritemp = $uritemp.split(";")
+        $uri = $uritemp[2] -replace "<|>", ""
     }
     ELSE{
         $exitDoUntil = $true
     }
-    $responseObj = (ConvertFrom-Json $response.content)
-    $responseCount = $responseObj.count
-    if($ResponseCount -gt 0) {
-        #breakdown into steps as Powershell in Azure Functions doesn't always like multistep combinations
-        $responseDate = $responseObj.published.ticks | Sort-Object -Descending
-        $responseDate = $responseDate[0]
-        $responseDate = Get-Date -Date $ResponseDate  
-        $responsedate = $responsedate.tostring('yyyy-MM-ddTHH:mm:ss.fffZ')
-
+    if($uri -ne $uriself){
+        $responseObj = (ConvertFrom-Json $response.content)
+        $responseCount = $responseObj.count
+        $TotalRecordCount= $TotalRecordCount + $responseCount
+        
         #ACN_CD_OktaIssue925
         $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
         $responseObj = $response | ConvertFrom-Json
         $responseObj | Add-Member -MemberType NoteProperty -Name "domain" -Value $domain
         $json = $responseObj | ConvertTo-Json -Depth 5
- 
-        IF($response.headers.RawContentLength -ieq 2){
-            $TotalRecordCount= $TotalRecordCount + $responseCount
-        }
-
+         
         Function new-BuildSignature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
         {
             $xHeaders = "x-ms-date:" + $date
@@ -153,20 +146,18 @@ do {
             "Authorization" = $signature;
             "Log-Type" = $logType;
             "x-ms-date" = $rfc1123date;
-            "time-generated-field" = $TimeStampField;
+            "time-generated-field" = $TimeStampField
         }
         $result = Invoke-WebRequest -Uri $LAuri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
         #update State table for next time we execute function
         #store details in function storage table to retrieve next time function runs 
-        if($responseDate.length -gt 2){
-            $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"StartTime"=$responseDate} -UpdateExisting
-        }
+        $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     }
     else{
         $exitDoUntil = $true
     }
     #check on time running, Azure Function default timeout is 5 minutes, if we are getting close exit function cleanly now and get more records next execution
-    IF((new-timespan -Start $currentUTCtime -end ((Get-Date).ToUniversalTime())).TotalSeconds -gt 260){$exitDoUntil = $true} 
+    IF((new-timespan -Start $currentUTCtime -end ((Get-Date).ToUniversalTime())).TotalSeconds -gt 500){$exitDoUntil = $true} 
 }until($exitDoUntil) 
 
 if($TotalRecordCount -lt 1){

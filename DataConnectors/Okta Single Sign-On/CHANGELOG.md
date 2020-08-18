@@ -1,3 +1,7 @@
+## 2.1.0
+- Modified Okta Event log tracking to use next URI link from header
+- Fixed Total record counter to record correctly the total number of records ingested
+
 ## 2.0.2
 - Added  ACN_CD_OktaIssue925 resolution to add domain to output records
 
