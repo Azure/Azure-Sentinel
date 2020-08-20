@@ -3,6 +3,7 @@ Type: KQL
 Provider: Sentinel
 DataTypes:
   - DataType: SecurityEvent
+  - DataType: Event
 RequiredInputFieldsSets:
   - - Account_Name
     - Account_NTDomain
@@ -16,35 +17,23 @@ BaseQuery: |
   | parse EventData with * 'SubjectUserSid>' SubjectUserSid '<' * 
   | parse EventData with * 'SubjectLogonId>' SubjectLogonId '<' * 
   | parse EventData with * 'SubjectDomainName>' SubjectDomainName '<' * 
+  | parse EventData with * 'BackupPath>' BackupPath'<' * 
   | extend ClearedLog = Type
-  | project-rename Account_Name = SubjectUserName, Account_NTDomain = SubjectDomainName
+  | extend Account_Name = SubjectUserName, Account_NTDomain = SubjectDomainName
   | union isfuzzy=true 
   ( Event
-  // 104 - This event generates every time Windows Event log was cleared
+  // 104 - This event generates every time a Windows Event log was cleared
   | where EventID == 104 and Source == "Microsoft-Windows-Eventlog"
   | parse EventData with * 'SubjectUserName>' SubjectUserName '<' *
   | parse EventData with * 'SubjectUserSid>' SubjectUserSid '<' * 
   | parse EventData with * 'SubjectLogonId>' SubjectLogonId '<' * 
-  | parse EventData with * 'SubjectDomainName>' SubjectDomainName '<' * 
+  | parse EventData with * 'SubjectDomainName>' SubjectDomainName '<' *
+  | parse EventData with * 'BackupPath>' BackupPath'<' * 
   | parse RenderedDescription with * 'The' ClearedLog 'log' *
-  | project-rename Account_Name = SubjectUserName, Account_NTDomain = SubjectDomainName
+  | extend Account_Name = SubjectUserName, Account_NTDomain = SubjectDomainName, Account_SID = SubjectUserSid
   )
-  | project TimeGenerated, Computer, EventID, Account_Name, SubjectUserSid, SubjectLogonId, Account_NTDomain, SourceComputerId, 
-  EventOriginId, _ResourceId, ClearedLog 
-  | extend p_Account_Name = case(
-  // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
-  v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
-  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
-  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
-  v_Account_Name
-  )
-  | extend p_Account_NTDomain = case(
-  v_Account_NTDomain has '\\', tostring(split(v_Account_NTDomain, '\\')[0]),
-  // Handles UPN scenario of AccountName@UPNSuffix to pull potential NTDomain from
-  v_Account_NTDomain has '@', tostring(split(tostring(split(v_Account_NTDomain, '@')[1]),'.')[0]),
-  v_Account_NTDomain
-  )
-  | where (Account_Name =~ p_Account_Name and Account_NTDomain =~ p_Account_NTDomain) or SubjectUserSid =~ v_Account_SID
+  | project TimeGenerated, Computer, EventID, Account_Name, SubjectUserName, SubjectUserSid, Account_SID, SubjectLogonId, Account_NTDomain, SubjectDomainName, SourceComputerId, _ResourceId, ClearedLog, BackupPath
+  | where (Account_Name =~ v_Account_Name and Account_NTDomain =~ v_Account_NTDomain) or (isnotempty(v_Account_SID) and Account_SID =~ v_Account_SID)
   };
   UserClearedEventLog('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_SID}}')
 # The queries for the insights.
@@ -52,28 +41,36 @@ Insights:
   Id: 5a70a68d-25d4-4012-b73e-4f302a16c06a
   DisplayName: Event Logs cleared by user
   Description: |
-    Provides the datetime & count of number of times the event logs were cleared
-    by the user.
+    Provides the datetime & count of number of times any event log was cleared by the user.
   DefaultTimeRange:
     BeforeRange: 12h
     AfterRange: 12h
   TableQuery:
     ColumnsDefinitions:
-      - Header: "Cleared Event Log"
+      - Header: Cleared Log
         OutputType: String
-      - Header: "Times Cleared"
+      - Header: Times Cleared
         OutputType: Number
-      - Header: "Host Count"
+      - Header: Host Count
         OutputType: Number
+        SupportDeepLink: true
+      - Header: Host(s)
+        OutputType: String
     QueriesDefinitions:
     # SecurityEvent cleared
       - Filter: "where ClearedLog =~ 'SecurityEvent'"
-        Summarize: "summarize HostCount = dcount(Computer), EventCount = count() by ClearedLog"
-        Project: "project Title = ClearedLog, EventCount, HostCount"
+        Summarize: "summarize Hosts = makeset(Computer), HostCount = dcount(Computer), EventCount = count() by ClearedLog"
+        Project: "project Title = ClearedLog, EventCount, HostCount, Hosts = case(array_length(Hosts) == 1, tostring(Hosts[0]), array_length(Hosts) > 1, 'Many', 'None')"
+        LinkColumnsDefinitions:
+        - ProjectedName: HostCount
+          Query: "{{BaseQuery}} | {{RowFilter}}"
     # Other Event Cleared
       - Filter: "where ClearedLog !~ 'SecurityEvent'"
-        Summarize: "summarize HostCount = dcount(Computer), EventCount = count() by ClearedLog"
-        Project: "project Title = ClearedLog, EventCount, HostCount"
+        Summarize: "summarize Hosts = makeset(Computer), HostCount = dcount(Computer), EventCount = count() by ClearedLog"
+        Project: "project Title = ClearedLog, EventCount, HostCount, Hosts = case(array_length(Hosts) == 1, tostring(Hosts[0]), array_length(Hosts) > 1, 'Many', 'None')"
+        LinkColumnsDefinitions:
+        - ProjectedName: HostCount
+          Query: "{{BaseQuery}} | {{RowFilter}}"
   ChartQuery:
     Title: "Log clear activity over time"
     DataSets:
@@ -85,7 +82,7 @@ Insights:
         XColumnName: TimeGenerated
         YColumnName: HostCount
         LegendColumnName: Legend
-    Type: LineChart
+    Type: BarChart
   AdditionalQuery:
     Text:  See All Log Clear Activity
-    Query: "project TimeGenerated, Computer, EventID, Account_Name, SubjectUserSid, SubjectLogonId, Account_NTDomain, SourceComputerId, EventOriginId, _ResourceId, ClearedLog"
+    Query: "project TimeGenerated, Computer, EventID, Account_Name, SubjectUserName, SubjectUserSid, SubjectLogonId, Account_NTDomain, SubjectDomainName, SourceComputerId, _ResourceId, ClearedLog, BackupPath"
