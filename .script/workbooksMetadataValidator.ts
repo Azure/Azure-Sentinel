@@ -1,10 +1,10 @@
 import fs from "fs";
-import { isValidSchema } from "./jsonSchemaValidator";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
+import { isValidSchema } from "./utils/jsonSchemaChecker";
 import * as logger from "./utils/logger";
-import { isValidPreviewImageFileNames } from "./workbooksValidations/previewImageValidator";
-import { isUniqueKeys } from "./workbooksValidations/uniqueWorkbookKeyValidator";
+import { isValidPreviewImageFileNames } from "./utils/workbookCheckers/previewImageChecker";
+import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker";
 
 export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
   let workbooksMetadata = JSON.parse(fs.readFileSync(filePath, "utf8"));
