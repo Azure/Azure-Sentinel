@@ -13,14 +13,41 @@ NOTE: If there is a non-standard parameter (ie not playbook name or username, yo
 
 Profit :)
 
-Reqirements: Github repo synced locally, PowerShell Module Az.Resources
-Directory: Specify local cloned repo, ie C:\Github\Azure-Sentinel\Playbooks
+Reqirements: Local GitHub Repo or URI of online repo, PowerShell Module Az.Resources
+RepoUri: Specify Github Repo in format https://github.com/<owner>/<repo>/tree/master/<
+RepoDirectory: Specify local cloned repo, ie C:\Github\Azure-Sentinel\Playbooks
 Permissions: Contributor on the Resource Group
 #>
 #Requires -Module Az.Resources
 
-$repoDirectory = Read-Host -Prompt "Enter the directory containing all playbooks to deploy"
-$playbooks = Get-ChildItem -LiteralPath $repoDirectory |Where-Object {$_.Name -notlike "*.*"} | Select-Object Name | Out-GridView -Title "Select Playbooks to Deploy" -PassThru
+[CmdletBinding()]
+param (
+    [Parameter(ParameterSetName = "CloudRepo")]
+    [string]
+    $repoUri = "https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks",
+
+    [Parameter(ParameterSetName = "LocalRepo")]
+    [string]
+    $repoDirectory
+)
+
+if($PSCmdlet.ParameterSetName -eq "CloudRepo")
+{
+    $uriArray = $repoUri.Split("/")
+    $gitOwner = $uriArray[3]
+    $gitRepo = $uriArray[4]
+    $gitPath = $uriArray[7]
+
+    $apiUri = "https://api.github.com/repos/$gitOwner/$gitRepo/contents/$gitPath"
+
+    $response = (Invoke-WebRequest $apiUri).Content | ConvertFrom-Json
+    $playbooks = $response| Where-Object {$_.Name -notlike "*.*"} | Select-Object Name | Out-GridView -Title "Select Playbooks to Deploy" -PassThru
+
+}
+elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
+{
+    $playbooks = Get-ChildItem -LiteralPath $repoDirectory |Where-Object {$_.Name -notlike "*.*"} | Select-Object Name | Out-GridView -Title "Select Playbooks to Deploy" -PassThru
+}
 
 Connect-AzAccount
 
@@ -28,56 +55,110 @@ $subscription = Get-AzSubscription | Out-GridView -Title "Select Subscription to
 Select-AzSubscription -SubscriptionName $subscription.Name
 $rg = Get-AzResourceGroup | Out-GridView -Title "Select Resource Group to Deploy Playbooks to" -PassThru
 
-$workspace = Get-AzResource -ResourceGroupName $rg.ResourceGroupName -ResourceType "Microsoft.OperationalInsights/workspaces" | Out-GridView -Title "Select Sentiel Workspace" -PassThru
+$userName = Read-Host -Prompt "Enter the Username to use for API connections"
+$playbookName = "PLACEHOLDER"
 
-$userName = Read-Host -Prompt "Enter the Username to use for Sentinel connections"
+$armTemplateParameters = New-Object System.Collections.Arraylist
 
+Write-Host -ForegroundColor Green "Extracting and consolidating all Playbook Parameters"
 foreach($playbook in $playbooks.Name)
 {
-    $templates = Get-ChildItem "$repoDirectory\$($playbook)\*.json" | Select-Object -ExpandProperty VersionInfo | Select-Object FileName
-
-    foreach($template in $templates.FileName)
+    if($PSCmdlet.ParameterSetName -eq "CloudRepo")
     {
-        $templateObj = Get-Content $template |ConvertFrom-Json
+        $playbookUri = "$apiUri/$playbook"
+        $response = (Invoke-WebRequest $playbookUri).Content | ConvertFrom-Json 
+        $templates = ($response |Where-Object {$_.download_url -like "*.json"}).download_url
+    }
+    elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
+    {
+        $templates = (Get-ChildItem "$repoDirectory\$($playbook)\*.json" | Select-Object -ExpandProperty VersionInfo).FileName
+    }
+
+    foreach($template in $templates)
+    {
+        if($PSCmdlet.ParameterSetName -eq "CloudRepo")
+        {
+            $templateObj = Invoke-WebRequest $template | ConvertFrom-Json
+        }
+        elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
+        {
+            $templateObj = Get-Content $template | ConvertFrom-Json
+        }
+    
         $params = $templateObj.parameters | Get-Member -MemberType NoteProperty | Select-Object Name
         Write-Host "Sentinel Workbook: $($playbook)"
         Write-Host "Parameters: $($params.Name)"
-        $templateParamTable = @{}
+
         foreach($param in $params.Name)
         {
-            switch ($param) {
-                UserName {
-                    $templateParamTable.Add($param, $userName)
-                }
-                AzureSentinelResourceGroup {
-                    $templateParamTable.Add($param, $rg.ResourceGroupName)
-                }
-                AzureSentinelSubscriptionID {
-                    $templateParamTable.Add($param, $subscription.Id)
-                }
-                AzureSentinelWorkspaceId {
-                    $templateParamTable.Add($param, $workspace)
-                }
-                AzureSentinelWorkspaceName {
-                    $templateParamTable.Add($param, $workspace.Name)
-                }
-                AzureSentinelLogAnalyticsWorkspaceName {
-                    $templateParamTable.Add($param, $workspace.Name)
-                }
-                AzureSentinelLogAnalyticsWorkspaceResourceGroupName {
-                    $templateParamTable.Add($param, $rg.ResourceGroupName)
-                }
-                PlaybookName {
-                    $templateParamTable.Add($param, $playbook)
-                }
-                Default {
-                    Write-Host -ForegroundColor Red "Unrecognized parameter: $param"
-                    $value = Read-Host "Provide value for parameter $param"
-                    $templateParamTable.Add($param, $value)
-                }
-            }
+            $armTemplateParameters.Add($param) | Out-Null
+        }    
+    }
+}
+
+Write-Host -ForegroundColor Green "Populating values for Playbook Parameters"
+$armTemplateParametersUnique = $armTemplateParameters | Select-Object -Unique
+
+foreach($armTemplateParameter in $armTemplateParametersUnique)
+{
+    try {
+        $paramValue = (Get-Variable $armTemplateParameter -ErrorAction Stop).Value
+    }
+    catch {
+        Write-Host -ForegroundColor Red "Unable to find value for parameter $armTemplateParameter"
+        $paramValue = Read-Host "Please enter a value for parameter $armTemplateParameter"
+        New-Variable -Name $armTemplateParameter -Value $paramValue
+    }
+}
+
+Write-Host -ForegroundColor Green "Deploying Playbooks"
+foreach($playbook in $playbooks.Name)
+{
+    if($PSCmdlet.ParameterSetName -eq "CloudRepo")
+    {
+        $playbookUri = "$apiUri/$playbook"
+        $response = (Invoke-WebRequest $playbookUri).Content | ConvertFrom-Json 
+        $templates = ($response |Where-Object {$_.download_url -like "*.json"}).download_url
+    }
+    elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
+    {
+        $templates = (Get-ChildItem "$repoDirectory\$($playbook)\*.json" | Select-Object -ExpandProperty VersionInfo).FileName
+    }
+
+    Set-Variable -Name "PlaybookName" -Value $playbook
+
+    foreach($template in $templates)
+    {
+        if($PSCmdlet.ParameterSetName -eq "CloudRepo")
+        {
+            $templateObj = Invoke-WebRequest $template | ConvertFrom-Json
+        }
+        elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
+        {
+            $templateObj = Get-Content $template | ConvertFrom-Json
         }
     
-        New-AzResourceGroupDeployment -Name "SentinelPlaybook-$($playbook)" -ResourceGroupName $rg.ResourceGroupName -TemplateFile $template -TemplateParameterObject $templateParamTable
+        $params = $templateObj.parameters | Get-Member -MemberType NoteProperty | Select-Object Name
+        Write-Host "Sentinel Workbook: $($playbook)"
+        Write-Host "Parameters: $($params.Name)"
+
+        $templateParamTable = @{}
+
+        foreach($param in $params.Name)
+        {
+            $paramValue = (Get-Variable -Name $param).Value
+            $templateParamTable.Add($param,$paramValue)
+        }
+        
+        Write-Host -ForegroundColor Yellow "Deploying Playbook $playbook"
+        if($PSCmdlet.ParameterSetName -eq "CloudRepo")
+        {
+            New-AzResourceGroupDeployment -Name "SentinelPlaybook-$($playbook)" -ResourceGroupName $rg.ResourceGroupName -TemplateUri $template -TemplateParameterObject $templateParamTable
+
+        }
+        elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
+        {
+            New-AzResourceGroupDeployment -Name "SentinelPlaybook-$($playbook)" -ResourceGroupName $rg.ResourceGroupName -TemplateFile $template -TemplateParameterObject $templateParamTable
+        }
     }
 }
