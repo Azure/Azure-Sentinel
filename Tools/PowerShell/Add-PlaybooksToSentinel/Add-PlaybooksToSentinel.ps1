@@ -20,7 +20,7 @@ Permissions: Contributor on the Resource Group
 #>
 #Requires -Module Az.Resources
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = "CloudRepo")]
 param (
     [Parameter(ParameterSetName = "CloudRepo")]
     [string]
