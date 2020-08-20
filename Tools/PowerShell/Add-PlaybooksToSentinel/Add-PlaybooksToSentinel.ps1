@@ -4,11 +4,11 @@ Authors: Tom Lilly @tlilly2010 (@TheTomLilly), Rich Lilly @richlilly2004 (@richl
 From https://github.com/Azure/Azure-Sentinel/PLACEHOLDER
 Last Updated Date: August 18, 2020
 
-This PowerShell script will enumerate a local Github repository clone of https://github.com/Azure/Azure-Sentinel/Playbook, 
+This PowerShell script will enumerate a local Github repository clone of https://github.com/Azure/Azure-Sentinel/Playbook, or a cloud repo can be provided (defaults to Azure/Azure-Sentinel) 
 ask for a multi-select of the playbooks to import and import them.
 At the time of authoring, additional API authorization will have to be completed, but this is being worked on :)
 
-Select your Playbooks, Subscription, LA instance, Resource Group, Sentinel instance, Username (for assignment)
+Select your Playbooks, Subscription, Resource Group, Username (for assignment)
 NOTE: If there is a non-standard parameter (ie not playbook name or username, you will prompted for that field entry (ie API key, etc))
 
 Profit :)
