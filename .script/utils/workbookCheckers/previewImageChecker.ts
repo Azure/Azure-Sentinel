@@ -1,5 +1,5 @@
-import { WorkbookValidationError } from "../utils/ValidationError";
-import { WorkbookMetadata } from "../utils/WorkbookMetadata";
+import { WorkbookValidationError } from "../ValidationError";
+import { WorkbookMetadata } from "../WorkbookMetadata";
 
 function isAllPng(previewImagesFileNames: Array<string>): boolean {
     return previewImagesFileNames.every((previewImageFileName: string) => previewImageFileName.endsWith('.png'));
