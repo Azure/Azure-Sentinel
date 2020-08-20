@@ -32,48 +32,52 @@ $workspace = Get-AzResource -ResourceGroupName $rg.ResourceGroupName -ResourceTy
 
 $userName = Read-Host -Prompt "Enter the Username to use for Sentinel connections"
 
-foreach($playbook in $playbooks)
+foreach($playbook in $playbooks.Name)
 {
-    $template = "$repoDirectory\$($playbook.Name)\azuredeploy.json"
-    $templateObj = Get-Content $template |ConvertFrom-Json
-    $params = $templateObj.parameters | Get-Member -MemberType NoteProperty | Select-Object Name
-    Write-Host "Sentinel Workbook: $($playbook.Name)"
-    Write-Host "Parameters: $($params.Name)"
-    $templateParamTable = @{}
-    foreach($param in $params.Name)
+    $templates = Get-ChildItem "$repoDirectory\$($playbook)\*.json" | Select-Object -ExpandProperty VersionInfo | Select-Object FileName
+
+    foreach($template in $templates.FileName)
     {
-        switch ($param) {
-            UserName {
-                $templateParamTable.Add($param, $userName)
-            }
-            AzureSentinelResourceGroup {
-                $templateParamTable.Add($param, $rg.ResourceGroupName)
-            }
-            AzureSentinelSubscriptionID {
-                $templateParamTable.Add($param, $subscription.Id)
-            }
-            AzureSentinelWorkspaceId {
-                $templateParamTable.Add($param, $workspace)
-            }
-            AzureSentinelWorkspaceName {
-                $templateParamTable.Add($param, $workspace.Name)
-            }
-            AzureSentinelLogAnalyticsWorkspaceName {
-                $templateParamTable.Add($param, $workspace.Name)
-            }
-            AzureSentinelLogAnalyticsWorkspaceResourceGroupName {
-                $templateParamTable.Add($param, $rg.ResourceGroupName)
-            }
-            PlaybookName {
-                $templateParamTable.Add($param, $playbook.Name)
-            }
-            Default {
-                Write-Host -ForegroundColor Red "Unrecognized parameter: $param"
-                $value = Read-Host "Provide value for parameter $param"
-                $templateParamTable.Add($param, $value)
+        $templateObj = Get-Content $template |ConvertFrom-Json
+        $params = $templateObj.parameters | Get-Member -MemberType NoteProperty | Select-Object Name
+        Write-Host "Sentinel Workbook: $($playbook)"
+        Write-Host "Parameters: $($params.Name)"
+        $templateParamTable = @{}
+        foreach($param in $params.Name)
+        {
+            switch ($param) {
+                UserName {
+                    $templateParamTable.Add($param, $userName)
+                }
+                AzureSentinelResourceGroup {
+                    $templateParamTable.Add($param, $rg.ResourceGroupName)
+                }
+                AzureSentinelSubscriptionID {
+                    $templateParamTable.Add($param, $subscription.Id)
+                }
+                AzureSentinelWorkspaceId {
+                    $templateParamTable.Add($param, $workspace)
+                }
+                AzureSentinelWorkspaceName {
+                    $templateParamTable.Add($param, $workspace.Name)
+                }
+                AzureSentinelLogAnalyticsWorkspaceName {
+                    $templateParamTable.Add($param, $workspace.Name)
+                }
+                AzureSentinelLogAnalyticsWorkspaceResourceGroupName {
+                    $templateParamTable.Add($param, $rg.ResourceGroupName)
+                }
+                PlaybookName {
+                    $templateParamTable.Add($param, $playbook)
+                }
+                Default {
+                    Write-Host -ForegroundColor Red "Unrecognized parameter: $param"
+                    $value = Read-Host "Provide value for parameter $param"
+                    $templateParamTable.Add($param, $value)
+                }
             }
         }
+    
+        New-AzResourceGroupDeployment -Name "SentinelPlaybook-$($playbook)" -ResourceGroupName $rg.ResourceGroupName -TemplateFile $template -TemplateParameterObject $templateParamTable
     }
-
-    New-AzResourceGroupDeployment -Name "SentinelPlaybook-$($playbook.Name)" -ResourceGroupName $rg.ResourceGroupName -TemplateFile $template -TemplateParameterObject $templateParamTable
 }
