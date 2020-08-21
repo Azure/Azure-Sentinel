@@ -1,10 +1,13 @@
 ﻿<#  
     Title:          Okta Data Connector
     Language:       PowerShell
-    Version:        2.1.0
+    Version:        2.1.1
     Author(s):      Microsoft - Chris Abberley
-    Last Modified:  8/18/2020
-    Comment:        Changes from Version 2.0.0 to 2.1.0
+    Last Modified:  8/22/2020
+    Comment:        Changes from Version 2.0.0 to 2.1.1
+					-Moved version 2.1.0 to sub folder AzureFunctionOktaSSO_V2 under Azure-Sentinel/DataConnectors/Okta Single Sign-On/
+					-Created V2 versions of Azure Deploy and Connector Json files to enable both versions to co-exist
+					-Changed zip file reference to use 'https://aka.ms/sentineloktaazuredeployv2'
                     -Added fix for issue: ACN_CD_OktaIssue925
                     -Modified Event log tracking to use OKTA Next URI to fix small quantity of duplicates that were occurring
                     -Fixed Total Record Counter 

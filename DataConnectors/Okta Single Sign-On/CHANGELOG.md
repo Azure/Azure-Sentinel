@@ -1,3 +1,9 @@
+## 2.1.1
+- Moved version 2.1.0 to sub folder AzureFunctionOktaSSO_V2 under Azure-Sentinel/DataConnectors/Okta Single Sign-On/
+- Created V2 versions of Azure Deploy and Connector Json files to enable both versions to co-exist
+- Changed zip file reference to use 'https://aka.ms/sentineloktaazuredeployv2'
+
+
 ## 2.1.0
 - Modified Okta Event log tracking to use next URI link from header
 - Fixed Total record counter to record correctly the total number of records ingested
