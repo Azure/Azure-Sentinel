@@ -27,7 +27,7 @@ Add new yaml file under [.azure-pipelines](https://github.com/Azure/Azure-Sentin
 
 6. Test the new validation. See instruction in [How to test the new validation](#How-to-test-the-new-validation) section
 
-### How to add scipt validation
+### How to add script validation
 
 **Note**: All script logs are public and display in DevOps pipeline.  
 By default, the logs color is white. In case you want another color you can use [logging commands](https://docs.microsoft.com/azure/devops/pipelines/scripts/logging-commands?view=azure-devops&tabs=bash)
