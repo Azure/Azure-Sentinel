@@ -2,6 +2,7 @@
 # See https://aka.ms/functionsmanageddependency for additional information.
 #
 @{
-    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. 
     'Az' = '4.*'
+    'AzTable' = '2.*'
+    'Az.OperationalInsights' = '2.*'
 }
