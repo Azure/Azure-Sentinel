@@ -3,12 +3,12 @@ DisplayName: 10 most recent VM configuration changes based on process
 Description: Provides the 10 most recent changes to any VM based on the process name provided
 InputEntityType: Process
 InputFields: 
-  - ImageFile_Name
+  - ImageFile
 OutputEntityTypes: 
   - Host
 QueryPeriodBefore: 1d
 QueryPeriodAfter: 1d
-DataSource: 
+DataSources: 
   - ConfigurationChange
 Tactics:
   - Persistence
@@ -18,8 +18,9 @@ query: |
   let exclude = dynamic([':\\Windows\\System32\\svchost.exe', ':\\Windows\\System32\\sppsvc.exe', ':\\Windows\\system32\\wbem\\WmiApSrv.exe', ':\\Windows\\System32\\conhost.exe', ':\\Windows\\System32\\wuauclt.exe', ':\\Windows\\SoftwareDistribution\\Download\\Install\\', ':\\WindowsAzure\\GuestAgent_', ':\\WindowsAzure\\WindowsAzureNetAgent_', 
   ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\', ':\\Windows\\System32\\taskhostw.exe', '\\MpSigStub.exe',':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe', ':\\Windows\\servicing\\trustedinstaller.exe', ':\\Windows\\System32\\WerFault.exe', ':\\Windows\\CCM\\CcmExec.exe'
   "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\"]);
-  let ConfigChange = (v_Process_ImageFile_Name:string ) 
-  {ConfigurationChange
+  let ConfigChange = (v_Process_ImageFile:string ) 
+  {let Process_ImageFile_Name = tostring(parse_json(v_Process_ImageFile)['Name']);
+  ConfigurationChange
   | where ConfigChangeType != "Software"
   | where isnotempty(ValueData) or isnotempty(SvcPath) or isnotempty(FileSystemPath)
   | extend Process = case(
@@ -31,7 +32,7 @@ query: |
   )
   // Removing Common processes to improve query performance
   | where not(Process has_any (exclude)) and (Process !has ':\\Windows\\Microsoft.NET\\Framework' and not(Process has_any ('\\ngentask.exe', '\\ngen.exe')))
-  | where iff(v_Process_ImageFile_Name == "", false, Process has v_Process_ImageFile_Name) 
+  | where iff(Process_ImageFile_Name == "", false, Process has Process_ImageFile_Name) 
   | parse FileContentChecksum with * "Hash=" Hash " " *
   | parse PreviousFileContentChecksum with * "Hash=" Hash " " *
   | extend Changes = case( 
