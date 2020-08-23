@@ -1,8 +1,8 @@
 id: 543e1ec6-ee5e-4368-aaa6-405f0551ba5c
-name: DNS high percentage NXDomain count
+name: Potential DGA detected
 description: |
   'Clients with a high NXDomain count could be indicative of a DGA (cycling through possible C2 domains
-  where most C2s are not live).  Based on quartile precent analysis aglorithm'
+  where most C2s are not live). Based on quartile precent analysis aglorithm.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: DNS
@@ -23,9 +23,9 @@ query: |
   let excludeTLD = dynamic(["arris","ati","virtusa","unknowndomain","onion","corp","domain","local","localdomain","host","home","gateway","lan",
   "services","hub","domain.name","WirelessAP","Digicom-ADSL","OpenDNS","dlinkrouter","Dlink","ASUS","device","router","Belkin","DHCP","Cisco"]);
   let nxDomainDnsEvents = DnsEvents
-  | where ResultCode == "3" 
+  | where ResultCode == 3 
   | where QueryType in ("A", "AAAA")
-  | where ClientIP != "127.0.0.1"
+  | where ipv4_is_match("127.0.0.1", ClientIP) == False
   | where Name !contains "/"
   | where Name contains "."
   | extend mytld = tostring(split(Name, '.')[-1])
@@ -57,7 +57,7 @@ query: |
   | where TotalNXLookups > IPthreshold 
   | join kind = leftouter (nxDomainDnsEvents
       | where TimeGenerated > ago(timeframe)
-      | summarize domainCount=dcount(Name) by truncatedDomain, ClientIP
+      | summarize domainCount = dcount(Name) by truncatedDomain, ClientIP
       | project SearchList = strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
       ) on ClientIP
   | summarize SLDs_DistinctLookups = make_list(SearchList) by ClientIP, TotalNXLookups, IPthreshold
@@ -83,8 +83,8 @@ query: |
   | where TotalNXLookups > GlobalThreshold 
   | join kind = leftouter (nxDomainDnsEvents
       | where TimeGenerated > ago(timeframe)
-      | summarize domainCount=dcount(Name) by truncatedDomain, ClientIP
-      | project truncatedDomain= strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
+      | summarize domainCount = dcount(Name) by truncatedDomain, ClientIP
+      | project truncatedDomain = strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
       ) on ClientIP
   | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), SLDs_DistinctLookups = make_list(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
   | sort by TotalNXLookups desc);
