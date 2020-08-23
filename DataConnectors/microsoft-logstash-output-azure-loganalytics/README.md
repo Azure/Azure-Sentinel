@@ -78,7 +78,7 @@ output {
 }
 ```
 
-<u>Advencaed Configuration</u>
+<u>Advanced Configuration</u>
 ```
 input {
   tcp {
