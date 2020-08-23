@@ -9,6 +9,10 @@ What can you use this solution for?
 1. For starters, it serves as a quickstart to help you set up a custom application to call the Azure Sentinel API to automate your management tasks on Azure Sentinel. Some examples include importing and exporting analytic rules, disable and enable an analytic rules, updating multiple incidents at once across workspaces, and many other use cases. The app can handle multiple Azure Sentinel workspaces cross-tenant at once, so if you manage multiple workspaces for multiple clients as a MSSP, this can be a solution.
 2. Additionally, the solution can be combined and integrated with other tools within your organization to achieve a more comprehensive security solution.
 
+Please refer to the documentation below for more details on Azure Sentinel API specs.
+* [Stable: 2020-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/stable/2020-01-01/SecurityInsights.json)
+* [Preview: 2019-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/preview/2019-01-01-preview/SecurityInsights.json)
+
 This sample provides examples of these API requests:
 
 - GET / CREATE(connect) / DELETE(disconnect) a Playbook to an alert rule
@@ -18,9 +22,7 @@ This sample provides examples of these API requests:
 - GET / CREATE / DELETE Bookmark(s)
 - GET / CREATE / UPDATE / DELETE Incident(s)
 - GET / CREATE Incident Comments
-- GET / GET / DELETE Incident Relation (i.e., Get all bookmarks related to an incident)
-
-Please refer to [Azure Sentinel API specs/documentation](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/stable/2020-01-01/SecurityInsights.json) for more details.
+- GET / GET / DELETE Incident Relation (i.e., Get all bookmarks related to an incident) - This is currently in Preview version.
 
 ## Prerequisites
 To configure the tool, the following assembly is required to authenticate and make requests to the Azure Sentinel Management API.
