@@ -22,7 +22,7 @@ This sample provides examples of these API requests:
 - GET / CREATE / DELETE Bookmark(s)
 - GET / CREATE / UPDATE / DELETE Incident(s)
 - GET / CREATE Incident Comments
-- GET / GET / DELETE Incident Relation (i.e., Get all bookmarks related to an incident) - This is currently in Preview version.
+- GET / GET / DELETE Incident Relation (i.e., Get all alerts, bookmarks related to an incident) - This is currently in Preview version.
 
 ## Prerequisites
 To configure the tool, the following assembly is required to authenticate and make requests to the Azure Sentinel Management API.
