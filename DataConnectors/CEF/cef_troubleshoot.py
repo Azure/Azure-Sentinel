@@ -38,6 +38,7 @@ syslog_ng_security_config_omsagent_conf_content_tokens = ["f_oms_filter", "oms_d
                                                           "source", "s_src", "oms_destination"]
 oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
+oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
@@ -383,6 +384,23 @@ def check_oms_agent_status():
     else:
         return True
 
+def check_omsagent_new_version(omsagent_plugin_securiy_config):
+        '''
+        Checking if the OMS agent has the updated configuration:
+        :param omsagent_plugin_security_config: path to the file containing the updated configuration
+        :return: True if the configuration is updated, false otherwise
+        '''
+        grep = subprocess.Popen(["grep", "-i", "return ident", oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
+        o, e = grep.communicate()
+        if o == '':
+            print_warning("Warning: Current content of the Omsagent configuration requires update\n")
+            print_notice("Notice: To update the configuration run - \"sed -i \"s|return \'%ASA\'|return ident|g\""
+                         " /opt/microsoft/omsagent/plugin/security_lib.rb\"")
+            return False
+        else:
+            print_ok("Omsagent configuration is up to date \n")
+            return True
+
 
 def file_contains_string(file_tokens, file_path):
     print_notice(file_path)
@@ -609,6 +627,7 @@ def main():
     # test oms agent configuration
     security_config_omsagent_test(workspace_id=workspace_id)
     omsagent_security_event_conf_validation(workspace_id=workspace_id)
+    check_omsagent_new_version(oms_agent_plugin_securiy_config)
     # validate firewalld
     check_red_hat_firewall_issue()
     # Check issue regarding security enhanced linux blocking tcp ports
