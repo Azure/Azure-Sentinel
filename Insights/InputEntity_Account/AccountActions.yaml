@@ -1,58 +1,38 @@
 SchemaVersion: 1.0
 DataTypes:
   - DataType: AuditLogs
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+RequiredInputFieldsSets:
+  - - Account_Name
+    - Account_NTDomain
+  - - Account_Name
+    - Account_UPNSuffix
+  - - Account_AADUserId
+  - - Account_SID
 BaseQuery: |
-  let GetAccountActions = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_NTDomain:string, v_Account_AADUserId:string, v_Account_SID:string){
+  let GetAccountActions = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_UPNSuffix:string, v_Account_AADUserId:string, v_Account_SID:string){
   AuditLogs
-  | where OperationName in~ ('Delete user', 'Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)','Update user')
+  | where OperationName in~ ('Delete user', 'Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', 'Update user')
   | extend UserPrincipalName = tostring(TargetResources[0].userPrincipalName)
-  | extend UserPrincipalName =iff(UserPrincipalName has "#EXT#", replace("_","@",tostring(split(UserPrincipalName,'#EXT#')[0])) ,UserPrincipalName)
   | extend Account_Name = tostring(split(UserPrincipalName, '@')[0])
   | extend Account_UPNSuffix = tostring(split(UserPrincipalName, '@')[1])
   | extend Action = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0])))
   | extend ModifiedProperty = parse_json(Action).displayName
   | extend ModifiedValue = parse_json(Action).newValue
-  | extend AADUserId = tostring(TargetResources[0].id)
+  | extend Account_AADUserId = tostring(TargetResources[0].id)
   | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')
-  | extend Initiator= coalesce(tostring(todynamic(InitiatedBy) ['user']['id']),tostring(todynamic(InitiatedBy) ['app']['displayName']),'[Unknown]')
-  | union isfuzzy=true (SecurityEvent
-  // 4720 - Created
-  // 4723 - ChangePassword
-  // 4724 - ResetPassword
-  // 4725 - Disabled
-  // 4726 - Deleted
-  // 4740 - Locked
-  | where EventID in (4726, 4740, 4720, 4725, 4724, 4723)
+  | union isfuzzy=true (
+  SecurityEvent
+  | where EventID in (4720, 4722, 4723, 4724, 4725, 4726, 4740)
   | extend OperationName = tostring(EventID)
   | where AccountType =~ "user" or isempty(AccountType)
-  | project-rename Account_Name = TargetUserName, Account_NTDomain = TargetDomainName
-  | extend Initiator=SubjectUserName
+  | extend Account_Name = TargetUserName, Account_NTDomain = TargetDomainName, Account_SID = TargetSid
   )
-  | extend p_Account_Name = case(
-  // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
-  v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
-  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
-  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
-  v_Account_Name
-  )
-  | extend p_Account_UPNSuffix = case(
-  v_Account_UPNSuffix has '@', tostring(split(v_Account_UPNSuffix, '@')[1]),
-  v_Account_UPNSuffix has '\\', tostring(split(v_Account_UPNSuffix, '\\')[0]),
-  v_Account_UPNSuffix
-  )
-  | extend p_Account_NTDomain = case(
-  v_Account_NTDomain has '\\', tostring(split(v_Account_NTDomain, '\\')[0]),
-  // Handles UPN scenario of AccountName@UPNSuffix to pull potential NTDomain from
-  v_Account_NTDomain has '@', tostring(split(tostring(split(v_Account_NTDomain, '@')[1]),'.')[0]),
-  v_Account_NTDomain
-  )
-  | where (Account_Name =~ p_Account_Name and (Account_UPNSuffix =~ p_Account_UPNSuffix or Account_NTDomain =~ p_Account_NTDomain)) or AADUserId =~ v_Account_AADUserId or TargetSid =~ v_Account_SID
+  | where (Account_Name =~ v_Account_Name and (Account_UPNSuffix =~ v_Account_UPNSuffix or Account_NTDomain =~ v_Account_NTDomain)) or Account_AADUserId =~ v_Account_AADUserId or Account_SID =~ v_Account_SID
   };
-  GetAccountActions('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_NTDomain}}', '{{Account_AADUserId}}', '{{Account_SID}}')
-Type: KQL
-Provider: Sentinel
-RequiredInputFieldsSets:
-  - - Account_Name
+  GetAccountActions('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_UPNSuffix}}', '{{Account_AADUserId}}', '{{Account_SID}}')
 
 Activities:
  EnabledByDefault: true
