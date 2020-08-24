@@ -8,15 +8,42 @@ EntitiesFilter:
   - Windows
 BaseQuery: |
   let AScoreThresh=3; 
-  let maxAnomalies=5; 
+  let maxAnomalies=3; 
   let BeforeRange = 14d; 
   let EndTime = todatetime('{{End_Time_UTC}}');
   let StartTime = todatetime('{{Start_Time_UTC}}');  
   let numDays = tolong((EndTime-StartTime)/1d);
-  let computerData = (v_Computer_Name:string) { SecurityEvent | where Computer  has v_Computer_Name };
-  computerData('{{Host_HostName}}')
+  let computerData = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string) { 
+  SecurityEvent 
+  | extend SourceComputerId = column_ifexists("SourceComputerId", "NotAvailable"), _ResourceId = column_ifexists("_ResourceId", "NotAvailable")
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId };
+  computerData('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 RequiredInputFieldsSets:
-- - Host_HostName
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
 Insights:
   Id: 4191a4d7-e72b-4564-b2fb-25580630384b
   DisplayName: Anomalously high number of a security event
@@ -51,7 +78,7 @@ Insights:
        | order by maxAnomalyScorePost desc 
 
       Summarize: take 1
-      Project: project Activity, expectedCount=postExpectedCount, actualCount=postActualCount, anomalyScore=postAnomalyScore
+      Project: project Activity, expectedCount=round(postExpectedCount,2), actualCount=postActualCount, anomalyScore=round(postAnomalyScore,2)
       LinkColumnsDefinitions:
       - ProjectedName: Activity
         Query: |
@@ -69,7 +96,7 @@ Insights:
        | extend count1=count_
        | mv-apply  count1 to typeof(long), anomalyScore to typeof(double), expectedCount to typeof(double) on ( summarize (dummy, postExpectedCount, postActualCount)=arg_min(abs(anomalyScore - maxAnomalyScorePost), expectedCount, count1) )
        | where totAnomalies < maxAnomalies        
-       | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,postExpectedCount)
+       | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,round(postExpectedCount,2))
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc 
        | take 1 
@@ -94,4 +121,4 @@ Insights:
        | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,postExpectedCount)
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc 
-       | project Activity, expectedCount=postExpectedCount, actualCount=postActualCount, anomalyScore=postAnomalyScore
+       | project Activity, expectedCount=round(postExpectedCount,2), actualCount=postActualCount, anomalyScore=round(postAnomalyScore,2)
