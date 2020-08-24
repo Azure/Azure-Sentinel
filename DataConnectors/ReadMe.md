@@ -169,9 +169,17 @@ Once you have a working POC, you are ready to build, validate the data connector
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
     2.	The sample data file in the right subfolder of ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
     3.	The company logo adhering to the following requirements in the ['Logo' folder](https://aka.ms/azuresentinelgithublogos)
-        1.	Logo needs to be in SVG format
-        2.	Ensure raw file of logo doesn’t have: a. cls style formats b. embedded png formats
-        3.  Logo scales well to fit in a 75 px square
+        1.	Logo needs to be in SVG format and under 5 Kb
+        2.	Ensure raw file of logo does **not** have any of the following: 
+            * cls and style formats 
+            * embedded png formats 
+            * xmlns:xlink  
+            * data-name
+        3. Do not use xlink:href - use inline instead
+        4. Do not use title tag
+        5. If some properties in the logo have IDs (for e.g. <g id="layer0"...), then set these IDs as GUIDs so that these are uniquely identifiable across all Azure logo assets
+        6. Logo scales well to fit in a 75 px square
+        7. SVG code file is formatted well for readability
     4.  For Syslog data connector, the Kusto function parser is in the right subfolder (PROVIDERNAME) of ['Parsers' folder](https://aka.ms/sentinelgithubparsers)
     5.  If you are bringing in detections or hunting queries, requiredDataConnectors section of the YAML template must be populated.  Details of what to reference in the YAML template from the connector JSON are in the Query Style Guide under [requiredDataConnectors](https://github.com/Azure/Azure-Sentinel/wiki/Query-Style-Guide#requireddataconnectors)
 
