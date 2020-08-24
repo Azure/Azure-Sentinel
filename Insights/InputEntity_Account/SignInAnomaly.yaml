@@ -5,19 +5,26 @@ Type: KQL
 Provider: Sentinel
 BaseQuery: |
  let AScoreThresh=3; 
- let maxAnomalies=5; 
+ let maxAnomalies=3; 
  let BeforeRange = 14d; 
  let EndTime=todatetime('{{End_Time_UTC}}');
  let StartTime = todatetime('{{Start_Time_UTC}}'); 
  let numDays = tolong((EndTime-StartTime)/1d); 
- let userData = (v_UserPrincipalName:string) { SigninLogs | where UserPrincipalName  has v_UserPrincipalName };
- userData('{{Account_Name}}')
+ let userData = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AADUserId:string) { 
+    SigninLogs 
+    | where TimeGenerated between ((StartTime-BeforeRange) .. EndTime)
+    | extend splitUserId=split(UserPrincipalName, '@')
+    | extend Account_Name = tostring(splitUserId[0]), Account_UPNSuffix = tostring(splitUserId[1])
+    | where (Account_Name =~ v_Account_Name and Account_UPNSuffix =~ v_Account_UPNSuffix) or UserId =~ v_Account_AADUserId };
+ userData('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_AADUserId}}')
 RequiredInputFieldsSets:
-- - Account_Name
+  - - Account_Name
+    - Account_UPNSuffix
+  - - Account_AADUserId
 Insights:
   Id: cae8d0aa-aa45-4d53-8d88-17dd64ffd4e4
-  DisplayName: Anomalously high sign-in results
-  Description: Highlight sign-in results of the user principal with anomalously high count compared to those observed in the preceding 14 days.
+  DisplayName: Anomalously high Azure sign-in result count
+  Description: Highlight Azure sign-in results by the user principal with anomalously high count compared to those observed in the preceding 14 days.
   DefaultTimeRange:
     BeforeRange: 1d
     AfterRange: 0d
@@ -47,7 +54,7 @@ Insights:
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc
       Summarize: take 1
-      Project: project ResultDescription, expectedCount=postExpectedCount, actualCount=postActualCount, anomalyScore=postAnomalyScore
+      Project: project ResultDescription, expectedCount=round(postExpectedCount,2), actualCount=postActualCount, anomalyScore=round(postAnomalyScore,2)
       LinkColumnsDefinitions:
       - ProjectedName: ResultDescription
         Query: |
@@ -65,7 +72,7 @@ Insights:
        | extend count1=count_ 
        | mv-apply  count1 to typeof(long), anomalyScore to typeof(double), expectedCount to typeof(double) on ( summarize (dummy, postExpectedCount, postActualCount)=arg_min(abs(anomalyScore - maxAnomalyScorePost), expectedCount, count1) ) 
        | where totAnomalies < maxAnomalies 
-       | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,postExpectedCount) 
+       | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,round(postExpectedCount,2)) 
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc 
        | take 1 
@@ -89,4 +96,4 @@ Insights:
        | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,postExpectedCount) 
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc 
-       | project ResultDescription, expectedCount=postExpectedCount, actualCount=postActualCount, anomalyScore=postAnomalyScore
+       | project ResultDescription, expectedCount=round(postExpectedCount,2), actualCount=postActualCount, anomalyScore=round(postAnomalyScore,2)
