@@ -5,18 +5,23 @@ Provider: Sentinel
 Type: KQL
 BaseQuery: |
   let AScoreThresh = 3; 
-  let maxAnomalies = 5;
+  let maxAnomalies = 3;
   let BeforeRange = 14d; 
   let EndTime = todatetime('{{End_Time_UTC}}'); 
   let StartTime = todatetime('{{Start_Time_UTC}}');
   let numDays = tolong((EndTime-StartTime)/1d); 
-  let userData = (v_UserId:string) { OfficeActivity | where UserId  has v_UserId }; 
-  userData('{{Account_Name}}')
+  let userData = (v_Account_Name:string, v_Account_UPNSuffix:string) { 
+    OfficeActivity 
+    | extend splitUserId=split(UserId, '@')
+    | extend Account_Name = tostring(splitUserId[0]), Account_UPNSuffix = tostring(splitUserId[1])
+    | where Account_Name =~ v_Account_Name and Account_UPNSuffix =~ v_Account_UPNSuffix }; 
+  userData('{{Account_Name}}', '{{Account_UPNSuffix}}')
 RequiredInputFieldsSets:
-- - Account_Name
+  - - Account_Name
+    - Account_UPNSuffix
 Insights:
   Id: 0a5d7b14-b485-450a-a0ac-4100c860ac32
-  DisplayName: Anomalously high office operations
+  DisplayName: Anomalously high office operation count
   Description: Highlight office operations of the user with anomalously high count compared to those observed in the preceding 14 days.
   DefaultTimeRange:
     BeforeRange: 1d
@@ -47,7 +52,7 @@ Insights:
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc
       Summarize: take 1
-      Project: project Operation, expectedCount=postExpectedCount, actualCount=postActualCount, anomalyScore=postAnomalyScore
+      Project: project Operation, expectedCount=round(postExpectedCount,2), actualCount=postActualCount, anomalyScore=round(postAnomalyScore,2)
       LinkColumnsDefinitions:
       - ProjectedName: Operation
         Query: |
@@ -65,7 +70,7 @@ Insights:
        | extend count1=count_ 
        | mv-apply count1 to typeof(long), anomalyScore to typeof(double), expectedCount to typeof(double) on ( summarize (dummy, postExpectedCount, postActualCount)=arg_min(abs(anomalyScore-maxAnomalyScorePost), expectedCount, count1) ) 
        | where totAnomalies < maxAnomalies 
-       | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,postExpectedCount) 
+       | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,round(postExpectedCount,2)) 
        | where maxAnomalyScorePost > AScoreThresh 
        | order by maxAnomalyScorePost desc 
        | take 1 
@@ -87,4 +92,4 @@ Insights:
        | where totAnomalies < maxAnomalies
        | extend postAnomalyScore=iff(baseStd == 0 and maxCountPost > tolong(count_[0]),1000.0,maxAnomalyScorePost), postExpectedCount=iff(postExpectedCount < 0,0.0,postExpectedCount) 
        | where maxAnomalyScorePost > AScoreThresh | order by maxAnomalyScorePost desc 
-       | project Operation, expectedCount=postExpectedCount, actualCount=postActualCount, anomalyScore=postAnomalyScore
+       | project Operation, expectedCount=round(postExpectedCount,2), actualCount=postActualCount, anomalyScore=round(postAnomalyScore,2)
