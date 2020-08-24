@@ -1,6 +1,7 @@
 SchemaVersion: 1.0
 DataTypes:
   - DataType: AuditLogs
+  - DataType: SecurityEvent
 BaseQuery: |
   let GetAccountActions = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_UPNSuffix:string, v_Account_AADUserId:string, v_Account_SID:string){
   AuditLogs
@@ -13,12 +14,14 @@ BaseQuery: |
   | extend ModifiedValue = parse_json(Action).newValue
   | extend AADUserId = tostring(TargetResources[0].id)
   | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')
+  | extend Initiator= coalesce(tostring(todynamic(InitiatedBy) ['user']['id']),tostring(todynamic(InitiatedBy) ['app']['displayName']),'[Unknown]')
   | union isfuzzy=true (
   SecurityEvent
   | where EventID in (4726, 4740, 4720, 4722, 4725, 4724, 4723)
   | extend OperationName = tostring(EventID)
   | where AccountType =~ "user" or isempty(AccountType)
   | extend Account_Name = TargetUserName, Account_NTDomain = TargetDomainName
+  | extend Initiator=SubjectUserName
   )
   | extend p_Account_Name = case(
   // Handles mixed use scenario of NTDomain\AccountName@UPNSuffix
@@ -141,3 +144,35 @@ Insights:
  AdditionalQuery:
   Text: "See All Account Activity"
   Query: "project TimeGenerated, UserPrincipalName, Account_Name, OperationName, Activity, DisableUser, TargetSid, AADUserId, InitiatedBy, AADTenantId, AccountType, Computer, SubjectAccount, SubjectUserSid, EventData"
+
+Activities:
+ EnabledByDefault: true
+ Items:
+ - Id: cdc8d852-f9d2-476b-999d-09696fb2b633
+   Title: "The account was created"
+   Content: "The account was created by '{{Initiator}}' '{{Count}}' times"
+   Description: "This activity displays the account's creation event"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Add user', '4720')"
+    SummarizeBy: "Initiator"
+ - Id: 9dbe582e-8afb-45e6-8880-60f8a0a102bc
+   Title: "The account was deleted"
+   Content: "The account was deleted by '{{Initiator}}' '{{Count}}' times"
+   Description: "This activity displays the account's deletion event"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Delete user', '4726')"
+    SummarizeBy: "Initiator"
+ - Id: 9d739090-245a-4dd8-88f2-970386bae29e
+   Title: "The account was disabled"
+   Content: "The account was disabled by Admin '{{Count}}' times"
+   Description: "This activity displays the account's disablement event"
+   QueryDefinitions:
+    Filter: "where OperationName  == '4725' or (OperationName  =~ 'Update user' and DisableUser =~ 'True')"
+    SummarizeBy: "Initiator"
+ - Id: 1e2043f0-ae03-4aa0-a731-227d823a624a
+   Title: "The account's password was reset"
+   Content: "The account's password was reset '{{Count}}' times"
+   Description: "This activity displays the account's password reset event"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', '4724', '4723')"
+    SummarizeBy: "Initiator"
