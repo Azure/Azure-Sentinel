@@ -6,8 +6,8 @@ Today you will be able to send messages to custom logs table that you will defin
 
 Azure Sentinel output plugin uses the rest API integration to Log Analytics, in order to ingest the logs into custom logs tables [What are custom logs tables](<https://docs.microsoft.com/azure/azure-monitor/platform/data-sources-custom-logs>)
 
-Plugin version: v0.3.0 
-Released on: 2020-06-23 
+Plugin version: v1.0.0 
+Released on: 2020-08-25 
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -51,7 +51,7 @@ input {
  filter {
 }
 output {
-    logstash-output-azure {
+    microsoft-logstash-output-azure-loganalytics {
       workspace_id => "4g5tad2b-a4u4-147v-a4r7-23148a5f2c21" # <your workspace id>
       workspace_key => "u/saRtY0JGHJ4Ce93g5WQ3Lk50ZnZ8ugfd74nk78RPLPP/KgfnjU5478Ndh64sNfdrsMni975HJP6lp==" # <your workspace key>
       custom_log_table_name => "tableName"
@@ -70,7 +70,7 @@ input {
  filter {
 }
 output {
-    logstash-output-azure {
+    microsoft-logstash-output-azure-loganalytics {
       workspace_id => "4g5tad2b-a4u4-147v-a4r7-23148a5f2c21" # <your workspace id>
       workspace_key => "u/saRtY0JGHJ4Ce93g5WQ3Lk50ZnZ8ugfd74nk78RPLPP/KgfnjU5478Ndh64sNfdrsMni975HJP6lp==" # <your workspace key>
       custom_log_table_name => "tableName"
@@ -78,7 +78,7 @@ output {
 }
 ```
 
-<u>Advencaed Configuration</u>
+<u>Advanced Configuration</u>
 ```
 input {
   tcp {
