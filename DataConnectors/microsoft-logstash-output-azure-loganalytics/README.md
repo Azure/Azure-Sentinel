@@ -51,7 +51,7 @@ input {
  filter {
 }
 output {
-    logstash-output-azure {
+    microsoft-logstash-output-azure-loganalytics {
       workspace_id => "4g5tad2b-a4u4-147v-a4r7-23148a5f2c21" # <your workspace id>
       workspace_key => "u/saRtY0JGHJ4Ce93g5WQ3Lk50ZnZ8ugfd74nk78RPLPP/KgfnjU5478Ndh64sNfdrsMni975HJP6lp==" # <your workspace key>
       custom_log_table_name => "tableName"
@@ -70,7 +70,7 @@ input {
  filter {
 }
 output {
-    logstash-output-azure {
+    microsoft-logstash-output-azure-loganalytics {
       workspace_id => "4g5tad2b-a4u4-147v-a4r7-23148a5f2c21" # <your workspace id>
       workspace_key => "u/saRtY0JGHJ4Ce93g5WQ3Lk50ZnZ8ugfd74nk78RPLPP/KgfnjU5478Ndh64sNfdrsMni975HJP6lp==" # <your workspace key>
       custom_log_table_name => "tableName"
@@ -78,7 +78,7 @@ output {
 }
 ```
 
-<u>Advencaed Configuration</u>
+<u>Advanced Configuration</u>
 ```
 input {
   tcp {
