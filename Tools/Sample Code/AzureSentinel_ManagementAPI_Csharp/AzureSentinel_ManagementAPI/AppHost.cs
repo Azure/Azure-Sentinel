@@ -58,7 +58,7 @@ namespace AzureSentinel_ManagementAPI
                 string option = Console.ReadLine();
 
                 bool isValid = int.TryParse(option, out var index);
-                isValid = isValid && index > 0 && index < 35;
+                isValid = isValid && index > 0 && index < 36;
 
                 if (!isValid)
                 {
@@ -269,14 +269,20 @@ namespace AzureSentinel_ManagementAPI
                         case 33:
                             {
                                 string incidentId = GetNonEmptyInput(Utils.GetString("Incident_Id_Prompt_Text"));
-                                await incidentRelationController.GetIncidentRelations(incidentId);
+                                await incidentRelationController.GetEntitiesforIncident(incidentId);
                                 break;
                             }
                         case 34:
                             {
                                 string incidentId = GetNonEmptyInput(Utils.GetString("Incident_Id_Prompt_Text"));
                                 string relationId = GetNonEmptyInput(Utils.GetString("Relation_Id_Prompt_Text"));
-                                response = await incidentRelationController.GetIncidentRelationByName(incidentId, relationId);
+                                await incidentRelationController.GetIncidentRelationByName(incidentId, relationId);
+                                break;
+                            }
+                        case 35:
+                            {
+                                string incidentId = GetNonEmptyInput(Utils.GetString("Incident_Id_Prompt_Text"));
+                                await incidentRelationController.GetIncidentEntitiesbyEntityType(incidentId);
                                 break;
                             }
                     }
@@ -397,6 +403,7 @@ namespace AzureSentinel_ManagementAPI
             Console.WriteLine(Utils.GetString("Delete_Relation_Menu"));
             Console.WriteLine(Utils.GetString("Get_Relations_Menu"));
             Console.WriteLine(Utils.GetString("Get_Relation_Menu"));
+            Console.WriteLine(Utils.GetString("Get_Entities_By_Type_Menu"));
             Console.WriteLine();
 
             Console.WriteLine(Utils.GetString("Exit_Text"));
