@@ -18,7 +18,7 @@ This sample provides examples of these API requests:
 - GET / CREATE / DELETE Bookmark(s)
 - GET / CREATE / UPDATE / DELETE Incident(s)
 - GET / CREATE Incident Comments
-- GET / GET / DELETE Incident Relation (i.e., Get all bookmarks related to an incident)
+- GET / CREATE / DELETE Incident Relation (i.e., Get entities related to an incident)
 
 Please refer to [Azure Sentinel API specs/documentation](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/stable/2020-01-01/SecurityInsights.json) for more details.
 
