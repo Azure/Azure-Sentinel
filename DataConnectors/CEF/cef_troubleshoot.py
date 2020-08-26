@@ -390,15 +390,16 @@ def check_omsagent_new_version(omsagent_plugin_securiy_config):
         :param omsagent_plugin_security_config: path to the file containing the updated configuration
         :return: True if the configuration is updated, false otherwise
         '''
-        grep = subprocess.Popen(["grep", "-i", "return ident", oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
+        grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')", oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
         o, e = grep.communicate()
         if not o:
-            print_warning("Warning: Current content of the Omsagent configuration requires update\n")
-            print_notice("Notice: To update the configuration run - \"sed -i \"s|return \'%ASA\'|return ident|g\""
-                         " /opt/microsoft/omsagent/plugin/security_lib.rb\"")
+            print_warning("Warning: Current content of the omsagent security configuration requires update\n")
+            print_notice("Notice: To update the configuration run: \"sed -i \"s|return \'%ASA\' "
+                         "if ident.include?(\'%ASA\')|return ident if ident.include?(\'%ASA\')|g\" "
+                         + oms_agent_plugin_securiy_config + "\"")
             return False
         else:
-            print_ok("Omsagent configuration is up to date \n")
+            print_ok("omsagent security configuration is up to date \n")
             return True
 
 
