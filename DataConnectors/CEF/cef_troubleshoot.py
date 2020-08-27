@@ -387,7 +387,6 @@ def check_oms_agent_status():
 def check_omsagent_cisco_asa_configuration(workspace_id):
         '''
         Checking if the OMS agent is able to parse Cisco ASA:
-        workspace_id: given at prompt from user
         :return: True if the configuration is updated, false otherwise
         '''
         grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')",
