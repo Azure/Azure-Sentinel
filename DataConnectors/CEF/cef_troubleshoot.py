@@ -384,22 +384,24 @@ def check_oms_agent_status():
     else:
         return True
 
-def check_omsagent_new_version(omsagent_plugin_securiy_config):
+def check_omsagent_cisco_asa_configuration(workspace_id):
         '''
-        Checking if the OMS agent has the updated configuration:
-        :param omsagent_plugin_security_config: path to the file containing the updated configuration
+        Checking if the OMS agent is able to parse Cisco ASA:
+        workspace_id: given at prompt from user
         :return: True if the configuration is updated, false otherwise
         '''
-        grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')", oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
+        grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')",
+                                 oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
         o, e = grep.communicate()
         if not o:
-            print_warning("Warning: Current content of the omsagent security configuration requires update\n")
-            print_notice("Notice: To update the configuration run: \"sed -i \"s|return \'%ASA\' "
-                         "if ident.include?(\'%ASA\')|return ident if ident.include?(\'%ASA\')|g\" "
-                         + oms_agent_plugin_securiy_config + "\"")
+            print_warning("Warning: Current content of the omsagent security configuration doesn't support"
+                          " Cisco ASA parsing. To resolve this issue please run the following command: \n"
+                          "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
+                          "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
+                          " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
             return False
         else:
-            print_ok("omsagent security configuration is up to date \n")
+            print_ok("omsagent security configuration supports Cisco ASA parsing \n")
             return True
 
 
@@ -628,7 +630,7 @@ def main():
     # test oms agent configuration
     security_config_omsagent_test(workspace_id=workspace_id)
     omsagent_security_event_conf_validation(workspace_id=workspace_id)
-    check_omsagent_new_version(oms_agent_plugin_securiy_config)
+    check_omsagent_cisco_asa_configuration(workspace_id=workspace_id)
     # validate firewalld
     check_red_hat_firewall_issue()
     # Check issue regarding security enhanced linux blocking tcp ports
