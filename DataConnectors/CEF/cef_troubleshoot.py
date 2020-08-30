@@ -394,7 +394,7 @@ def check_omsagent_cisco_asa_configuration(workspace_id):
         o, e = grep.communicate()
         if not o:
             print_warning("Warning: Current content of the omsagent security configuration doesn't support"
-                          " Cisco ASA parsing. To resolve this issue please run the following command: \n"
+                          " Cisco ASA parsing.\nTo enable Cisco ASA firewall events parsing run the following: \n"
                           "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
                           "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
                           " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
