@@ -1,0 +1,34 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+DataTypes: 
+- DataType: AzureActivity
+RequiredInputFieldsSets:
+- - Account_Name
+  - Account_UPNSuffix
+- - Account_AadUserId
+BaseQuery: |- 
+  let AzureRunProcess = (Account_Name:string, Account_UPNSuffix:string,Account_AadUserId:string){
+  let upn = strcat(Account_Name,"@",Account_UPNSuffix);
+      AzureActivity 
+      | where TimeGenerated between (queryStartTime .. queryEndTime)
+      | where (isnotempty(Account_AadUserId) and Caller =~ Account_AadUserId) or Caller =~ upn
+      | where OperationName contains "Run Command on Virtual Machine"
+               or (OperationName == "List Storage Account Keys" and ActivityStatus == "Succeeded")
+               or OperationName == "Create or Update Virtual Machine" 
+               or OperationName == "Create Deployment"
+               or OperationName == "Create role assignment"
+  | project-rename Target_AzureResource_ResourceId = ResourceId, Source_IP_Address = CallerIpAddress
+  | extend shortResourceId = tostring(split(ResourceId,'/')[-1])
+  };
+  AzureRunProcess('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_AadUserId}}')
+  
+Activities:
+     EnabledByDefault: true
+     Title: "User performed operation on azure resource from IP"
+     Content: "User performed operation {{OperationName}} on azure resource: {{shortResourceId}} from IP {{Source_IP_Address}} {{Count}} time(s)"
+     Items: 
+        - Id: cab4058a-0707-4a02-b76f-cf96270823ed
+          Description: This activity lists the user's activities on Azure.
+          QueryDefinitions:
+            SummarizeBy: Target_AzureResource_ResourceId, Source_IP_Address, shortResourceId, OperationName

@@ -1,0 +1,32 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+DataTypes: 
+- DataType: OfficeActivity
+RequiredInputFieldsSets:
+- - Account_Name
+  - Account_UPNSuffix
+- - Account_Sid
+BaseQuery: |- 
+  let ruleChangeRecordTypes = dynamic( ["ExchangeAdmin", "ExchangeItem"]);
+  let TLQ_UserModifiedinboxRules = (Account_Name: string, Account_UPNSuffix: string, Account_Sid: string){
+  let upn = iff(Account_Name != "" and Account_UPNSuffix != ""
+  , strcat(Account_Name, "@", Account_UPNSuffix)
+  , "");
+  OfficeActivity
+  | where RecordType in~ (ruleChangeRecordTypes) and Operation contains "InboxRule"
+  | where((Account_Sid != "" and LogonUserSid == Account_Sid)
+  or(upn != "" and UserId == upn )
+  )
+  };
+  TLQ_UserModifiedinboxRules('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_Sid}}')
+
+Activities:
+     EnabledByDefault: true
+     Title: "User Modified {{Count}} inbox rules on {{MailboxOwnerUPN}}'s Mailbox"
+     Content: "User Modified {{Count}} inbox rules on {{MailboxOwnerUPN}}'s Mailbox"
+     Items: 
+        - Id: e480efd0-016d-428e-b892-84b9d586d004
+          Description: User modified inbox rules on a mailbox
+          QueryDefinitions:
+            SummarizeBy: MailboxOwnerSid, MailboxOwnerUPN
