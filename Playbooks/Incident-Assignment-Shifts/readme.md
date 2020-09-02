@@ -28,7 +28,7 @@ Create or use an existing Service Principal with the Azure Sentinel Responder ro
 
 **Steps to create a new Service Principal:**
 
-Follow the steps in this [link](https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal):
+Follow the steps in this [link](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal):
 
 - Register an application to Azure AD and create a Service Principal.
 
@@ -38,7 +38,7 @@ Follow the steps in this [link](https://docs.microsoft.com/en-us/azure/active-di
 
 
 ### 3. Shifts for Teams
-- You must have the [Shifts](https://support.microsoft.com/en-us/office/get-started-in-shifts-5f3e30d8-1821-4904-be26-c3cd25a497d6) schedule setup in Microsoft Teams.
+- You must have the [Shifts](https://support.microsoft.com/office/get-started-in-shifts-5f3e30d8-1821-4904-be26-c3cd25a497d6) schedule setup in Microsoft Teams.
 
 - The Shifts schedule must be published (**Share with team**).
 
