@@ -1,6 +1,7 @@
+# Get-AlienVault_OTX
 author: Andrew Blumhardt
 
-This playbook will copy AlienVault OTX IOC data using the Security Graph API. Requires an AlienVault API Key and registered Azure AD app. Update the AlienVault, tenant ID, client ID (app ID), and secret. Refer to MS Docs and Sentinel Threat Intelligence blogs for more information.
+This playbook will copy AlienVault OTX IOC data using the Security Graph API into Azure Sentinel. Requires an AlienVault API Key and registered Azure AD app. Update the AlienVault, tenant ID, client ID (app ID), and secret. Refer to MS Docs and Sentinel Threat Intelligence blogs for more information.
 
 Activation:
 1. Obtain an API Key (authentication to OTX data)
@@ -16,5 +17,25 @@ ThreatIntelligenceIndicator
 |where TimeGenerated >= ago(1h)
 | summarize count() by Description
 
-Logic App template based on and inspired by Jason Wescott’s article on OTX-Sentinel integration: https://techcommunity.microsoft.com/t5/azure-sentinel/bring-your-threat-intelligence-to-azure-sentinel/ba-p/1167546
+Logic App template based on and inspired by Jason Wescott’s article on OTX-Sentinel integration: 
 
+Documentation references:
+
+<li>Azure Management groups as containers of subscriptions to monitor
+<ul>
+<li><a href="https://techcommunity.microsoft.com/t5/azure-sentinel/bring-your-threat-intelligence-to-azure-sentinel/ba-p/1167546" target="_blank" rel="noopener">Bring your threat intelligence to Azure Sentinel</a></li>
+</ul>
+</li>
+<li>Azure Active Directory registered application, assigned with RBAC roles
+<ul>
+<li><a href="https://docs.microsoft.com/en-us/graph/api/resources/security-api-overview" target="_blank" rel="noopener">Use the Microsoft Graph Security API</a></li>
+</ul>
+</li>
+</ul>
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlienVault_OTX%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlienVault_OTX%2Fazuredeploy.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
