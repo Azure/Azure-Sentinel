@@ -490,7 +490,7 @@ def omsagent_security_event_conf_validation(workspace_id):
 def check_daemon(daemon_name):
     tokens = process_check(daemon_name)
     print(tokens)
-    if len(tokens) > 0:
+    if len(tokens) > 1:
         for single_token in tokens:
             if "/usr/sbin/" + daemon_name in single_token:
                 print_ok("Found " + daemon_name + " process running on this machine.")
