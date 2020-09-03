@@ -35,6 +35,7 @@ oms_agent_url = "https://raw.githubusercontent.com/Microsoft/OMS-Agent-for-Linux
 help_text = "Optional arguments for the python script are:\n\t-T: for TCP\n\t-U: for UDP which is the default value.\n\t-F: for no facility restrictions.\n\t-p: for changing default port from 25226"
 omsagent_default_incoming_port = "25226"
 daemon_default_incoming_port = "514"
+oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 syslog_ng_source_content = "source s_src { udp( port(514)); tcp( port(514));};"
@@ -324,6 +325,25 @@ def change_omsagent_configuration_port(omsagent_incoming_port, configuration_pat
     print_ok("Omsagent incoming port was changed in configuration - " + configuration_path)
     return True
 
+def check_syslog_filter_field_mapping(workspace_id):
+    '''
+    Checking if the OMS agent maps the Computer field correctly:
+    :return: True if the mapping configuration is correct, false otherwise
+    '''
+    grep = subprocess.Popen(["grep", "-i", "'Host' => record\['host'\]",
+                             oms_agent_field_mapping_configuration], stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if not o:
+        print_warning("Warning: Current content of the omsagent syslog filter mapping configuration doesn't map the"
+                      " Computer field from your hostname.\nTo enable the Computer field mapping, please run: \n"
+                      "\"sed -i -e \"/'Severity' => tags\[tags.size - 1\]/ a \ \\t  'Host' => record['host']\""
+                      " -e \"s/'Severity' => tags\[tags.size - 1\]/&,/\" " + oms_agent_field_mapping_configuration +
+                      " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
+        return False
+    else:
+        print_ok("OMS Agent syslog field mapping is correct \n")
+        return True
+
 
 def restart_rsyslog():
     '''
@@ -511,6 +531,7 @@ def main():
         set_syslog_ng_configuration()
         restart_syslog_ng()
     restart_omsagent(workspace_id=workspace_id)
+    check_syslog_filter_field_mapping(workspace_id=workspace_id)
     print_ok("Installation completed")
 
 
