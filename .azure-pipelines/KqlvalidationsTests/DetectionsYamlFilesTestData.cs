@@ -11,14 +11,20 @@ namespace Kqlvalidations.Tests
     {
         public DetectionsYamlFilesTestData()
         {
+            string detectionPath = GetDetectionPath();
+            var files = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
+            files.ForEach(f => AddData(Path.GetFileName(f)));
+        }
+
+        public static string GetDetectionPath()
+        {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
             for (int i = 0; i < 5; i++)
             {
                 rootDir = rootDir.Parent;
             }
             var detectionPath = Path.Combine(rootDir.FullName, "Detections");
-            var files = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
-            files.ForEach(f => AddData(f));
+            return detectionPath;
         }
 
         private static string GetAssemblyDirectory()
