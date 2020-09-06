@@ -24,7 +24,7 @@ namespace Kqlvalidations.Tests
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void validate_detectionqueries_succeed(string detectionsYamlFileName)
+        public void Validate_DetectionQueries_HaveValidKql(string detectionsYamlFileName)
         {
             var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
             var yaml = File.ReadAllText(detectionsYamlFile);
