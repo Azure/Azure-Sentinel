@@ -11,7 +11,7 @@ namespace Kqlvalidations.Tests
         public DetectionsYamlFilesTestData()
         {
             var rootDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().CodeBase);
-            var detectionPath = $@"{rootDir}/../../../../..\Detections".Replace(@"file:\", string.Empty);
+            var detectionPath = $"{rootDir}/../../../../../Detections".Replace(@"file:/", string.Empty);
             var files = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
             files.ForEach(f => AddData(f));
         }
