@@ -33,14 +33,12 @@ namespace Kqlvalidations.Tests
             string queryStr = res["query"];
             string id = res["id"];
 
-            //we ignore so known issues
+            //we ignore known issues (in progress)
             if (WhiteListTemplateIds.Contains(id))
             {
                 return;
             }
-
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
-
             Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : validationRes.Diagnostics.Select(d => d.Message).ToList().Aggregate((s1, s2) => s1 + "," + s2));
         }
 
