@@ -45,7 +45,7 @@ As part of the PR checks we run kql validation on the queries that are defined i
 In the pipeline you can see which test fail and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
 If you are using custom logs table (the table is not defined on all workspaces by default) you should verify
-your table schema is defined in json file in the Azure-Sentinel/.azure-pipelines/KqlvalidationsTests/CustomTables/
+your table schema is defined in json file in the folder *Azure-Sentinel\.script\tests\KqlvalidationsTests\CustomTables*
 Example create tablexyz.json:
 ```json
 {
