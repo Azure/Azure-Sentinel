@@ -44,9 +44,10 @@ As part of the PR checks we run kql validation on the queries that are defined i
 ![Azurepipeline](.github/Media/Azurepipeline.png)
 In the pipeline you can see which test fail and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
-If you are using custom logs table (the table is not defined on all workspaces by default) you should verify
-your table schema is defined in json file in the folder *Azure-Sentinel\.script\tests\KqlvalidationsTests\CustomTables*
-Example create tablexyz.json:
+If you are using custom logs table (a table which is not defined on all workspaces by default) you should verify
+your table schema is defined in json file in the folder *Azure-Sentinel\\.script\tests\KqlvalidationsTests\CustomTables*
+
+**Example for table tablexyz.json**
 ```json
 {
   "Name": "tablexyz",
@@ -66,7 +67,6 @@ Example create tablexyz.json:
   ]
 }
 ```
-
 
 
 When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
