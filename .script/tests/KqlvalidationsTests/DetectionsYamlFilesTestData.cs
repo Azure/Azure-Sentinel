@@ -19,7 +19,7 @@ namespace Kqlvalidations.Tests
         public static string GetDetectionPath()
         {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
-            var testFolderDepth = 5;
+            var testFolderDepth = 6;
             for (int i = 0; i < testFolderDepth; i++)
             {
                 rootDir = rootDir.Parent;
