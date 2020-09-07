@@ -28,6 +28,18 @@ namespace Kqlvalidations.Tests
             return detectionPath;
         }
 
+        public static string GetCustomTablesPath()
+        {
+            var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
+            var testFolderDepth = 3;
+            for (int i = 0; i < testFolderDepth; i++)
+            {
+                rootDir = rootDir.Parent;
+            }
+            var detectionPath = Path.Combine(rootDir.FullName, "CustomTables");
+            return detectionPath;
+        }
+
         private static string GetAssemblyDirectory()
         {
             string codeBase = Assembly.GetExecutingAssembly().CodeBase;
