@@ -39,6 +39,7 @@ syslog_ng_security_config_omsagent_conf_content_tokens = ["f_oms_filter", "oms_d
 oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
 oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
+oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
@@ -397,12 +398,31 @@ def check_omsagent_cisco_asa_configuration(workspace_id):
                           " Cisco ASA parsing.\nTo enable Cisco ASA firewall events parsing run the following: \n"
                           "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
                           "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
-                          " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
+                          " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"\n")
             return False
         else:
             print_ok("omsagent security configuration supports Cisco ASA parsing \n")
             return True
 
+
+def check_syslog_computer_field_mapping(workspace_id):
+    '''
+    Checking if the OMS agent maps the Computer field correctly:
+    :return: True if the mapping configuration is correct, false otherwise
+    '''
+    grep = subprocess.Popen(["grep", "-i", "'Host' => record\['host'\]",
+                             oms_agent_field_mapping_configuration], stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if not o:
+        print_warning("Warning: Current content of the omsagent syslog filter mapping configuration doesn't map the"
+                      " Computer field from your hostname.\nTo enable the Computer field mapping, please run: \n"
+                      "\"sed -i -e \"/'Severity' => tags\[tags.size - 1\]/ a \ \\t  'Host' => record['host']\""
+                      " -e \"s/'Severity' => tags\[tags.size - 1\]/&,/\" " + oms_agent_field_mapping_configuration +
+                      " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
+        return False
+    else:
+        print_ok("OMS Agent syslog field mapping is correct \n")
+        return True
 
 def file_contains_string(file_tokens, file_path):
     print_notice(file_path)
@@ -631,6 +651,7 @@ def main():
     security_config_omsagent_test(workspace_id=workspace_id)
     omsagent_security_event_conf_validation(workspace_id=workspace_id)
     check_omsagent_cisco_asa_configuration(workspace_id=workspace_id)
+    check_syslog_computer_field_mapping(workspace_id=workspace_id)
     # validate firewalld
     check_red_hat_firewall_issue()
     # Check issue regarding security enhanced linux blocking tcp ports
