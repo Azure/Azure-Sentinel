@@ -2,7 +2,7 @@ import { WorkbookValidationError } from "../validationError";
 import { WorkbookMetadata } from "../workbookMetadata";
 
 function isAllPng(previewImagesFileNames: Array<string>): boolean {
-    return previewImagesFileNames.every((previewImageFileName: string) => previewImageFileName.endsWith('.png'));
+    return previewImagesFileNames.every((previewImageFileName: string) => previewImageFileName.toLowerCase().endsWith('.png'));
 }
 
 function isAllIncludeBlackOrWhite(previewImagesFileNames: Array<string>): boolean {
