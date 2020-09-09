@@ -6,6 +6,7 @@ Libraries (.whl files)
 - azure_sentinel_ml_utilities - Library contains Azure Storage & Log Analytics helper functions.
 
 Notebooks
+
 The following three Notebooks work with the collaborative filtering algorithm for Anomalous Resource Access (File Share Access as example) 
 - AnonymousRATraining.ipynb - This Notebook trains and stores the model in Blob Storage.
 - AnonymousRAScoring.ipynb - This Notebook schedules the scoring and writes the highest scored results into Log Analytics so the score can be used for hunting, detection, investigation in Azure Sentinel.
