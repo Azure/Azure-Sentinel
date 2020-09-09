@@ -1,15 +1,12 @@
-Build-Your-Own Machine Learning(BYO ML) package, currently in private preview, is provided by Azure Sentinel team to help organizations build or bring your own ML to tackle security problems specifically for your business. This folder contains the BYO ML package including the first ML algorithm  Azure Sentinel team shares.
+Build-Your-Own Machine Learning (BYO ML) package, currently in public preview, is provided by the Azure Sentinel team to help organizations build or bring their own ML to tackle security problems specifi to their business. This folder contains the BYO ML package including the first ML algorithm the Azure Sentinel team has shared.
 
 The package includes:
 
 Libraries (.whl files)
-- sentinel_ai - Library contains collaborative filtering algorithm for Anomalous Resource Access.
 - azure_sentinel_ml_utilities - Library contains Azure Storage & Log Analytics helper functions.
 
-Notebooks:
-
-Following three Notebooks work with the collaborative filtering algorithm for Anomalous Resource Access (File Share Access as example) 
-
+Notebooks
+The following three Notebooks work with the collaborative filtering algorithm for Anomalous Resource Access (File Share Access as example) 
 - AnonymousRATraining.ipynb - This Notebook trains and stores the model in Blob Storage.
 - AnonymousRAScoring.ipynb - This Notebook schedules the scoring and writes the highest scored results into Log Analytics so the score can be used for hunting, detection, investigation in Azure Sentinel.
 - AnonymousRASampleData.ipynb - This notebook demonstrates the use of Anomalous Resource Access model in Sentinel. It generates training and testing data, trains the Anomalous Resource Access model and uses it to score the test data. The top predicted scores are submitted to Sentinel workspace.
@@ -23,7 +20,7 @@ Other libraries:
 - scikit-surprise==1.0.6 (from PyPi)
 - numpy==1.15.0 (from PyPi)
 - pyarrow==0.12.0 (from PyPi)
-- plotly  (from PyPi,for Sankey diagram)
+- plotly  (from PyPi, for Sankey diagram)
 
 Notes:
 - Credentials for Azure Storage and Log Analytics are kept in KeyVault
