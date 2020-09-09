@@ -7,7 +7,7 @@ function isAllPng(previewImagesFileNames: Array<string>): boolean {
 
 function isAllIncludeBlackOrWhite(previewImagesFileNames: Array<string>): boolean {
     return previewImagesFileNames.every((previewImageFileName: string) => 
-        ["Black", "black", "White", "White"].some(color => previewImageFileName.includes(color))
+        ["Black", "black", "white", "White"].some(color => previewImageFileName.includes(color))
     );
 }
 
