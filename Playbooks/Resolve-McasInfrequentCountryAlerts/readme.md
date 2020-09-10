@@ -27,9 +27,9 @@ This playbook uses an API token to close the alert in MCAS, and an AAD service p
 ### Additional resources
 
 * Complete explanation and demonstration of this playbook in [this video](https://youtu.be/ql8x4rC6m9A).
-* [Registering a service principal in Azure AD](https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal)
-* [Microsoft Graph permissions reference](https://docs.microsoft.com/en-us/graph/permissions-reference)
-* [Create an MCAS API token](https://docs.microsoft.com/en-us/cloud-app-security/api-tokens)
+* [Registering a service principal in Azure AD](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal)
+* [Microsoft Graph permissions reference](https://docs.microsoft.com/graph/permissions-reference)
+* [Create an MCAS API token](https://docs.microsoft.com/cloud-app-security/api-tokens)
 
 <br>
 
