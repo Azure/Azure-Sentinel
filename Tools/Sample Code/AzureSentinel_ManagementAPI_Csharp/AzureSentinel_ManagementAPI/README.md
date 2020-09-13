@@ -22,7 +22,7 @@ This sample provides examples of these API requests:
 
 Please refer to the API specs and documentation for more details.
 * [Stable: 2020-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/stable/2020-01-01/SecurityInsights.json)
-* [Preview: 2019-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/preview/2019-01-01-preview/SecurityInsights.json
+* [Preview: 2019-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/preview/2019-01-01-preview/SecurityInsights.json)
 * [Documentation](https://docs.microsoft.com/rest/api/securityinsights/)
 
 ## Prerequisites
