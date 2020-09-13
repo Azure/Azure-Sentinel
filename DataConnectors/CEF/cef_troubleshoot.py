@@ -344,7 +344,7 @@ def locate_check(process_name):
 
 def omsagent_process_check(oms_process_name):
     tokens = process_check(oms_process_name)
-    if len(tokens) > 1:
+    if len(tokens) > 0:
         for single_token in tokens:
             if oms_agent_process_name in single_token:
                 print_ok("Found omsagent process running on this machine.")
@@ -361,7 +361,8 @@ def process_check(process_name):
     '''
     p1 = subprocess.Popen(["ps", "-ef"], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["grep", "-i", process_name], stdin=p1.stdout, stdout=subprocess.PIPE)
-    o, e = p2.communicate()
+    p3 = subprocess.Popen(["grep", "-v", "grep"], stdin=p2.stdout, stdout=subprocess.PIPE)
+    o, e = p3.communicate()
     tokens = o.decode(encoding='UTF-8').split('\n')
     tokens.remove('')
     return tokens
@@ -510,7 +511,7 @@ def omsagent_security_event_conf_validation(workspace_id):
 def check_daemon(daemon_name):
     tokens = process_check(daemon_name)
     print(tokens)
-    if len(tokens) > 1:
+    if len(tokens) > 0:
         for single_token in tokens:
             if "/usr/sbin/" + daemon_name in single_token:
                 print_ok("Found " + daemon_name + " process running on this machine.")

@@ -142,7 +142,8 @@ def process_check(process_name):
     '''
     p1 = subprocess.Popen(["ps", "-ef"], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["grep", "-i", process_name], stdin=p1.stdout, stdout=subprocess.PIPE)
-    o, e = p2.communicate()
+    p3 = subprocess.Popen(["grep", "-v", "grep"], stdin=p2.stdout, stdout=subprocess.PIPE)
+    o, e = p3.communicate()
     tokens = o.decode(encoding='UTF-8').split('\n')
     tokens.remove('')
     return len(tokens)
@@ -439,7 +440,7 @@ def is_rsyslog():
     Returns True if the daemon is 'Rsyslog'
     '''
     # Meaning ps -ef | grep "daemon name" has returned more then the grep result
-    return process_check(rsyslog_daemon_name) > 1
+    return process_check(rsyslog_daemon_name) > 0
 
 
 def is_syslog_ng():
@@ -447,7 +448,7 @@ def is_syslog_ng():
     Returns True if the daemon is 'Syslogng'
     '''
     # Meaning ps -ef | grep "daemon name" has returned more then the grep result
-    return process_check(syslog_ng_daemon_name) > 1
+    return process_check(syslog_ng_daemon_name) > 0
 
 
 def set_syslog_ng_configuration():
