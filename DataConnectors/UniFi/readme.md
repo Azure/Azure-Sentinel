@@ -1,3 +1,0 @@
-Configure netflow
-
-Configure syslog

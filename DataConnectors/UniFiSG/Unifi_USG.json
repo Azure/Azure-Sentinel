@@ -1,8 +1,8 @@
 {
     "id": "UnfiSG",
     "title": "Unfi Security Gateway (Preview) ",
-    "publisher": "Microsoft Corp.",
-    "descriptionMarkdown": "The UniFi® Security Gateway extends the UniFi Enterprise System to provide cost-effective, reliable routing and advanced security for your network.  Unifi Security Gateway does not output CEF by default, Logstash is used to parse message into CEF for this connector. By connecting your CEF logs to Azure Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.",
+    "publisher": "Azure Sentinel Community",
+    "descriptionMarkdown": "The UniFi Security Gateway extends the UniFi Enterprise System to provide cost-effective, reliable routing and advanced security for your network.  Unifi Security Gateway does not output CEF by default, Logstash is used to parse message into CEF for this connector. By connecting your CEF logs to Azure Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.",
     "graphQueries": [
         {
             "metricName": "Total data received",
@@ -12,20 +12,20 @@
     ],
     "sampleQueries": [
         {
-            "description" : "UnifiSG Firewall Logs",
+            "description": "UnifiSG Firewall Logs",
             "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"Firewall\"\n"
         },
         {
-            "description" : "UnifiSG IPS Logs",
+            "description": "UnifiSG IPS Logs",
             "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"IPS\"\n"
         },
         {
-            "description" : "UnifiSG DNS Logs",
+            "description": "UnifiSG DNS Logs",
             "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"DNS\"\n"
         },
         {
-            "description" : "UnifiSG DHCP Logs",
-            "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"Firewall\"\n"
+            "description": "UnifiSG DHCP Logs",
+            "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Unifi\" and where DeviceProduct == \"USG\" and where DeviceEventClassID == \"DHCP\"\n"
         }
     ],
     "dataTypes": [
@@ -44,7 +44,7 @@
     ],
     "availability": {
         "status": 1,
-        "isPreview": true 
+        "isPreview": true
     },
     "permissions": {
         "resourceProvider": [
@@ -95,30 +95,77 @@
                             "type": "CopyableLabel"
                         }
                     ]
+                },
+                {
+                    "title": "1.3 Install Elastic Logstash on the Linux Machine",
+                    "description": "Install Logstash on your Linux machine and use the provided configuration to parse the messages.\n\n> 1. Make sure that you have Java on your machine using the following command: java -version.\n\n> 2. Install Logstash using the instrcutions provided at https://www.elastic.co/guide/en/logstash/current/installing-logstash.html.\n\n> 3. Enable the Logstash service to auto start.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "label": "Run the following command to download the provided configuration",
+                                "value": "sudo /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog\nsudo wget -o /etc/logstash/conf.d/ui-logstash.conf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/UnifiSG/ui-logstash.conf",
+                                "rows": 4
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                },
+                {
+                    "title": "1.4 Optional: Download the configuration to collect NetFlow",
+                    "description": "Unifi Security Gateway supports sending NetFlow logs.  If you wish to collect these you will need an additional Logstash configuration.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "fillWith": [
+                                    "WorkspaceId",
+                                    "PrimaryKey"
+                                ],
+                                "label": "Run the following command to download the provided NetFlow configuartion",
+                                "value": "sudo /usr/share/logstash/bin/logstash-plugin install microsoft-logstash-output-azure-loganalytics\nsudo wget -o /etc/logstash/conf.d/ui-netflow-logstash.conf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/UnifiSG/ui-netflow-logstash.conf\nsudo sed -i 's/\"workspaceid\"/\"{0}\"/g' /etc/logstash/conf.d/ui-netflow-logstash.conf\nsudo sed -i 's/\"workspacekey\"/\"{1}\"/g' /etc/logstash/conf.d/ui-netflow-logstash.conf",
+                                "rows": 11
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
                 }
             ]
         },
         {
             "title": "2. Forward Unifi Security Gateway logs to Logstash",
             "description": "Configure the USG for Remote logging.",
-            "innerSteps" :[
+            "innerSteps": [
                 {
-                    "title": "2.1 Configure the USG to send logs via syslog to Logstash.",
+                    "title": "2.1 Configure the USG to send logs via syslog to Logstash using port 5514.",
                     "description": "Information is documented here: https://help.ui.com/hc/en-us/articles/227129127-UniFi-Methods-for-Capturing-Useful-Debug-Information#2\n"
                 },
                 {
                     "title": "2.2 Optional:  Configure DNS log collection.",
                     "description": "Configure DNS log collection on the USG.",
                     "instructions": [
-                    {
-                        "parameters": {
-                            "label": "Configure logging using the CLI (USG Device) to run the following commands:",
-                            "value": "sudo sed -i 's/$output .= "log-facility/$output .= "# log-facility/g' /opt/vyatta/sbin/vyatta-dns-forwarding.pl\nconfig log syslogd setting\nconfigure\nset service dns forwarding options 'log-queries'\ncommit\nsave",
-                            "rows": 8
-                        },
-                        "type": "CopyableLabel"
-                    }
-                ]}
+                        {
+                            "parameters": {
+                                "label": "Configure logging using the CLI (USG Device) to run the following commands:",
+                                "value": "sudo sed -i 's/$output .= \"# log-facility/$output .= \"log-facility/g' /opt/vyatta/sbin/vyatta-dns-forwarding.pl\nconfig log syslogd setting\nconfigure\nset service dns forwarding options 'log-queries'\ncommit\nsave",
+                                "rows": 7
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                },
+                {
+                    "title": "2.3 Optional: Configure NetFlow collection using port 2055",
+                    "description": "Configure NetFlow log collection on the USG.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "label": "Configure logging using the CLI (USG Device) to run the following commands:",
+                                "value": "configure\nset system flow-accounting netflow server <ip_address_of_Receiver> port 2055\nset system flow-accounting netflow version 9\ncommit\nsave",
+                                "rows": 5
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                }
             ]
         },
         {
