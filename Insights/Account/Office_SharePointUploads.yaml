@@ -1,0 +1,34 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+DataTypes: 
+- DataType: OfficeActivity
+RequiredInputFieldsSets:
+- - Account_Name
+  - Account_UPNSuffix
+BaseQuery: |- 
+  let TLQ_UserUploadFiles = (Account_Name:string, Account_UPNSuffix:string){
+  let upn = strcat(Account_Name,"@",Account_UPNSuffix);
+  OfficeActivity
+  | where RecordType =~ "SharePointFileOperation" and Operation in~ ("FileUploaded", "FileDownloaded")
+  | where upn =~UserId
+  | extend Subject_File_Directory = tostring(split(OfficeObjectId,SourceFileName)[0]), Op = iff (Operation != "FileUploaded", "uploaded", "downloaded")
+  | project-rename Source_IP_Address = ClientIP
+  };
+  TLQ_UserUploadFiles('{{Account_Name}}', '{{Account_UPNSuffix}}')
+  
+Activities:
+     EnabledByDefault: true
+     Title: "User {{Op}} files to SharePoint"
+     Content: "User Uploaded {{Count}} File(s) To SharePoint From {{Source IPAddress}}"
+     Items: 
+        - Id: 0eabec03-51e7-4909-b0cb-1adc76759e93
+          Description: This activity lists the user's SharePoint uploads.
+          QueryDefinitions:
+            Filter: where Operation =~ "FileUploaded"
+            SummarizeBy: Source_IP_Address, Op
+        - Id: df564e7b-bf6d-4dc4-a32d-79b00bd2cc7b
+          Description: This activity lists the user's SharePoint downloads.
+          QueryDefinitions:
+            Filter: where Operation =~ "FileDownloaded"
+            SummarizeBy: Source_IP_Address, Op

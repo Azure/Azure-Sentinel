@@ -1,0 +1,110 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: Syslog
+EntitiesFilter: 
+ Host_OsFamily:
+  - Linux
+RequiredInputFieldsSets: 
+  - - Host_HostName
+  - - Host_AzureID
+BaseQuery: |
+  let SigninResults = 
+  Syslog 
+  | where Facility =~ 'auth'
+  | where SyslogMessage startswith 'Accepted' or SyslogMessage startswith 'Failed';
+  let AllSigninResults = (v_Host_Name:string, v_Host_AzureID:string) 
+  {
+  let HostSpecificResults = SigninResults 
+  | where Computer == v_Host_Name or v_Host_AzureID == _ResourceId;
+  let AcceptedAuth = HostSpecificResults
+  | where SyslogMessage startswith 'Accepted';
+  let LongAuth = AcceptedAuth
+  | where SyslogMessage has ':'
+  | parse SyslogMessage with * 'Accepted ' LogonMethod ' for ' User ' from ' ExternalIP ' port ' Port ' ' ConnectionType ':' TrimExtra
+  | project TimeGenerated = EventTime, HostName, HostIP, User, LogonMethod, ExternalIP, Port, ConnectionType, ProcessName, Result = 'SuccessfulSignin', _ResourceId;
+  let ShortAuth = AcceptedAuth
+  | where SyslogMessage !has ':'
+  | parse SyslogMessage with * 'Accepted ' LogonMethod ' for ' User ' from ' ExternalIP ' port ' Port ' ' ConnectionType
+  | project TimeGenerated = EventTime, HostName, HostIP, User, LogonMethod, ExternalIP, Port, ConnectionType, ProcessName, Result = 'SuccessfulSignin', _ResourceId;
+  let InitialFailedAuth = HostSpecificResults
+  | where SyslogMessage startswith 'Failed';
+  let FailedAuth = InitialFailedAuth
+  | where SyslogMessage !has 'invalid'
+  | parse SyslogMessage with * 'Failed ' LogonMethod ' for ' User ' from ' ExternalIP ' port ' Port ' ' ConnectionType
+  | project TimeGenerated = EventTime, HostName, HostIP, User, LogonMethod, ExternalIP, Port, ConnectionType, ProcessName, Result = 'FailedSignin', _ResourceId;
+  let ShortInvalidAuth = InitialFailedAuth
+  | where SyslogMessage has 'invalid user from'
+  | parse SyslogMessage with * 'Failed ' LogonMethod ' for invalid user from ' ExternalIP ' port ' Port ' ' ConnectionType
+  | project TimeGenerated = EventTime, HostName, HostIP, User = ' ', LogonMethod, ExternalIP, Port, ConnectionType, ProcessName, Result = 'InvalidSignin', _ResourceId;
+  let LongInvalidAuth = InitialFailedAuth
+  | where SyslogMessage has 'invalid' and SyslogMessage !has ' user from'
+  | parse SyslogMessage with * 'Failed ' LogonMethod ' for invalid user ' User ' from ' ExternalIP ' port ' Port ' ' ConnectionType
+  | project TimeGenerated = EventTime, HostName, HostIP, User, LogonMethod, ExternalIP, Port, ConnectionType, ProcessName, Result = 'InvalidSignin', _ResourceId;
+  union isfuzzy=true LongAuth, ShortAuth, FailedAuth, ShortInvalidAuth, LongInvalidAuth
+  | extend timestamp = TimeGenerated, HostCustomEntity = HostName, IPCustomEntity = HostIP, AccountCustomEntity = User
+  };
+  AllSigninResults('{{Host_HostName}}', '{{Host_AzureID}}')
+Insights:
+  Id: d4ca45db-254b-46f0-98fa-d1d104c26e0c
+  DisplayName: Linux sign-in activity
+  Description: |
+    'Summary of successful, failed or invalid signins, along with most frequent and least frequent signins.'
+  DefaultTimeRange:
+     BeforeRange: 12h
+     AfterRange: 12h
+  SingleValuesQuery: {}
+  TableQuery:
+   ColumnsDefinitions:
+   - Header: "Signin Result"
+     OutputType: String
+   - Header: "Signin Count"
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: "User Count"
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: "User(s)"
+     OutputType: String
+   QueriesDefinitions:
+   # UserSigninsToHost
+   - Filter:    "where Result == 'SuccessfulSignin'"
+     Summarize: "summarize UserCount = dcount(User), Users = makeset(User), SigninCount = count() by HostName"
+     Project:   "project Title = 'Success', SigninCount = case(UserCount == 0, 0, isempty(SigninCount), 0, SigninCount), UserCount, Users = case(UserCount == 1, tostring(Users[0]), UserCount > 1, 'Many', 'None')" 
+   # UserFailedSigninsToHost
+   - Filter:    "where Result == 'FailedSignin'"
+     Summarize: "summarize UserCount = dcount(User), Users = makeset(User), SigninCount = count() by HostName"
+     Project:   "project Title = 'Fail', SigninCount = case(UserCount == 0, 0, isempty(SigninCount), 0, SigninCount), UserCount, Users = case(UserCount == 1, tostring(Users[0]), UserCount > 1, 'Many', 'None')"
+   # InvalidSigninsToHost
+   - Filter:    "where Result == 'InvalidSignin'"
+     Summarize: "summarize UserCount = dcount(User), Users = makeset(User), SigninCount = count() by HostName"
+     Project:   "project Title = 'Invalid', SigninCount = case(UserCount == 0, 0, isempty(SigninCount), 0, SigninCount), UserCount, Users = case(UserCount == 1, tostring(Users[0]), UserCount > 1, 'Many', 'None')"
+   # MostFrequent
+   - Filter:    "where Result == 'SuccessfulSignin'"
+     Summarize: "summarize StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SigninCount = count() by User | top 1 by SigninCount desc"
+     Project:   "project Title = 'Most Frequent', SigninCount, UserCount = 1, Users = User"
+   # LeastFrequent
+   - Filter:    "where Result == 'SuccessfulSignin'"
+     Summarize: "summarize StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SigninCount = count() by User | top 1 by SigninCount asc"
+     Project:   "project Title = 'Least Frequent', SigninCount, UserCount = 1, Users = User"
+  
+  ChartQuery: 
+   Title: "Sign-ins over time"
+   DataSets: 
+    - Query: "where Result == 'SuccessfulSignin' | summarize SigninCount = count() by Time = bin(TimeGenerated, 1h) | extend Legend = 'Success'"
+      XColumnName: Time
+      YColumnName: SigninCount
+      LegendColumnName: Legend
+    - Query: "where Result == 'FailedSignin' | summarize SigninCount = count() by Time = bin(TimeGenerated, 1h) | extend Legend = 'Fail'"
+      XColumnName: Time
+      YColumnName: SigninCount
+      LegendColumnName: Legend
+    - Query: "where Result == 'InvalidSignin' | summarize SigninCount = count() by Time = bin(TimeGenerated, 1h) | extend Legend = 'Invalid'"
+      XColumnName: Time
+      YColumnName: SigninCount
+      LegendColumnName: Legend
+   Type: LineChart
+  AdditionalQuery: 
+   Text: "See all Linux sign-ins"
+   Query: "summarize StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SigninCount = count() by HostName, HostIP, User, LogonMethod, ExternalIP, Port, ConnectionType, ProcessName, Result, _ResourceId, timestamp, HostCustomEntity, AccountCustomEntity, IPCustomEntity"

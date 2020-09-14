@@ -1,0 +1,121 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: SecurityEvent
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  
+  let excludeProc = dynamic([':\\Windows\\System32\\svchost.exe', ':\\Windows\\System32\\sppsvc.exe', ':\\Windows\\system32\\wbem\\WmiApSrv.exe', ':\\Windows\\System32\\conhost.exe', ':\\Windows\\System32\\wuauclt.exe', ':\\Windows\\SoftwareDistribution\\Download\\Install\\', ':\\WindowsAzure\\GuestAgent_', ':\\WindowsAzure\\WindowsAzureNetAgent_', 
+  ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\', ':\\Windows\\System32\\taskhostw.exe', '\\MpSigStub.exe',':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe', ':\\Windows\\servicing\\trustedinstaller.exe', ':\\Windows\\System32\\WerFault.exe', ':\\Windows\\CCM\\CcmExec.exe']);
+  let starttime = todatetime('{{Start_Time_ISO}}');
+  let endtime = todatetime('{{End_Time_ISO}}');
+  let includeScope = 1d;
+  let historicalScope = 14d;
+  let Procs=(v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
+  let processEvents=SecurityEvent
+  | where TimeGenerated >= (starttime - historicalScope)
+  | where EventID==4688
+  // removing common items that may still show up in small environments, add here if you have additional exclusions
+  | where not(NewProcessName has_any (excludeProc)) and not(ParentProcessName has_any (excludeProc))
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
+  | project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess = tostring(split(ParentProcessName, '\\')[-1]), _ResourceId, SourceComputerId;
+  let processes = materialize(processEvents
+  | where TimeGenerated >= endtime - includeScope
+  | join kind=leftanti (
+      processEvents
+      | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
+      | distinct NewProcessName
+  ) on NewProcessName
+  | extend ExecType = 'Processes');
+  let parents = materialize(processEvents
+  | where TimeGenerated >= endtime - includeScope
+  | join kind=leftanti (
+      processEvents
+      | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
+      | distinct ParentProcessName
+  ) on ParentProcessName
+  | extend ExecType = 'Parents');
+  union isfuzzy=true processes, parents
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = SubjectAccount
+  };
+  Procs('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+Insights:
+  Id: 37a420dc-8d03-4a1f-b579-d96d5c5f5fe4
+  DisplayName: Windows process execution info
+  Description: |
+    'Identifies new processes and new parent processes, along with low or high execution counts.'
+  DefaultTimeRange:
+    BeforeRange: 12h
+    AfterRange: 12h
+  SingleValuesQuery: {}
+  TableQuery:
+   ColumnsDefinitions:
+   - Header: ProcessType
+     OutputType: String
+   - Header: ProcessName
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: Executions
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: User(s)
+     OutputType: String
+   QueriesDefinitions:
+  # NewProcessExec
+   - Filter:    "where ExecType == 'Processes'"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(Process), ProcCount = count()"
+     Project:   "project Title = 'New Process(es)', Processes = case(array_length(Processes) == 1, tostring(Processes[0]), array_length(Processes) > 1, 'Many', 'None'), ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+  # NewParentProcessExec
+   - Filter:    "where ExecType == 'Parents'"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), Processes = make_set(ParentProcess), ProcCount = count()"
+     Project:   "project Title = 'New Parent(s)', Processes = case(array_length(Processes) == 1, tostring(Processes[0]), array_length(Processes) > 1, 'Many', 'None'), ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+  # LeastNewProcessExecs
+   - Filter:    "where ExecType == 'Processes' | project TimeGenerated, Computer, SubjectAccount, Process"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), ProcCount = count() by Process | order by ProcCount, UserCount asc | top 1 by ProcCount"
+     Project:   "project Title = 'Least New Process Executions', Processes = Process, ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+  # MostNewProcessExecs
+   - Filter:    "where ExecType == 'Processes' | project TimeGenerated, Computer, SubjectAccount, Process"
+     Summarize: "summarize UserCount = dcount(SubjectAccount), Users = make_set(SubjectAccount), ProcCount = count() by Process | order by ProcCount, UserCount desc | top 1 by ProcCount"
+     Project:   "project Title = 'Most New Process Executions', Processes = Process, ProcCount, Users = case(array_length(Users) == 1, tostring(Users[0]), array_length(Users) > 1, 'Many', 'None')"
+
+  ChartQuery: 
+   Title: "Process executions over time"
+   DataSets: 
+    - Query: "summarize ProcessCount = count() by Time = bin(TimeGenerated, 1h), Process | extend Legend = Process"
+      XColumnName: Time
+      YColumnName: ProcessCount
+      LegendColumnName: Legend
+   Type: BarChart
+  AdditionalQuery: 
+   Text: "See all new process information"
+   Query: "project TimeGenerated, Computer, SubjectAccount, NewProcessName, Process, CommandLine, ParentProcessName, ParentProcess, ExecType, _ResourceId, SourceComputerId, timestamp, HostCustomEntity, AccountCustomEntity"

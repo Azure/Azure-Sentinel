@@ -1,0 +1,136 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  let GetAccountActions = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
+  SecurityEvent
+  | where EventID in (4725, 4726, 4767, 4720, 4722, 4723, 4724)
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
+  | project TimeGenerated, EventID, Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, TargetSid, SubjectUserName, SubjectUserSid, _ResourceId, SourceComputerId
+  | extend AddedBy = SubjectUserName
+  // Future support for Activities
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = TargetAccount
+  };
+  GetAccountActions('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+# The queries for the insights.
+Insights:
+ Id: e29ee1ef-7445-455e-85f1-269f2d536d61
+ DisplayName: Actions on accounts
+ Description: |
+   Summary of actions taken on the specified host, grouped by action: password resets and changes, account lockouts (policy or admin), account creation and deletion, account enabled and disabled
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Action"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: "NameCount"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "SIDCount"
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+  # Account Created or Enabled
+  - Filter:    "where EventID in (4720, 4722)"
+    Summarize: "summarize NameCount = dcount(TargetAccount), SIDCount = dcount(TargetSid)"
+    Project:   "project Title = 'Created or Enabled', NameCount, SIDCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: NameCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: SIDCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # Account Deleted or Disabled
+  - Filter:    "where EventID in (4725, 4726)"
+    Summarize: "summarize NameCount = dcount(TargetAccount), SIDCount = dcount(TargetSid)"
+    Project:   "project Title = 'Deleted or Disabled', NameCount, SIDCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: NameCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: SIDCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # Account Password Changes
+  - Filter:    "where EventID in (4723, 4724)"
+    Summarize: "summarize NameCount = dcount(TargetAccount), SIDCount = dcount(TargetSid)"
+    Project:   "project Title = 'Password Reset', NameCount, SIDCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: NameCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: SIDCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ 
+ ChartQuery: 
+  Title: "Actions on accounts over time"
+  DataSets: 
+   - Query: "where EventID in (4720, 4722) | summarize Count = dcount(TargetSid) by bin(TimeGenerated, 1h) | extend Legend = 'Created/Enabled'"
+     XColumnName: "TimeGenerated"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+   - Query: "where EventID in (4725, 4726) | summarize Count = dcount(TargetSid) by bin(TimeGenerated, 1h) | extend Legend = 'Deleted/Disabled'"
+     XColumnName: "TimeGenerated"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+   - Query: "where EventID in (4723, 4724) | summarize Count = dcount(TargetSid) by bin(TimeGenerated, 1h) | extend Legend = 'Reset'"
+     XColumnName: "TimeGenerated"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+  Type: BarChart
+ 
+ AdditionalQuery:
+  Text: "See all actions on accounts"
+  Query: "project TimeGenerated, EventID, Activity, Computer, TargetAccount, TargetUserName, TargetDomainName, TargetSid, SubjectUserName, SubjectUserSid, _ResourceId, SourceComputerId, timestamp, HostCustomEntity, AccountCustomEntity | order by TimeGenerated desc"
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: 307c85ee-39a2-4da3-952e-4fd79aa46d3a
+     Description: Account created on host
+     Title: "An account was created on this host"
+     Content: "On '{{Computer}}' the account '{{TargetAccount}}' was created by '{{AddedBy}}'"
+     QueryDefinitions:
+       Filter: where EventID == 4720
+       SummarizeBy: Computer
+   - Id: 31529548-dbd2-4d5d-8270-710330cdcec7
+     Description: Account deleted on host
+     Title: "An account was deleted on this host"
+     Content: "On '{{Computer}}' the account '{{TargetAccount}}' was deleted by '{{AddedBy}}'"
+     QueryDefinitions:
+       Filter: where EventID == 4726
+       SummarizeBy: Computer

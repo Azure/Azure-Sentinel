@@ -1,0 +1,180 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: SecurityEvent
+  - DataType: Event
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |  
+  let SystemAccount = datatable(AccountName:string)['NT AUTHORITY\\SYSTEM', 'NT AUTHORITY\\NETWORK SERVICE', 'NT AUTHORITY\\LOCAL SERVICE', 'NT AUTHORITY\\IUSR', 'NTAUTHORITY\\ANONYMOUS LOGON'];
+  let SvcAcctList = dynamic(["Local SYSTEM","Local SERVICE","Network SERVICE","NT AUTHORITY"]);
+  let ServiceAccount = SecurityEvent
+  | where EventID == '4624' and LogonType == '5' and not(Account has_any (SvcAcctList))
+  | extend AccountName = Account
+  | distinct AccountName;
+  let MachineAccount = SecurityEvent
+  | where EventID == '4624' and AccountType == "Machine" and not(Account has_any (SvcAcctList))
+  | extend AccountName = Account
+  | distinct AccountName;
+  let Accounts = union isfuzzy=true SystemAccount, ServiceAccount, MachineAccount;
+  let source = 'Microsoft-Windows-Eventlog';
+  let tableFunc = (tableName:string, event:int){
+  table(tableName) 
+  | where EventID == event
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | extend SourceComputerId = column_ifexists("SourceComputerId", "NotAvailable"), EventOriginId = column_ifexists("EventOriginId", "NotAvailable")
+  | parse EventData with * 'SubjectUserName>' SubjectUserName '<' *
+  | parse EventData with * 'SubjectUserSid>' SubjectUserSid '<' *
+  | parse EventData with * 'SubjectLogonId>' SubjectLogonId '<' *
+  | parse EventData with * 'SubjectDomainName>' SubjectDomainName '<' *
+  | extend SubjectAccount = strcat(SubjectDomainName, '\\', SubjectUserName)
+  };
+  let HostClearedEventLog = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string)
+  {
+  let Event104 = tableFunc('Event', event=104)
+  | where Source =~ source
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId  
+  or v_Host_OMSAgentID == SourceComputerId
+  | parse RenderedDescription with * 'The' LogName 'log' *
+  | project TimeGenerated, Computer, EventID, SubjectAccount, SubjectUserName, SubjectDomainName, LogName, SubjectUserSid, SubjectLogonId, SourceComputerId, EventOriginId, _ResourceId
+  | extend timestamp = TimeGenerated, AccountCustomEntity = SubjectAccount, HostCustomEntity = Computer;
+  let Event1102 = tableFunc('SecurityEvent', event=1102)
+  | where EventSourceName == source
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId  
+  or v_Host_OMSAgentID == SourceComputerId
+  | extend LogName  = 'Security'
+  | project TimeGenerated, Computer, EventID, SubjectAccount, SubjectUserName, SubjectDomainName, LogName, SubjectUserSid, SubjectLogonId, SourceComputerId, EventOriginId, _ResourceId
+  | extend timestamp = TimeGenerated, AccountCustomEntity = SubjectAccount, HostCustomEntity = Computer;
+  union isfuzzy=true Event104, Event1102
+  };
+  HostClearedEventLog('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+Insights:
+ Id: 9a70a72d-25d4-7212-b73e-4f302a90c06a
+ DisplayName: Event Logs cleared on host
+ Description: |
+  'Provides the number of times event logs were cleared on the host.'
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ SingleValuesQuery: {}
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Cleared By"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: "Security Log"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "Other Logs"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "Total"
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions: 
+
+  # LogCleared_User
+  - Filter:    "where SubjectUserName !in (Accounts)"
+    Summarize: "summarize Security = countif(LogName  =~ 'Security'), Other = countif(LogName  !~ 'Security'), All = count() by SubjectAccount"
+    Project:   "project SubjectAccount, Security, Other, All"
+    LinkColumnsDefinitions:
+    - ProjectedName: Security
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  =~ 'Security'"
+    - ProjectedName: Other
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  !~ 'Security'"
+    - ProjectedName: All
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # LogCleared_System 
+  - Filter:    "where AccountCustomEntity in (SystemAccount)"
+    Summarize: "summarize Security = countif(LogName  =~ 'Security'), Other = countif(LogName  !~ 'Security'), All = count() by SubjectAccount"
+    Project:   "project SubjectAccount, Security, Other, All"
+    LinkColumnsDefinitions:
+    - ProjectedName: Security
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  =~ 'Security'"
+    - ProjectedName: Other
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  !~ 'Security'"
+    - ProjectedName: All
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # LogCleared_Service 
+  - Filter:    "where AccountCustomEntity in (ServiceAccount)"
+    Summarize: "summarize Security = countif(LogName  =~ 'Security'), Other = countif(LogName  !~ 'Security'), All = count() by SubjectAccount"
+    Project:   "project SubjectAccount, Security, Other, All"
+    LinkColumnsDefinitions:
+    - ProjectedName: Security
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  =~ 'Security'"
+    - ProjectedName: Other
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  !~ 'Security'"
+    - ProjectedName: All
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # LogCleared_Machine 
+  - Filter:    "where AccountCustomEntity in (MachineAccount)"
+    Summarize: "summarize Security = countif(LogName  =~ 'Security'), Other = countif(LogName  !~ 'Security'), All = count() by SubjectAccount"
+    Project:   "project SubjectAccount, Security, Other, All"
+    LinkColumnsDefinitions:
+    - ProjectedName: Security
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  =~ 'Security'"
+    - ProjectedName: Other
+      Query: "{{BaseQuery}} | {{RowFilter}} | where LogName  !~ 'Security'"
+    - ProjectedName: All
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Log clear activity over time"
+  DataSets: 
+   - Query: "summarize LogClearOnHost = count() by Time = bin(TimeGenerated, 12h), SubjectAccount"
+     XColumnName: Time
+     YColumnName: LogClearOnHost
+     LegendColumnName: SubjectAccount
+  Type: BarChart
+ AdditionalQuery: 
+  Text: "See all log clear activity"
+  Query: "project TimeGenerated, LogName, Computer, SubjectAccount, SubjectUserName, SubjectDomainName, EventID, SubjectUserSid, SubjectLogonId, SourceComputerId, _ResourceId, EventOriginId"
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: 2fcda698-9526-454f-8fe0-4a0fd7af13f2
+     Description: Security Event log cleared by account
+     Title: "Security Event log cleared by account on this host"
+     Content: "On '{{Computer}}' the user '{{SubjectAccount}}' cleared the '{{LogName}}' log, EventID: '{{EventID}}'"
+     QueryDefinitions:
+       Filter: where LogName =~ 'Security'
+       SummarizeBy: SubjectAccount
+   - Id: 3ff675ee-3052-4e0b-88ad-f34ed1732adc
+     Description: Event logs cleared by account
+     Title: "Event log(s) cleared by account on this host"
+     Content: "On '{{Computer}}' the user '{{SubjectAccount}}' cleared the '{{LogName}}' log, EventID: '{{EventID}}'"
+     QueryDefinitions:
+       Filter: where LogName !~ 'Security'
+       SummarizeBy: SubjectAccount

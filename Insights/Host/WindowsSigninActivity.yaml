@@ -1,0 +1,271 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  let starttime = todatetime('{{Start_Time_ISO}}');
+  let endtime = todatetime('{{End_Time_ISO}}');
+  let includeScope = 2d;
+  let historicalScope = 8d;
+  let GetAllLogonsForHost = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
+  let DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]);
+  let AccountAllowList = dynamic(["SYSTEM","NETWORK SERVICE", "LOCAL SERVICE"]);
+  let AllEvents = SecurityEvent
+  | where TimeGenerated >= (starttime - historicalScope)
+  | where EventID in (4624, 4625, 4672)
+  // parsing for Host to handle variety of conventions coming from data
+  | extend Host_HostName = case(
+  Computer has '@', tostring(split(Computer, '@')[0]),
+  Computer has '\\', tostring(split(Computer, '\\')[1]),
+  Computer has '.', tostring(split(Computer, '.')[0]),
+  Computer
+  )
+  | extend Host_NTDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', tostring(split(Computer, '.')[-2]), 
+  Computer
+  )
+  | extend Host_DnsDomain = case(
+  Computer has '\\', tostring(split(Computer, '\\')[0]), 
+  Computer has '.', strcat_array(array_slice(split(Computer,'.'),-2,-1),'.'), 
+  Computer
+  )
+  | where (Host_HostName =~ v_Host_Name and Host_NTDomain =~ v_Host_NTDomain) 
+  or (Host_HostName =~ v_Host_Name and Host_DnsDomain =~ v_Host_DnsDomain) 
+  or v_Host_AzureID =~ _ResourceId 
+  or v_Host_OMSAgentID == SourceComputerId
+  | extend RelatedRowSet = 'AllEvents'
+  | extend HourOfLogin = hourofday(TimeGenerated), DayNumberofWeek = dayofweek(TimeGenerated)
+  | extend DayofWeek = case(
+  DayNumberofWeek == "00:00:00", "Sunday", 
+  DayNumberofWeek == "1.00:00:00", "Monday", 
+  DayNumberofWeek == "2.00:00:00", "Tuesday", 
+  DayNumberofWeek == "3.00:00:00", "Wednesday", 
+  DayNumberofWeek == "4.00:00:00", "Thursday", 
+  DayNumberofWeek == "5.00:00:00", "Friday", 
+  DayNumberofWeek == "6.00:00:00", "Saturday","InvalidTimeStamp")
+  // map the most common ntstatus codes
+  | extend StatusDesc = case(
+  Status =~ "0x80090302", "SEC_E_UNSUPPORTED_FUNCTION",
+  Status =~ "0x80090308", "SEC_E_INVALID_TOKEN",
+  Status =~ "0x8009030E", "SEC_E_NO_CREDENTIALS",
+  Status =~ "0xC0000008", "STATUS_INVALID_HANDLE",
+  Status =~ "0xC0000017", "STATUS_NO_MEMORY",
+  Status =~ "0xC0000022", "STATUS_ACCESS_DENIED",
+  Status =~ "0xC0000034", "STATUS_OBJECT_NAME_NOT_FOUND",
+  Status =~ "0xC000005E", "STATUS_NO_LOGON_SERVERS",
+  Status =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
+  Status =~ "0xC000006D", "STATUS_LOGON_FAILURE",
+  Status =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+  Status =~ "0xC0000073", "STATUS_NONE_MAPPED",
+  Status =~ "0xC00000FE", "STATUS_NO_SUCH_PACKAGE",
+  Status =~ "0xC000009A", "STATUS_INSUFFICIENT_RESOURCES",
+  Status =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+  Status =~ "0xC0000106", "STATUS_NAME_TOO_LONG",
+  Status =~ "0xC000010B", "STATUS_INVALID_LOGON_TYPE",
+  Status =~ "0xC000015B", "STATUS_LOGON_TYPE_NOT_GRANTED",
+  Status =~ "0xC000018B", "STATUS_NO_TRUST_SAM_ACCOUNT",
+  Status =~ "0xC0000224", "STATUS_PASSWORD_MUST_CHANGE",
+  Status =~ "0xC0000234", "STATUS_ACCOUNT_LOCKED_OUT",
+  Status =~ "0xC00002EE", "STATUS_UNFINISHED_CONTEXT_DELETED",
+  EventID == 4624 or EventID == 4672, "Success",
+  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  )
+  | extend SubStatusDesc = case(
+  SubStatus =~ "0x80090325", "SEC_E_UNTRUSTED_ROOT",
+  SubStatus =~ "0xC0000008", "STATUS_INVALID_HANDLE",
+  SubStatus =~ "0xC0000022", "STATUS_ACCESS_DENIED",
+  SubStatus =~ "0xC0000064", "STATUS_NO_SUCH_USER",
+  SubStatus =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
+  SubStatus =~ "0xC000006D", "STATUS_LOGON_FAILURE",
+  SubStatus =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+  SubStatus =~ "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
+  SubStatus =~ "0xC0000070", "STATUS_INVALID_WORKSTATION",
+  SubStatus =~ "0xC0000071", "STATUS_PASSWORD_EXPIRED",
+  SubStatus =~ "0xC0000072", "STATUS_ACCOUNT_DISABLED",
+  SubStatus =~ "0xC0000073", "STATUS_NONE_MAPPED",
+  SubStatus =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+  SubStatus =~ "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
+  SubStatus =~ "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
+  SubStatus =~ "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
+  SubStatus =~ "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
+  SubStatus =~ "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
+  SubStatus =~ "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
+  SubStatus =~ "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
+  SubStatus =~ "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
+  SubStatus =~ "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
+  SubStatus =~ "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
+  SubStatus =~ "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
+  SubStatus =~ "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
+  SubStatus =~ "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED",
+  EventID == 4624 or EventID == 4672, "Success",
+  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
+  )
+  | project TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetAccount, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc, RelatedRowSet, _ResourceId, SourceComputerId 
+  ;
+  let HostSigninToSystems = materialize(AllEvents
+  | where EventID == 4624
+  | project-away StatusDesc, SubStatusDesc, PrivilegeList
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
+  | extend RelatedRowSet = 'HostSigninToSystems', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]));
+  let HostFailedSigninToSystems = materialize(AllEvents
+  | where EventID == 4625
+  | project-away PrivilegeList
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, _ResourceId, SourceComputerId
+  | extend RelatedRowSet = 'HostFailedSigninToSystems');
+  let HostSigninDuringAbnormalHours = materialize(AllEvents
+  | where TimeGenerated between ((starttime - historicalScope) .. (endtime - includeScope))
+  | where EventID in (4624,4625)
+  | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
+  | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek) by Computer, _ResourceId, SourceComputerId
+  | join kind= inner
+  (
+      AllEvents
+      | where TimeGenerated > endtime - includeScope
+      | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
+  )
+  on Computer
+  | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
+  | extend historical_DayofWeek = tostring(historical_DayofWeek)
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek, _ResourceId, SourceComputerId
+  | extend historical_DayofWeek = todynamic(historical_DayofWeek) 
+  | extend RelatedRowSet = 'HostSigninDuringAbnormalHour', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"])); 
+  let HostHadPrivilegedLogonSessions = materialize(AllEvents
+  | where EventID == 4672
+  | where PrivilegeList contains 'SeDebugPrivilege'
+  | project-away StatusDesc, SubStatusDesc
+  | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName) by EventID, Activity, Computer, TargetAccount, TargetDomainName, TargetUserName, PrivilegeList, _ResourceId, SourceComputerId
+  | extend RelatedRowSet = 'HostHadPrivilegedLogonSessions', DomainAllowList = dynamic(["NT AUTHORITY", "NT SERVICE", "Font Driver Host", "Window Manager"]));
+  union isfuzzy=true AllEvents, HostSigninToSystems, HostFailedSigninToSystems, HostSigninDuringAbnormalHours, HostHadPrivilegedLogonSessions
+  | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = TargetAccount
+  };
+  // change {{Host_HostName}} value below to the HostName you are interested in
+  GetAllLogonsForHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+# The queries for the insights.
+Insights:
+ Id: 4ecc2229-5cbf-4b04-a2ab-0842c5e4d1cd
+ DisplayName: Windows sign-in activity
+ Description: |
+   Summary of successful and failed sign-ins along with anamalous sign-in patterns for the specific host.  Successful sign-ins currently only include interactive and limited to LogonType 2 and 10.
+ DefaultTimeRange: 
+   BeforeRange: 12h
+   AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Signin Type"
+    OutputType: String
+  - Header: "Signin Count"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "User Count"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "User(s)"
+    OutputType: String   
+  QueriesDefinitions:
+
+  # HostSigninToSystems
+  - Filter:     "where RelatedRowSet =~ 'HostSigninToSystems' and TargetDomainName !in ('NT AUTHORITY', 'NT SERVICE', 'Font Driver Host', 'Window Manager')"
+    Summarize:  "summarize SigninCount = sum(SigninCount), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName)"
+    Project:    "project Title = 'Successful', SigninCount, UserCount, Users = case(array_length(Users) > 1, 'Many', array_length(Users) == 1, tostring(Users[0]), 'None')"
+    LinkColumnsDefinitions:
+    - ProjectedName: SigninCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UserCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # HostFailedSigninToSystems
+  - Filter:     "where RelatedRowSet =~ 'HostFailedSigninToSystems'"
+    Summarize:  "summarize SigninCount= sum(SigninCount), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName)"
+    Project:    "project Title = 'Failed', SigninCount, UserCount, Users = case(array_length(Users) > 1, 'Many', array_length(Users) == 1, tostring(Users[0]), 'None')"
+    LinkColumnsDefinitions:
+    - ProjectedName: SigninCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UserCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # HostSigninDuringAbnormalHours
+  - Filter:    "where RelatedRowSet =~ 'HostSigninDuringAbnormalHour' and TargetDomainName !in ('NT AUTHORITY', 'NT SERVICE', 'Font Driver Host', 'Window Manager')"
+    Summarize: "summarize SigninCount = sum(SigninCount), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName)"
+    Project:   "project Title = 'Abnormal Time', SigninCount, UserCount, Users = case(array_length(Users) > 1, 'Many', array_length(Users) == 1, tostring(Users[0]), 'None')"
+    LinkColumnsDefinitions:
+    - ProjectedName: SigninCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UserCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # HostHadPrivilegedLogonSessions
+  - Filter:     "where RelatedRowSet =~ 'HostHadPrivilegedLogonSessions' "
+    Summarize:  "summarize SigninCount = sum(SigninCount), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName)"
+    Project:    "project Title = 'Privileged', SigninCount, UserCount, Users = case(array_length(Users) > 1, 'Many', array_length(Users) == 1, tostring(Users[0]), 'None')"
+    LinkColumnsDefinitions:
+    - ProjectedName: SigninCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UserCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # MostFrequent
+  - Filter:     "where RelatedRowSet =~ 'AllEvents' | where EventID == 4624 and TargetDomainName !in ('NT AUTHORITY', 'NT SERVICE', 'Font Driver Host', 'Window Manager')"
+    Summarize:  "summarize StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SigninCount = count() by TargetDomainName, TargetUserName, EventID | top 1 by SigninCount desc"
+    Project:    "project Title = 'Most Frequent', SigninCount, UserCount = 1, Users = TargetUserName"
+    LinkColumnsDefinitions:
+    - ProjectedName: SigninCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UserCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # LeastFrequent
+  - Filter:     "where RelatedRowSet =~ 'AllEvents' | where EventID == 4624 and TargetDomainName !in ('NT AUTHORITY', 'NT SERVICE', 'Font Driver Host', 'Window Manager')"
+    Summarize:  "summarize StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SigninCount = count() by TargetDomainName, TargetUserName, EventID | top 1 by SigninCount asc"
+    Project:    "project Title = 'Least Frequent', SigninCount, UserCount = 1, Users = TargetUserName"
+    LinkColumnsDefinitions:
+    - ProjectedName: SigninCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UserCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Sign-ins over time"
+  DataSets: 
+   - Query: "where RelatedRowSet =~ 'AllEvents' and EventID == 4624 and TargetDomainName !in ('NT AUTHORITY', 'NT SERVICE', 'Font Driver Host', 'Window Manager') | summarize Count=count() by Time = bin(TimeGenerated, 1h) | extend Legend = 'Success'"
+     XColumnName: "Time"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+   - Query: "where RelatedRowSet =~ 'AllEvents' and EventID == 4625 | summarize Count=count() by Time = bin(TimeGenerated, 1h) | extend Legend = 'Failed'"
+     XColumnName: "Time"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+  Type: LineChart
+
+ AdditionalQuery:
+  Text: "See all windows sign-ins"
+  Query: "where RelatedRowSet =~ 'AllEvents' | extend SubjectUserName = columnifexists('SubjectUserName', 'EventDoesNotContain') | summarize SigninCount= count(), max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek), StartTime=min(TimeGenerated), EndTime = max(TimeGenerated), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName), UserCount = dcount(TargetUserName), Users = make_set(TargetUserName) by Activity, TargetDomainName, TargetUserName, ProcessName, LogonTypeName, timestamp, HostCustomEntity, AccountCustomEntity"
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: cfba48ac-49dd-4d8a-8a65-70eaf4aafb61
+     Description: Privileged logon by account
+     Title: "Privileged logon by account on this host"
+     Content: "On '{{Computer}}' the user '{{TargetUserName}}' logged on at least once with the SeDebugPrivilege"
+     QueryDefinitions:
+       Filter: where RelatedRowSet =~ 'HostHadPrivilegedLogonSessions'
+       SummarizeBy: TargetUserName
+   - Id: 8d639acf-f55f-40cd-8ada-bf81b277bb73
+     Description: Logon outside normal hours
+     Title: "An account has logged on outside of their normal hours on this host"
+     Content: "On '{{Computer}}' the user '{{TargetUserName}}' logged on at least once outside of their normal logon hours"
+     QueryDefinitions:
+       Filter: where RelatedRowSet =~ 'HostSigninDuringAbnormalHour' and TargetDomainName !in ('NT AUTHORITY', 'NT SERVICE', 'Font Driver Host', 'Window Manager')
+       SummarizeBy: TargetUserName

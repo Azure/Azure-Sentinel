@@ -1,0 +1,75 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: OfficeActivity
+Provider: Sentinel
+Type: KQL
+RequiredInputFieldsSets:
+  - - Account_Name
+    - Account_UPNSuffix
+  - - Account_AADUserId
+BaseQuery: |
+  let Operations = dynamic(["FileDownloaded", "FileUploaded"]);
+  let UserOperationToSharePoint =  (v_Account_Name:string, v_Account_UPNSuffix:string) {
+  OfficeActivity
+  // Select sharepoint activity that is relevant
+  | where RecordType in~ ('SharePointFileOperation')
+  | where Operation in~ (Operations)
+  | extend Account_Name = tostring(split(UserId, '@')[0])
+  | extend Account_UPNSuffix = tostring(split(UserId, '@')[1])
+  | where Account_Name =~ v_Account_Name and Account_UPNSuffix =~ v_Account_UPNSuffix
+  | project TimeGenerated, Account_Name, Account_UPNSuffix, UserId, OfficeId, RecordType, Operation, OrganizationId, UserType, UserKey, OfficeWorkload, OfficeObjectId, ClientIP, ItemType, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName, SourceFileExtension , Start_Time , ElevationTime , TenantId, SourceSystem , Type
+  };
+  UserOperationToSharePoint ('{{Account_Name}}','{{Account_UPNSuffix}}')
+Insights:
+  Id: e6cf68e6-1eca-4fbb-9fad-6280f2a9476e
+  DisplayName: Resource access
+  Description: |
+    Provides the count and distinct resource accesses by a given user account
+  DefaultTimeRange: 
+    BeforeRange: 12h
+    AfterRange: 12h
+  TableQuery:
+    ColumnsDefinitions:
+      - Header: Resource Type
+        OutputType: String
+      - Header: Distinct Resources
+        OutputType: Number
+        SupportDeepLink: true
+      - Header: Total Resources
+        OutputType: Number
+        SupportDeepLink: true
+      - Header: IPAddress(es)
+        OutputType: string
+    QueriesDefinitions:
+      - Filter:    "where Operation =~ 'FileUploaded'"
+        Summarize: "summarize DistinctResources = dcount(SourceFileName), TotalResources = count(SourceFileName), IPAddresses = make_set(ClientIP) by Operation"
+        Project:   "project Title = Operation, DistinctResources, TotalResources, IPAddresses = case(array_length(IPAddresses) == 1, tostring(IPAddresses[0]), array_length(IPAddresses) > 1, 'Many', 'None')"
+        LinkColumnsDefinitions:
+        - ProjectedName: DistinctResources
+          Query: "{{BaseQuery}} | {{RowFilter}}"
+        - ProjectedName: TotalResources
+          Query: "{{BaseQuery}} | {{RowFilter}}"
+      - Filter:    "where Operation =~ 'FileDownloaded'"
+        Summarize: "summarize DistinctResources = dcount(SourceFileName), TotalResources = count(SourceFileName), IPAddresses = make_set(ClientIP) by Operation"
+        Project:   "project Title = Operation, DistinctResources, TotalResources, IPAddresses = case(array_length(IPAddresses) == 1, tostring(IPAddresses[0]), array_length(IPAddresses) > 1, 'Many', 'None')"
+        LinkColumnsDefinitions:
+        - ProjectedName: DistinctResources
+          Query: "{{BaseQuery}} | {{RowFilter}}"
+        - ProjectedName: TotalResources
+          Query: "{{BaseQuery}} | {{RowFilter}}"
+  ChartQuery: 
+    Title: "Resource access over time"
+    DataSets: 
+      - Query: "summarize DistinctResources = dcountif(Operation, Operation =~ 'FileUploaded'), TotalResources = countif(Operation =~ 'FileUploaded') by bin(TimeGenerated, 1h) | extend Legend = 'File Uploads'"
+        XColumnName: TimeGenerated
+        YColumnName: TotalResources
+        LegendColumnName: Legend
+      - Query: "summarize DistinctResources = dcountif(Operation, Operation =~ 'FileDownloaded'), TotalResources = countif(Operation =~ 'FileDownloaded') by bin(TimeGenerated, 1h) | extend Legend = 'File Downloads'"
+        XColumnName: TimeGenerated
+        YColumnName: TotalResources
+        LegendColumnName: Legend
+    Type: LineChart
+  AdditionalQuery:  
+    Text:  "See all resource activity"
+    Query: "where Operation in~ (Operations)"
+ 

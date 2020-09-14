@@ -1,0 +1,83 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: Syslog
+EntitiesFilter: 
+ Host_OsFamily:
+  - Linux
+RequiredInputFieldsSets: 
+  - - Host_HostName
+  - - Host_AzureID
+BaseQuery: |
+  let AllUserEvents = (v_Host_Name:string, v_Host_AzureID:string) {
+  Syslog
+  | where Computer == v_Host_Name or v_Host_AzureID == _ResourceId
+  | where Facility == "authpriv"
+  | where SyslogMessage !startswith "omsagent"
+  | where SyslogMessage has 'COMMAND'
+  | parse SyslogMessage with User ' : TTY=' TTY ' PWD=' WorkingDirectory ' USER=' CmdRunAs ' COMMAND=' Commandline
+  | where User != 'omsagent'
+  | parse Commandline with Command ' ' *
+  | extend Command = case(isempty(Command), Commandline, Command)
+  | project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage, _ResourceId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP, AccountCustomEntity = User
+  };
+  AllUserEvents('{{Host_HostName}}', '{{Host_AzureID}}')
+Insights:
+  Id: a9191fbe-ca33-400c-8036-18caac59271c
+  DisplayName: Linux sudo usage on host
+  Description: |
+    'Sudo usage on host by users, most/least events by commands, most/least events by user'
+  DefaultTimeRange:
+    BeforeRange: 7d
+    AfterRange: 7d
+  SingleValuesQuery: {}
+  TableQuery:
+   ColumnsDefinitions:
+   - Header: "Sudo Usage"
+     OutputType: String
+   - Header: User
+     OutputType: String
+   - Header: "Usage Count"
+     OutputType: Number
+     SupportDeepLink: true
+   - Header: Command(s)
+     OutputType: String
+     SupportDeepLink: true
+   - Header: "Distinct Commands"
+     OutputType: Number
+     SupportDeepLink: true
+   QueriesDefinitions:
+   # MostSudoEventsByCommand
+   - Filter:    "project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage"
+     Summarize: "summarize User = make_set(User), UserCount = dcount(User), UsageCount = count() by Command | top 1 by UsageCount desc"
+     Project:   "project Title = 'Most by Command', User = case(UserCount == 1, tostring(User[0]), UserCount > 1, 'Many', 'None'), UsageCount = case(UsageCount == 0, 0, UsageCount), Commands = Command, CommandCount = 1"
+   # LeastSudoEventsByCommand
+   - Filter:    "project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage"
+     Summarize: "summarize User = make_set(User), UserCount = dcount(User), UsageCount = count() by Command | top 1 by UsageCount asc"
+     Project:   "project Title = 'Least by Command', User = case(UserCount == 1, tostring(User[0]), UserCount > 1, 'Many', 'None'), UsageCount = case(UsageCount == 0, 0, UsageCount), Commands = Command, CommandCount = 1"
+   # MostSudoEventsByUser
+   - Filter:    "project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage"
+     Summarize: "summarize CommandCount = dcount(Command), Commands = make_set(Command), UsageCount = count() by User | top 1 by UsageCount desc"
+     Project:   "project Title = 'Most by User', User = case(isnotempty(User), User, 'None'), UsageCount = case(UsageCount == 0, 0, UsageCount), Commands = case(CommandCount == 1, tostring(Commands[0]), CommandCount > 1, 'Many', 'None'), CommandCount = case(CommandCount == 0, 0, CommandCount)"
+   # LeastSudoEventsByUser
+   - Filter:    "project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage"
+     Summarize: "summarize CommandCount = dcount(Command), Commands = make_set(Command),UsageCount = count() by User | top 1 by UsageCount asc"
+     Project:   "project Title = 'Least by User', User = case(isnotempty(User), User, 'None'), UsageCount = case(UsageCount == 0, 0, UsageCount), Commands = case(CommandCount == 1, tostring(Commands[0]), CommandCount > 1, 'Many', 'None'), CommandCount = case(CommandCount == 0, 0, CommandCount)" 
+   # AllSudoEvents
+   - Filter:    "project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage"
+     Summarize: "summarize CommandCount = dcount(Command), Commands = make_set(Command), User = make_set(User), UserCount = dcount(User), UsageCount = count() by Computer"
+     Project:   "project Title = 'All', User = case(UserCount == 1, tostring(User[0]), UserCount > 1, 'Many', 'None'), UsageCount = case(UsageCount == 0, 0, UsageCount), Commands = case(CommandCount == 1, tostring(Commands[0]), CommandCount > 1, 'Many', 'None'), CommandCount = case(CommandCount == 0, 0, CommandCount)"
+ 
+  ChartQuery: 
+   Title: "Sudo usage over time"
+   DataSets: 
+    - Query: "summarize UsageCount = count(User) by Time = bin(TimeGenerated, 1h), Command | extend Legend = Command"
+      XColumnName: Time
+      YColumnName: UsageCount
+      LegendColumnName: Legend
+   Type: BarChart
+  AdditionalQuery: 
+   Text: "See all sudo usage"
+   Query: "project TimeGenerated, Computer, HostIP, User, CmdRunAs, WorkingDirectory, Command, Commandline, SyslogMessage, _ResourceId, timestamp, HostCustomEntity, AccountCustomEntity, IPCustomEntity"

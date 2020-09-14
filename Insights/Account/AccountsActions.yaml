@@ -1,0 +1,70 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: AuditLogs
+  - DataType: SecurityEvent
+Type: KQL
+Provider: Sentinel
+RequiredInputFieldsSets:
+  - - Account_Name
+    - Account_NTDomain
+  - - Account_Name
+    - Account_UPNSuffix
+  - - Account_AADUserId
+  - - Account_SID
+BaseQuery: |
+    let GetAccountActions = (Account_Name:string, Account_NTDomain:string, Account_UPNSuffix:string, Account_AADUserId:string, Account_SID:string){
+    union isfuzzy=true
+    (
+     AuditLogs
+    | where  tostring(bag_keys(InitiatedBy)[0]) == "user"
+    | where OperationName in~ ('Delete user', 'Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', 'Update user')
+    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend userName=tostring(split(userPrincipalName, '@')[0])
+    | extend userUpnSuffix=tostring(split(userPrincipalName, '@')[1])
+    | extend userId=tostring(parse_json(tostring(InitiatedBy.user)).id)
+    | where (userName == Account_Name and userUpnSuffix == Account_UPNSuffix ) or (userId == Account_AADUserId )
+      | extend Target_UPN = tostring(TargetResources[0].userPrincipalName)
+      | extend Target_Name = tostring(split(Target_UPN, '@')[0])
+      | extend Target_UPNSuffix = tostring(split(Target_UPN, '@')[1])
+      | extend Target_AADUserId = tostring(TargetResources[0].id)
+      | extend Action = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0])))
+      | extend ModifiedProperty = parse_json(Action).displayName
+      | extend ModifiedValue = parse_json(Action).newValue
+      | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')
+    ),
+    (
+     SecurityEvent
+      | where EventID in (4720, 4722, 4723, 4724, 4725, 4726, 4740)
+      | where AccountType =~ "user" or isempty(AccountType)
+      | extend userName=tostring(split(Account,"\\")[1]), userNTDomain=tostring(split(Account,"\\")[0]), userSid=SubjectUserSid
+      | where (Account_Name==userName and userNTDomain==Account_NTDomain) or SubjectUserSid == Account_SID
+      | extend OperationName = tostring(EventID)
+      | extend Target_Name = TargetUserName, Target_NTDomain = TargetDomainName, Target_SID = TargetSid
+      )
+    };
+    GetAccountActions('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_UPNSuffix}}', '{{Account_AADUserId}}', '{{Account_SID}}')
+    
+Activities:
+ EnabledByDefault: true
+ Items:
+ - Id: d6d08c94-455f-4ea5-8f76-fc6c0c442cfa
+   Title: "The user has created an account"
+   Content: "The user has created the account {{Target_Name}} {{Count}} time(s)"
+   Description: "This activity displays account creation events performed by the user"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Add user', '4720')"
+    SummarizeBy: "Target_Name, Target_NTDomain, Target_UPNSuffix"
+ - Id: e0459780-ac9d-4b72-8bd4-fecf6b46a0a1
+   Title: "The user has deleted an account"
+   Content: "The user has deleted the account {{Target_Name}} {{Count}} time(s)"
+   Description: "This activity displays account deletion events performed by the user"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Delete user', '4726')"
+    SummarizeBy: "Target_Name, Target_NTDomain, Target_UPNSuffix"
+ - Id: ad1f4269-5418-4c46-a3b6-4ec01031de60
+   Title: "The user has reset an account's password"
+   Content: "The password for account {{Target_Name}} was reset by the user {{Count}} time(s)"
+   Description: "This activity displays password reset events performed by the user"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', '4724', '4723')"
+    SummarizeBy: "Target_Name, Target_NTDomain, Target_UPNSuffix"
