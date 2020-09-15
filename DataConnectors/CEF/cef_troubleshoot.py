@@ -34,6 +34,7 @@ import time
 daemon_port = "514"
 agent_port = "25226"
 rsyslog_security_config_omsagent_conf_content_tokens = ["if", "contains", "then", "@127.0.0.1:25226", "CEF:", "ASA-"]
+rh_firewalld_agent_exception_tokens = ["INPUT", "tcp", "--dport", "25226", "ACCEPT"]
 syslog_ng_security_config_omsagent_conf_content_tokens = ["f_oms_filter", "oms_destination", "port(25226)", "tcp",
                                                           "source", "s_src", "oms_destination"]
 oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
@@ -41,7 +42,6 @@ oms_agent_process_name = "opt/microsoft/omsagent"
 oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
-firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
@@ -110,38 +110,41 @@ def check_red_hat_firewall_issue():
         if "running" in str(o):
             print_warning(
                 "Warning: you have a firewall running on your linux machine this can prevent communication between the syslog daemon and the omsagent.")
-            print("Checking if firewall has exception for omsagent port.[" + agent_port + "]")
-            if red_hat_firewall_d_exception_for_omsagent():
+            print_notice("Checking if firewall has exception for omsagent port [" + agent_port + "]")
+            if validate_rh_firewall_exception():
                 print_ok("Found exception in the firewalld for the omsagent port.[" + agent_port + "]")
-                restart_red_hat_firewall_d()
             else:
                 print_warning("Warning: no exception found for omsagent in the firewall")
                 print_warning(
                     "You can add exception for the agent port[" + agent_port + "] by using the following commands:")
                 print_warning("Add exception:")
-                print_notice(
-                    "sudo firewall-cmd --direct --add-rule ipv4 filter INPUT 0 -p tcp --dport " + agent_port + "  -j ACCEPT")
-                print_warning("Validate the exception was added in the configuration:")
-                print_notice("sudo firewall-cmd --direct --get-rules ipv4 filter INPUT")
+                print_notice("sudo firewall-cmd --direct --permanent --add-rule ipv4 filter INPUT 0 -p tcp --dport " + agent_port + "  -j ACCEPT")
                 print_warning("Reload the firewall:")
                 print_notice("sudo firewall-cmd --reload")
+                print_warning("Validate the exception was added in the configuration:")
+                print_notice("sudo firewall-cmd --direct --get-rules ipv4 filter INPUT")
                 print_warning("You can disable your firewall by using this command - not recommended:")
                 print_notice("sudo systemctl stop firewalld")
 
 
-def red_hat_firewall_d_exception_for_omsagent():
-    '''
-    Check that the firewall_d has an exception for the omsagent
-    :return:
-    '''
-    print("Checking for exception for omsagent")
-    print_notice(firewall_d_exception_configuration_file)
-    firewall_status = subprocess.Popen(["sudo", "cat", firewall_d_exception_configuration_file], stdout=subprocess.PIPE)
-    o, e = firewall_status.communicate()
-    if e is not None:
-        print_error("Error: could not get /etc/firewalld/zones/public.xml file holding firewall exceptions")
-    print_command_response(str(o))
-    return agent_port in str(o)
+def validate_rh_firewall_exception():
+    iptables = subprocess.Popen(["sudo", "iptables-save"], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(["sudo", "grep", agent_port], stdin=iptables.stdout, stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if e is not None or o is None:
+        return False
+    else:
+        content = o.decode(encoding='UTF-8')
+        rules = content.split('\n')
+        for rule in rules:
+            is_exception = True
+            for token in rh_firewalld_agent_exception_tokens:
+                if token not in rule:
+                    is_exception = False
+                    break
+            if is_exception:
+                return True
+        return False
 
 
 def restart_red_hat_firewall_d():
