@@ -184,14 +184,14 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
 
     print("Creating omsagent configuration to listen to syslog daemon forwarding port - " + omsagent_incoming_port)
     print("Configuration location is - " + configuration_path)
-    command_tokens1 = ["sudo", "mkdir", "-p", configuration_directory]
-    command_tokens2 = ["sudo", "wget", "-O", configuration_path, oms_agent_configuration_url]
+    mkdir_command_tokens = ["sudo", "mkdir", "-p", configuration_directory]
+    wget_command_tokens = ["sudo", "wget", "-O", configuration_path, oms_agent_configuration_url]
     print("Download configuration into the correct directory")
-    print_notice(" ".join(command_tokens1))
-    print_notice(" ".join(command_tokens2))
+    print_notice(" ".join(mkdir_command_tokens))
+    print_notice(" ".join(wget_command_tokens))
     time.sleep(3)
-    create_omsagent_configuration_directory = subprocess.Popen(command_tokens1, stdout=subprocess.PIPE)
-    set_omsagent_configuration_command = subprocess.Popen(command_tokens2, stdout=subprocess.PIPE)
+    create_omsagent_configuration_directory = subprocess.Popen(mkdir_command_tokens, stdout=subprocess.PIPE)
+    set_omsagent_configuration_command = subprocess.Popen(wget_command_tokens, stdout=subprocess.PIPE)
     o, e = create_omsagent_configuration_directory.communicate()
     if e is not None:
         handle_error(e, error_response_str="Error: could not create omsagent configuration directory.")
