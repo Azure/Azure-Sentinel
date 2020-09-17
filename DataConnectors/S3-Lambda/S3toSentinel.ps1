@@ -79,12 +79,6 @@ foreach ($record in $LambdaInput.Records) {
         #$CustomerID = 'ENTER WORKSPACE ID HERE'
     
         # Shared key needs to be set for environment
-        # Below uses an encrypted variable from Azure Automation
-        # Uncomment the next two lines if using Azure Automation Variable and comment the last
-        # $automationVarName = 'Enter Variable Name Here'
-        # $sharedKey = Get-AutomationVariable -name $automationVarName
-        # Key Vault is another secure option for storing the value
-        # Less secure option is to put the key in the code
         #$SharedKey = 'ENTER WORKSPACE KEY HERE'
     
         #endregion
@@ -157,6 +151,10 @@ foreach ($record in $LambdaInput.Records) {
     $workspaceId = "workspaceId"
     $workspaceKey = "workspaceKey"
     $CustomLogName = "CustomLog"
+    #$worksapceId = $env:workspaceId
+    #$workspaceKey = $env:workspaceKey
+    #$CustomLogName = $env:CustomLogName
+
 
     Write-Host "Processing event for: bucket = $bucket, key = $key"
 
