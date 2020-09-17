@@ -7,10 +7,10 @@ Welcome to the Azure Sentinel repository! This repository contains out of the bo
 * [Getting started with GitHub](https://help.github.com/en#dotcom)
 
 We value your feedback. Here are some channels to help surface your questions or feedback:
-1. General product specific Q&A � Join in the [Azure Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
-1. Product specific feature requests � Upvote or post new on [Azure Sentinel feedback forums](https://feedback.azure.com/forums/920458-azure-sentinel)
-1. Report product or contribution bugs � File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
-1. General feedback on community and contribution process � File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
+1. General product specific Q&A - Join in the [Azure Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
+1. Product specific feature requests - Upvote or post new on [Azure Sentinel feedback forums](https://feedback.azure.com/forums/920458-azure-sentinel)
+1. Report product or contribution bugs - File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
+1. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
 
 # Contributing
@@ -40,9 +40,9 @@ Brand new or update to a contribution via these methods:
 * Make changes as suggested and update your branch or explain why no change is needed. Resolve the comment when done.
 
 ### Pull Request Kql Validation Check
-As part of the PR checks we run kql validation on the queries that are defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
+As part of the PR checks we run a syntax validation of the kql queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
 ![Azurepipeline](.github/Media/Azurepipeline.png)
-In the pipeline you can see which test fail and what is the cause:
+In the pipeline you can see which test failed and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
 If you are using custom logs table (a table which is not defined on all workspaces by default) you should verify
 your table schema is defined in json file in the folder *Azure-Sentinel\\.script\tests\KqlvalidationsTests\CustomTables*
