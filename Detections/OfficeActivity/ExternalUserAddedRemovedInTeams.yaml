@@ -3,34 +3,35 @@ name: External user added and removed in short timeframe
 description: |
   'This detection flags the occurances of external user accounts that are added to a Team and then removed within
   one hour.This data is a part of Office 365 Connector in Azure Sentinel.'
+severity: Low
+requiredDataConnectors:
+- connectorId: Office365
+dataTypes:
+- OfficeActivity (Teams)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
 tactics:
   - Persistence
 relevantTechniques:
   - T1136
 query: |
-
-  // If you want to look at user added further than 7 days ago adjust this value
-  let time_ago = 7d;
-  // If you want to change the timeframe of how quickly accounts need to be added and removed change this value
-  let time_delta = 1h;
+  
   OfficeActivity
-  | where OfficeWorkload == "MicrosoftTeams"
-  | where TimeGenerated > ago(time_ago)
-  | where OfficeWorkload == "MicrosoftTeams"
-  | where TimeGenerated > ago(time_ago)
+  | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberAdded"
   | extend UPN = tostring(parse_json(Members)[0].UPN)
   | where UPN contains ("#EXT#")
-  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName=ItemName
+  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName
   | join (
    OfficeActivity
-  | where OfficeWorkload == "MicrosoftTeams"
-  | where TimeGenerated > ago(time_ago)
+  | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberRemoved"
   | extend UPN = tostring(parse_json(Members)[0].UPN)
   | where UPN contains ("#EXT#")
-  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName=ItemName
+  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName
   ) on UPN
-  | where TimeDeleted < (TimeAdded + time_delta)
+  | where TimeDeleted < TimeAdded
   | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName
   | extend timestamp = TimeAdded, AccountCustomEntity = UPN
