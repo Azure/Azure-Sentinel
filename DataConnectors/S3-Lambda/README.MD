@@ -14,6 +14,22 @@ See the documentation here https://docs.aws.amazon.com/lambda/latest/dg/powershe
 
 I recommend you review https://docs.aws.amazon.com/lambda/latest/dg/powershell-package.html to review the cmdlets that are part of AWSLambdaPSCore.
 
+Note: If the environment uses a proxy, you may need to add the following to VSCode profile
+```powershell
+Added to VS Code profile:
+$webclient=New-Object System.Net.WebClient
+$webclient.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+```
+### Edit the script
+You will need to add the workspace ID, Key and Custom Log file name:
+1. Go to line 151 and edit the following:
+```powershell
+$workspaceId = "workspaceId"
+$workspaceKey = "workspaceKey"
+$CustomLogName = "CustomLog"
+```
+Note:  It is possible to put these in Lambda Environment Variables.  See [this](https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html) to add the environment variables.  If using env variables, comment out lines 151-153 and uncomment lines 154-156.  Ensure the env variable names match the names on these lines.
+
 ### Create AWS Role
 The Lambda function will need an execution role defined that grants access to the S3 bucket and CloudWatch logs.  To create an execution role: 
 1. Open the [roles](https://console.aws.amazon.com/iam/home#/roles) page in the IAM console. 
@@ -22,6 +38,35 @@ The Lambda function will need an execution role defined that grants access to th
  - Trusted entity – AWS Lambda. 
  - Permissions – AWSLambdaExecute. 
  - Role name – lambda-s3-role. 
+ 4. Add s3:GetObject and s3:Listbucket to the role.
+ ```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:*"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject"
+            ],
+            "Resource": "<bucketarn>/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": "<bucketarn>"
+        }
+    ]
+}
+ ```
 The AWSLambdaExecute policy has the permissions that the function needs to manage objects in Amazon S3 and write logs to CloudWatch Logs.  Copy the arn of the role created as you will need it for the next step. 
 
 ### Create the Lambda Function
