@@ -1,0 +1,758 @@
+{
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-UserAndEntityBehaviorAnalytics",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# User and Entity Behavior Analytics\n---\n\nWelcome to the User and Entity Behavior Analytics workbook. The workbook provides a guided investigation\nfor entities based on open incidents, alerts and anomalies identified by the UEBA engine. "
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "36cdaf52-4303-405d-ac9c-de2037db99c3",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 2419200000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityIncident\r\n| where TimeGenerated {TimeRange:query}\r\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\r\n| where Status == \"New\" or Status == \"Active\"\r\n| summarize IncidentCount=count() \r\n| project \"Open Incidents\", IncidentCount",
+        "size": 4,
+        "timeContext": {
+          "durationMs": 2419200000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Column1"
+          },
+          "leftContent": {
+            "columnMatch": "IncidentCount",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 0,
+              "options": {
+                "style": "decimal"
+              }
+            }
+          },
+          "showBorder": false,
+          "size": "auto"
+        }
+      },
+      "customWidth": "10",
+      "name": "query - 16"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let TotalAlertsCount = SecurityIncident\r\n| where TimeGenerated {TimeRange:query}\r\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\r\n| where Status == \"New\" or Status == \"Active\"\r\n| mv-expand AlertIds\r\n| extend AlertId = tostring(AlertIds)\r\n| join kind= innerunique ( \r\nSecurityAlert | where TimeGenerated {TimeRange:query}) on $left.AlertId == $right.SystemAlertId\r\n| summarize hint.strategy = shuffle arg_max(TimeGenerated,*), NumberOfUpdates = count() by SystemAlertId\r\n| summarize AlertCount=count()\r\n| project \"Alert Count\",AlertCount;\r\nTotalAlertsCount\r\n",
+        "size": 4,
+        "timeContext": {
+          "durationMs": 2419200000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Column1",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "AlertCount",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": false,
+          "size": "auto"
+        }
+      },
+      "customWidth": "10",
+      "name": "query - 18"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let AnomalousSigninActivity = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Sign-in\"\r\n| where (UsersInsights.NewAccount == True or UsersInsights.DormantAccount == True) and (\r\n ActivityInsights.FirstTimeUserAccessedResource == True and ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True\r\nor ActivityInsights.FirstTimeUserUsedApp  == True and ActivityInsights.AppUncommonlyUsedAmongPeers == False)\r\n| join (\r\nSigninLogs | where TimeGenerated {TimeRange:query} | where Status.errorCode == 0 or Status.errorCode == 0 and RiskDetail != \"none\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Successful Logon\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Successful Sign-in with one or more of the following indications: sign by new or recently dormant accounts and sign in with resource for the first time (while none of their peers did) or to an app for the first time (while none of their peers did) or performed by a user with Risk indicaiton from AAD\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet critical = dynamic(['9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3','c4e39bd9-1100-46d3-8c65-fb160da0071f','158c047a-c907-4556-b7ef-446551a6b5f7','62e90394-69f5-4237-9190-012177145e10','d29b2b05-8046-44ba-8758-1e26182fcf32','729827e3-9c14-49f7-bb1b-9608f156bbb8','966707d0-3269-4727-9be2-8c3a10f19b9d','194ae4cb-b126-40b2-bd5b-6091b380977d','fe930be7-5e62-47db-91af-98c3a49a38b1']);\r\nlet high = dynamic(['cf1c38e5-3621-4004-a7cb-879624dced7c','7495fdc4-34c4-4d15-a289-98788ce399fd','aaf43236-0c0d-4d5f-883a-6955382ac081','3edaf663-341e-4475-9f94-5c398ef6c070','7698a772-787b-4ac8-901f-60d6b08affd2','b1be1c3e-b65d-4f19-8427-f6fa0d97feb9','9f06204d-73c1-4d4c-880a-6edb90606fd8','29232cdf-9323-42fd-ade2-1d097af3e4de','be2f45a1-457d-42af-a067-6ec1fa63bc45','7be44c8a-adaf-4e2a-84d6-ab2649e08a13','e8611ab8-c189-46e8-94e1-60213ab1f814']);\r\nlet AnomalousRoleAssignment = AuditLogs\r\n| where TimeGenerated  {TimeRange:query}\r\n| where OperationName == \"Add member to role\"\r\n| mv-expand TargetResources\r\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\r\n| where isnotempty(RoleId) and RoleId in (critical,high)\r\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\r\n| where isnotempty(RoleName)\r\n| extend TargetId = tostring(TargetResources.id)\r\n| extend Target = tostring(TargetResources.userPrincipalName)\r\n| join kind=inner ( BehaviorAnalytics\r\n     | where TimeGenerated  {TimeRange:query}\r\n     | where ActionType == \"Add member to role\"\r\n     | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction  == true\r\n) on $left._ItemId == $right.SourceRecordId\r\n| extend AnomalyName = \"Anomalous Role Assignemt\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Account Manipulation\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access.  The query below generates an output of all high Blast Radius users performing Add member to priveleged role, or ones that add users for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority;let LogOns=materialize(\r\nBehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActivityType == \"LogOn\");\r\nlet AnomalousResourceAccess = LogOns\r\n| where ActionType == \"ResourceAccess\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| extend AnomalyName = \"Anomalous Resource Access\",\r\n         Tactic = \"Lateral Movement\",\r\n         Technique = \"\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversary may be trying to move through the environment. APT29 and APT32, for example, has used PtH & PtT techniques to lateral move around the network. The query below generates an output of all users performing an resource access (4624:3) to devices for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousRDPActivity = LogOns\r\n| where ActionType == \"RemoteInteractiveLogon\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| extend AnomalyName = \"Anomalous RDP Activity\",\r\n         Tactic = \"Lateral Movement\",\r\n         Technique = \"\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may use Valid Accounts to log into a computer using the Remote Desktop Protocol (RDP). The adversary may then perform actions as the logged-on user. FIN10, for example, has used RDP to move laterally to systems in the victim environment. The query below generates an output of all users performing a remote interactive logon (4624:10) to a device for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousLogintoDevices = LogOns\r\n| where ActionType == \"InteractiveLogon\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| where UsersInsights.DormantAccount == true or DevicesInsights.LocalAdmin == true\r\n| extend AnomalyName = \"Anomalous Login To Devices\",\r\n         Tactic = \"Privilege Escalation\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access and privilege escalation. The query below generates an output of all administator users performing an interactive logon (4624:2) to a device for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousPasswordReset = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Reset user password\"\r\n| where ActivityInsights.FirstTimeUserPerformedAction  == \"True\"\r\n| join (\r\nAuditLogs\r\n |  where TimeGenerated {TimeRange:query}\r\n |  where OperationName == \"Reset user password\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| mv-expand TargetResources\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Password Reset\",\r\n         Tactic = \"Impact\",\r\n         Technique = \"Account Access Removal\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may interrupt availability of system and network resources by inhibiting access to accounts utilized by legitimate users. Accounts may be deleted, locked, or manipulated (ex: changed credentials) to remove access to accounts. LockerGoga, for example, has been observed changing account passwords and logging off current users. The query below generates an output of all users performing Reset user password for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\r\n| sort by TimeGenerated desc;\r\nlet AnomalousGeoLocationLogon = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Sign-in\"\r\n| where ActivityInsights.FirstTimeUserConnectedFromCountry == True and (ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True)\r\n| join (\r\nSigninLogs\r\n |  where TimeGenerated {TimeRange:query}\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Successful Logon\",\r\n         Tactic = \"Initial Access\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access. The query below generates an output of successful Sign-in performed by a user from a new geo location he has never connected from before, and none of his peers as well.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousFailedLogon = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActivityType == \"LogOn\"\r\n| where UsersInsights.BlastRadius == \"High\"\r\n| join (\r\n  SigninLogs  \r\n     | where TimeGenerated {TimeRange:query}\r\n     | where Status.errorCode == 50126\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Failed Logon\",\r\n         Tactic = \"Credential Access\",\r\n         Technique = \"Brute Force\",\r\n         SubTechnique = \"Password Guessing\",\r\n         Description = \"Adversaries with no prior knowledge of legitimate credentials within the system or environment may guess passwords to attempt access to accounts. Emotet, for example, has been observed using a hard coded list of passwords to brute force user accounts. The query below generates an output of all users with 'High' BlastRadius that perform failed Sign-in:Invalid username or password.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousAADAccountManipulation = AuditLogs\r\n| where TimeGenerated {TimeRange:query}\r\n| where OperationName == \"Update user\"\r\n| mv-expand AdditionalDetails\r\n| where AdditionalDetails.key == \"UserPrincipalName\"\r\n| mv-expand TargetResources\r\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\r\n| where isnotempty(RoleId) and RoleId in (critical,high)\r\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\r\n| where isnotempty(RoleName)\r\n| extend TargetId = tostring(TargetResources.id)\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| join kind=inner ( \r\n    BehaviorAnalytics\r\n    | where TimeGenerated {TimeRange:query}\r\n    | where ActionType == \"Update user\"\r\n    | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction == true\r\n) on $left._ItemId == $right.SourceRecordId\r\n|  extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName) \r\n| extend AnomalyName = \"Anomalous Account Manipulation\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Account Manipulation\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access. The query below generates an output of all high Blast Radius users performing 'Update user' (name change) to priveleged role, or ones that changed users for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; let AnomalousAADAccountCreation = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Add user\"\r\n| where ActivityInsights.FirstTimeUserPerformedAction == True or ActivityInsights.FirstTimeActionPerformedInTenant == True or ActivityInsights.ActionUncommonlyPerformedAmongPeers == true\r\n| join(\r\nAuditLogs\r\n    | where TimeGenerated {TimeRange:query} \r\n    | where OperationName == \"Add user\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| mv-expand TargetResources\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| extend DisplayName = tostring(UsersInsights.AccountDisplayName),\r\nUserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Account Creation\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Create Account\",\r\n         SubTechnique = \"Cloud Account\",\r\n         Description = \"Adversaries may create a cloud account to maintain access to victim systems. With a sufficient level of access, such accounts may be used to establish secondary credentialed access that does not require persistent remote access tools to be deployed on the system. The query below generates an output of all the users performing user creation for the first time and the target users that were created.\"\t\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\r\n| sort by TimeGenerated desc;\r\nlet AnomalyTable = union kind=outer  AnomalousSigninActivity, AnomalousRoleAssignment, AnomalousResourceAccess, AnomalousRDPActivity, AnomalousPasswordReset, AnomalousLogintoDevices, AnomalousGeoLocationLogon, AnomalousAADAccountManipulation, AnomalousAADAccountCreation, AnomalousFailedLogon;\r\nAnomalyTable\r\n| summarize AnomaliesCount=count()\r\n| project \"Anomalies Count\", AnomaliesCount",
+        "size": 4,
+        "timeContext": {
+          "durationMs": 2419200000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Column1",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "AnomaliesCount",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "showBorder": false,
+          "size": "auto"
+        }
+      },
+      "customWidth": "10",
+      "name": "query - 17",
+      "styleSettings": {
+        "margin": "12"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let AnomalousSigninActivity = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Sign-in\"\r\n| where (UsersInsights.NewAccount == True or UsersInsights.DormantAccount == True) and (\r\n ActivityInsights.FirstTimeUserAccessedResource == True and ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True\r\nor ActivityInsights.FirstTimeUserUsedApp  == True and ActivityInsights.AppUncommonlyUsedAmongPeers == False)\r\n| join (\r\nSigninLogs | where TimeGenerated {TimeRange:query} | where Status.errorCode == 0 or Status.errorCode == 0 and RiskDetail != \"none\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Successful Logon\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Successful Sign-in with one or more of the following indications: sign by new or recently dormant accounts and sign in with resource for the first time (while none of their peers did) or to an app for the first time (while none of their peers did) or performed by a user with Risk indicaiton from AAD\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet critical = dynamic(['9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3','c4e39bd9-1100-46d3-8c65-fb160da0071f','158c047a-c907-4556-b7ef-446551a6b5f7','62e90394-69f5-4237-9190-012177145e10','d29b2b05-8046-44ba-8758-1e26182fcf32','729827e3-9c14-49f7-bb1b-9608f156bbb8','966707d0-3269-4727-9be2-8c3a10f19b9d','194ae4cb-b126-40b2-bd5b-6091b380977d','fe930be7-5e62-47db-91af-98c3a49a38b1']);\r\nlet high = dynamic(['cf1c38e5-3621-4004-a7cb-879624dced7c','7495fdc4-34c4-4d15-a289-98788ce399fd','aaf43236-0c0d-4d5f-883a-6955382ac081','3edaf663-341e-4475-9f94-5c398ef6c070','7698a772-787b-4ac8-901f-60d6b08affd2','b1be1c3e-b65d-4f19-8427-f6fa0d97feb9','9f06204d-73c1-4d4c-880a-6edb90606fd8','29232cdf-9323-42fd-ade2-1d097af3e4de','be2f45a1-457d-42af-a067-6ec1fa63bc45','7be44c8a-adaf-4e2a-84d6-ab2649e08a13','e8611ab8-c189-46e8-94e1-60213ab1f814']);\r\nlet AnomalousRoleAssignment = AuditLogs\r\n| where TimeGenerated  {TimeRange:query}\r\n| where OperationName == \"Add member to role\"\r\n| mv-expand TargetResources\r\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\r\n| where isnotempty(RoleId) and RoleId in (critical,high)\r\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\r\n| where isnotempty(RoleName)\r\n| extend TargetId = tostring(TargetResources.id)\r\n| extend Target = tostring(TargetResources.userPrincipalName)\r\n| join kind=inner ( BehaviorAnalytics\r\n     | where TimeGenerated  {TimeRange:query}\r\n     | where ActionType == \"Add member to role\"\r\n     | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction  == true\r\n) on $left._ItemId == $right.SourceRecordId\r\n| extend AnomalyName = \"Anomalous Role Assignemt\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Account Manipulation\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access.  The query below generates an output of all high Blast Radius users performing Add member to priveleged role, or ones that add users for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority;let LogOns=materialize(\r\nBehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActivityType == \"LogOn\");\r\nlet AnomalousResourceAccess = LogOns\r\n| where ActionType == \"ResourceAccess\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| extend AnomalyName = \"Anomalous Resource Access\",\r\n         Tactic = \"Lateral Movement\",\r\n         Technique = \"\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversary may be trying to move through the environment. APT29 and APT32, for example, has used PtH & PtT techniques to lateral move around the network. The query below generates an output of all users performing an resource access (4624:3) to devices for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousRDPActivity = LogOns\r\n| where ActionType == \"RemoteInteractiveLogon\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| extend AnomalyName = \"Anomalous RDP Activity\",\r\n         Tactic = \"Lateral Movement\",\r\n         Technique = \"\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may use Valid Accounts to log into a computer using the Remote Desktop Protocol (RDP). The adversary may then perform actions as the logged-on user. FIN10, for example, has used RDP to move laterally to systems in the victim environment. The query below generates an output of all users performing a remote interactive logon (4624:10) to a device for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousLogintoDevices = LogOns\r\n| where ActionType == \"InteractiveLogon\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| where UsersInsights.DormantAccount == true or DevicesInsights.LocalAdmin == true\r\n| extend AnomalyName = \"Anomalous Login To Devices\",\r\n         Tactic = \"Privilege Escalation\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access and privilege escalation. The query below generates an output of all administator users performing an interactive logon (4624:2) to a device for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousPasswordReset = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Reset user password\"\r\n| where ActivityInsights.FirstTimeUserPerformedAction  == \"True\"\r\n| join (\r\nAuditLogs\r\n |  where TimeGenerated {TimeRange:query}\r\n |  where OperationName == \"Reset user password\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| mv-expand TargetResources\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Password Reset\",\r\n         Tactic = \"Impact\",\r\n         Technique = \"Account Access Removal\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may interrupt availability of system and network resources by inhibiting access to accounts utilized by legitimate users. Accounts may be deleted, locked, or manipulated (ex: changed credentials) to remove access to accounts. LockerGoga, for example, has been observed changing account passwords and logging off current users. The query below generates an output of all users performing Reset user password for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\r\n| sort by TimeGenerated desc;\r\nlet AnomalousGeoLocationLogon = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Sign-in\"\r\n| where ActivityInsights.FirstTimeUserConnectedFromCountry == True and (ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True)\r\n| join (\r\nSigninLogs\r\n |  where TimeGenerated {TimeRange:query}\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Successful Logon\",\r\n         Tactic = \"Initial Access\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access. The query below generates an output of successful Sign-in performed by a user from a new geo location he has never connected from before, and none of his peers as well.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousFailedLogon = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActivityType == \"LogOn\"\r\n| where UsersInsights.BlastRadius == \"High\"\r\n| join (\r\n  SigninLogs  \r\n     | where TimeGenerated {TimeRange:query}\r\n     | where Status.errorCode == 50126\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Failed Logon\",\r\n         Tactic = \"Credential Access\",\r\n         Technique = \"Brute Force\",\r\n         SubTechnique = \"Password Guessing\",\r\n         Description = \"Adversaries with no prior knowledge of legitimate credentials within the system or environment may guess passwords to attempt access to accounts. Emotet, for example, has been observed using a hard coded list of passwords to brute force user accounts. The query below generates an output of all users with 'High' BlastRadius that perform failed Sign-in:Invalid username or password.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousAADAccountManipulation = AuditLogs\r\n| where TimeGenerated {TimeRange:query}\r\n| where OperationName == \"Update user\"\r\n| mv-expand AdditionalDetails\r\n| where AdditionalDetails.key == \"UserPrincipalName\"\r\n| mv-expand TargetResources\r\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\r\n| where isnotempty(RoleId) and RoleId in (critical,high)\r\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\r\n| where isnotempty(RoleName)\r\n| extend TargetId = tostring(TargetResources.id)\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| join kind=inner ( \r\n    BehaviorAnalytics\r\n    | where TimeGenerated {TimeRange:query}\r\n    | where ActionType == \"Update user\"\r\n    | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction == true\r\n) on $left._ItemId == $right.SourceRecordId\r\n|  extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName) \r\n| extend AnomalyName = \"Anomalous Account Manipulation\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Account Manipulation\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access. The query below generates an output of all high Blast Radius users performing 'Update user' (name change) to priveleged role, or ones that changed users for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; let AnomalousAADAccountCreation = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Add user\"\r\n| where ActivityInsights.FirstTimeUserPerformedAction == True or ActivityInsights.FirstTimeActionPerformedInTenant == True or ActivityInsights.ActionUncommonlyPerformedAmongPeers == true\r\n| join(\r\nAuditLogs\r\n    | where TimeGenerated {TimeRange:query} \r\n    | where OperationName == \"Add user\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| mv-expand TargetResources\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| extend DisplayName = tostring(UsersInsights.AccountDisplayName),\r\nUserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Account Creation\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Create Account\",\r\n         SubTechnique = \"Cloud Account\",\r\n         Description = \"Adversaries may create a cloud account to maintain access to victim systems. With a sufficient level of access, such accounts may be used to establish secondary credentialed access that does not require persistent remote access tools to be deployed on the system. The query below generates an output of all the users performing user creation for the first time and the target users that were created.\"\t\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\r\n| sort by TimeGenerated desc;\r\nlet AnomalyTable = union kind=outer  AnomalousSigninActivity, AnomalousRoleAssignment, AnomalousResourceAccess, AnomalousRDPActivity, AnomalousPasswordReset, AnomalousLogintoDevices, AnomalousGeoLocationLogon, AnomalousAADAccountManipulation, AnomalousAADAccountCreation, AnomalousFailedLogon;\r\n\r\n\r\nlet TotalAnomaliesCount = AnomalyTable\r\n| make-series count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1d\r\n| extend series = \"Anomalies Trend\"\r\n| project  series, count_, TimeGenerated ;\r\nlet TotalAlertsCount = SecurityIncident\r\n|  where TimeGenerated {TimeRange:query}\r\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\r\n| where Status == \"New\" or Status == \"Active\"\r\n| mv-expand AlertIds\r\n| extend AlertId = tostring(AlertIds)\r\n| join kind= innerunique ( \r\nSecurityAlert |  where TimeGenerated {TimeRange:query}\r\n) on $left.AlertId == $right.SystemAlertId\r\n| summarize hint.strategy = shuffle arg_max(TimeGenerated,*), NumberOfUpdates = count() by SystemAlertId\r\n| make-series count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1d\r\n| extend series = \"Alerts Trend\"\r\n| project  series, count_, TimeGenerated ;\r\nlet TotalIncidentsCount=SecurityIncident\r\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\r\n| where Status == \"New\" or Status == \"Active\"\r\n| make-series count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1d \r\n| extend series = \"Incidents Trend\"\r\n| project series, count_, TimeGenerated;\r\nTotalIncidentsCount | union TotalAlertsCount, TotalAnomaliesCount\r\n\r\n\r\n",
+        "size": 1,
+        "timeContext": {
+          "durationMs": 2419200000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "Incidents Trend",
+              "label": "Incidents Counts",
+              "color": "blue"
+            },
+            {
+              "seriesName": "Alerts Trend",
+              "label": "Alerts Counts",
+              "color": "redBright"
+            }
+          ]
+        }
+      },
+      "customWidth": "70",
+      "name": "query - 19"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Top users to investigate - by Incidents, alerts & anomalies\r\n---\r\n"
+      },
+      "name": "text - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let AnomalousSigninActivity = BehaviorAnalytics\n| where TimeGenerated {TimeRange:query}\n| where ActionType == \"Sign-in\"\n| where (UsersInsights.NewAccount == True or UsersInsights.DormantAccount == True) and (\n ActivityInsights.FirstTimeUserAccessedResource == True and ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True\nor ActivityInsights.FirstTimeUserUsedApp  == True and ActivityInsights.AppUncommonlyUsedAmongPeers == False)\n| join (\nSigninLogs | where TimeGenerated {TimeRange:query} | where Status.errorCode == 0 or Status.errorCode == 0 and RiskDetail != \"none\"\n) on $left.SourceRecordId == $right._ItemId\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\n| extend AnomalyName = \"Anomalous Successful Logon\",\n         Tactic = \"Persistence\",\n         Technique = \"Valid Accounts\",\n         SubTechnique = \"\",\n         Description = \"Successful Sign-in with one or more of the following indications: sign by new or recently dormant accounts and sign in with resource for the first time (while none of their peers did) or to an app for the first time (while none of their peers did) or performed by a user with Risk indicaiton from AAD\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \nlet critical = dynamic(['9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3','c4e39bd9-1100-46d3-8c65-fb160da0071f','158c047a-c907-4556-b7ef-446551a6b5f7','62e90394-69f5-4237-9190-012177145e10','d29b2b05-8046-44ba-8758-1e26182fcf32','729827e3-9c14-49f7-bb1b-9608f156bbb8','966707d0-3269-4727-9be2-8c3a10f19b9d','194ae4cb-b126-40b2-bd5b-6091b380977d','fe930be7-5e62-47db-91af-98c3a49a38b1']);\nlet high = dynamic(['cf1c38e5-3621-4004-a7cb-879624dced7c','7495fdc4-34c4-4d15-a289-98788ce399fd','aaf43236-0c0d-4d5f-883a-6955382ac081','3edaf663-341e-4475-9f94-5c398ef6c070','7698a772-787b-4ac8-901f-60d6b08affd2','b1be1c3e-b65d-4f19-8427-f6fa0d97feb9','9f06204d-73c1-4d4c-880a-6edb90606fd8','29232cdf-9323-42fd-ade2-1d097af3e4de','be2f45a1-457d-42af-a067-6ec1fa63bc45','7be44c8a-adaf-4e2a-84d6-ab2649e08a13','e8611ab8-c189-46e8-94e1-60213ab1f814']);\nlet AnomalousRoleAssignment = AuditLogs\n| where TimeGenerated  {TimeRange:query}\n| where OperationName == \"Add member to role\"\n| mv-expand TargetResources\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\n| where isnotempty(RoleId) and RoleId in (critical,high)\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\n| where isnotempty(RoleName)\n| extend TargetId = tostring(TargetResources.id)\n| extend Target = tostring(TargetResources.userPrincipalName)\n| join kind=inner ( BehaviorAnalytics\n     | where TimeGenerated  {TimeRange:query}\n     | where ActionType == \"Add member to role\"\n     | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction  == true\n) on $left._ItemId == $right.SourceRecordId\n| extend AnomalyName = \"Anomalous Role Assignemt\",\n         Tactic = \"Persistence\",\n         Technique = \"Account Manipulation\",\n         SubTechnique = \"\",\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access.  The query below generates an output of all high Blast Radius users performing Add member to priveleged role, or ones that add users for the first time.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority;let LogOns=materialize(\nBehaviorAnalytics\n| where TimeGenerated {TimeRange:query}\n| where ActivityType == \"LogOn\");\nlet AnomalousResourceAccess = LogOns\n| where ActionType == \"ResourceAccess\"\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\n| extend AnomalyName = \"Anomalous Resource Access\",\n         Tactic = \"Lateral Movement\",\n         Technique = \"\",\n         SubTechnique = \"\",\n         Description = \"Adversary may be trying to move through the environment. APT29 and APT32, for example, has used PtH & PtT techniques to lateral move around the network. The query below generates an output of all users performing an resource access (4624:3) to devices for the first time.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \nlet AnomalousRDPActivity = LogOns\n| where ActionType == \"RemoteInteractiveLogon\"\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\n| extend AnomalyName = \"Anomalous RDP Activity\",\n         Tactic = \"Lateral Movement\",\n         Technique = \"\",\n         SubTechnique = \"\",\n         Description = \"Adversaries may use Valid Accounts to log into a computer using the Remote Desktop Protocol (RDP). The adversary may then perform actions as the logged-on user. FIN10, for example, has used RDP to move laterally to systems in the victim environment. The query below generates an output of all users performing a remote interactive logon (4624:10) to a device for the first time.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \nlet AnomalousLogintoDevices = LogOns\n| where ActionType == \"InteractiveLogon\"\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\n| where UsersInsights.DormantAccount == true or DevicesInsights.LocalAdmin == true\n| extend AnomalyName = \"Anomalous Login To Devices\",\n         Tactic = \"Privilege Escalation\",\n         Technique = \"Valid Accounts\",\n         SubTechnique = \"\",\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access and privilege escalation. The query below generates an output of all administator users performing an interactive logon (4624:2) to a device for the first time.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \nlet AnomalousPasswordReset = BehaviorAnalytics\n| where TimeGenerated {TimeRange:query}\n| where ActionType == \"Reset user password\"\n| where ActivityInsights.FirstTimeUserPerformedAction  == \"True\"\n| join (\nAuditLogs\n |  where TimeGenerated {TimeRange:query}\n |  where OperationName == \"Reset user password\"\n) on $left.SourceRecordId == $right._ItemId\n| mv-expand TargetResources\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\n| extend AnomalyName = \"Anomalous Password Reset\",\n         Tactic = \"Impact\",\n         Technique = \"Account Access Removal\",\n         SubTechnique = \"\",\n         Description = \"Adversaries may interrupt availability of system and network resources by inhibiting access to accounts utilized by legitimate users. Accounts may be deleted, locked, or manipulated (ex: changed credentials) to remove access to accounts. LockerGoga, for example, has been observed changing account passwords and logging off current users. The query below generates an output of all users performing Reset user password for the first time.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\n| sort by TimeGenerated desc;\nlet AnomalousGeoLocationLogon = BehaviorAnalytics\n| where TimeGenerated {TimeRange:query}\n| where ActionType == \"Sign-in\"\n| where ActivityInsights.FirstTimeUserConnectedFromCountry == True and (ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True)\n| join (\nSigninLogs\n |  where TimeGenerated {TimeRange:query}\n) on $left.SourceRecordId == $right._ItemId\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\n| extend AnomalyName = \"Anomalous Successful Logon\",\n         Tactic = \"Initial Access\",\n         Technique = \"Valid Accounts\",\n         SubTechnique = \"\",\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access. The query below generates an output of successful Sign-in performed by a user from a new geo location he has never connected from before, and none of his peers as well.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \nlet AnomalousFailedLogon = BehaviorAnalytics\n| where TimeGenerated {TimeRange:query}\n| where ActivityType == \"LogOn\"\n| where UsersInsights.BlastRadius == \"High\"\n| join (\n  SigninLogs  \n     | where TimeGenerated {TimeRange:query}\n     | where Status.errorCode == 50126\n) on $left.SourceRecordId == $right._ItemId\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\n| extend AnomalyName = \"Anomalous Failed Logon\",\n         Tactic = \"Credential Access\",\n         Technique = \"Brute Force\",\n         SubTechnique = \"Password Guessing\",\n         Description = \"Adversaries with no prior knowledge of legitimate credentials within the system or environment may guess passwords to attempt access to accounts. Emotet, for example, has been observed using a hard coded list of passwords to brute force user accounts. The query below generates an output of all users with 'High' BlastRadius that perform failed Sign-in:Invalid username or password.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \nlet AnomalousAADAccountManipulation = AuditLogs\n| where TimeGenerated {TimeRange:query}\n| where OperationName == \"Update user\"\n| mv-expand AdditionalDetails\n| where AdditionalDetails.key == \"UserPrincipalName\"\n| mv-expand TargetResources\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\n| where isnotempty(RoleId) and RoleId in (critical,high)\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\n| where isnotempty(RoleName)\n| extend TargetId = tostring(TargetResources.id)\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\n| join kind=inner ( \n    BehaviorAnalytics\n    | where TimeGenerated {TimeRange:query}\n    | where ActionType == \"Update user\"\n    | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction == true\n) on $left._ItemId == $right.SourceRecordId\n|  extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName) \n| extend AnomalyName = \"Anomalous Account Manipulation\",\n         Tactic = \"Persistence\",\n         Technique = \"Account Manipulation\",\n         SubTechnique = \"\",\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access. The query below generates an output of all high Blast Radius users performing 'Update user' (name change) to priveleged role, or ones that changed users for the first time.\"\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; let AnomalousAADAccountCreation = BehaviorAnalytics\n| where TimeGenerated {TimeRange:query}\n| where ActionType == \"Add user\"\n| where ActivityInsights.FirstTimeUserPerformedAction == True or ActivityInsights.FirstTimeActionPerformedInTenant == True or ActivityInsights.ActionUncommonlyPerformedAmongPeers == true\n| join(\nAuditLogs\n    | where TimeGenerated {TimeRange:query} \n    | where OperationName == \"Add user\"\n) on $left.SourceRecordId == $right._ItemId\n| mv-expand TargetResources\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\n| extend DisplayName = tostring(UsersInsights.AccountDisplayName),\nUserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\n| extend AnomalyName = \"Anomalous Account Creation\",\n         Tactic = \"Persistence\",\n         Technique = \"Create Account\",\n         SubTechnique = \"Cloud Account\",\n         Description = \"Adversaries may create a cloud account to maintain access to victim systems. With a sufficient level of access, such accounts may be used to establish secondary credentialed access that does not require persistent remote access tools to be deployed on the system. The query below generates an output of all the users performing user creation for the first time and the target users that were created.\"\t\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\n| sort by TimeGenerated desc;\nlet AnomalyTable = union kind=outer  AnomalousSigninActivity, AnomalousRoleAssignment, AnomalousResourceAccess, AnomalousRDPActivity, AnomalousPasswordReset, AnomalousLogintoDevices, AnomalousGeoLocationLogon, AnomalousAADAccountManipulation, AnomalousAADAccountCreation, AnomalousFailedLogon;\nlet TopUsersByAnomalies = AnomalyTable\n| summarize hint.strategy = shuffle AnomalyCount=count() by UserName, UserPrincipalName, tostring(UsersInsights.OnPremSid), tostring(UsersInsights.AccountObjectId)\n| project Name=tolower(UserName),UPN=tolower(UserPrincipalName), AadUserId=UsersInsights_AccountObjectId, Sid=UsersInsights_OnPremSid, AnomalyCount\n| sort by AnomalyCount desc;\nlet TopUsersByIncidents = SecurityIncident\n| where TimeGenerated {TimeRange:query} \n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| where Status == \"New\" or Status == \"Active\"\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \nSecurityAlert | where TimeGenerated {TimeRange:query} \n) on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated,*), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend  Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]) , Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| union TopUsersByAnomalies\n| extend \n        AadPivot = iff(isempty(AadUserId),iff(isempty(Sid),Name,Sid),AadUserId),\n        SidPivot = iff(isempty(Sid),iff(isempty(AadUserId),Name,AadUserId),Sid),\n        UPNExists = iff(isempty(UPN), false,true),\n        NameExists = iff(isempty(Name), false,true),\n        SidExists = iff(isempty(Sid), false,true),\n        AADExists = iff(isempty(AadUserId), false,true)\n| summarize hint.strategy = shuffle IncidentCount=dcount(IncidentNumber,4),AlertCount=dcountif(AlertId,isnotempty(AlertId),4),AnomalyCount=sum(AnomalyCount),any(Title, Severity, Status, StartTime, IncidentNumber, IncidentUrl, Owner), UPNAnchor=anyif(UPN, UPNExists == true),NameAnchor=anyif(Name, NameExists == true),AadAnchor=anyif(AadUserId, AADExists == true), SidAnchor=anyif(Sid, SidExists == true) , any(SidPivot) by AadPivot\n| summarize hint.strategy = shuffle IncidentCount=sum(IncidentCount),AlertCount=sum(AlertCount),AnomalyCount=sum(AnomalyCount), UPNAnchor=anyif(UPNAnchor, isempty(UPNAnchor) == false),NameAnchor=anyif(NameAnchor, isempty(NameAnchor) == false),AadAnchor=anyif(AadAnchor, isempty(AadAnchor) == false), SidAnchor=anyif(SidAnchor, isempty(SidAnchor) == false), any(any_Title,any_Severity,any_StartTime, any_IncidentNumber, any_IncidentUrl) by any_SidPivot\n| summarize hint.strategy = shuffle IncidentCount=sum(IncidentCount), AlertCount=sum(AlertCount),AnomalyCount=sum(AnomalyCount), UPNAnchor=anyif(UPNAnchor, isempty(UPNAnchor) == false),AadAnchor=anyif(AadAnchor, isempty(AadAnchor) == false), SidAnchor=anyif(SidAnchor, isempty(SidAnchor) == false), any(any_any_Title, any_any_Severity,any_any_StartTime, any_any_IncidentNumber, any_any_IncidentUrl) by NameAnchor\n| project [\"UserName\"]=NameAnchor,IncidentCount, AlertCount,AnomalyCount, [\"AadUserId\"]=AadAnchor,[\"OnPremSid\"]=SidAnchor , [\"UserPrincipalName\"]=UPNAnchor;\nTopUsersByIncidents\n| sort by IncidentCount, AlertCount, AnomalyCount desc\n",
+        "size": 1,
+        "showAnalytics": true,
+        "timeContext": {
+          "durationMs": 2419200000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportedParameters": [
+          {
+            "fieldName": "UserPrincipalName",
+            "parameterName": "SelectedUser",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "UserName",
+            "parameterName": "UserName",
+            "parameterType": 1,
+            "defaultValue": "None"
+          },
+          {
+            "fieldName": "AadUserId",
+            "parameterName": "UserObjectId",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "OnPremSid",
+            "parameterName": "UserSid",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "AnomalyCount",
+            "parameterName": "AnomalyCount",
+            "parameterType": 1,
+            "defaultValue": "0"
+          }
+        ],
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "IncidentCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redDark"
+              }
+            }
+          ],
+          "filter": true,
+          "sortBy": [
+            {
+              "itemKey": "AnomalyCount",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "AnomalyCount",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "Select a user to view Incidents & Alerts & Anomalies breakdown",
+        "style": "upsell"
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isEqualTo",
+        "value": "None"
+      },
+      "name": "text - 6"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Incidents Breakdown: [{SelectedUser}]()\r\n---\r\n"
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isNotEqualTo",
+        "value": "None"
+      },
+      "name": "text - 4"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f3097a1b-3aad-4a82-8a8a-19e2725b4ecb",
+            "version": "KqlParameterItem/1.0",
+            "name": "Severity",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "jsonData": "[\"Low\",\"Medium\",\"High\"]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "994e7321-0462-4367-aae3-a69c6d61bf26",
+            "version": "KqlParameterItem/1.0",
+            "name": "Status",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "jsonData": "[\"New\",\"Active\"]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "774bfc35-07c1-4680-b305-a65606439a53",
+            "version": "KqlParameterItem/1.0",
+            "name": "Owner",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "SecurityIncident\r\n| summarize arg_max(LastModifiedTime, *) by IncidentNumber\r\n| where Status == \"New\" or Status == \"Active\"\r\n| where isnotempty(Owner.assignedTo) \r\n| distinct tostring(Owner.assignedTo)\r\n",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 5184000000
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isNotEqualTo",
+        "value": "None"
+      },
+      "name": "parameters - 14"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let GetUserAlert = SecurityAlert\r\n| where TimeGenerated {TimeRange:query}\r\n| summarize arg_max(TimeGenerated,*) by SystemAlertId\r\n| where Entities contains \"account\"\r\n| extend SelectedAccountUPN = tolower(tostring('{SelectedUser}')),\r\n         SelectedName = tolower(tostring('{UserName}')),\r\n         SelectAAD = tolower(tostring('{UserObjectId}')),\r\n         SelectSID = tolower(tostring('{UserSid}'))\r\n| mv-expand todynamic(Entities)\r\n| where Entities[\"Type\"] =~ \"account\"\r\n| extend  Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \r\n Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]) , Host = tostring(Entities[\"Host\"])\r\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\r\n| where (Name == SelectedName and SelectedName != \"\" ) or (UPN == SelectedAccountUPN and SelectedAccountUPN != \"\") or (AadUserId == SelectAAD and SelectAAD != \"\") or (Sid == SelectSID and SelectSID != \"\")\r\n| serialize Id = tostring(row_number())\r\n| project TimeGenerated, Title=DisplayName, Sid,Severity=AlertSeverity, Description, ProviderName, ProductName, SystemAlertId, Id;\r\nlet MapAlertsToIncidents = SecurityIncident\r\n| where TimeGenerated {TimeRange:query}\r\n| summarize arg_max(LastModifiedTime, *) by IncidentNumber\r\n| where Status == \"New\" or Status == \"Active\"\r\n| serialize Id = tostring(IncidentNumber)\r\n| mv-expand AlertIds\r\n| extend AlertId = tostring(AlertIds)\r\n| join kind=innerunique (GetUserAlert) on $left.AlertId == $right.SystemAlertId\r\n| project TimeGenerated=TimeGenerated1, Title=Title1, Severity=Severity1,Description=Description1,  ProviderName, ProductName, SystemAlertId,Id=Id1,ParentId=Id, IncidentNumber;\r\nlet IncidentAlertsCount = MapAlertsToIncidents\r\n| summarize AlertCount=count() by IncidentNumber\r\n| join kind=innerunique (SecurityIncident \r\n| where TimeGenerated {TimeRange:query}\r\n| summarize arg_max(LastModifiedTime, *) by IncidentNumber\r\n) on $left.IncidentNumber == $right.IncidentNumber\r\n| extend SecOpsOwner = Owner.assignedTo\r\n| project TimeGenerated, Title,Severity,Description,AlertCount,Status,Owner=SecOpsOwner,BookmarkIds,Comments,Labels,IncidentUrl,Id=tostring(IncidentNumber),ParentId=\"root\";\r\nlet IncidentsAndAlertsForUser = MapAlertsToIncidents \r\n| union IncidentAlertsCount;\r\nIncidentsAndAlertsForUser\r\n| where (Severity == {Severity:value} or {Severity:value} == 'All') and (Status == {Status:value} or {Status:value} == 'All') and (Owner == {Owner:value} or {Owner:value} == 'All')\r\n| sort by AlertCount desc\r\n| project TimeGenerated, Title, AlertCount, Description, Severity, Status, Owner, BookmarkIds, Comments, Labels, IncidentUrl, Id, ParentId\r\n\r\n\r\n\r\n",
+        "size": 1,
+        "showAnalytics": true,
+        "noDataMessage": "No incidents associated with this user",
+        "noDataMessageStyle": 3,
+        "timeContext": {
+          "durationMs": 2419200000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "AlertCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "grayBlue"
+              }
+            },
+            {
+              "columnMatch": "Severity",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Low",
+                    "representation": "yellow",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Medium",
+                    "representation": "orange",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "High",
+                    "representation": "redBright",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "blue",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Comments",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true
+              }
+            },
+            {
+              "columnMatch": "Labels",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true
+              }
+            },
+            {
+              "columnMatch": "IncidentUrl",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url"
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5
+            }
+          ],
+          "rowLimit": 500,
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Title"
+          }
+        },
+        "sortBy": []
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isNotEqualTo",
+        "value": "None"
+      },
+      "name": "query - 6 - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Anomalies Breakdown: [{SelectedUser}]()\r\n---\r\n"
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isNotEqualTo",
+        "value": "None"
+      },
+      "name": "text - 4 - Copy"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "98f0e009-27e3-451d-a105-5c40bc269c52",
+            "version": "KqlParameterItem/1.0",
+            "name": "AnomalyName",
+            "label": " Anoamly Name",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "jsonData": "[\"Anomalous Account Creation\",\r\n\"Anomalous Account Manipulation\",\r\n\"Anomalous Failed Logon\",\r\n\"Anomalous Geo Location Logon\",\r\n\"Anomalous Login to Devices\",\r\n\"Anomalous Password Reset\",\r\n\"Anomalous RDP Activity\",\r\n\"Anomalous Resource Access\",\r\n\"Anomalous Role Assignment\",\r\n\"Anomalous Sign-in Activity\"\r\n]",
+            "timeContext": {
+              "durationMs": 1209600000
+            },
+            "timeContextFromParameter": "TimeRange"
+          },
+          {
+            "id": "d3c089ab-a356-40e6-af42-d33759981503",
+            "version": "KqlParameterItem/1.0",
+            "name": "Tactic",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "jsonData": "[\"Initial Access\",\"Execution\",\"Persistence\",\"Privilege Escalation\",\"Defense Evasion\",\"Credential Access\",\"Discovery\",\"Lateral Movement\",\"Collection\", \"Command and Control\", \"Exfiltration\",\"Impact\"]\r\n\r\n\r\n",
+            "timeContext": {
+              "durationMs": 1209600000
+            },
+            "timeContextFromParameter": "TimeRange"
+          },
+          {
+            "id": "f84c4293-3f2b-44aa-9b0e-402d449e8b6c",
+            "version": "KqlParameterItem/1.0",
+            "name": "AnomalyScore",
+            "label": "Anomaly Score",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "jsonData": "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\",\"10\"]",
+            "timeContext": {
+              "durationMs": 7776000000
+            },
+            "timeContextFromParameter": "TimeRange"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isNotEqualTo",
+        "value": "None"
+      },
+      "name": "parameters - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let AnomalousSigninActivity = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Sign-in\"\r\n| where (UsersInsights.NewAccount == True or UsersInsights.DormantAccount == True) and (\r\n ActivityInsights.FirstTimeUserAccessedResource == True and ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True\r\nor ActivityInsights.FirstTimeUserUsedApp  == True and ActivityInsights.AppUncommonlyUsedAmongPeers == False)\r\n| join (\r\nSigninLogs | where TimeGenerated {TimeRange:query} | where Status.errorCode == 0 or Status.errorCode == 0 and RiskDetail != \"none\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Successful Logon\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Successful Sign-in with one or more of the following indications: sign by new or recently dormant accounts and sign in with resource for the first time (while none of their peers did) or to an app for the first time (while none of their peers did) or performed by a user with Risk indicaiton from AAD\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet critical = dynamic(['9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3','c4e39bd9-1100-46d3-8c65-fb160da0071f','158c047a-c907-4556-b7ef-446551a6b5f7','62e90394-69f5-4237-9190-012177145e10','d29b2b05-8046-44ba-8758-1e26182fcf32','729827e3-9c14-49f7-bb1b-9608f156bbb8','966707d0-3269-4727-9be2-8c3a10f19b9d','194ae4cb-b126-40b2-bd5b-6091b380977d','fe930be7-5e62-47db-91af-98c3a49a38b1']);\r\nlet high = dynamic(['cf1c38e5-3621-4004-a7cb-879624dced7c','7495fdc4-34c4-4d15-a289-98788ce399fd','aaf43236-0c0d-4d5f-883a-6955382ac081','3edaf663-341e-4475-9f94-5c398ef6c070','7698a772-787b-4ac8-901f-60d6b08affd2','b1be1c3e-b65d-4f19-8427-f6fa0d97feb9','9f06204d-73c1-4d4c-880a-6edb90606fd8','29232cdf-9323-42fd-ade2-1d097af3e4de','be2f45a1-457d-42af-a067-6ec1fa63bc45','7be44c8a-adaf-4e2a-84d6-ab2649e08a13','e8611ab8-c189-46e8-94e1-60213ab1f814']);\r\nlet AnomalousRoleAssignment = AuditLogs\r\n| where TimeGenerated  {TimeRange:query}\r\n| where OperationName == \"Add member to role\"\r\n| mv-expand TargetResources\r\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\r\n| where isnotempty(RoleId) and RoleId in (critical,high)\r\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\r\n| where isnotempty(RoleName)\r\n| extend TargetId = tostring(TargetResources.id)\r\n| extend Target = tostring(TargetResources.userPrincipalName)\r\n| join kind=inner ( BehaviorAnalytics\r\n     | where TimeGenerated  {TimeRange:query}\r\n     | where ActionType == \"Add member to role\"\r\n     | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction  == true\r\n) on $left._ItemId == $right.SourceRecordId\r\n| extend AnomalyName = \"Anomalous Role Assignemt\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Account Manipulation\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access.  The query below generates an output of all high Blast Radius users performing Add member to priveleged role, or ones that add users for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority;let LogOns=materialize(\r\nBehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActivityType == \"LogOn\");\r\nlet AnomalousResourceAccess = LogOns\r\n| where ActionType == \"ResourceAccess\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| extend AnomalyName = \"Anomalous Resource Access\",\r\n         Tactic = \"Lateral Movement\",\r\n         Technique = \"\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversary may be trying to move through the environment. APT29 and APT32, for example, has used PtH & PtT techniques to lateral move around the network. The query below generates an output of all users performing an resource access (4624:3) to devices for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousRDPActivity = LogOns\r\n| where ActionType == \"RemoteInteractiveLogon\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| extend AnomalyName = \"Anomalous RDP Activity\",\r\n         Tactic = \"Lateral Movement\",\r\n         Technique = \"\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may use Valid Accounts to log into a computer using the Remote Desktop Protocol (RDP). The adversary may then perform actions as the logged-on user. FIN10, for example, has used RDP to move laterally to systems in the victim environment. The query below generates an output of all users performing a remote interactive logon (4624:10) to a device for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousLogintoDevices = LogOns\r\n| where ActionType == \"InteractiveLogon\"\r\n| where ActivityInsights.FirstTimeUserLoggedOnToDevice == true\r\n| where UsersInsights.DormantAccount == true or DevicesInsights.LocalAdmin == true\r\n| extend AnomalyName = \"Anomalous Login To Devices\",\r\n         Tactic = \"Privilege Escalation\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access and privilege escalation. The query below generates an output of all administator users performing an interactive logon (4624:2) to a device for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousPasswordReset = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Reset user password\"\r\n| where ActivityInsights.FirstTimeUserPerformedAction  == \"True\"\r\n| join (\r\nAuditLogs\r\n |  where TimeGenerated {TimeRange:query}\r\n |  where OperationName == \"Reset user password\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| mv-expand TargetResources\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Password Reset\",\r\n         Tactic = \"Impact\",\r\n         Technique = \"Account Access Removal\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may interrupt availability of system and network resources by inhibiting access to accounts utilized by legitimate users. Accounts may be deleted, locked, or manipulated (ex: changed credentials) to remove access to accounts. LockerGoga, for example, has been observed changing account passwords and logging off current users. The query below generates an output of all users performing Reset user password for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\r\n| sort by TimeGenerated desc;\r\nlet AnomalousGeoLocationLogon = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Sign-in\"\r\n| where ActivityInsights.FirstTimeUserConnectedFromCountry == True and (ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True)\r\n| join (\r\nSigninLogs\r\n |  where TimeGenerated {TimeRange:query}\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Successful Logon\",\r\n         Tactic = \"Initial Access\",\r\n         Technique = \"Valid Accounts\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Initial Access. APT33, for example, has used valid accounts for initial access. The query below generates an output of successful Sign-in performed by a user from a new geo location he has never connected from before, and none of his peers as well.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousFailedLogon = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActivityType == \"LogOn\"\r\n| where UsersInsights.BlastRadius == \"High\"\r\n| join (\r\n  SigninLogs  \r\n     | where TimeGenerated {TimeRange:query}\r\n     | where Status.errorCode == 50126\r\n) on $left.SourceRecordId == $right._ItemId\r\n| extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Failed Logon\",\r\n         Tactic = \"Credential Access\",\r\n         Technique = \"Brute Force\",\r\n         SubTechnique = \"Password Guessing\",\r\n         Description = \"Adversaries with no prior knowledge of legitimate credentials within the system or environment may guess passwords to attempt access to accounts. Emotet, for example, has been observed using a hard coded list of passwords to brute force user accounts. The query below generates an output of all users with 'High' BlastRadius that perform failed Sign-in:Invalid username or password.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,[\"Evidence\"]=ActivityInsights, ResourceDisplayName,AppDisplayName ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; \r\nlet AnomalousAADAccountManipulation = AuditLogs\r\n| where TimeGenerated {TimeRange:query}\r\n| where OperationName == \"Update user\"\r\n| mv-expand AdditionalDetails\r\n| where AdditionalDetails.key == \"UserPrincipalName\"\r\n| mv-expand TargetResources\r\n| extend RoleId = tostring(TargetResources.modifiedProperties[0].newValue)\r\n| where isnotempty(RoleId) and RoleId in (critical,high)\r\n| extend RoleName = tostring(TargetResources.modifiedProperties[1].newValue)\r\n| where isnotempty(RoleName)\r\n| extend TargetId = tostring(TargetResources.id)\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| join kind=inner ( \r\n    BehaviorAnalytics\r\n    | where TimeGenerated {TimeRange:query}\r\n    | where ActionType == \"Update user\"\r\n    | where UsersInsights.BlasrRadius == \"High\" or ActivityInsights.FirstTimeUserPerformedAction == true\r\n) on $left._ItemId == $right.SourceRecordId\r\n|  extend UserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName) \r\n| extend AnomalyName = \"Anomalous Account Manipulation\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Account Manipulation\",\r\n         SubTechnique = \"\",\r\n         Description = \"Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access. The query below generates an output of all high Blast Radius users performing 'Update user' (name change) to priveleged role, or ones that changed users for the first time.\"\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,RoleName,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority; let AnomalousAADAccountCreation = BehaviorAnalytics\r\n| where TimeGenerated {TimeRange:query}\r\n| where ActionType == \"Add user\"\r\n| where ActivityInsights.FirstTimeUserPerformedAction == True or ActivityInsights.FirstTimeActionPerformedInTenant == True or ActivityInsights.ActionUncommonlyPerformedAmongPeers == true\r\n| join(\r\nAuditLogs\r\n    | where TimeGenerated {TimeRange:query} \r\n    | where OperationName == \"Add user\"\r\n) on $left.SourceRecordId == $right._ItemId\r\n| mv-expand TargetResources\r\n| extend Target =  iff(tostring(TargetResources.userPrincipalName) contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(TargetResources.userPrincipalName, \"#\")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)\r\n| extend DisplayName = tostring(UsersInsights.AccountDisplayName),\r\nUserPrincipalName = iff(UserPrincipalName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserPrincipalName),\r\nUserName = iff(UserName contains \"#EXT#\",replace(\"_\",\"@\",tostring(split(UserPrincipalName, \"#\")[0])),UserName)\r\n| extend AnomalyName = \"Anomalous Account Creation\",\r\n         Tactic = \"Persistence\",\r\n         Technique = \"Create Account\",\r\n         SubTechnique = \"Cloud Account\",\r\n         Description = \"Adversaries may create a cloud account to maintain access to victim systems. With a sufficient level of access, such accounts may be used to establish secondary credentialed access that does not require persistent remote access tools to be deployed on the system. The query below generates an output of all the users performing user creation for the first time and the target users that were created.\"\t\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, [\"TargetUser\"]=Target,[\"Evidence\"]=ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights,[\"Anomaly Score\"]=InvestigationPriority\r\n| sort by TimeGenerated desc;\r\nlet AnomalyTable = union kind=outer  AnomalousSigninActivity, AnomalousRoleAssignment, AnomalousResourceAccess, AnomalousRDPActivity, AnomalousPasswordReset, AnomalousLogintoDevices, AnomalousGeoLocationLogon, AnomalousAADAccountManipulation, AnomalousAADAccountCreation, AnomalousFailedLogon;\r\n\r\n\r\nlet GetUserAnomalies = AnomalyTable\r\n| extend SelectedAccountUPN = tolower(tostring('{SelectedUser}')),\r\n         SelectedName = tolower(tostring('{UserName}')),\r\n         SelectAAD = tolower(tostring('{UserObjectId}')),\r\n         SelectSID = tolower(tostring('{UserSid}'))\r\n| where (tolower(UserName) == tolower(SelectedName) and SelectedName != \"\" ) or (tolower(UserPrincipalName) == tolower(SelectedAccountUPN) and SelectedAccountUPN != \"\") or (UsersInsights.AccountObjectId == SelectAAD and SelectAAD != \"\") or (UsersInsights.OnPremSid == SelectSID and SelectSID != \"\")\r\n| project TimeGenerated, AnomalyName,Tactic,Technique,SubTechnique, Description, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, TargetUser,Evidence ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights, [\"Anomaly Score\"], AccountObjectId=UsersInsights.AccountObjectId;\r\nGetUserAnomalies\r\n| where AnomalyName == {AnomalyName:value} or {AnomalyName:value} == 'All'\r\n| where Tactic == {Tactic:value} or {Tactic:value} == 'All'\r\n| where  {AnomalyScore:value} == 'All' or [\"Anomaly Score\"] == {AnomalyScore:value}\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+        "size": 1,
+        "showAnalytics": true,
+        "noDataMessage": "No anomalies associated with this user",
+        "noDataMessageStyle": 3,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "Tactic",
+        "exportParameterName": "TacticM",
+        "exportDefaultValue": "None",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Description",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true
+              }
+            },
+            {
+              "columnMatch": "Id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "IncidentUrl",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url"
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5
+            }
+          ],
+          "filter": true
+        },
+        "sortBy": []
+      },
+      "conditionalVisibility": {
+        "parameterName": "UserName",
+        "comparison": "isNotEqualTo",
+        "value": "None"
+      },
+      "customWidth": "70",
+      "name": "query - 6 - Copy - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Lateral Movement\r\n\r\nThe adversary is trying to move through your environment.\r\n\r\nLateral Movement consists of techniques that adversaries use to enter and control remote systems on a network. Following through on their primary objective often requires exploring the network to find their target and subsequently gaining access to it. Reaching their objective often involves pivoting through multiple systems and accounts to gain. Adversaries might install their own remote access tools to accomplish Lateral Movement or use legitimate credentials with native network and operating system tools, which may be stealthier.\r\n\r\n[Learn More Here](https://attack.mitre.org/tactics/TA0008/)"
+      },
+      "conditionalVisibility": {
+        "parameterName": "TacticM",
+        "comparison": "isEqualTo",
+        "value": "Lateral Movement"
+      },
+      "customWidth": "30",
+      "name": "text - 13 - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Mitre Tactic Information\r\nClick on one of the anomalies to presents an overview of ATT&CK\r\n"
+      },
+      "conditionalVisibility": {
+        "parameterName": "TacticM",
+        "comparison": "isEqualTo",
+        "value": "None"
+      },
+      "customWidth": "30",
+      "name": "text - 13 - Copy - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Initial Access\r\n\r\nThe adversary is trying to get into your network.\r\n\r\nInitial Access consists of techniques that use various entry vectors to gain their initial foothold within a network. Techniques used to gain a foothold include targeted spearphishing and exploiting weaknesses on public-facing web servers. Footholds gained through initial access may allow for continued access, like valid accounts and use of external remote services, or may be limited-use due to changing passwords.\r\n\r\n[Learn More Here](https://attack.mitre.org/tactics/TA0001/)"
+      },
+      "conditionalVisibility": {
+        "parameterName": "TacticM",
+        "comparison": "isEqualTo",
+        "value": "Initial Access"
+      },
+      "customWidth": "30",
+      "name": "text - 13"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Persistence\r\n\r\nThe adversary is trying to maintain their foothold.\r\n\r\nPersistence consists of techniques that adversaries use to keep access to systems across restarts, changed credentials, and other interruptions that could cut off their access. Techniques used for persistence include any access, action, or configuration changes that let them maintain their foothold on systems, such as replacing or hijacking legitimate code or adding startup code.\r\n\r\n[Learn More Here](https://attack.mitre.org/tactics/TA0003/)"
+      },
+      "conditionalVisibility": {
+        "parameterName": "TacticM",
+        "comparison": "isEqualTo",
+        "value": "Persistence"
+      },
+      "customWidth": "30",
+      "name": "text - 13 - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Discovery\r\n\r\nThe adversary is trying to figure out your environment.\r\n\r\nDiscovery consists of techniques an adversary may use to gain knowledge about the system and internal network. These techniques help adversaries observe the environment and orient themselves before deciding how to act. They also allow adversaries to explore what they can control and what’s around their entry point in order to discover how it could benefit their current objective. Native operating system tools are often used toward this post-compromise information-gathering objective.\r\n\r\n[Learn More Here](https://attack.mitre.org/tactics/TA0007/)"
+      },
+      "conditionalVisibility": {
+        "parameterName": "TacticM",
+        "comparison": "isEqualTo",
+        "value": "Discovery"
+      },
+      "customWidth": "30",
+      "name": "text - 13 - Copy - Copy - Copy - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Collection\r\n\r\nThe adversary is trying to gather data of interest to their goal.\r\n\r\nCollection consists of techniques adversaries may use to gather information and the sources information is collected from that are relevant to following through on the adversary's objectives. Frequently, the next goal after collecting data is to steal (exfiltrate) the data. Common target sources include various drive types, browsers, audio, video, and email. Common collection methods include capturing screenshots and keyboard input.\r\n\r\n[Learn More Here](https://attack.mitre.org/tactics/TA0009/)"
+      },
+      "conditionalVisibility": {
+        "parameterName": "TacticM",
+        "comparison": "isEqualTo",
+        "value": "Collection"
+      },
+      "customWidth": "30",
+      "name": "text - 13 - Copy - Copy"
+    }
+  ],
+  "fromTemplateId": "sentinel-UserAndEntityBehaviorAnalytics",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
