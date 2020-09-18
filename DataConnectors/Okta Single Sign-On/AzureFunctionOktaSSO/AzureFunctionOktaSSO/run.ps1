@@ -1,10 +1,10 @@
 ﻿<#  
     Title:          Okta Data Connector
     Language:       PowerShell
-    Version:        1.1
+    Version:        1.2
     Author(s):      Microsoft
-    Last Modified:  7/22/2020
-    Comment:        Hardcoded table name
+    Last Modified:  08/03/2020
+    Comment:        Added Domain field to log record
 
     DESCRIPTION
     This Function App calls the Okta System Log API (https://developer.okta.com/docs/reference/api/system-log/) to pull the Okta System logs. The response from the Okta API is recieved in JSON format. This function will build the signature and authorization header 
@@ -88,7 +88,10 @@ $recordCount = $response.Count
 
 if ($recordCount -gt 0) {
     Write-Output "$recordCount record(s) are avaliable as of $startDate"
-    $json = $response | ConvertTo-Json -Depth 5
+    $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
+    $responseObj = $response | ConvertFrom-Json
+    $responseObj | Add-Member -MemberType NoteProperty -Name "Domain" -Value $domain
+    $json = $responseObj | ConvertTo-Json -Depth 5
     Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType  
 }
 else{

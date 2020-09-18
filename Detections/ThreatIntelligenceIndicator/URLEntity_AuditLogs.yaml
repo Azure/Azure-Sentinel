@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -25,17 +28,17 @@ query: |
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
-  | join (   
-    AuditLogs 
+  | join (
+    AuditLogs
     | where TimeGenerated >= ago(dt_lookBack)
     // Extract the URL that is contained within the JSON data
-    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,tostring(TargetResources)) 
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);", 1,tostring(TargetResources))
     | where isnotempty(Url)
     | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName) 
+    | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName)
     | extend Audit_TimeGenerated = TimeGenerated
   ) on Url
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, 
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
   Audit_TimeGenerated, OperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url
   | extend timestamp = Audit_TimeGenerated, AccountCustomEntity = userPrincipalName, HostCustomEntity = TargetResourceDisplayName, URLCustomEntity = Url
