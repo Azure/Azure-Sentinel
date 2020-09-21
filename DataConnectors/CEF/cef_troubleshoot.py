@@ -48,7 +48,11 @@ syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security
 rsyslog_daemon_forwarding_configuration_dir_path = "/etc/rsyslog.d/"
 syslog_ng_daemon_forwarding_configuration_dir_path = "/etc/syslog-ng/conf.d/"
 rsyslog_daemon_name = "rsyslog.d"
+rsyslog_process_name = "rsyslogd"
+syslog_ng_process_name = "syslog-ng"
 syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
+syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
+rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 tcpdump_time_restriction = 60
 
 
@@ -637,6 +641,22 @@ def handle_rsyslog(workspace_id):
             time.sleep(1)
 
 
+def print_full_disk_warning():
+    warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
+                   "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
+                   " For more on this issue please visit- "
+
+    if check_daemon(rsyslog_process_name):
+        if check_daemon(syslog_ng_process_name):
+            print_warning(warn_message + '\n' + rsyslog_documantation_path + '\n' + syslog_ng_documantation_path)
+        else:
+            print_warning(warn_message + '\n' + rsyslog_documantation_path)
+    elif check_daemon(syslog_ng_process_name):
+        print_warning(warn_message + '\n' + rsyslog_documantation_path)
+    else:
+        print_warning("No daemon was found on the machine")
+
+
 def main():
     print_notice("Note this script should be run in elevated privileges")
     print_notice("Please validate you are sending CEF messages to agent machine.")
@@ -665,6 +685,7 @@ def main():
     print("Simulating mock data which you can find in your workspace")
     # we always simulate to the daemon port
     incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True)
+    print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(
         "Please check Log Analytics to see if your logs are arriving. All events streamed from these appliances appear in raw form in Log Analytics under CommonSecurityLog type")
