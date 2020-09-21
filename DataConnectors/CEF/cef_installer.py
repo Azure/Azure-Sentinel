@@ -45,6 +45,8 @@ rsyslog_module_udp_content = "# provides UDP syslog reception\nmodule(load=\"imu
 rsyslog_module_tcp_content = "# provides TCP syslog reception\nmodule(load=\"imtcp\")\ninput(type=\"imtcp\" port=\"" + daemon_default_incoming_port + "\")\n"
 rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imudp\n$UDPServerRun " + daemon_default_incoming_port + "\n"
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
+syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
+rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
 
 
@@ -496,6 +498,22 @@ def set_syslog_ng_configuration():
     return True
 
 
+def print_full_disk_warning():
+    warn_message = "\nWarning: please make sure your logging daemon configuration does not store unnecessary logs. " \
+                   "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
+                   " For more information:"
+
+    if process_check(rsyslog_daemon_name):
+        if process_check(syslog_ng_daemon_name):
+            print_warning(warn_message + '\n' + rsyslog_documantation_path + '\n' + syslog_ng_documantation_path)
+        else:
+            print_warning(warn_message + '\n' + rsyslog_documantation_path)
+    elif process_check(syslog_ng_daemon_name):
+        print_warning(warn_message + '\n' + rsyslog_documantation_path)
+    else:
+        print_warning("No daemon was found on the machine")
+
+
 def main():
     omsagent_incoming_port = omsagent_default_incoming_port
     port_argument = False
@@ -543,6 +561,7 @@ def main():
         restart_syslog_ng()
     restart_omsagent(workspace_id=workspace_id)
     check_syslog_computer_field_mapping(workspace_id=workspace_id)
+    print_full_disk_warning()
     print_ok("Installation completed")
 
 

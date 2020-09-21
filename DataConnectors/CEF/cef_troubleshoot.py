@@ -644,7 +644,7 @@ def handle_rsyslog(workspace_id):
 def print_full_disk_warning():
     warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
-                   " For more on this issue please visit- "
+                   " For more information:"
 
     if check_daemon(rsyslog_process_name):
         if check_daemon(syslog_ng_process_name):
