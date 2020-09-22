@@ -509,7 +509,7 @@ def print_full_disk_warning():
         else:
             print_warning(warn_message + '\n' + rsyslog_documantation_path)
     elif process_check(syslog_ng_daemon_name):
-        print_warning(warn_message + '\n' + rsyslog_documantation_path)
+        print_warning(warn_message + '\n' + syslog_ng_documantation_path)
     else:
         print_warning("No daemon was found on the machine")
 
