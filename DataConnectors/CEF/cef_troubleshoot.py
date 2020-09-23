@@ -142,9 +142,12 @@ def validate_rh_firewall_exception():
         content = o.decode(encoding='UTF-8')
         rules = content.split('\n')
         for rule in rules:
+            # reviewing all rules until a match is found
             is_exception = True
             for token in rh_firewalld_agent_exception_tokens:
+                # comparing expected rule tokens with existing rule key words
                 if token not in rule:
+                    # not an exception- exit loop and move to next rule
                     is_exception = False
                     break
             if is_exception:
