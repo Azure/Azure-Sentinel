@@ -128,10 +128,15 @@ def check_red_hat_firewall_issue():
 
 
 def validate_rh_firewall_exception():
+    '''
+    Validating that a firewall rule with the agents port as an exception exists
+    :return: True if exception was found, False otherwise
+    '''
     iptables = subprocess.Popen(["sudo", "iptables-save"], stdout=subprocess.PIPE)
     grep = subprocess.Popen(["sudo", "grep", agent_port], stdin=iptables.stdout, stdout=subprocess.PIPE)
     o, e = grep.communicate()
     if e is not None or o is None:
+        # either an error running the command or no rules exist
         return False
     else:
         content = o.decode(encoding='UTF-8')
