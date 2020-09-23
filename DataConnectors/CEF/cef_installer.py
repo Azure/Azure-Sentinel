@@ -499,6 +499,10 @@ def set_syslog_ng_configuration():
 
 
 def print_full_disk_warning():
+    '''
+    Warn from potential full disk issues that can be caused by the daemon running on the machine.
+    The function points the user to the relevant documentation according to his daemon type.
+    '''
     warn_message = "\nWarning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
                    " For more information:"
