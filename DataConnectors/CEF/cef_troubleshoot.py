@@ -611,10 +611,9 @@ def handle_rsyslog(workspace_id):
                                                                     rsyslog_security_config_omsagent_conf_content_tokens)
         if not daemon_config_valid:
             print_error("Error: rsyslog daemon configuration was found invalid. ")
-            print_notice("Notice: please make sure:")
-            print_notice("\t1. /etc/rsyslog.d/security-config-omsagent.conf file exists")
-            print_notice("\t2. File contains the following content:\n" + "\"if $rawmsg contains \"CEF:\" or $rawmsg contains"
-                                                                       " \"ASA-\" then @@127.0.0.1:" + agent_port + "\"")
+            print_notice("Notice: please run the following command to fix the rsyslog regex:")
+            print_notice("\"echo \'if $rawmsg contains \"CEF:\" or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port +
+                         "\' > /etc/rsyslog.d/security-config-omsagent.conf && service rsyslog restart\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")
