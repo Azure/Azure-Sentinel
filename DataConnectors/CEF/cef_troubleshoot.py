@@ -33,11 +33,13 @@ import time
 
 daemon_port = "514"
 agent_port = "25226"
-rsyslog_security_config_omsagent_conf_content_tokens = ["*.", "*", "@127.0.0.1:25226", "CEF", "ASA"]
+rsyslog_security_config_omsagent_conf_content_tokens = ["if", "contains", "then", "@127.0.0.1:25226", "CEF:", "ASA-"]
 syslog_ng_security_config_omsagent_conf_content_tokens = ["f_oms_filter", "oms_destination", "port(25226)", "tcp",
                                                           "source", "s_src", "oms_destination"]
 oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
+oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
+oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
@@ -342,7 +344,7 @@ def locate_check(process_name):
 
 def omsagent_process_check(oms_process_name):
     tokens = process_check(oms_process_name)
-    if len(tokens) > 1:
+    if len(tokens) > 0:
         for single_token in tokens:
             if oms_agent_process_name in single_token:
                 print_ok("Found omsagent process running on this machine.")
@@ -359,7 +361,8 @@ def process_check(process_name):
     '''
     p1 = subprocess.Popen(["ps", "-ef"], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["grep", "-i", process_name], stdin=p1.stdout, stdout=subprocess.PIPE)
-    o, e = p2.communicate()
+    p3 = subprocess.Popen(["grep", "-v", "grep"], stdin=p2.stdout, stdout=subprocess.PIPE)
+    o, e = p3.communicate()
     tokens = o.decode(encoding='UTF-8').split('\n')
     tokens.remove('')
     return tokens
@@ -383,6 +386,44 @@ def check_oms_agent_status():
     else:
         return True
 
+def check_omsagent_cisco_asa_configuration(workspace_id):
+        '''
+        Checking if the OMS agent is able to parse Cisco ASA:
+        :return: True if the configuration is updated, false otherwise
+        '''
+        grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')",
+                                 oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
+        o, e = grep.communicate()
+        if not o:
+            print_warning("Warning: Current content of the omsagent security configuration doesn't support"
+                          " Cisco ASA parsing.\nTo enable Cisco ASA firewall events parsing run the following: \n"
+                          "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
+                          "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
+                          " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"\n")
+            return False
+        else:
+            print_ok("omsagent security configuration supports Cisco ASA parsing \n")
+            return True
+
+
+def check_syslog_computer_field_mapping(workspace_id):
+    '''
+    Checking if the OMS agent maps the Computer field correctly:
+    :return: True if the mapping configuration is correct, false otherwise
+    '''
+    grep = subprocess.Popen(["grep", "-i", "'Host' => record\['host'\]",
+                             oms_agent_field_mapping_configuration], stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if not o:
+        print_warning("Warning: Current content of the omsagent syslog filter mapping configuration doesn't map the"
+                      " Computer field from your hostname.\nTo enable the Computer field mapping, please run: \n"
+                      "\"sed -i -e \"/'Severity' => tags\[tags.size - 1\]/ a \ \\t  'Host' => record['host']\""
+                      " -e \"s/'Severity' => tags\[tags.size - 1\]/&,/\" " + oms_agent_field_mapping_configuration +
+                      " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
+        return False
+    else:
+        print_ok("OMS Agent syslog field mapping is correct \n")
+        return True
 
 def file_contains_string(file_tokens, file_path):
     print_notice(file_path)
@@ -470,7 +511,7 @@ def omsagent_security_event_conf_validation(workspace_id):
 def check_daemon(daemon_name):
     tokens = process_check(daemon_name)
     print(tokens)
-    if len(tokens) > 1:
+    if len(tokens) > 0:
         for single_token in tokens:
             if "/usr/sbin/" + daemon_name in single_token:
                 print_ok("Found " + daemon_name + " process running on this machine.")
@@ -572,7 +613,8 @@ def handle_rsyslog(workspace_id):
             print_error("Error: rsyslog daemon configuration was found invalid. ")
             print_notice("Notice: please make sure:")
             print_notice("\t1. /etc/rsyslog.d/security-config-omsagent.conf file exists")
-            print_notice("\t2. File contains the following content:" + "\":rawmsg, regex, \"CEF\"|\"ASA\" \n*.* @@127.0.0.1:" + agent_port + "\"")
+            print_notice("\t2. File contains the following content:\n" + "\"if $rawmsg contains \"CEF:\" or $rawmsg contains"
+                                                                       " \"ASA-\" then @@127.0.0.1:" + agent_port + "\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")
@@ -609,6 +651,8 @@ def main():
     # test oms agent configuration
     security_config_omsagent_test(workspace_id=workspace_id)
     omsagent_security_event_conf_validation(workspace_id=workspace_id)
+    check_omsagent_cisco_asa_configuration(workspace_id=workspace_id)
+    check_syslog_computer_field_mapping(workspace_id=workspace_id)
     # validate firewalld
     check_red_hat_firewall_issue()
     # Check issue regarding security enhanced linux blocking tcp ports

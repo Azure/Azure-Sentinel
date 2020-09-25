@@ -18,13 +18,19 @@ relevantTechniques:
   - T1008
 query: |
 
-  let timeframe = ago(1h);
+  let timeframe = 1h;
   let threshold = 200;
   InfobloxNIOS
-  | where TimeGenerated >= timeframe
-  | where LogType =~ "named" and Type =~ "client"
+  | where TimeGenerated >= ago(timeframe)
+  | where ProcessName =~ "named" and Log_Type =~ "client"
   | where isnotempty(ResponseCode)
   | where ResponseCode =~ "NXDOMAIN"
   | summarize count() by Client_IP, bin(TimeGenerated,15m)
   | where count_ > threshold
-  | extend timestamp = TimeGenerated, extend IPCustomEntity = Client_IP
+  | join kind=inner (InfobloxNIOS
+      | where TimeGenerated >= ago(timeframe)
+      | where ProcessName =~ "named" and Log_Type =~ "client"
+      | where isnotempty(ResponseCode)
+      | where ResponseCode =~ "NXDOMAIN"
+      ) on Client_IP
+  | extend timestamp = TimeGenerated, IPCustomEntity = Client_IP
