@@ -1,0 +1,1603 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"logicAppName": {
+			"defaultValue": "UserEnrichment",
+            "type": "string",
+			"metadata": {
+				"description": "The name of the logic app to create."
+			}
+		},
+		"location": {
+			"type": "string",
+			"defaultValue": "[resourceGroup().location]",
+			"metadata": {
+				"description": "Location for all resources."
+			}
+		},
+        "servicePrincipal": {
+            "type": "secureObject"
+        },
+        "mcasAPI": {
+            "type": "secureobject"
+        }
+	},
+	"variables": {},
+	"resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('location')]",
+            "tags": {
+                "Owner": "Automation"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "servicePrincipal": {
+                            "type": "secureobject",
+                            "defaultValue": "[parameters('servicePrincipal')]"
+                        },
+                        "mcasAPI": {
+                            "defaultValue": "[parameters('mcasAPI')]",
+                            "type": "secureobject"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "userPrincipalName": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {        
+                        "Parse_trigger": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()",
+                                "schema": {
+                                    "properties": {
+                                        "userPrincipalName": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Initialize_userMcasId": {
+                            "runAfter": {
+                                "Parse_trigger": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "userMcasId",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_devices": {
+                            "runAfter": {
+                                "Initialize_userMcasId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "devices",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_locationsTotalActivities": {
+                            "runAfter": {
+                                "Initialize_devices": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "locationsTotalActivities",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_locations": {
+                            "runAfter": {
+                                "Initialize_locationsTotalActivities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "locations",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_inboxRules": {
+                            "runAfter": {
+                                "Initialize_locations": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "inboxRules",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_adminRoles": {
+                            "runAfter": {
+                                "Initialize_inboxRules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "adminRoles",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_ssprActivities": {
+                            "runAfter": {
+                                "Initialize_adminRoles": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ssprActivities",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "User": {
+                            "actions": {
+                                "Get_user_details": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}"
+                                    }
+                                },
+                                "Switch": {
+                                    "runAfter": {
+                                        "Get_user_details": [
+                                            "Failed",
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_200_OK": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Get_user_AAD_risk_status": {
+                                                    "runAfter": {
+                                                        "Parse_MFA-SSPR": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com/",
+                                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://graph.microsoft.com/beta/riskyUsers/@{body('Parse_user_details')?['id']}/"
+                                                    }
+                                                },
+                                                "Get_user_MFA-SSPR_status": {
+                                                    "runAfter": {
+                                                        "Parse_user_manager": [
+                                                            "Succeeded",
+                                                            "Failed"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com/",
+                                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://graph.microsoft.com/beta/reports/credentialUserRegistrationDetails?$filter=userPrincipalName  eq '@{body('Parse_trigger')?['userPrincipalName']}'"
+                                                    }
+                                                },
+                                                "Get_user_manager": {
+                                                    "runAfter": {
+                                                        "Parse_user_details": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com/",
+                                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}/manager"
+                                                    }
+                                                },
+                                                "Parse_MFA-SSPR": {
+                                                    "runAfter": {
+                                                        "Get_user_MFA-SSPR_status": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_MFA-SSPR_status')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "authMethods": {
+                                                                                "items": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "isCapable": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "isEnabled": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "isMfaRegistered": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "isRegistered": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "userDisplayName": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "userPrincipalName": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_user_details": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_details')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {},
+                                                                "accountEnabled": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "ageGroup": {},
+                                                                "businessPhones": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "city": {},
+                                                                "companyName": {},
+                                                                "consentProvidedForMinor": {},
+                                                                "country": {},
+                                                                "createdDateTime": {},
+                                                                "creationType": {},
+                                                                "deletedDateTime": {},
+                                                                "department": {},
+                                                                "deviceKeys": {
+                                                                    "type": "array"
+                                                                },
+                                                                "displayName": {},
+                                                                "employeeId": {},
+                                                                "externalUserState": {},
+                                                                "externalUserStateChangeDateTime": {},
+                                                                "faxNumber": {},
+                                                                "givenName": {},
+                                                                "id": {},
+                                                                "identities": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "issuer": {},
+                                                                            "issuerAssignedId": {},
+                                                                            "signInType": {}
+                                                                        },
+                                                                        "required": [],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "imAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "isResourceAccount": {},
+                                                                "jobTitle": {},
+                                                                "legalAgeGroupClassification": {},
+                                                                "mail": {},
+                                                                "mailNickname": {},
+                                                                "mobilePhone": {},
+                                                                "officeLocation": {},
+                                                                "onPremisesDistinguishedName": {},
+                                                                "onPremisesDomainName": {},
+                                                                "onPremisesImmutableId": {},
+                                                                "onPremisesLastSyncDateTime": {},
+                                                                "onPremisesSamAccountName": {},
+                                                                "onPremisesSecurityIdentifier": {},
+                                                                "onPremisesSyncEnabled": {},
+                                                                "onPremisesUserPrincipalName": {},
+                                                                "otherMails": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "passwordPolicies": {},
+                                                                "passwordProfile": {},
+                                                                "postalCode": {},
+                                                                "preferredDataLocation": {},
+                                                                "preferredLanguage": {},
+                                                                "proxyAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "refreshTokensValidFromDateTime": {},
+                                                                "showInAddressList": {},
+                                                                "signInSessionsValidFromDateTime": {},
+                                                                "state": {},
+                                                                "streetAddress": {},
+                                                                "surname": {},
+                                                                "usageLocation": {},
+                                                                "userPrincipalName": {},
+                                                                "userType": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_user_manager": {
+                                                    "runAfter": {
+                                                        "Get_user_manager": [
+                                                            "Succeeded",
+                                                            "Failed"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_details')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {},
+                                                                "accountEnabled": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "ageGroup": {},
+                                                                "businessPhones": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "city": {},
+                                                                "companyName": {},
+                                                                "consentProvidedForMinor": {},
+                                                                "country": {},
+                                                                "createdDateTime": {},
+                                                                "creationType": {},
+                                                                "deletedDateTime": {},
+                                                                "department": {},
+                                                                "deviceKeys": {
+                                                                    "type": "array"
+                                                                },
+                                                                "displayName": {},
+                                                                "employeeId": {},
+                                                                "externalUserState": {},
+                                                                "externalUserStateChangeDateTime": {},
+                                                                "faxNumber": {},
+                                                                "givenName": {},
+                                                                "id": {},
+                                                                "identities": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "issuer": {},
+                                                                            "issuerAssignedId": {},
+                                                                            "signInType": {}
+                                                                        },
+                                                                        "required": [],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "imAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "isResourceAccount": {},
+                                                                "jobTitle": {},
+                                                                "legalAgeGroupClassification": {},
+                                                                "mail": {},
+                                                                "mailNickname": {},
+                                                                "mobilePhone": {},
+                                                                "officeLocation": {},
+                                                                "onPremisesDistinguishedName": {},
+                                                                "onPremisesDomainName": {},
+                                                                "onPremisesImmutableId": {},
+                                                                "onPremisesLastSyncDateTime": {},
+                                                                "onPremisesSamAccountName": {},
+                                                                "onPremisesSecurityIdentifier": {},
+                                                                "onPremisesSyncEnabled": {},
+                                                                "onPremisesUserPrincipalName": {},
+                                                                "otherMails": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "passwordPolicies": {},
+                                                                "passwordProfile": {},
+                                                                "postalCode": {},
+                                                                "preferredDataLocation": {},
+                                                                "preferredLanguage": {},
+                                                                "proxyAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "refreshTokensValidFromDateTime": {},
+                                                                "showInAddressList": {},
+                                                                "signInSessionsValidFromDateTime": {},
+                                                                "state": {},
+                                                                "streetAddress": {},
+                                                                "surname": {},
+                                                                "usageLocation": {},
+                                                                "userPrincipalName": {},
+                                                                "userType": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_user_risk_status": {
+                                                    "runAfter": {
+                                                        "Get_user_AAD_risk_status": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_AAD_risk_status')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {},
+                                                                "id": {},
+                                                                "isDeleted": {},
+                                                                "isGuest": {},
+                                                                "isProcessing": {},
+                                                                "riskDetail": {},
+                                                                "riskLastUpdatedDateTime": {},
+                                                                "riskLevel": {},
+                                                                "riskState": {},
+                                                                "userDisplayName": {},
+                                                                "userPrincipalName": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {
+                                            "Response_user_unknown": {
+                                                "runAfter": {},
+                                                "type": "Response",
+                                                "kind": "Http",
+                                                "inputs": {
+                                                    "body": "@body('Get_user_details')",
+                                                    "statusCode": "@outputs('Get_user_details')['statusCode']"
+                                                }
+                                            },
+                                            "Terminate": {
+                                                "runAfter": {
+                                                    "Response_user_unknown": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": "@outputs('Get_user_details')['statusCode']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_ssprActivities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },                    
+                        "Devices": {
+                            "actions": {
+                                "Get_user_owned_devices": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}/ownedDevices "
+                                    }
+                                },
+                                "Parse_user_owned_devices": {
+                                    "runAfter": {
+                                        "Get_user_owned_devices": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_user_owned_devices')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {},
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "@@odata.type": {},
+                                                            "Manufacturer": {},
+                                                            "Model": {},
+                                                            "accountEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "alternativeSecurityIds": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "identityProvider": {},
+                                                                        "key": {},
+                                                                        "type": {}
+                                                                    },
+                                                                    "required": [],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "approximateLastSignInDateTime": {},
+                                                            "complianceExpirationDateTime": {},
+                                                            "deletedDateTime": {},
+                                                            "deviceId": {},
+                                                            "deviceMetadata": {},
+                                                            "deviceVersion": {},
+                                                            "displayName": {},
+                                                            "id": {},
+                                                            "isCompliant": {},
+                                                            "isManaged": {},
+                                                            "mdmAppId": {},
+                                                            "onPremisesLastSyncDateTime": {},
+                                                            "onPremisesSyncEnabled": {},
+                                                            "operatingSystem": {},
+                                                            "operatingSystemVersion": {},
+                                                            "physicalIds": {
+                                                                "items": {},
+                                                                "type": "array"
+                                                            },
+                                                            "profileType": {},
+                                                            "systemLabels": {
+                                                                "type": "array"
+                                                            },
+                                                            "trustType": {}
+                                                        },
+                                                        "required": [],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "For_each_device": {
+                                    "foreach": "@body('Parse_user_owned_devices')?['value']",
+                                    "actions": {
+                                        "Append_to_devices": {
+                                            "runAfter": {
+                                                "Compose_device": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "devices",
+                                                "value": "@outputs('Compose_device')"
+                                            }
+                                        },
+                                        "Compose_device": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "Manufacturer": "@items('For_each_device')?['Manufacturer']",
+                                                "Model": "@items('For_each_device')?['Model']",
+                                                "accountEnabled": "@items('For_each_device')?['accountEnabled']",
+                                                "approximateLastSignInDateTime": "@items('For_each_device')?['approximateLastSignInDateTime']",
+                                                "complianceExpirationDateTime": "@items('For_each_device')?['complianceExpirationDateTime']",
+                                                "deviceId": "@items('For_each_device')?['deviceId']",
+                                                "displayName": "@items('For_each_device')?['displayName']",
+                                                "id": "@items('For_each_device')?['id']",
+                                                "isCompliant": "@items('For_each_device')?['isCompliant']",
+                                                "isManaged": "@items('For_each_device')?['isManaged']",
+                                                "onPremisesLastSyncDateTime": "@items('For_each_device')?['onPremisesLastSyncDateTime']",
+                                                "onPremisesSyncEnabled": "@items('For_each_device')?['onPremisesSyncEnabled']",
+                                                "operatingSystem": "@items('For_each_device')?['operatingSystem']",
+                                                "operatingSystemVersion": "@items('For_each_device')?['operatingSystemVersion']",
+                                                "profileType": "@items('For_each_device')?['profileType']",
+                                                "trustType": "@items('For_each_device')?['trustType']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_user_owned_devices": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Advanced_Hunting": {
+                                    "runAfter": {
+                                        "For_each_device": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://api.securitycenter.windows.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        
+                                        "body": {
+                                                    "Query":
+                                                    "let timeToSearch = ago(14d); DeviceInfo | where (LoggedOnUsers contains \"@{body('Get_user_details')?['onPremisesSamAccountName']}\") or (LoggedOnUsers contains \"@{body('Get_user_details')?['userPrincipalName']}\") and Timestamp > timeToSearch | distinct DeviceName, DeviceId, PublicIP  | summarize IPAddressHistory = make_list(PublicIP) by DeviceName, DeviceId"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://api.securitycenter.windows.com/api/advancedqueries/run"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "User": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Group_membership": {
+                            "actions": {
+                                "Check_group_membership": {
+                                    "runAfter": {
+                                        "Groups": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "body": "@outputs('Groups')",
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}/checkMemberGroups"
+                                    }
+                                },
+                                "Foreach_role": {
+                                    "foreach": "@body('Parse_admin_roles')?['value']",
+                                    "actions": {
+                                        "Append_to_adminRoles": {
+                                            "runAfter": {
+                                                "Compose_adminRole": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "adminRoles",
+                                                "value": "@outputs('Compose_adminRole')"
+                                            }
+                                        },
+                                        "Compose_adminRole": {
+                                            "runAfter": {
+                                                "Parse_role_details": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "description": "@body('Parse_role_details')?['description']",
+                                                "displayName": "@body('Parse_role_details')?['displayName']",
+                                                "id": "@body('Parse_role_details')?['id']",
+                                                "isBuiltIn": "@body('Parse_role_details')?['isBuiltIn']",
+                                                "isEnabled": "@body('Parse_role_details')?['isEnabled']",
+                                                "resourceScopes": "@body('Parse_role_details')?['resourceScopes']"
+                                            }
+                                        },
+                                        "Get_role_details": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com/",
+                                                    "clientId": "[parameters('servicePrincipal').clientId]",
+                                                    "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                    "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://graph.microsoft.com/beta/roleManagement/directory/roleDefinitions/@{items('Foreach_role')?['roleDefinitionId']}"
+                                            }
+                                        },
+                                        "Parse_role_details": {
+                                            "runAfter": {
+                                                "Get_role_details": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get_role_details')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "@@odata.context": {},
+                                                        "description": {},
+                                                        "displayName": {},
+                                                        "id": {},
+                                                        "isBuiltIn": {},
+                                                        "isEnabled": {},
+                                                        "resourceScopes": {
+                                                            "items": {},
+                                                            "type": "array"
+                                                        },
+                                                        "version": {}
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_admin_roles": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_user_admin_roles": {
+                                    "runAfter": {
+                                        "Parse_Groups": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/roleManagement/directory/roleAssignments?$filter=principalId eq '@{body('Parse_user_details')?['id']}'"
+                                    }
+                                },
+                                "Groups": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "groupIds": [
+                                            "05795c57-70c0-4363-b55a-6ca803ecbcaa",
+                                            "ac9b3596-f4bd-407e-acd3-a773bad6a156"
+                                        ]
+                                    }
+                                },
+                                "Parse_Groups": {
+                                    "runAfter": {
+                                        "Check_group_membership": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Check_group_membership')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {
+                                                    "type": "string"
+                                                },
+                                                "value": {
+                                                    "items": {},
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Parse_admin_roles": {
+                                    "runAfter": {
+                                        "Get_user_admin_roles": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_user_admin_roles')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {},
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {},
+                                                            "principalId": {},
+                                                            "resourceScope": {},
+                                                            "roleDefinitionId": {}
+                                                        },
+                                                        "required": [],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "User": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Mailbox": {
+                            "actions": {
+                                "Compose_mailboxOofEnabled": {
+                                    "runAfter": {
+                                        "Parse_user_OOF": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@not(empty(body('Get_user_OOF')?['value']?[0]?['automaticReplies']))"
+                                },
+                                "For_each_inbox_rule": {
+                                    "foreach": "@body('Parse_inbox_rules')?['value']",
+                                    "actions": {
+                                        "If_move_to_folder": {
+                                            "actions": {
+                                                "Append_to_inboxRules": {
+                                                    "runAfter": {
+                                                        "Compose_inboxRuleUpdated": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "inboxRules",
+                                                        "value": "@outputs('Compose_inboxRuleUpdated')"
+                                                    }
+                                                },
+                                                "Compose_actions": {
+                                                    "runAfter": {
+                                                        "Parse_inbox_folder": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@items('For_each_inbox_rule')?['actions']"
+                                                },
+                                                "Compose_actionsUpdated": {
+                                                    "runAfter": {
+                                                        "Compose_actions": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@setProperty(outputs('Compose_actions'), 'moveToFolder', body('Get_inbox_folder')?['displayName'])"
+                                                },
+                                                "Compose_inboxRuleUpdated": {
+                                                    "runAfter": {
+                                                        "Compose_actionsUpdated": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@setProperty(items('For_each_inbox_rule'), 'actions', outputs('Compose_actionsUpdated'))"
+                                                },
+                                                "Get_inbox_folder": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com/",
+                                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}/mailFolders/@{items('For_each_inbox_rule')?['actions']?['moveToFolder']}"
+                                                    }
+                                                },
+                                                "Parse_inbox_folder": {
+                                                    "runAfter": {
+                                                        "Get_inbox_folder": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_inbox_folder')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {
+                                                                    "type": "string"
+                                                                },
+                                                                "childFolderCount": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "displayName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "parentFolderId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "totalItemCount": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "unreadItemCount": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "wellKnownName": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Append_to_inboxRules_false": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "inboxRules",
+                                                            "value": "@items('For_each_inbox_rule')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@contains(items('For_each_inbox_rule')?['actions'], 'moveToFolder')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_inbox_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "description": "Change inbox rules \"moveToFolder\" folder id to folder \"displayName\""
+                                },
+                                "Get_user_OOF": {
+                                    "runAfter": {
+                                        "For_each_inbox_rule": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "body": {
+                                            "EmailAddresses": [
+                                                "@{body('Parse_user_details')?['mail']}"
+                                            ],
+                                            "MailTipsOptions": "automaticReplies"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}/getMailTips"
+                                    }
+                                },
+                                "Get_user_inbox_rules": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_trigger')?['userPrincipalName']}/mailFolders/inbox/messageRules"
+                                    }
+                                },
+                                "Parse_inbox_rules": {
+                                    "runAfter": {
+                                        "Get_user_inbox_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_user_inbox_rules')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {},
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "actions": {
+                                                                "properties": {
+                                                                    "forwardTo": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "emailAddress": {
+                                                                                    "properties": {
+                                                                                        "address": {},
+                                                                                        "name": {}
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "required": [],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "moveToFolder": {},
+                                                                    "stopProcessingRules": {}
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "conditions": {
+                                                                "properties": {
+                                                                    "bodyOrSubjectContains": {
+                                                                        "items": {},
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "displayName": {},
+                                                            "hasError": {},
+                                                            "id": {},
+                                                            "isEnabled": {},
+                                                            "isReadOnly": {},
+                                                            "sequence": {}
+                                                        },
+                                                        "required": [],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Parse_user_OOF": {
+                                    "runAfter": {
+                                        "Get_user_OOF": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_user_OOF')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {},
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "automaticReplies": {
+                                                                "properties": {
+                                                                    "message": {},
+                                                                    "messageLanguage": {
+                                                                        "properties": {
+                                                                            "displayName": {},
+                                                                            "locale": {}
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "emailAddress": {
+                                                                "properties": {
+                                                                    "address": {},
+                                                                    "name": {}
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "required": [],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "User": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "User_changes": {
+                            "actions": {
+                                "Foreach_SSPR_activity": {
+                                    "foreach": "@body('Parse_SSPR')?['value']",
+                                    "actions": {
+                                        "Append_to_ssprActivities": {
+                                            "runAfter": {
+                                                "Compose_ssprActivity": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "ssprActivities",
+                                                "value": "@outputs('Compose_ssprActivity')"
+                                            }
+                                        },
+                                        "Compose_ssprActivity": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "authMethod": "@items('Foreach_SSPR_activity')?['authMethod']",
+                                                "eventDateTime": "@items('Foreach_SSPR_activity')?['eventDateTime']",
+                                                "failureReason": "@items('Foreach_SSPR_activity')?['failureReason']",
+                                                "feature": "@items('Foreach_SSPR_activity')?['feature']",
+                                                "id": "@items('Foreach_SSPR_activity')?['id']",
+                                                "isSuccess": "@items('Foreach_SSPR_activity')?['isSuccess']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_SSPR": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_user_password_reset_activities": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/reports/userCredentialUsageDetails?$filter=userPrincipalName  eq '@{body('Parse_trigger')?['userPrincipalName']}'"
+                                    }
+                                },
+                                "Parse_SSPR": {
+                                    "runAfter": {
+                                        "Get_user_password_reset_activities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_user_password_reset_activities')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {},
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "authMethod": {},
+                                                            "eventDateTime": {},
+                                                            "failureReason": {},
+                                                            "feature": {},
+                                                            "id": {},
+                                                            "isSuccess": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "userDisplayName": {},
+                                                            "userPrincipalName": {}
+                                                        },
+                                                        "required": [],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Group_membership": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Mcas_Profile" :{
+                            "actions": {
+                                "Compose_userMcasId": {
+                                    "description": "Calculate MCAS user id based on AAD object id",
+                                    "inputs": "@concat('{\"id\":\"',body('Get_user_details')?['id'],'\",\"saas\":11161,\"inst\":0}')",
+                                    "type": "Compose",
+                                    "runAfter": {}
+                                },
+                                "Set_userMcasId": {
+                                    "description":"convert the value to base64 - this value will be used in API calls",
+                                    "inputs": {
+                                        "name": "userMcasId",
+                                        "value": "@{base64(outputs('Compose_userMcasId'))}"
+                                    },
+                                    "type": "SetVariable",
+                                    "runAfter": {
+                                        "Compose_userMcasId": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Get_user_locations_habits": {
+                                    "description": "Collect user locations habits from MCAS",
+                                    "runAfter": {
+                                        "Set_userMcasId": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "[concat('token ',parameters('mcasAPI').apiToken)]",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{parameters('mcasAPI').tenantUrl}/cas/api/v1/activities_locations/by_user/?username=@{variables('userMcasId')}/"
+                                    }
+                                    
+                                },
+                                "Get_total_activities": {
+                                    "actions": {
+                                        "Increment_locationsTotalActivities": {
+                                            "inputs": {
+                                                "name": "locationsTotalActivities",
+                                                "value": "@items('Get_total_activities')[1]"
+                                            },
+                                            "runAfter": {},
+                                            "type": "IncrementVariable"
+                                        }
+                                    },
+                                    "foreach": "@body('Get_user_locations_habits')?['data']",
+                                    "runAfter": {
+                                        "Get_user_locations_habits": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "For_each_location": {
+                                    "actions": {                                        
+                                        "Compose_location_percentage": {
+                                            "inputs": "@div(mul(items('For_each_location')[1], 100), variables('locationsTotalActivities'))",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        },
+                                        "Compose_location": {
+                                            "inputs": {
+                                                "activities": "@{items('For_each_location')?[1]}",
+                                                "country": "@{items('For_each_location')?[0]}",
+                                                "lastActivity": "@{items('For_each_location')?[2]}",
+                                                "percentageTotalActivities": "@{outputs('Compose_location_percentage')}"
+                                            },
+                                            "runAfter": {
+                                                "Compose_location_percentage": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Append_to_locations": {
+                                            "inputs": {
+                                                "name": "locations",
+                                                "value": "@outputs('Compose_location')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_location": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        }
+                                    },
+                                    "foreach": "@body('Get_user_locations_habits')?['data']",
+                                    "runAfter": {
+                                        "Get_total_activities": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_mcas_user_profile": {
+                                    "description": "Collect user locations habits from MCAS",
+                                    "runAfter": {
+                                        "For_each_location": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "[concat('token ',parameters('mcasAPI').apiToken)]",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{parameters('mcasAPI').tenantUrl}/cas/api/v1/entities/@{variables('userMcasId')}/"
+                                    }
+                                    
+                                },
+                                "Select_threatScore_properties": {
+                                    "inputs": {
+                                        "from": "@body('Get_mcas_user_profile')?['threatScoreHistory']",
+                                        "select": {
+                                            "date": "@item()?['dateFormatted']",
+                                            "percentile": "@item()?['percentile']",
+                                            "score": "@item()?['score']"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_mcas_user_profile": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Select"
+                                }
+
+                            },
+                            "runAfter": {
+                                "User": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Compose_JSON": {
+                            "actions": {
+                                "Compose_user_json": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "accountEnabled": "@body('Get_user_details')?['accountEnabled']",
+                                        "adminRoles": "@variables('adminRoles')",
+                                        "authMethodsMfa": "@body('Get_user_MFA-SSPR_status')?['value']?[0]?['authMethods']",
+                                        "businessPhones": "@body('Get_user_details')?['businessPhones']?[0]",
+                                        "city": "@body('Get_user_details')?['city']",
+                                        "companyName": "@body('Get_user_details')?['companyName']",
+                                        "country": "@body('Get_user_details')?['country']",
+                                        "createdDateTime": "@body('Get_user_details')?['createdDateTime']",
+                                        "department": "@body('Get_user_details')?['department']",
+                                        "devices": {
+                                            "aadDevices": "@variables('devices')",
+                                            "mdatpDevices": "@body('Advanced_Hunting')?['Results']"
+                                        },
+                                        "displayName": "@body('Get_user_details')?['displayName']",
+                                        "employeeId": "@body('Get_user_details')?['employeeId']",
+                                        "givenName": "@body('Get_user_details')?['givenName']",
+                                        "id": "@body('Get_user_details')?['id']",
+                                        "isMfaRegistered": "@body('Get_user_MFA-SSPR_status')?['value']?[0]?['isMfaRegistered']",
+                                        "isSsprRegistered": "@body('Get_user_MFA-SSPR_status')?['value']?[0]?['isRegistered']",
+                                        "jobTitle": "@body('Get_user_details')?['jobTitle']",
+                                        "locationsUsage": "@variables('locations')",
+                                        "mail": "@body('Get_user_details')?['mail']",
+                                        "mailboxInboxRules": "@variables('inboxRules')",
+                                        "mailboxOofEnabled": "@outputs('Compose_mailboxOofEnabled')",
+                                        "mailboxOofMessage": "@body('Get_user_OOF')?['value']?[0]?['automaticReplies']?['message']",
+                                        "manager": {
+                                            "displayName": "@body('Get_user_manager')?['displayName']",
+                                            "id": "@body('Get_user_manager')?['id']",
+                                            "jobTitle": "@body('Get_user_manager')?['jobTitle']",
+                                            "mail": "@body('Get_user_manager')?['mail']",
+                                            "mobilePhone": "@body('Get_user_manager')?['mobilePhone']",
+                                            "userPrincipalName": "@body('Get_user_manager')?['userPrincipalName']"
+                                        },
+                                        "mobilePhone": "@body('Get_user_details')?['mobilePhone']",
+                                        "officeLocation": "@body('Get_user_details')?['officeLocation']",
+                                        "onPremisesDistinguishedName": "@body('Get_user_details')?['onPremisesDistinguishedName']",
+                                        "onPremisesDomainName": "@body('Get_user_details')?['onPremisesDomainName']",
+                                        "onPremisesLastSyncDateTime": "@body('Get_user_details')?['onPremisesLastSyncDateTime']",
+                                        "onPremisesSamAccountName": "@body('Get_user_details')?['onPremisesSamAccountName']",
+                                        "onPremisesSecurityIdentifier": "@body('Get_user_details')?['onPremisesSecurityIdentifier']",
+                                        "onPremisesSyncEnabled": "@body('Get_user_details')?['onPremisesSyncEnabled']",
+                                        "postalCode": "@body('Get_user_details')?['postalCode']",
+                                        "preferredLanguage": "@body('Get_user_details')?['preferredLanguage']",
+                                        "refreshTokensValidFromDateTime": "@body('Get_user_details')?['refreshTokensValidFromDateTime']",
+                                        "riskLevel": "@body('Get_user_AAD_risk_status')?['riskLevel']",
+                                        "riskState": "@body('Get_user_AAD_risk_status')?['riskState']",
+                                        "riskDetail": "@body('Get_user_AAD_risk_status')?['riskDetail']",
+                                        "riskLastUpdatedDateTime": "@body('Get_user_AAD_risk_status')?['riskLastUpdatedDateTime']",
+                                        "ssprActivities": "@variables('ssprActivities')",
+                                        "state": "@body('Get_user_details')?['state']",
+                                        "streetAddress": "@body('Get_user_details')?['streetAddress']",
+                                        "surname": "@body('Get_user_details')?['surname']",
+                                        "threatScore": "@body('Get_mcas_user_profile')?['threatScore']",
+                                        "threatScoreHistory": "@outputs('Select_threatScore_properties')",
+                                        "userPrincipalName": "@body('Get_user_details')?['userPrincipalName']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Devices": [
+                                    "Succeeded",
+                                    "Failed"
+                                ],
+                                "Mailbox": [
+                                    "Succeeded",
+                                    "Failed"
+                                ],
+                                "User_changes": [
+                                    "Succeeded"
+                                ],
+                                "Mcas_profile": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "Compose_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@outputs('Compose_user_json')",
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                }
+            }
+        }
+    ],
+	"outputs": {
+        
+        "logicAppUrl": {
+            "type": "string",
+            "value": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows/', parameters('logicAppName')), '/triggers/manual'), '2016-06-01').value]"
+        }
+    }
+}
