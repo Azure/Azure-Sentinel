@@ -19,10 +19,10 @@ if ($env:MSI_SECRET -and (Get-Module -ListAvailable Az.Accounts)){
 }
 
 #need to convert these to use $env variables in function
-$storageAccountName = "githubsa4bpcbk2msylly"
-$storageAccountKey = "xxj0NyQtN6ztx0odSqumkWdAaeGuk97rybZzcj2KTMXWimIUDAU0ks15lVXmo4BWYXOkHyqD2OXo8/2tJYwmlg=="
-$StorageAccountContainer = "githublogicapp"
-$personalAccessToken = "edf1a149bd0a0c8824ce713721126fc18847666e"
+$storageAccountName = ""
+$storageAccountKey = ""
+$StorageAccountContainer = ""
+$personalAccessToken = ""
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
 
 # header for API calls
