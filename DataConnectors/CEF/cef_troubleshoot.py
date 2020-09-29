@@ -42,7 +42,8 @@ oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.r
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
-red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
+red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
+red_hat_security_enhanced_permanent_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 rsyslog_daemon_forwarding_configuration_dir_path = "/etc/rsyslog.d/"
@@ -162,15 +163,15 @@ def restart_red_hat_firewall_d():
 
 def security_enhanced_linux_enabled():
     print("Checking if security enhanced linux is enabled")
-    print_notice("sestatus")
-    command_tokens = ["sudo", "sestatus"]
-    sestatus_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
-    o, e = sestatus_command.communicate()
+    print_notice("getenforce")
+    command_tokens = ["sudo", "getenforce"]
+    getenforce_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+    o, e = getenforce_command.communicate()
     if e is not None:
-        print_error("Could not execute \'sestatus\' to check if security enhanced linux is enabled")
+        print_error("Could not execute \'getenforce\' to check if security enhanced linux is enabled")
+        print_notice("please install \'selinux-utils\' package and run the troubleshoot script again")
     else:
-        for line in o.decode('ascii').split('\n'):
-            if "SELinux status" in line and "enabled" in line:
+        if o == 'Enforcing\n':
                 return True
         return False
 
@@ -178,15 +179,14 @@ def security_enhanced_linux_enabled():
 def security_enhanced_linux():
     if security_enhanced_linux_enabled() is True:
         print_warning(
-            "Security enhanced linux is enabled.\nTo use TCP with syslog daemon the omsagent incoming port should be inserted")
-        print("Use elevated privileges to perform the following:")
-        print("\tTo enable the port")
-        print_notice("\tsemanage port -a -t syslogd_port_t -p tcp " + agent_port)
-        print("\tTo validate enabled port")
-        print_notice("\tsemanage port -l | grep " + agent_port)
-        print("\tTo install the policy editor")
-        print_notice("\tyum install policycoreutils-python")
-        print("For more information: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+            "Security enhanced linux is Enforceing.\nTo use TCP with syslog daemon it should be in permissive mode")
+        print_notice("Use elevated privileges to perform the following:")
+        print_notice("Run the following command to change SELinux to permissive mode: \"setenforce 0\"")
+        print_notice("Please restart the syslog daemon running on your machine")
+        print_notice("In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
+        print_notice("For more information: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+    else:
+        print_notice("SELinux is not in Enforcing mode")
 
 
 def rsyslog_get_cef_log_counter():
@@ -655,7 +655,7 @@ def main():
     check_syslog_computer_field_mapping(workspace_id=workspace_id)
     # validate firewalld
     check_red_hat_firewall_issue()
-    # Check issue regarding security enhanced linux blocking tcp ports
+    # Check issues regarding security enhanced linux
     security_enhanced_linux()
     # testing that the daemon is running
     if check_daemon("rsyslog"):
