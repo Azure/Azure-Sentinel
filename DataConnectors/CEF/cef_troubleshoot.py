@@ -167,9 +167,9 @@ def security_enhanced_linux_enabled():
     command_tokens = ["sudo", "getenforce"]
     getenforce_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = getenforce_command.communicate()
-    if e is not None:
+    if e is not None or getenforce_command.returncode != 0:
         print_error("Could not execute \'getenforce\' to check if security enhanced linux is enabled")
-        print_notice("please install \'selinux-utils\' package and run the troubleshoot script again")
+        print_notice("please install \'policycoreutils\' package and run the troubleshoot script again")
     else:
         if o == 'Enforcing\n':
                 return True
@@ -181,12 +181,12 @@ def security_enhanced_linux():
         print_warning(
             "Security enhanced linux is Enforceing.\nTo use TCP with syslog daemon it should be in permissive mode")
         print_notice("Use elevated privileges to perform the following:")
-        print_notice("Run the following command to change SELinux to permissive mode: \"setenforce 0\"")
+        print_notice("Run the following command to temporarily change SELinux to permissive mode: \"setenforce 0\"")
         print_notice("Please restart the syslog daemon running on your machine")
         print_notice("In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
         print_notice("For more information: " + red_hat_rsyslog_security_enhanced_linux_documentation)
     else:
-        print_notice("SELinux is not in Enforcing mode")
+        pass
 
 
 def rsyslog_get_cef_log_counter():
