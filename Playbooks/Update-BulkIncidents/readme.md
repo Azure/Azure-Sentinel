@@ -1,7 +1,7 @@
 # Update-BulkIncidents
 authors: Priscila Viana, Nathan Swift
 
-This Logic App will act as listner, you can pass json object to a HTTP Endpoint to use KQL query to discover Azure Sentinel Security Incidents through the SecurityIncident table you wish to bulk change on. It includes a method to slective update by array []. It also includes a method to bulk change all
+This Logic App will act as listener, you can pass json object to a HTTP Endpoint to use KQL query to discover Azure Sentinel Security Incidents through the SecurityIncident table you wish to bulk change on. It includes a method to selective update by array [].
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-BulkIncidents%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
@@ -12,11 +12,17 @@ This Logic App will act as listner, you can pass json object to a HTTP Endpoint 
 
 **Additional Post Install Notes:**
 
-The Logic App requires the SecurityIncident Table preview | You need to change the KQL Query within the action to close selective Security incidents else it will bulk close all Incidents creates. There is a seprate path as well so if you want to bulk close all security incidents via API you can, need to turn on MSI and assign RBAC 'Reader' role to the Logic App at the RG of the Azure Sentinel Workspace.
+The Logic App requires the SecurityIncident Table preview
 
 **Usage Notes**
 
-You can use Postman, PowerShell, or your favorite shell to send a JSON body to the Logic App Endpoint. Below are some code examples of usage.
+To obtain your Logic App URI to make POST calls to, go to the Logic App designer mode and the first action and copy the URI 
+
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Update-BulkIncidents/images/logicappedit.png"/>
+
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Update-BulkIncidents/images/logicappuri.png"/>
+
+You can use Postman, PowerShell, or your favorite shell to send a JSON body to the Logic App Endpoint. Below are some PowerShell code examples of usage.
 
 At this time the Logic App can only bulk update the Status of Azure Sentinel Incidents.
 
@@ -25,7 +31,7 @@ At this time the Logic App can only bulk update the Status of Azure Sentinel Inc
 
     Object parameters accepted are:
 
-    operationtype - acceptable values are 'kql' or 'ids' or 'all' | 'kql' = you will pass a parameter 'operationquery' with the kql language, those results will be passed to bulk update incidents | 'ids' = use an array list in parameter 'operationids'
+    operationtype - acceptable values are 'kql' or 'ids' | 'kql' = you will pass a parameter 'operationquery' with the kql language, those results will be passed to bulk update incidents | 'ids' = use an array list in parameter 'operationids'
     operationstatus - Closed, New, InProgress  
     operationkql - use a kql query to send results of Azure Sentinel Incidents to bulk update
     operationids - using an array list of Azure Sentinel Incident Ids/case numbers to bulk update
@@ -48,7 +54,7 @@ $json = @"
 {  "bulkoperation": {
         "operationtype": "kql",
         "operationquery": "SecurityIncident | where TimeGenerated >= ago(7d) | where Status == 'New'",
-        "operationstatus": "InProgress"
+        "operationstatus": "Closed"
     }
 }
 "@
@@ -61,25 +67,8 @@ $json = @"
 {  "bulkoperation": {
         "operationtype": "ids",
         "operationids": [933, 934, 935, 935, 936],
-        "operationstatus": "New"
-    }
-}
-"@
-```
-
-```
-## Example 3 Bulk update all incidents
-
-$json = @"
-{  "bulkoperation": {
-        "operationtype": "all",
         "operationstatus": "Closed"
     }
 }
 "@
-```
-
-```
-# Invoke call to Logic App
-Invoke-WebRequest -Uri $uri -Method Post -Body $json -Headers $header
 ```
