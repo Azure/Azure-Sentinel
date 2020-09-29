@@ -494,11 +494,8 @@ def validate_daemon_configuration_content(daemon_name, valid_content_tokens_arr)
     # set path according to the daemon
     path = rsyslog_daemon_forwarding_configuration_path if daemon_name == rsyslog_daemon_name else syslog_ng_daemon_forwarding_configuration_path
     if not file_contains_string(valid_content_tokens_arr, path):
-        print_error(
-            "Error - security-config-omsagent.conf does not contain " + daemon_name + " daemon routing to oms-agent")
         return False
     else:
-        print_ok("Security-config-omsagent.conf contains " + daemon_name + " routing configuration")
         return True
 
 
@@ -625,11 +622,12 @@ def handle_rsyslog(workspace_id):
         daemon_config_valid = validate_daemon_configuration_content("rsyslog.d",
                                                                     rsyslog_security_config_omsagent_conf_content_tokens)
         if not daemon_config_valid:
-            print_error("Error: rsyslog daemon configuration was found invalid. ")
-            print_notice("Notice: please make sure:")
-            print_notice("\t1. /etc/rsyslog.d/security-config-omsagent.conf file exists")
-            print_notice("\t2. File contains the following content:\n" + "\"if $rawmsg contains \"CEF:\" or $rawmsg contains"
-                                                                       " \"ASA-\" then @@127.0.0.1:" + agent_port + "\"")
+            print_error("Error: found an outdated rsyslog daemon configuration file: " + rsyslog_daemon_forwarding_configuration_path)
+            print_notice("The updated file should contain the following configuration: \'if $rawmsg contains \"CEF:\""
+                         " or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port + "\'")
+            print_notice("Notice: Please run the following command to update the configuration and restart the rsyslog daemon:")
+            print_notice("\"echo \'if $rawmsg contains \"CEF:\" or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port +
+                         "\' > /etc/rsyslog.d/security-config-omsagent.conf && service rsyslog restart\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")
