@@ -40,6 +40,7 @@ oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
 oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_selinux_documentation = "https://docs.microsoft.com/en-us/azure/azure-monitor/platform/agent-linux"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
@@ -179,12 +180,14 @@ def security_enhanced_linux_enabled():
 def security_enhanced_linux():
     if security_enhanced_linux_enabled() is True:
         print_warning(
-            "Security enhanced linux is Enforceing.\nTo use TCP with syslog daemon it should be in permissive mode")
-        print_notice("Use elevated privileges to perform the following:")
+            "Security enhanced linux is in Enforcing mode.\n"
+            "This is not supported by the OMS Agent and can harm the communication with it.\n"
+            "For more information: " + oms_agent_selinux_documentation)
+        print_notice("To set SELinux to Permissive mode use elevated privileges to perform the following:")
         print_notice("Run the following command to temporarily change SELinux to permissive mode: \"setenforce 0\"")
         print_notice("Please restart the syslog daemon running on your machine")
         print_notice("In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
-        print_notice("For more information: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+        print_notice("For more information on SELinux: " + red_hat_rsyslog_security_enhanced_linux_documentation)
     else:
         pass
 
