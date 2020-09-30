@@ -1,0 +1,88 @@
+SchemaVersion: 1.0
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: BehaviorAnalytics
+RequiredInputFieldsSets:
+  - - Account_Name
+    - Account_UPNSuffix
+EntitiesFilter: {}
+BaseQuery: |
+  BehaviorAnalytics | extend UPN = iff(UserPrincipalName contains '#EXT#', replace(@'_', @'@',  tostring(split(UserPrincipalName,'#EXT#')[0])), UserPrincipalName) | where tostring(split(UPN,'@')[0]) =~ '{{Account_Name}}' and tostring(split(UPN,'@')[1])=~ '{{Account_UPNSuffix}}' | extend Evidence = ActivityInsights
+Insights:
+  Id: 145de96e-e63e-47a6-9dc8-1d56736cc68b
+  DisplayName: UEBA Insights
+  Description: |
+    Summarize anomalous user activities - across geographical locations, devices, and environments; across time and frequency horizons (compared to user's own history); as compared to peers' behavior; as compared to organization's behavior.
+  DefaultTimeRange:
+    BeforeRange: 12d
+    AfterRange: 2d
+  ReferenceTimeRange:
+    BeforeRange: 0d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: Anomaly
+      OutputType: String
+      SupportDeepLink: false
+    - Header: First Time User Anomaly
+      OutputType: Number
+      SupportDeepLink: true
+    - Header: Uncommon Among Peers
+      OutputType: Number
+      SupportDeepLink: true
+    - Header: Uncommon in Tenant
+      OutputType: Number
+      SupportDeepLink: true
+    - Header: First Time Tenant Anomaly
+      OutputType: Number
+      SupportDeepLink: true
+    QueriesDefinitions:
+    - Filter: " where (ActionType in('Add user','Update user','Reset user password') and  (ActivityInsights.FirstTimeUserPerformedAction == true or ActivityInsights.FirstTimeActionPerformedInTenant == true or ActivityInsights.ActionUncommonlyPerformedAmongPeers == true or ActivityInsights.ActionUncommonlyPerformedInTenant == true))"
+      Summarize: summarize ['First Time User Anomaly']=countif(Evidence.FirstTimeUserPerformedAction == true),['Uncommon Among Peers']=countif(Evidence.ActionUncommonlyPerformedAmongPeers == true), ['Uncommon in Tenant']=countif(Evidence.ActionUncommonlyPerformedInTenant == true) , ['First Time Tenant Anomaly']=countif(Evidence.FirstTimeActionPerformedInTenant == True)
+      Project: project Anomaly = 'Anomalous administrative action', ['First Time User Anomaly'], ['Uncommon Among Peers'], ['Uncommon in Tenant'], ['First Time Tenant Anomaly']
+      LinkColumnsDefinitions:
+      - ProjectedName: First Time User Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTimeUserPerformedAction == true)"
+      - ProjectedName: Uncommon Among Peers
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.ActionUncommonlyPerformedAmongPeers == true)"
+      - ProjectedName: Uncommon in Tenant
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.ActionUncommonlyPerformedInTenant == true)"
+      - ProjectedName: First Time Tenant Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTimeActionPerformedInTenant == True)"
+    - Filter: " where (ActionType in('Sign-in') and  (ActivityInsights.FirstTimeUserConnectedFromCountry == True or  ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromInTenant == True or ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True))"
+      Summarize: summarize ['First Time User Anomaly']=countif(Evidence.FirstTimeUserConnectedFromCountry == True),['Uncommon Among Peers']=countif(Evidence.CountryUncommonlyConnectedFromAmongPeers == True), ['Uncommon in Tenant']=countif(Evidence.CountryUncommonlyConnectedFromInTenant == True) , ['First Time Tenant Anomaly']=countif(Evidence.FirstTimeConnectionFromCountryObservedInTenant == True)
+      Project: project Anomaly = 'Anomloaus location', ['First Time User Anomaly'], ['Uncommon Among Peers'], ['Uncommon in Tenant'], ['First Time Tenant Anomaly']
+      LinkColumnsDefinitions:
+      - ProjectedName: First Time User Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTimeUserConnectedFromCountry == True)"
+      - ProjectedName: Uncommon Among Peers
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.CountryUncommonlyConnectedFromAmongPeers == True)"
+      - ProjectedName: Uncommon in Tenant
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.CountryUncommonlyConnectedFromInTenant == True)"
+      - ProjectedName: First Time Tenant Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTimeConnectionFromCountryObservedInTenant == True)"
+    - Filter: " where (ActionType in('InteractiveLogon','Sign-in','ResourceAccess') and (ActivityInsights.FirstTimeDeviceObservedInTenant == True or ActivityInsights.FirstTImeUserConnectedFromDevice == True or ActivityInsights.DeviceUncommonlyUsedAmongPeers == True or ActivityInsights.FirstTimeResourceAccessedInTenant == True or ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True or ActivityInsights.FirstTimeUserAccessedResource == True))"
+      Summarize: summarize ['First Time User Anomaly']=countif(Evidence.FirstTImeUserConnectedFromDevice == True or Evidence.FirstTimeUserAccessedResource == True),['Uncommon Among Peers']=countif(Evidence.DeviceUncommonlyUsedAmongPeers == True or Evidence.ResourceUncommonlyAccessedAmongPeers == True), ['Uncommon in Tenant']=0 , ['First Time Tenant Anomaly']=countif(Evidence.FirstTimeDeviceObservedInTenant == True or Evidence.FirstTimeResourceAccessedInTenant == True)
+      Project: project Anomaly = 'Anoamlaous access', ['First Time User Anomaly'], ['Uncommon Among Peers'], ['Uncommon in Tenant'], ['First Time Tenant Anomaly']
+      LinkColumnsDefinitions:
+      - ProjectedName: First Time User Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTImeUserConnectedFromDevice == True or Evidence.FirstTimeUserConnectedToResource == True)"
+      - ProjectedName: Uncommon Among Peers
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.PeersConnectedToDestinationDevice == True or Evidence.PeersConnectedToResource == True)| where UserPrincipalName == '{{Account_UPN}}'"
+      - ProjectedName: Uncommon in Tenant
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.DestinationDeviceUncommonFromInTenant == True)"
+      - ProjectedName: First Time Tenant Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTImeTenantConnectedFromDevice == True or Evidence.FirstTimeTenantConnectedToResource == True)"
+    - Filter: " where (ActionType in('Create role assignment','Export an existing database','Remove database vulnerability assessment rule baseline','Run Command on Virtual Machine') and (ActivityInsights.FirstTimeUserPerformedAction == True or ActivityInsights.FirstTimeActionPerformedInTenant == True or ActivityInsights.ActionUncommonlyPerformedAmongPeers == True) )"
+      Summarize: summarize ['First Time User Anomaly']=countif(Evidence.FirstTimeUserPerformedAction == True),['Uncommon Among Peers']=countif(Evidence.ActionUncommonlyPerformedAmongPeers == True), ['Uncommon in Tenant']=countif(Evidence.ActionUncommonlyPerformedFromInTenant==True) , ['First Time Tenant Anomaly']=countif(Evidence.FirstTimeActionPerformedInTenant == True)
+      Project: project Anomaly = 'Anomalous data handeling', ['First Time User Anomaly'], ['Uncommon Among Peers'], ['Uncommon in Tenant'], ['First Time Tenant Anomaly']
+      LinkColumnsDefinitions:
+      - ProjectedName: First Time User Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTimeUserPerformedAction == True)"
+      - ProjectedName: Uncommon Among Peers
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.ActionUncommonlyPerformedAmongPeers == True)"
+      - ProjectedName: Uncommon in Tenant
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.ActionUncommonlyPerformedFromInTenant==True)"
+      - ProjectedName: First Time Tenant Anomaly
+        Query: "{{BaseQuery}} | {{RowFilter}} and (Evidence.FirstTimeActionPerformedInTenant == True)"
