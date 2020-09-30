@@ -3,8 +3,9 @@ author: Lior Tamir
 
 The playbook is triggered on a scheduled basis.
 It is running on behalf of a registered Azure AD application, which monitors a certain management group.
-For each subscription this app has access to, if the subscription doesn't have an Azure Security Center connection enabled, a connection to Azure Sentinel is created.
-
+For each subscription this app has access to, if the subscription doesn't have an Azure Security Center connection enabled, a connection to Azure Sentinel is created.<br><br>
+### See expanded guidance in the following blogpost: [Azure Security Center Auto-connect to Sentinel](https://techcommunity.microsoft.com/t5/azure-sentinel/azure-security-center-auto-connect-to-sentinel/ba-p/1387539)
+<br><br>
 The registered application needs to have the following RBAC Roles:
 
 1. Security Reader Role on the Management Group which ASC subscriptions are under.
