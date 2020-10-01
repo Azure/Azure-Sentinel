@@ -241,6 +241,8 @@ def set_rsyslog_new_configuration():
                         fout.write(line.replace("#", "", 1))
                     elif "port" in line:
                         fout.write(line.replace("#", "", 2))
+                    else:
+                        fout.write(line)
                 else:
                     fout.write(line)
     command_tokens = ["sudo", "mv", "tmp.txt", rsyslog_conf_path]
