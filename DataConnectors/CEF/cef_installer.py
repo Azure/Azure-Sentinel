@@ -136,6 +136,7 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     install_omsagent_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = install_omsagent_command.communicate()
     time.sleep(3)
+    # Parsing the agent's installation return code
     return_code = re.search(".*Shell bundle exiting with code (\d+)", o, re.IGNORECASE)
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
