@@ -237,7 +237,10 @@ def set_rsyslog_new_configuration():
         with open("tmp.txt", "wt") as fout:
             for line in fin:
                 if "imudp" in line or "imtcp" in line:
-                    fout.write(line.replace("#", "")) if "#" in line else fout.write(line)
+                    if "load" in line:
+                        fout.write(line.replace("#", "", 1))
+                    elif "port" in line:
+                        fout.write(line.replace("#", "", 2))
                 else:
                     fout.write(line)
     command_tokens = ["sudo", "mv", "tmp.txt", rsyslog_conf_path]
