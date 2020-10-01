@@ -18,12 +18,12 @@ Documentation references:
 
 <li>Azure Management groups as containers of subscriptions to monitor
 <ul>
-<li><a href="https://docs.microsoft.com/en-us/azure/governance/management-groups/overview" target="_blank" rel="noopener">Learn more about Azure Management Groups</a></li>
+<li><a href="https://docs.microsoft.com/azure/governance/management-groups/overview" target="_blank" rel="noopener">Learn more about Azure Management Groups</a></li>
 </ul>
 </li>
 <li>Azure Active Directory registered application, assigned with RBAC roles
 <ul>
-<li><a href="https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals" target="_blank" rel="noopener">Learn more about applications in Azure Active Directory.</a></li>
+<li><a href="https://docs.microsoft.com/azure/active-directory/develop/app-objects-and-service-principals" target="_blank" rel="noopener">Learn more about applications in Azure Active Directory.</a></li>
 </ul>
 </li>
 </ul>
