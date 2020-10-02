@@ -3,7 +3,6 @@ Build-Your-Own Machine Learning(BYO ML) package, currently in private preview, i
 The package includes:
 
 Libraries (.whl files)
-- sentinel_ai - Library contains collaborative filtering algorithm for Anomalous Resource Access.
 - azure_sentinel_ml_utilities - Library contains Azure Storage & Log Analytics helper functions.
 
 Notebooks:

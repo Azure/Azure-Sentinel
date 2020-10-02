@@ -16,10 +16,12 @@ The Logic App creates and uses a Managed System Identity (MSI) to authenticate a
 
 The MSI must be assigned API Permissions 'Ti.ReadWrite' to WindowsDefenderATP App. To assign use PowerShell and AzureAD Module. Run the following commands:
 
-$msi = Get-AzureADServicePrincipal | ?{$_.DisplayName -ieq "Restrict-MDATPUrl"}
-$graph = Get-AzureADServicePrincipal -Filter "AppId eq 'fc780465-2017-40d4-a0c5-307022471b92'"
-$roles = $graph.AppRoles | ?{$_.Value -imatch "Ti.ReadWrite" }
+`$msi= Get-AzureADServicePrincipal -Filter "displayname eq 'Restrict-MDATPUrl'"`
 
-Foreach ($role in $roles){
-New-AzureADServiceAppRoleAssignment -ObjectId $msi.ObjectId -PrincipalId $msi.ObjectId -Id $role.Id -ResourceId $graph.ObjectId
-}
+`$graph = Get-AzureADServicePrincipal -Filter "AppId eq 'fc780465-2017-40d4-a0c5-307022471b92'"`
+
+`$roles = $graph.AppRoles | Where-Object {$_.Value -imatch "Ti.ReadWrite"}`
+
+`Foreach ($role in $roles){`
+`New-AzureADServiceAppRoleAssignment -ObjectId $msi.ObjectId -PrincipalId $msi.ObjectId -Id $role.Id -ResourceId $graph.ObjectId`
+`}`
