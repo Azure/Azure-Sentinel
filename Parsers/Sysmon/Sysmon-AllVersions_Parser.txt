@@ -1,0 +1,41 @@
+// KQL Sysmon Event Parser
+// Last Updated Date: Sept 20, 2020
+// Sysmon Version: Applicable to all versions
+//
+// Sysmon Instructions:
+// If you want to print configuration schema definition of sysmon. Execute below command from command shell or powershell terminal
+// Sysmon.exe -s
+//
+// You can further customize config XML definition and install sysmon with it via below command. 
+// Sample Sysmon config XML from Swift on Security’s GitHub page : https://github.com/SwiftOnSecurity/sysmon-config/blob/master/sysmonconfig-export.xml
+// Sysmon.exe -i sysmonconfig-export.xml -accepteula -h sha1,md5,sha256 -n -l  
+// -n : Log all network connections and -l: log loading of modules.
+//
+// Parser Notes:
+// This parser works against all versions unless original event manifest is changed
+// 
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. Sysmon_Normalized).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. Sysmon_Normalized | take 10).
+// Reference :
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+Event
+| where Source == "Microsoft-Windows-Sysmon"
+| extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+| extend EventData = parse_xml(EventData).DataItem.EventData.Data
+| mv-expand bagexpansion=array EventData
+| evaluate bag_unpack(EventData)
+| extend Key=tostring(['@Name']), Value=['#text']
+| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+| extend RuleName = column_ifexists("RuleName", ""), TechniqueId = column_ifexists("TechniqueId", ""),  TechniqueName = column_ifexists("TechniqueName", "")
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+| project TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId, 
+Archived, CallTrace, CommandLine, Company, CreationUtcTime, CurrentDirectory, Description, DestinationHostname, DestinationIp, DestinationIsIpv6, DestinationPort, DestinationPortName, 
+Details, Device, EventType, FileVersion, GrantedAccess, Hashes, Image, ImageLoaded, Initiated, IntegrityLevel, IsExecutable, LogonGuid, LogonId, NewThreadId, OriginalFileName, 
+ParentCommandLine, ParentImage, ParentProcessGuid, ParentProcessId, PipeName, PreviousCreationUtcTime, ProcessGuid, ProcessId, Product, Protocol, QueryName, QueryResults, QueryStatus,  
+ RuleName, Signature, SignatureStatus, Signed, SourceHostname, SourceImage, SourceIp, SourceIsIpv6, SourcePort, SourcePortName, SourceProcessGuid, SourceProcessGUID, SourceProcessId, 
+ SourceThreadId, StartAddress, StartFunction, StartModule, TargetFilename, TargetImage, TargetObject, TargetProcessGuid, TargetProcessGUID, TargetProcessId, TerminalSessionId, User, 
+ UtcTime, TechniqueId, TechniqueName

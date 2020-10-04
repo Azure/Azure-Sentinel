@@ -1,7 +1,7 @@
 id: 8741deeb-332e-4061-8873-5086040920e3
 name: Anomalous AAD Account Manipulation
 description: |
-  'Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access. The query below generates an output of all high Blast Radius users performing "Update user" (name change) to priveleged role, or ones that changed users for the first time.'
+  'Adversaries may manipulate accounts to maintain access to victim systems. These actions include adding new accounts to high privilleged groups. Dragonfly 2.0, for example, added newly created accounts to the administrators group to maintain elevated access. The query below generates an output of all high Blast Radius users performing "Update user" (name change) to priveleged role, or where one or more features of the activitiy deviates from the user, his peers or the tenant profile.'
 requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
@@ -28,10 +28,10 @@ query: |
  | where RoleId in (critical,high)
  | where isnotempty(RoleId) or isnotempty(RoleName)
  | extend TargetId = tostring(TargetResources.id)
- | extend Target =  iff(tostring(TargetResources.userPrincipalName) contains "#EXT#",replace("_","@",tostring(split(TargetResources.userPrincipalName, "#")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)
+ | extend Target =  iff(tostring(TargetResources.userPrincipalName) has "#EXT#",replace("_","@",tostring(split(TargetResources.userPrincipalName, "#")[0])),TargetResources.userPrincipalName),tostring(TargetResources.userPrincipalName)
  | join kind=inner ( BehaviorAnalytics
  ) on $left._ItemId == $right.SourceRecordId
- | where UsersInsights.BlastRadius == "High" or ActivityInsights.FirstTimeUserPerformedAction == true
- |  extend UserPrincipalName = iff(UserPrincipalName contains "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserPrincipalName),
- UserName = iff(UserName contains "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName) 
+ | where UsersInsights.BlastRadius == "High" or ActivityInsights has "True"
+ |  extend UserPrincipalName = iff(UserPrincipalName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserPrincipalName),
+ UserName = iff(UserName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName) 
  | project TimeGenerated, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, ["TargetUser"]=Target,RoleName,ActivityInsights ,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights
