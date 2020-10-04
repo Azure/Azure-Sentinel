@@ -8,23 +8,23 @@ The Microsoft Teams bot will post an adaptive card in the SOC channel, including
 
 Note: Azure AD Identity Protection is a premium feature. You need an Azure AD Premium P1 or P2 license to access the riskDetection API (note: P1 licenses receive limited risk information). The riskyUsers API is only available to Azure AD Premium P2 licenses only.
 
-
+<br><br>
 Overall:
-!['LogicApps Designer view']('./images/designerView.png')
-
+<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse/images/designerView.png"/>
+<br><br>
 Card to be sent by Microsoft Teams bot:
-!['LogicApps Designer view']('./images/msg.png')
+<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse/images/msg.png"/><br><br>
 
 Response Part:
-!['LogicApps Designer view']('./images/responsePart.png')
-
+<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse/images/responsePart.png"/>
+<br><br>
 Documentation references:
 
 <li>Azure AD Identity Protection:
 <ul>
 <li><a href="https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection" target="_blank" rel="noopener">Learn more about Identity Protection</a></li>
 </ul>
-</li>
+</li><br><br>
 
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json" target="_blank">
