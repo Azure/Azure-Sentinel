@@ -2,7 +2,7 @@ Build-Your-Own Machine Learning(BYO ML) package, currently in public preview, is
 
 The package includes:
 
-Libraries (.whl files)
+Library (.whl files)
 - azure_sentinel_ml_utilities - Library contains Azure Storage & Log Analytics helper functions.
 
 Notebooks:
