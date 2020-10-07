@@ -7,6 +7,7 @@ There are a number of configuration steps required to deploy the Logic App playb
 
 ## Configuration Steps
 1. Generate a GitHub (Personal Access Token)[https://github.com/settings/tokens].  GitHub user settings -> Developer settings -> Personal access tokens.
+        *Necessary permissions for the token include: admin:org, admin:enterprise, read:user, repo*
 2. Get the objectId for a user that the Logic App can use.  Azure Portal -> Azure Active Directory -> Users -> User.
 This user will be used to grant access to the Key Vault secret.
 3. Deploy the ARM template and fill in the parameters.
