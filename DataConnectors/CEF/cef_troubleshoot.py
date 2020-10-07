@@ -43,7 +43,6 @@ oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.r
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 oms_agent_selinux_documentation = "https://docs.microsoft.com/en-us/azure/azure-monitor/platform/agent-linux"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
-firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
 red_hat_security_enhanced_permanent_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
@@ -173,7 +172,7 @@ def restart_red_hat_firewall_d():
     o, e = restart.communicate()
     time.sleep(2)
     if e is not None:
-        print_error("Error: could not get /etc/firewalld/zones/public.xml file holding firewall exceptions.")
+        print_error("Could not restart firewalld")
     else:
         print_ok("Restarted firewalld.")
 
