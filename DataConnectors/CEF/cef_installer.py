@@ -100,7 +100,7 @@ def download_omsagent():
     '''
     print("Trying to download the omsagent.")
     print_notice("wget " + oms_agent_url)
-    download_command = subprocess.Popen(["wget", oms_agent_url], stdout=subprocess.PIPE)
+    download_command = subprocess.Popen(["wget", "-O", omsagent_file_name, oms_agent_url], stdout=subprocess.PIPE)
     o, e = download_command.communicate()
     time.sleep(3)
     if e is not None:
