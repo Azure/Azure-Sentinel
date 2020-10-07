@@ -226,7 +226,7 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
 def is_rsyslog_new_configuration():
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
-            if "module" in line and "load" in line:
+            if "module(load=" in line:
                 return True
         fin.close()
     return False
@@ -270,16 +270,20 @@ def append_content_to_file(line, file_path, overide = False):
 def set_rsyslog_old_configuration():
     add_udp = False
     add_tcp = False
+    is_exist_udp_conf = False
+    is_exist_tcp_conf = False
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
             if "imudp" in line or "UDPServerRun" in line:
+                is_exist_udp_conf = True
                 add_udp = True if "#" in line else False
             elif "imtcp" in line or "InputTCPServerRun" in line:
+                is_exist_tcp_conf = True
                 add_tcp = True if "#" in line else False
         fin.close()
-    if add_udp is True:
+    if add_udp or not is_exist_udp_conf:
         append_content_to_file(rsyslog_old_config_udp_content, rsyslog_conf_path)
-    if add_tcp:
+    if add_tcp or not is_exist_tcp_conf:
         append_content_to_file(rsyslog_old_config_tcp_content, rsyslog_conf_path)
     print_ok("Rsyslog.conf configuration was changed to fit required protocol - " + rsyslog_conf_path)
     return True
