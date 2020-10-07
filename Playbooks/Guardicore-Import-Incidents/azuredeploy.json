@@ -1,0 +1,563 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will pull Guardicore Incidents into Azure Sentinel Logs and update the Guardicore Incidents with a tag, showing that they are in Sentinel.",
+        "author": "Arbala Security"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Guardicore-Import-Incidents",
+            "type": "String"
+        },
+        "GCURL": {
+            "defaultValue": "https://<guardicore_instance_url>.com",
+            "type": "string"
+        },
+        "GCUsername": {
+            "defaultValue": "Enter your Guardicore API username",
+            "type": "string"
+        },
+        "GCPassword": {
+            "defaultValue": "Enter your Guardicore API password",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "azureloganalyticsdatacollector": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureloganalyticsdatacollector')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "GCIncidents",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
+                            },
+                            "type": "Recurrence"
+                        }
+                    },           
+                    "actions": {
+                        "Send_authorization_callout": {
+                            "inputs": {
+                                "body": {
+                                    "password": "[parameters('GCPassword')]",
+                                    "username": "[parameters('GCUsername')]"
+                                },
+                                "method": "POST",
+                                "uri": "[concat('', parameters('GCURL'), '/api/v3.0/authenticate')]"
+                            },
+                            "runAfter": {},
+                            "type": "Http"
+                        },
+                        "Handle_authorization_response": {
+                            "inputs": {
+                                "content": "@body('Send_authorization_callout')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "username": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "Send_authorization_callout": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Send_get_incidents_callout": {
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "bearer @{body('Handle_authorization_response')?['access_token']}"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "from_time": "@{div(sub(ticks(addminutes(utcNow(),-360)),621355968000000000),10000)}",
+                                    "to_time": "@{div(sub(ticks(utcNow()),621355968000000000),10000)}"
+                                },
+                                 "uri": "[concat('', parameters('GCURL'), '/api/v3.0/incidents?tags__not=sentinel')]"
+                            },
+                            "runAfter": {
+                                "Handle_authorization_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Handle_get_incidents_response": {
+                            "inputs": {
+                                "content": "@body('Send_get_incidents_callout')",
+                                "schema": {
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "integer"
+                                        },
+                                        "db_query_time": {
+                                            "type": "string"
+                                        },
+                                        "dict_mapping_time": {
+                                            "type": "string"
+                                        },
+                                        "filter": {
+                                            "properties": {
+                                                "from_time": {
+                                                    "type": "string"
+                                                },
+                                                "severity__gte": {
+                                                    "type": "integer"
+                                                },
+                                                "to_time": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "from_time",
+                                                "to_time",
+                                                "severity__gte"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "from": {
+                                            "type": "integer"
+                                        },
+                                        "is_count_exact": {
+                                            "type": "boolean"
+                                        },
+                                        "objects": {
+                                            "items": [
+                                                {
+                                                    "properties": {
+                                                        "_cls": {
+                                                            "type": "string"
+                                                        },
+                                                        "_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "affected_assets": {
+                                                            "items": [
+                                                                {
+                                                                    "properties": {
+                                                                        "country": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "country_code": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "domain": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "full_name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ip": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "is_inner": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "labels": {
+                                                                            "items": [
+                                                                                {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            ],
+                                                                            "type": "array"
+                                                                        },
+                                                                        "vm": {
+                                                                            "properties": {
+                                                                                "full_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "id": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "recent_domains": {
+                                                                                    "items": {},
+                                                                                    "type": "array"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "vm_id": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [],
+                                                                    "type": "object"
+                                                                }
+                                                            ],
+                                                            "type": "array"
+                                                        },
+                                                        "closed_time": {
+                                                            "type": "integer"
+                                                        },
+                                                        "concatenated_tags": {
+                                                            "items": [
+                                                                {
+                                                                    "properties": {
+                                                                        "display_name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "events": {
+                                                                            "items": [
+                                                                                {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            ],
+                                                                            "type": "array"
+                                                                        },
+                                                                        "tag_class": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [],
+                                                                    "type": "object"
+                                                                }
+                                                            ],
+                                                            "type": "array"
+                                                        },
+                                                        "destination_net": {
+                                                            "type": "string"
+                                                        },
+                                                        "doc_version": {
+                                                            "type": "integer"
+                                                        },
+                                                        "end_time": {
+                                                            "type": "integer"
+                                                        },
+                                                        "ended": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "enriched": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "experimental_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "flow_ids": {
+                                                            "items": {},
+                                                            "type": "array"
+                                                        },
+                                                        "has_export": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "incident_group": {
+                                                            "items": [
+                                                                {
+                                                                    "properties": {
+                                                                        "gid": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "gname": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [],
+                                                                    "type": "object"
+                                                                }
+                                                            ],
+                                                            "type": "array"
+                                                        },
+                                                        "incident_type": {
+                                                            "type": "string"
+                                                        },
+                                                        "iocs": {
+                                                            "items": {},
+                                                            "type": "array"
+                                                        },
+                                                        "is_experimental": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "last_updated_time": {
+                                                            "type": "integer"
+                                                        },
+                                                        "original_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "recommendations": {
+                                                            "items": {},
+                                                            "type": "array"
+                                                        },
+                                                        "reenrich_count": {
+                                                            "type": "integer"
+                                                        },
+                                                        "remote_index": {
+                                                            "type": "string"
+                                                        },
+                                                        "sensor_name": {
+                                                            "type": "string"
+                                                        },
+                                                        "sensor_type": {
+                                                            "type": "string"
+                                                        },
+                                                        "severity": {
+                                                            "type": "integer"
+                                                        },
+                                                        "similarity_calculated": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "source_ip": {
+                                                            "type": "string"
+                                                        },
+                                                        "start_time": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "required": [],
+                                                    "type": "object"
+                                                }
+                                            ],
+                                            "type": "array"
+                                        },
+                                        "objects_cleanup_time": {
+                                            "type": "string"
+                                        },
+                                        "objects_mapping_time": {
+                                            "type": "string"
+                                        },
+                                        "results_in_page": {
+                                            "type": "integer"
+                                        },
+                                        "sort": {
+                                            "type": "string"
+                                        },
+                                        "to": {
+                                            "type": "integer"
+                                        },
+                                        "total_count": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "required": [
+                                        "objects",
+                                        "total_count",
+                                        "is_count_exact",
+                                        "current_page",
+                                        "results_in_page",
+                                        "from",
+                                        "to",
+                                        "sort",
+                                        "filter",
+                                        "db_query_time",
+                                        "dict_mapping_time",
+                                        "objects_mapping_time",
+                                        "objects_cleanup_time"
+                                    ],
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "Send_get_incidents_callout": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Initialize_boolean_for_Sentinel_tag": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InSentinel",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Handle_get_incidents_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "For_each_Guardicore_incident": {
+                            "actions": {
+                                "For_each_tag_associated_with_the_current_Guardicore_incident": {
+                                    "actions": {
+                                        "Check_for_a_Sentinel_tag": {
+                                            "actions": {
+                                                "Set_boolean_to_true": {
+                                                    "inputs": {
+                                                        "name": "InSentinel",
+                                                        "value": true
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@items('For_each_tag_associated_with_the_current_Guardicore_incident')['display_name']",
+                                                            "Sentinel"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "foreach": "@items('For_each_Guardicore_incident')['concatenated_tags']",
+                                    "runAfter": {
+                                        "Set_boolean_to_false_for_next_Guardicore_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "If_no_Sentinel_tag_was_found": {
+                                    "actions": {
+                                        "Send_update_incident_callout_to_Guardicore": {
+                                            "inputs": {
+                                                "body": {
+                                                    "_id": "@{items('For_each_Guardicore_incident')?['_Id']}",
+                                                    "name": "Sentinel",
+                                                    "types": [
+                                                        "Sentinel"
+                                                    ]
+                                                },
+                                                "headers": {
+                                                    "Authorization": "bearer @{body('Handle_authorization_response')?['access_token']}"
+                                                },
+                                                "method": "PUT",
+                                                "uri": "[concat('', parameters('GCURL'), '/api/v3.0/incidents/@{items(''For_each_Guardicore_incident'')?[''_Id'']}?action=add_user_tag')]"
+                                            },
+                                            "runAfter": {},
+                                            "type": "Http"
+                                        },
+                                        "Send_Data": {
+                                            "runAfter": {
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{items('For_each_Guardicore_incident')}",
+                                                "headers": {
+                                                    "Log-Type": "GCIncidents",
+                                                    "time-generated-field": "@{utcNow()}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('InSentinel')",
+                                                    false
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "For_each_tag_associated_with_the_current_Guardicore_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_boolean_to_false_for_next_Guardicore_incident": {
+                                    "inputs": {
+                                        "name": "InSentinel",
+                                        "value": false
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "foreach": "@body('Handle_get_incidents_response')['objects']",
+                            "runAfter": {
+                                "Initialize_boolean_for_Sentinel_tag": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    
+                    "outputs": {
+
+                    }
+                    
+                },
+                "parameters": {
+                     "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]",
+                                "connectionName": "[variables('azureloganalyticsdatacollector')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    ]
+}
