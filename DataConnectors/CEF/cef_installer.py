@@ -141,7 +141,7 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
         sys.exit()
-    elif return_code.group(1) != '0':
+    elif return_code is not None and return_code.group(1) != '0':
         handle_error(o, error_response_str="Error: could not install omsagent.")
         sys.exit()
     print_ok("Installed omsagent successfully.")
