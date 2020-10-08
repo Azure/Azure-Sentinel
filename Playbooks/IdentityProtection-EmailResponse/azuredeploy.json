@@ -1,0 +1,362 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+        "metadata":{
+        "comments": "This playbook sends an email to the SOC with user risk history and allows to comfirm or dismiss risky user.",
+        "author": "Lior Tamir"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "IdentityProtection-EmailResponse",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "SocEmailAddress": {
+        "defaultValue": "Email will be sent to this address when new alert is triggered.",
+        "type": "string"
+        }
+    },
+    "variables": {
+	"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+	"Office365ConnectionName": "[concat('teams', parameters('PlaybookName'))]",
+	"AADIPConnectionName": "[concat('AADIP', parameters('PlaybookName'))]"
+	},	
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+    {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('Office365ConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[parameters('UserName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+          }
+        }
+      },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AADIPConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureadip')]"
+                }
+            }
+        },      
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AADIPConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"                
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_accounts": {
+                            "runAfter": {
+                                "Initialize_variable_-_SOC_email_address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Alert_-_Get_accounts')?['Accounts']",
+                            "actions": {
+                                "Create_HTML_table_-_Account": {
+                                    "runAfter": {
+                                        "Get_the_risk_history_of_a_risky_user": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@array(items('For_each'))"
+                                    }
+                                },
+                                "Create_HTML_table_-_Risk_History": {
+                                    "runAfter": {
+                                        "Create_HTML_table_-_Account": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@array(body('Get_the_risk_history_of_a_risky_user')?['value'])"
+                                    }
+                                },
+                                "Get_risky_user": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/beta/riskyUsers/@{encodeURIComponent(if(greater(length(items('For_each')?['AadUserId']), 0), items('For_each')?['AadUserId'], items('For_each')?['UPNSuffix']))}"
+                                    }
+                                },
+                                "Get_the_risk_history_of_a_risky_user": {
+                                    "runAfter": {
+                                        "Get_risky_user": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/beta/riskyUsers/@{encodeURIComponent(if(greater(length(items('For_each')?['AadUserId']), 0), items('For_each')?['AadUserId'], items('For_each')?['UPNSuffix']))}/history"
+                                    }
+                                },
+                                "Send_email_with_options": {
+                                    "runAfter": {
+                                        "Create_HTML_table_-_Risk_History": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "body": {
+                                            "Message": {
+                                                "Body": "<p><span style=\\\"font-size: 14px\\\"><strong>New Azure Sentinel alert<br></strong></span><span style=\\\"font-size: 14px\\\"><br></span><span style=\\\"font-size: 12px\\\"><strong>Alert display name: </strong></span><span style=\\\"font-size: 12px\\\">&nbsp;</span><span style=\\\"font-size: 12px\\\">@{triggerBody()?['AlertDisplayName']}</span><span style=\\\"font-size: 12px\\\"><br></span><span style=\\\"font-size: 12px\\\"><strong>Alert provider: </strong></span><span style=\\\"font-size: 12px\\\"></span><span style=\\\"font-size: 12px\\\">@{triggerBody()?['ProductName']}</span><span style=\\\"font-size: 12px\\\"><br></span><span style=\\\"font-size: 12px\\\">@{triggerBody()?['Description']}<br><br><span style=\\\"font-size: 14px\\\">The following account was found in the alert:<br></span>@{body('Create_HTML_table_-_Account')}<span style=\\\"font-size: 14px\\\"><br>User risk history:<br></span>@{body('Create_HTML_table_-_Risk_History')}",
+                                                "HideHTMLMessage": false,
+                                                "Importance": "Normal",
+                                                "Options": "Confirm Compromised, Dismiss Risky User, ignore",
+                                                "SelectionText": "<span style=\\\"font-size: 14px\\\"><strong>Should this account confirmed as compromised in AD Identity Protection?</strong></span>",
+                                                "ShowHTMLConfirmationDialog": false,
+                                                "Subject": "Respond to compromised user in Azure Sentinel alert",
+                                                "To": "@variables('SocEmailAddress')",
+                                                "UseOnlyHTMLMessage": true
+                                            },
+                                            "NotificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/mailwithoptions/$subscriptions"
+                                    }
+                                },
+                                "Switch": {
+                                    "runAfter": {
+                                        "Send_email_with_options": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_-_Confirm_Compromised": {
+                                            "case": "Confirm Compromised",
+                                            "actions": {
+                                                "Add_comment_to_incident_(V2)": {
+                                                    "runAfter": {
+                                                        "Confirm_a_risky_user_as_compromised": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "Value": "The user @{if(greater(length(items('For_each')?['AadUserId']), 0), items('For_each')?['AadUserId'], items('For_each')?['UPNSuffix']) } confirmed as compromised in Azure AD Identity Protection."
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                                    }
+                                                },
+                                                "Confirm_a_risky_user_as_compromised": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "userIds": [
+                                                                "@{if(greater(length(items('For_each')?['AadUserId']), 0), items('For_each')?['AadUserId'], items('For_each')?['UPNSuffix']) }"
+                                                            ]
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/beta/riskyUsers/confirmCompromised"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_-_Dismiss_Risky_User": {
+                                            "case": "Dismiss Risky User",
+                                            "actions": {
+                                                "Add_comment_to_incident_(V2)_2": {
+                                                    "runAfter": {
+                                                        "Dismiss_a_risky_user": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "Value": "The user @{if(greater(length(items('For_each')?['AadUserId']), 0), items('For_each')?['AadUserId'], items('For_each')?['UPNSuffix']) } dismissed in Azure AD Identity Protection."
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                                    }
+                                                },
+                                                "Dismiss_a_risky_user": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "userIds": [
+                                                                "@{if(greater(length(items('For_each')?['AadUserId']), 0), items('For_each')?['AadUserId'], items('For_each')?['UPNSuffix']) }"
+                                                            ]
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/beta/riskyUsers/dismiss"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@body('Send_email_with_options')?['SelectedOption']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "This loop iterates over all entities of type Account found in this alert"
+                        },
+                        "Initialize_variable_-_SOC_email_address": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SocEmailAddress",
+                                        "type": "string",
+                                        "value": "[parameters('SocEmailAddress')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureadip": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AADIPConnectionName'))]",
+                                "connectionName": "[variables('AADIPConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureadip')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName": "[variables('Office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
