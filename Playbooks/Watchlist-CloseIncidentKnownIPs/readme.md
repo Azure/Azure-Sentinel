@@ -16,11 +16,11 @@ For each Ip address that this alert includes (entities of type Ip):
 * The watchlist used in this example has at list one column named **ipaddress** which stores the safe address. See the csv file attached in this folder as an example.
 <br><br>
 Overall:
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlists-CloseIncidentKnownIP/images/designerView.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/designerView.png"/><br><br>
 For each IP:
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlists-CloseIncidentKnownIP/images/ForEach.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/ForEach.png"/><br><br>
 Update incident by the results:
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlists-CloseIncidentKnownIP/images/end.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/end.png"/><br><br>
 
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlists-CloseIncidentKnownIP%2Fazuredeploy.json" target="_blank">
