@@ -5,12 +5,11 @@ This playbook levarages Azure Sentinel Watchlists in order to get the relevant s
 It uses Microsoft Teams and Office 365 Outlook as ways to inform the sub owner.
 
 
-Note: This playbook utilizes two features currently in Private Preview.
+Note: This playbook utilizes two features currently in Preview.
 * Azure Sentinel Watchlists
 * Azure Sentinel Incident Trigger
 <br><br>
 
-Overall:
 <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-InformSubowner-IncidentTrigger/images/designerView.png"/><br><br>
 
 
