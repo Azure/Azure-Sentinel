@@ -237,8 +237,10 @@ def set_rsyslog_new_configuration():
         with open("tmp.txt", "wt") as fout:
             for line in fin:
                 if "imudp" in line or "imtcp" in line:
+                    # Load configuration line requires 1 replacement
                     if "load" in line:
                         fout.write(line.replace("#", "", 1))
+                    # Port configuration line requires 2 replacements
                     elif "port" in line:
                         fout.write(line.replace("#", "", 2))
                     else:
@@ -270,6 +272,7 @@ def append_content_to_file(line, file_path, overide = False):
 def set_rsyslog_old_configuration():
     add_udp = False
     add_tcp = False
+    # Do the configuration lines exist
     is_exist_udp_conf = False
     is_exist_tcp_conf = False
     with open(rsyslog_conf_path, "rt") as fin:
