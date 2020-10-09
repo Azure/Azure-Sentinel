@@ -5,16 +5,16 @@ This folder has resources to generate MITRE ATT&CK coverage for Azure Sentinel a
  **Jupyter Notebook** : Click on nbviewer Badge - [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/Azure/Azure-Sentinel/blob/master/Sample%20Data/MITRE%20ATT%26CK/MITRE%20ATT%26CK%20for%20Azure%20Sentinel.ipynb)
 
 
-- [Setup](##setup)
-- [Data Acquisition - Github](##data-acquisition-github)
-- [Data Cleaning and Preprocessing](##data-cleaning-and-preprocessing)
-- [Data Scraping](##data-scraping)
-- [Data Visualization](##data-visualization)
-    - [Jupyter DataFrame Widget](###jupyter-dataframe-widget)
-    - [Heatmaps](###heatmaps)
-    - [Radar Plots](###radarplots)
-    - [ATT&CK Navigator](###attck-navigator)
-    - [Donut Charts](###donutcharts)
+- [Setup](#setup)
+- [Data Acquisition - Github](#data-acquisition-github)
+- [Data Cleaning and Preprocessing](#data-cleaning-and-preprocessing)
+- [Data Scraping](#data-scraping)
+- [Data Visualization](#data-visualization)
+    - [Jupyter DataFrame Widget](#jupyter-dataframe-widget)
+    - [Heatmaps](#heatmaps)
+    - [Radar Plots](#radarplots)
+    - [ATT&CK Navigator](#attck-navigator)
+    - [Donut Charts](#donutcharts)
 
 
 **Raw Csv file for Azure Sentinel Detections and hunting Queries**
