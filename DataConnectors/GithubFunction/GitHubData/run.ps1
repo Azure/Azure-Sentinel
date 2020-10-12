@@ -242,6 +242,7 @@ foreach($org in $githubOrgs){
     $hasNextPage = $true
     $uri = "https://api.github.com/graphql"
     do {
+        $results = $null
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
             #write to log A to be added later
@@ -299,58 +300,84 @@ foreach($org in $githubOrgs){
 
     #For Each Repo in Org, get repo logs
     foreach($repo in $repoList){
-        $repoName = $repo.Name
-        Write-Host "Starting to process ORG: $orgName Repo: $repoName"
+        $repoName = $repo.Name        
+        $uri = "https://api.github.com/repos/$orgName/$repoName/contributors"
+        $contributorsInfo = Invoke-WebRequest -Method Get -Uri $uri -Headers $headers -UseBasicParsing
+        Write-Host $contributorsInfo.statuscode
+        # Status 204 represents No Content - ie., empty repo
+        if ($contributorsInfo.statuscode -ne 204)
+        {
+            Write-Host "Starting to process ORG: $orgName Repo: $repoName"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/referrers"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
-        #Send to log A; Name: GitHubRepoLogs
-        SendToLogA $results "GitHubRepoLogs"
+            $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/referrers"
+            $referrerLogs = $null
+            $referrerLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $referrerLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
+            #Send to log A;
+            SendToLogA $referrerLogs "GitHubRepoLogs"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
-        #Send to log A
+            $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
+            $pathLogs = $null
+            $pathLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $pathLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
+            #Send to log A;
+            SendToLogA $pathLogs "GitHubRepoLogs"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Views
-        #Send to log A
+            $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
+            $viewLogs = $null
+            $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $viewLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
+            #Send to log A
+            SendToLogA $viewLogs "GitHubRepoLogs"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
-        #Send to log A
+            $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
+            $cloneLogs = $null
+            $cloneLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $cloneLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
+            #Send to log A
+            SendToLogA $cloneLogs "GitHubRepoLogs"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
-        #Send to log A
+            $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
+            $commitLogs = $null
+            $commitLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $commitLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
+            #Send to log A
+            SendToLogA $commitLogs "GitHubRepoLogs"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
-        #Send to log A
+            $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
+            $collaboratorLogs = $null
+            $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $collaboratorLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
+            #Send to log A
+            SendToLogA $collaboratorLogs "GitHubRepoLogs"
 
-        $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
-        $results = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        $results | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-        $results | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-        $results | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
-        #Send to log A
+            $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
+            $forkLogs = $null
+            $forkLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $forkLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+            $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+            $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
+            #Send to log A
+            SendToLogA $forkLogs "GitHubRepoLogs"
+        }
+        else {
+            Write-Host "$repoName is empty"
+            Write-Verbose "$repoName is empty"
+        }
+        
+        
     }
     
     # get blobs for last run
@@ -358,7 +385,7 @@ foreach($org in $githubOrgs){
     $blobs = Get-AzStorageBlob -Context $storageAccountContext -Container $storageAccountContainer
     foreach($repo in $repoList){
         $repoName = $repo.name
-        if($blobs.Name -contains "lastrun-$orgName-$reppName.json"){
+        if($blobs.Name -contains "lastrun-$orgName-$repoName.json"){
             Get-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
             $lastRunVulnContext = Get-Content "$env:TMPDIR\lastrun-$orgName-$repoName.json" | ConvertFrom-Json
         }
@@ -375,7 +402,7 @@ foreach($org in $githubOrgs){
             Set-AzStorageBlobContent -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
         }
 
-        #BuildShe query based on previous context or not
+        #Build the query based on previous context or not
         $lastRunContext = $lastRunVulnContext.lastContext
         if($lastRunContext -eq ""){
             $VulnQuery = '{"query": "query {organization(login: \"'+$orgName+'\") {repository(name: \"'+$repoName+'\") { vulnerabilityAlerts(first: 100) { nodes { createdAt dismissReason dismissedAt id vulnerableManifestFilename vulnerableManifestPath vulnerableRequirements securityAdvisory { databaseId description ghsaId id origin permalink publishedAt severity summary withdrawnAt } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } } }"}'
@@ -386,8 +413,10 @@ foreach($org in $githubOrgs){
 
         $hasNextPage = $true
         $vulnList = @()
+        $uri = $null
         do {
             $uri = "https://api.github.com/graphql"
+            $results = $null
             $results = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $VulnQuery
             if(($results.data.organization.repository.vulnerabilityAlerts.nodes).Count -ne 0){
                 $vulnList += $results.data.organization.repository.vulnerabilityAlerts.nodes
@@ -395,6 +424,7 @@ foreach($org in $githubOrgs){
                 $vulnList | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
                 $vulnList | Add-Member -NotePropertyName LogType -NotePropertyValue vulnerabilityAlerts
                 #send to log A; Name:GitHubRepoLogs
+                SendToLogA $vulnList "GitHubRepoLogs"
             }
             $hasNextPage = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.hasNextPage
             $lastRunContext = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.endCursor
@@ -413,7 +443,7 @@ foreach($org in $githubOrgs){
                 $lastRunVulnContext.lastContext = $lastRunContext
                 $lastRunVulnContext.lastRun = $currentStartTime
                 $lastRunVulnContext | ConvertTo-Json | Out-File "$env:TMPDIR\lastrun-$orgName-$repoName.json"
-                Set-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-Audit.json" -Force
+                Set-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
             }
         } until ($hasNextPage -eq $false)
     }
