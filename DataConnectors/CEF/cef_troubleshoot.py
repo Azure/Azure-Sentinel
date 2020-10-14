@@ -650,6 +650,24 @@ def handle_rsyslog(workspace_id):
             time.sleep(1)
 
 
+def check_portal_auto_sync():
+    if check_file_in_directory(portal_auto_sync_disable_file, portal_auto_sync_disable_directory):
+        print_ok("No auto sync with the portal")
+        return False
+    if check_daemon("rsyslog"):
+        portal_auto_sync_file_name = rsyslog_portal_auto_sync_file_name
+        portal_auto_sync_directory = rsyslog_daemon_forwarding_configuration_dir_path
+    elif check_daemon("syslog-ng"):
+        portal_auto_sync_file_name = syslog_ng_portal_auto_sync_file_name
+        portal_auto_sync_directory = syslog_ng_default_config_directory
+    if check_file_in_directory(portal_auto_sync_file_name, portal_auto_sync_directory):
+        print_warning("Your machine is auto synced with the portal. This may cause duplicated syslog logs in your workspace.")
+        print_warning("To disable this auto sync please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+        return True
+    print_ok("No auto sync with the portal")
+    return False
+
+
 def print_full_disk_warning():
     warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
