@@ -5,8 +5,8 @@ This playbook levarages Azure Sentinel Watchlists in order to close incidents wh
 
 For each Ip address included in the alert (entities of type IP):
 1. Check if IP is included in watchlist.
-    * If IP is in the watchlist, consider the IP safe. **Add it to Safe IPs array.**
-    * If IP is not in the watchlist, meaning that we are not sure it is safe. **Add it to not Safe IPs array.**
+    * If IP is in the watchlist, consider the IP saf,. **Add it to Safe IPs array.**
+    * If IP is not in the watchlist, meaning that we are not sure it is safe, **Add it to not Safe IPs array.**
 2. Add a comment to the incident the list of safe and not safe IPs found.
 3. If the not safe list is empty (length == 0), close the incident as Benign Positive.
 <br>
