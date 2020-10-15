@@ -58,7 +58,7 @@ syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/do
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
-portal_auto_sync_disable_file = "/etc/opt/omi/conf/omsconfig/omshelper_disable"
+portal_auto_sync_disable_file = "omshelper_disable"
 
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
@@ -659,9 +659,9 @@ def check_portal_auto_sync():
     if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
         print_ok("No auto sync with the portal")
         return False
-    print_warning("Your machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages,"
+    print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
                   "make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
-                  "the auto sync with the portal, otherwise all chages will be over written ")
+                  "the auto sync with the portal. Otherwise all changes will be overwritten ")
     print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
     print_warning("For more on how to avoid duplicate syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
     return True
