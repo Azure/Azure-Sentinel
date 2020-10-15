@@ -41,6 +41,7 @@ oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
 oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
@@ -53,8 +54,9 @@ syslog_ng_process_name = "syslog-ng"
 syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
-
+portal_auto_sync_disable_file = "/etc/opt/omi/conf/omsconfig/omshelper_disable"
 
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
@@ -651,21 +653,15 @@ def handle_rsyslog(workspace_id):
 
 
 def check_portal_auto_sync():
-    if check_file_in_directory(portal_auto_sync_disable_file, portal_auto_sync_disable_directory):
+    if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
         print_ok("No auto sync with the portal")
         return False
-    if check_daemon("rsyslog"):
-        portal_auto_sync_file_name = rsyslog_portal_auto_sync_file_name
-        portal_auto_sync_directory = rsyslog_daemon_forwarding_configuration_dir_path
-    elif check_daemon("syslog-ng"):
-        portal_auto_sync_file_name = syslog_ng_portal_auto_sync_file_name
-        portal_auto_sync_directory = syslog_ng_default_config_directory
-    if check_file_in_directory(portal_auto_sync_file_name, portal_auto_sync_directory):
-        print_warning("Your machine is auto synced with the portal. This may cause duplicated syslog logs in your workspace.")
-        print_warning("To disable this auto sync please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
-        return True
-    print_ok("No auto sync with the portal")
-    return False
+    print_warning("Your machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages,"
+                  "make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal, otherwise all chages will be over written ")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicate syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    return True
 
 
 def print_full_disk_warning():
@@ -712,6 +708,7 @@ def main():
     print("Simulating mock data which you can find in your workspace")
     # we always simulate to the daemon port
     incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True)
+    check_portal_auto_sync()
     print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(

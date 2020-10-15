@@ -37,6 +37,7 @@ help_text = "Optional arguments for the python script are:\n\t-T: for TCP\n\t-U:
 omsagent_default_incoming_port = "25226"
 daemon_default_incoming_port = "514"
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 syslog_ng_source_content = "source s_src { udp( port(514)); tcp( port(514));};"
@@ -48,8 +49,9 @@ rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imud
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
-
+portal_auto_sync_disable_file = "/etc/opt/omi/conf/omsconfig/omshelper_disable"
 
 
 
@@ -260,6 +262,22 @@ def append_content_to_file(line, file_path, overide = False):
         handle_error(e, error_response_str="Error: could not change Rsyslog.conf configuration add line \"" + line + "\" to file -" + rsyslog_conf_path)
         return False
     return True
+
+
+def check_file_in_directory(file_name, path):
+    '''
+    Check if the given file is found in the current directory.
+    :param path:
+    :param file_name:
+    :return: return True if it is found elsewhere False
+    '''
+    current_dir = subprocess.Popen(["ls", "-ltrh", path], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(["grep", "-i", file_name], stdin=current_dir.stdout, stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    output = o.decode(encoding='UTF-8')
+    if e is None and file_name in output:
+        return True
+    return False
 
 
 def set_rsyslog_old_configuration():
@@ -502,6 +520,19 @@ def set_syslog_ng_configuration():
         append_content_to_file(line=syslog_ng_source_content, file_path=syslog_ng_conf_path)
     print_ok("Rsyslog.conf configuration was changed to fit required protocol - " + syslog_ng_conf_path)
     return True
+
+
+def check_portal_auto_sync():
+    if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
+        print_ok("No auto sync with the portal")
+        return False
+    print_warning("Your machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages,"
+                  "make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal, otherwise all chages will be over written ")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicate syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    return True
+
 
 
 def print_full_disk_warning():
