@@ -10,10 +10,10 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
 using CsvHelper;
 using CsvHelper.Configuration;
-using Microsoft.Azure.Storage;
-using Microsoft.Azure.Storage.Blob;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging; 
 #endregion
@@ -66,27 +66,17 @@ namespace HoneyBucketLogParser
         /// <returns>File contents</returns>
         private static string GetData(string storageConnectionString, string containerName, string path)
         {
-            if (CloudStorageAccount.TryParse(storageConnectionString, out var storageAccount))
+            BlobServiceClient blobServiceClient = new BlobServiceClient(storageConnectionString);
+            var container = blobServiceClient.GetBlobContainerClient(containerName);
+            var blobRef = container.GetBlobClient(path);
+
+            using (var ms = new MemoryStream())
+            using (var sr = new StreamReader(ms))
             {
-                // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
-                var cloudBlobClient = storageAccount.CreateCloudBlobClient();
-
-                var container = cloudBlobClient.GetContainerReference(containerName);
-
-                var blobRef = container.GetBlockBlobReference(path);
-
-                using (var ms = new MemoryStream())
-                using (var sr = new StreamReader(ms))
-                {
-                    var task = blobRef.DownloadToStreamAsync(ms);
-                    task.Wait();
-                    ms.Position = 0;
-                    return sr.ReadToEnd();
-                }
-            }
-            else
-            {
-                throw new InvalidProgramException("Invalid format string");
+                var task = blobRef.DownloadToAsync(ms);
+                task.Wait();
+                ms.Position = 0;
+                return sr.ReadToEnd();
             }
         }
 
@@ -99,21 +89,16 @@ namespace HoneyBucketLogParser
         /// <param name="data">The data to write</param>
         private static void WriteData(string storageConnectionString, string containerName, string path, string data)
         {
-            if (CloudStorageAccount.TryParse(storageConnectionString, out var storageAccount))
+            BlobServiceClient blobServiceClient = new BlobServiceClient(storageConnectionString);
+
+            var container = blobServiceClient.GetBlobContainerClient(containerName);
+
+            var blobRef = container.GetBlockBlobClient(path);
+
+            var dataAsBytes = Encoding.UTF8.GetBytes(data);
+            using (Stream stream = new MemoryStream(dataAsBytes))
             {
-                // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
-                var cloudBlobClient = storageAccount.CreateCloudBlobClient();
-
-                var container = cloudBlobClient.GetContainerReference(containerName);
-
-                var blobRef = container.GetBlockBlobReference(path);
-
-                var dataAsBytes = Encoding.UTF8.GetBytes(data);
-                blobRef.UploadFromByteArrayAsync(dataAsBytes, 0, dataAsBytes.Length).Wait();
-            }
-            else
-            {
-                throw new InvalidProgramException("Invalid format string");
+                blobRef.UploadAsync(stream).Wait();
             }
         }
 
