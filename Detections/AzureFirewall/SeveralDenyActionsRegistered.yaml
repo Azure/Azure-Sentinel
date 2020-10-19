@@ -1,0 +1,34 @@
+id: 
+name: Several deny actions registered
+description: |
+  'This Creates an incident when a source has more than 1 registered deny action in Azure Firewall.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - 
+query: |
+
+let timeframe = ago(1h);
+let threshold = 2;
+AzureDiagnostics
+    | where TimeGenerated >= timeframe
+    | where OperationName in ('AzureFirewallApplicationRuleLog','AzureFirewallNetworkRuleLog')
+    | extend msg_s_replaced0 = replace(@'\s\s',@' ',msg_s)
+    | extend msg_s_replaced1 = replace(@'\.\s',@' ',msg_s_replaced0)
+    | extend msg_a = split(msg_s_replaced1,' ')
+    | extend srcAddr_a = split(msg_a[3],':') , destAddr_a = split(msg_a[5],':')
+    | extend protocol = tostring(msg_a[0]), srcIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), destIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), action = tostring(msg_a[7])
+    | where action == 'Deny'
+    | extend url = iff(destIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",destIp)
+    | summarize StartTime = min(TimeGenerated), count() by srcIp, destIp, url
+    | where count_ >= ['threshold']
+    | extend URLCustomEntity = url, IPCustomEntity = srcIp
