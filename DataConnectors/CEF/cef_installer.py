@@ -30,6 +30,7 @@ import sys
 import os
 import re
 
+default_file_permissions = '644'
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
 omsagent_file_name = "onboard_agent.sh"
@@ -214,6 +215,8 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
     if e is not None:
         handle_error(e, error_response_str="Error: could not download omsagent configuration.")
         return False
+    # set permissions to the configuration file after downloaded and created
+    set_file_permissions(configuration_path)
     print_ok("Configuration for omsagent downloaded successfully.")
     print("Trying to change omsagent configuration")
     if omsagent_incoming_port is not omsagent_default_incoming_port:
@@ -271,6 +274,23 @@ def append_content_to_file(line, file_path, overide = False):
     o, e = write_new_content.communicate()
     if e is not None:
         handle_error(e, error_response_str="Error: could not change Rsyslog.conf configuration add line \"" + line + "\" to file -" + rsyslog_conf_path)
+        return False
+    set_file_permissions(file_path)
+    return True
+
+
+def set_file_permissions(file_path, permissions = default_file_permissions):
+    """
+    :param  file_path: the path to change the permissions for
+    :param2 permissions: set to the default file permissions
+    :return: True if changes successfully otherwise false
+    """
+    command_tokens = ["sudo", "chmod", permissions, file_path]
+    change_permissions = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+    time.sleep(3)
+    o, e = change_permissions.communicate()
+    if e is not None:
+        handle_error(e, error_response_str="Error: could not change the permissions for the file -" + file_path)
         return False
     return True
 
@@ -337,6 +357,8 @@ def change_omsagent_protocol(configuration_path):
     if e is not None:
         handle_error(e, error_response_str="Error: could not change omsagent configuration port in ." + configuration_path)
         return False
+    # set permissions to file after recreated with the move command
+    set_file_permissions(configuration_path)
     print_ok("Omsagent configuration was changed to fit required protocol - " + configuration_path)
     return True
 
@@ -358,6 +380,8 @@ def change_omsagent_configuration_port(omsagent_incoming_port, configuration_pat
     if e is not None:
         handle_error(e, error_response_str="Error: could not change omsagent configuration port in ." + configuration_path)
         return False
+    # set permissions to file after recreated with the move command
+    set_file_permissions(configuration_path)
     print_ok("Omsagent incoming port was changed in configuration - " + configuration_path)
     return True
 
