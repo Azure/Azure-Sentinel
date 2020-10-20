@@ -697,7 +697,7 @@ def main():
     print("Simulating mock data which you can find in your workspace")
     # we always simulate to the daemon port
     if not incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True):
-        print_error("Please make sure local TCP traffic to port" + agent_port + "is enabled in your firewall")
+        print_error("Please make sure local TCP traffic to port " + agent_port + " is enabled in your firewall")
     print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(
