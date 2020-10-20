@@ -27,8 +27,6 @@ if ($Timer.IsPastDue) {
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 
-Write-Host "Sreedhar Ande"
-
 # Main
 if ($env:MSI_SECRET -and (Get-Module -ListAvailable Az.Accounts)){
     Connect-AzAccount -Identity
@@ -41,9 +39,8 @@ $storageAccountContainer = $env:StorageAccountContainer
 $personalAccessToken = $env:PersonalAccessToken
 $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
-$AuditLogTable = "GitHubAuditLogs"
-$RepoLogTable = "GitHubRepoLogs"
-$VulnerabilityLogTable = "GitHubVulnerabilityLogs"
+$AuditLogTable = "GitHub_CL"
+$RepoLogTable = "GitHubRepoLogs_CL"
 
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
 
@@ -266,7 +263,7 @@ foreach($org in $githubOrgs){
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
             #write to log A to be added later            
-            SendToLogA $results $AuditLogTable
+            SendToLogA -gitHubData $results, -customLogName $AuditLogTable
         }
         $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
         $lastRunContext = $results.data.organization.auditLog.pageInfo.endCursor
@@ -334,7 +331,8 @@ foreach($org in $githubOrgs){
             $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
             #Send to log A;
-            SendToLogA $referrerLogs $RepoLogTable
+            SendToLogA -gitHubData $referrerLogs, -customLogName $RepoLogTable
+            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
             $pathLogs = $null
@@ -343,8 +341,8 @@ foreach($org in $githubOrgs){
             $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
             #Send to log A;
-            SendToLogA $pathLogs $RepoLogTable
-
+            SendToLogA -gitHubData $pathLogs, -customLogName $RepoLogTable
+            
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
             $viewLogs = $null
             $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
@@ -352,7 +350,7 @@ foreach($org in $githubOrgs){
             $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
             #Send to log A
-            SendToLogA $viewLogs $RepoLogTable
+            SendToLogA -gitHubData $viewLogs, -customLogName $RepoLogTable            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
             $cloneLogs = $null
@@ -361,7 +359,7 @@ foreach($org in $githubOrgs){
             $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
             #Send to log A
-            SendToLogA $cloneLogs $RepoLogTable
+            SendToLogA -gitHubData $cloneLogs, -customLogName $RepoLogTable            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
             $commitLogs = $null
@@ -370,8 +368,8 @@ foreach($org in $githubOrgs){
             $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
             #Send to log A
-            SendToLogA $commitLogs $RepoLogTable
-
+            SendToLogA -gitHubData $commitLogs, -customLogName $RepoLogTable
+            
             $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
             $collaboratorLogs = $null
             $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
@@ -379,7 +377,7 @@ foreach($org in $githubOrgs){
             $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
             #Send to log A
-            SendToLogA $collaboratorLogs $RepoLogTable
+            SendToLogA -gitHubData $collaboratorLogs, -customLogName $RepoLogTable            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
             $forkLogs = $null
@@ -388,7 +386,7 @@ foreach($org in $githubOrgs){
             $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
             #Send to log A
-            SendToLogA $forkLogs $RepoLogTable
+            SendToLogA -gitHubData $forkLogs, -customLogName $RepoLogTable            
         }
         else {
             Write-Host "$repoName is empty"
@@ -442,7 +440,7 @@ foreach($org in $githubOrgs){
                 $vulnList | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
                 $vulnList | Add-Member -NotePropertyName LogType -NotePropertyValue vulnerabilityAlerts
                 #send to log A; Name:GitHubRepoLogs
-                SendToLogA $vulnList $VulnerabilityLogTable
+                SendToLogA -gitHubData $vulnList, -customLogName $RepoLogTable                
             }
             $hasNextPage = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.hasNextPage
             $lastRunContext = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.endCursor
