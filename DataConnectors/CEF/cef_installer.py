@@ -28,6 +28,7 @@ import subprocess
 import time
 import sys
 import os
+import re
 
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
@@ -135,9 +136,14 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     install_omsagent_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = install_omsagent_command.communicate()
     time.sleep(3)
+    # Parsing the agent's installation return code
+    return_code = re.search(".*Shell bundle exiting with code (\d+)", o, re.IGNORECASE)
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
-        return False
+        sys.exit()
+    elif return_code is not None and return_code.group(1) != '0':
+        handle_error(o, error_response_str="Error: could not install omsagent.")
+        sys.exit()
     print_ok("Installed omsagent successfully.")
     return True
 
@@ -226,7 +232,7 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
 def is_rsyslog_new_configuration():
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
-            if "module" in line and "load" in line:
+            if "module(load=" in line:
                 return True
         fin.close()
     return False
@@ -237,7 +243,14 @@ def set_rsyslog_new_configuration():
         with open("tmp.txt", "wt") as fout:
             for line in fin:
                 if "imudp" in line or "imtcp" in line:
-                    fout.write(line.replace("#", "")) if "#" in line else fout.write(line)
+                    # Load configuration line requires 1 replacement
+                    if "load" in line:
+                        fout.write(line.replace("#", "", 1))
+                    # Port configuration line requires 2 replacements
+                    elif "port" in line:
+                        fout.write(line.replace("#", "", 2))
+                    else:
+                        fout.write(line)
                 else:
                     fout.write(line)
     command_tokens = ["sudo", "mv", "tmp.txt", rsyslog_conf_path]
@@ -265,16 +278,21 @@ def append_content_to_file(line, file_path, overide = False):
 def set_rsyslog_old_configuration():
     add_udp = False
     add_tcp = False
+    # Do the configuration lines exist
+    is_exist_udp_conf = False
+    is_exist_tcp_conf = False
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
             if "imudp" in line or "UDPServerRun" in line:
+                is_exist_udp_conf = True
                 add_udp = True if "#" in line else False
             elif "imtcp" in line or "InputTCPServerRun" in line:
+                is_exist_tcp_conf = True
                 add_tcp = True if "#" in line else False
         fin.close()
-    if add_udp is True:
+    if add_udp or not is_exist_udp_conf:
         append_content_to_file(rsyslog_old_config_udp_content, rsyslog_conf_path)
-    if add_tcp:
+    if add_tcp or not is_exist_tcp_conf:
         append_content_to_file(rsyslog_old_config_tcp_content, rsyslog_conf_path)
     print_ok("Rsyslog.conf configuration was changed to fit required protocol - " + rsyslog_conf_path)
     return True
