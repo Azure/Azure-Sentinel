@@ -1,0 +1,253 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will pull the domain names and IPs from the threat intelligence that Guardicore shares every Sunday. It will create Azure Sentinel Threat Intelligence Indicators with the information gathered and send it to the tiIndicators API. This playbook is configured to run every Monday morning at 6:00 AM EST.",
+        "author": "Arbala Security"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Guardicore-ThreatIntel",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "microsoftgraphsecurity": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('microsoftgraphsecurity')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "GCTI",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('microsoftgraphsecurity'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Week",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "6"
+                                    ],
+                                    "minutes": [
+                                        0
+                                    ],
+                                    "weekDays": [
+                                        "Monday"
+                                    ]
+                                },
+                                "timeZone": "UTC"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "HTTP-_Get_GC_Data": {
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://threatintelligence.guardicore.com/downloads/latest.json"
+                            },
+                            "runAfter": {},
+                            "type": "Http"
+                        },
+                        "Parse_JSON_-_GC_Data": {
+                            "inputs": {
+                                "content": "@body('HTTP-_Get_GC_Data')",
+                                "schema": {
+                                    "properties": {
+                                        "content": {
+                                            "properties": {
+                                                "malicious_domains": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "dns_record": {
+                                                                "type": "string"
+                                                            },
+                                                            "first_seen": {
+                                                                "type": "string"
+                                                            },
+                                                            "ips": {
+                                                                "type": "string"
+                                                            },
+                                                            "last_seen": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP-_Get_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "For_Each_-_GC_Data:_Malicious_Domains_1": {
+                            "actions": {
+                                "Condition_-_Check_Valid_Data_1": {
+                                    "actions": {
+                                        "Create_tiIndicator_2": {
+                                            "inputs": {
+                                                "body": {
+                                                    "action": "alert",
+                                                    "confidence": 0,
+                                                    "description": "Guardicore Malicious Domain",
+                                                    "domainName": "@{items('For_Each_-_GC_Data:_Malicious_Domains_1')?['dns_record']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "severity": 0,
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/beta/security/tiIndicators"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@items('For_Each_-_GC_Data:_Malicious_Domains_1')?['dns_record']",
+                                                    "."
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['malicious_domains']",
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_-_GC_Data:_Malicious_Domains_2": {
+                            "actions": {
+                                "Condition_-_Check_Valid_Data_2": {
+                                    "actions": {
+                                        "For_Each_-_GC_Data:_Malicious_Domains_IPs": {
+                                            "actions": {
+                                                "Create_tiIndicator": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "action": "alert",
+                                                            "confidence": 0,
+                                                            "description": "Guardicore Malicious Domain (IP)",
+                                                            "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                            "networkDestinationCidrBlock": "@{items('For_Each_-_GC_Data:_Malicious_Domains_IPs')}",
+                                                            "severity": 0,
+                                                            "targetProduct": "Azure Sentinel",
+                                                            "threatType": "WatchList",
+                                                            "tlpLevel": "white"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/beta/security/tiIndicators"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection"
+                                                }
+                                            },
+                                            "foreach": "@split(items('For_Each_-_GC_Data:_Malicious_Domains_2')?['ips'], ',')",
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_Each_-_GC_Data:_Malicious_Domains_2')?['ips']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Parse_JSON_-_GC_Data')?['malicious_domains']",
+                            "runAfter": {
+                                "Parse_JSON_-_GC_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftgraphsecurity": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('microsoftgraphsecurity'))]",
+                                "connectionName": "[variables('microsoftgraphsecurity')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
