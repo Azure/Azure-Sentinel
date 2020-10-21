@@ -1,4 +1,4 @@
-<img src="logic_app_logo.png" alt="LogicApps Logo" width="500" height="250"/>
+<img src="logic_app_logo.png" alt="LogicApps Logo" width="500" height="270"/>
 # About
 This repo contains sample security playbooks for security automation, orchestration and response (SOAR). Each folder contains a security playbook ARM template that uses Microsoft Azure Sentinel trigger.
 
