@@ -10,21 +10,23 @@ To configure the tool, the following assembly is required to post sample data to
 
 1. **Active Azure Subscription**, if you don't have one, create a [free account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F) before you begin.
 
-2. Obtain **domain** by following these steps:
+2. *\[Optional\]* Obtain **domain** by following these steps:
     1. Login into [Azure Management Portal](https://portal.azure.com)
     1. Navigate to the **Azure Active Directory** blade
     1. Click on **Custom Domain Names**. Copy your domain name as you will need it later to run the application.
 
 3. **Log Analytics workspace**. If you don't have one, [create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/learn/quick-create-workspace).
 
-4. Obtain **WorkSpaceId** and **Key** following these steps. Copy this workspace Id and Key as you will need them later to run the application.
+4. Obtain **WorkSpaceId** and **PrimaryKey** following these steps. Copy this workspace Id and PrimaryKey as you will need them later to run the application.
    1. In the Azure portal, search for and select **Log Analytics workspaces**
    1. In your list of Log Analytics workspaces, select the workspace you intend on configuring the agent to report to.
-   1. Select **Advanced Settings**.
+   1. Select **Agents management**.
 
 5. To enable Azure Sentinel, you need **contributor** permissions to the subscription in which the Azure Sentinel workspace resides. Learn more to [onboard Azure Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard#enable-azure-sentinel-).
 
 6. To use Azure Sentinel, you need either **contributor** or **reader** permissions on the resource group that the workspace belongs to.
+
+7. [.NET Core](https://dotnet.microsoft.com/download) installed locally.
 
 ## App Registration
 To use Log Analytics API in the application, you'll need to register a new application in the Microsoft [Application Registration Portal](https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps).
@@ -33,9 +35,9 @@ Follow these steps to register a new application:
 
 2. Choose **New registration**.
 
-3. Enter an application name, and choose **Register**.
+3. Enter an application name, and choose **Register** (keep the default values for the other fields).
 
-4. Next you'll see the overview page for your app. Copy and save the **Application Id** field. You will need it later to complete the configuration process.
+4. Next you'll see the overview page for your app. Copy and save the **Application Id (clientId)** field. You will need it later to complete the configuration process. If the app is not registered under the domain listed above, you will also need to copy and save the **Directory ID (tenantId)**.
 
 5. Under **Certificates & secrets**, choose **New client secret** and add a quick description. A new secret will be displayed in the **Value** column. Copy this password. You will need it later to complete the configuration process and it will not be shown again.
 
@@ -50,16 +52,19 @@ This option allows users to post the readily available sample custom data in the
 
 ### Setup
 1) Clone Azure Sentinel repository by running this command: git clone https://github.com/Azure/Azure-Sentinel.git
+
 2) In the cloned repo, navigate to the **Tools** directory, and open **SampleDataIngestTool** solution.
+
 3) Install necessary dependencies: In Visual Studio, right click the **SampleDataIngestTool** solution.
 Click **Restore NuGet Packages**.
+
 4) Open **config.txt** file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
 
         "workspaceId": "enter_your_workspaceId_or_customerId_here",
         "sharedKey": "enter_your_workspace_primary_key_here",
         "clientId": "enter_your_clientId_here",
         "clientSecret": "enter_your_client_secret_here",
-        "domain": "enter_your_domain_here";
+        "domain": "enter_your_app_domain_or_tenantId_here";
 
 5) Once changes are complete, save the file.
 Now you can run the application. Please note that the "Main" function in the Program.cs class is the entry point for the application.
