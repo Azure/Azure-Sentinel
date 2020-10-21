@@ -28,6 +28,7 @@ import subprocess
 import time
 import sys
 import os
+import re
 
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
@@ -46,6 +47,8 @@ rsyslog_module_udp_content = "# provides UDP syslog reception\nmodule(load=\"imu
 rsyslog_module_tcp_content = "# provides TCP syslog reception\nmodule(load=\"imtcp\")\ninput(type=\"imtcp\" port=\"" + daemon_default_incoming_port + "\")\n"
 rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imudp\n$UDPServerRun " + daemon_default_incoming_port + "\n"
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
+syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
+rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
 
 
@@ -98,7 +101,7 @@ def download_omsagent():
     '''
     print("Trying to download the omsagent.")
     print_notice("wget " + oms_agent_url)
-    download_command = subprocess.Popen(["wget", oms_agent_url], stdout=subprocess.PIPE)
+    download_command = subprocess.Popen(["wget", "-O", omsagent_file_name, oms_agent_url], stdout=subprocess.PIPE)
     o, e = download_command.communicate()
     time.sleep(3)
     if e is not None:
@@ -133,9 +136,14 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     install_omsagent_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = install_omsagent_command.communicate()
     time.sleep(3)
+    # Parsing the agent's installation return code
+    return_code = re.search(".*Shell bundle exiting with code (\d+)", o, re.IGNORECASE)
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
-        return False
+        sys.exit()
+    elif return_code is not None and return_code.group(1) != '0':
+        handle_error(o, error_response_str="Error: could not install omsagent.")
+        sys.exit()
     print_ok("Installed omsagent successfully.")
     return True
 
@@ -224,7 +232,7 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
 def is_rsyslog_new_configuration():
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
-            if "module" in line and "load" in line:
+            if "module(load=" in line:
                 return True
         fin.close()
     return False
@@ -235,7 +243,14 @@ def set_rsyslog_new_configuration():
         with open("tmp.txt", "wt") as fout:
             for line in fin:
                 if "imudp" in line or "imtcp" in line:
-                    fout.write(line.replace("#", "")) if "#" in line else fout.write(line)
+                    # Load configuration line requires 1 replacement
+                    if "load" in line:
+                        fout.write(line.replace("#", "", 1))
+                    # Port configuration line requires 2 replacements
+                    elif "port" in line:
+                        fout.write(line.replace("#", "", 2))
+                    else:
+                        fout.write(line)
                 else:
                     fout.write(line)
     command_tokens = ["sudo", "mv", "tmp.txt", rsyslog_conf_path]
@@ -263,16 +278,21 @@ def append_content_to_file(line, file_path, overide = False):
 def set_rsyslog_old_configuration():
     add_udp = False
     add_tcp = False
+    # Do the configuration lines exist
+    is_exist_udp_conf = False
+    is_exist_tcp_conf = False
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
             if "imudp" in line or "UDPServerRun" in line:
+                is_exist_udp_conf = True
                 add_udp = True if "#" in line else False
             elif "imtcp" in line or "InputTCPServerRun" in line:
+                is_exist_tcp_conf = True
                 add_tcp = True if "#" in line else False
         fin.close()
-    if add_udp is True:
+    if add_udp or not is_exist_udp_conf:
         append_content_to_file(rsyslog_old_config_udp_content, rsyslog_conf_path)
-    if add_tcp:
+    if add_tcp or not is_exist_tcp_conf:
         append_content_to_file(rsyslog_old_config_tcp_content, rsyslog_conf_path)
     print_ok("Rsyslog.conf configuration was changed to fit required protocol - " + rsyslog_conf_path)
     return True
@@ -502,6 +522,26 @@ def set_syslog_ng_configuration():
     return True
 
 
+def print_full_disk_warning():
+    '''
+    Warn from potential full disk issues that can be caused by the daemon running on the machine.
+    The function points the user to the relevant documentation according to his daemon type.
+    '''
+    warn_message = "\nWarning: please make sure your logging daemon configuration does not store unnecessary logs. " \
+                   "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
+                   " For more information:"
+
+    if process_check(rsyslog_daemon_name):
+        if process_check(syslog_ng_daemon_name):
+            print_warning(warn_message + '\n' + rsyslog_documantation_path + '\n' + syslog_ng_documantation_path)
+        else:
+            print_warning(warn_message + '\n' + rsyslog_documantation_path)
+    elif process_check(syslog_ng_daemon_name):
+        print_warning(warn_message + '\n' + syslog_ng_documantation_path)
+    else:
+        print_warning("No daemon was found on the machine")
+
+
 def main():
     omsagent_incoming_port = omsagent_default_incoming_port
     port_argument = False
@@ -549,6 +589,7 @@ def main():
         restart_syslog_ng()
     restart_omsagent(workspace_id=workspace_id)
     check_syslog_computer_field_mapping(workspace_id=workspace_id)
+    print_full_disk_warning()
     print_ok("Installation completed")
 
 

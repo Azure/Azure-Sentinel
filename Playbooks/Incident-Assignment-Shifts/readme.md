@@ -45,6 +45,16 @@ Follow the steps in this [link](https://docs.microsoft.com/azure/active-director
   <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts/media/pic2.png" width="700" height="350">
 
 
+### 4. Permission on Azure AD
+- There is an Azure AD connector in this Logic App to get details for a user.
+- To use the Azure AD connector, you need to **Sign-in** with an account with the following administrator permissions:
+    - Group.ReadWrite.All
+    - User.ReadWrite.All
+    - Directory.ReadWrite.All
+    
+### 5. An O365 account to be used to send email notification
+- Login details of the O365 account.
+
 
 
 ## Post Deployment Configuration:
@@ -66,7 +76,7 @@ Follow the steps in this [link](https://docs.microsoft.com/azure/active-director
 Incidents are assigned to users based on the following criteria:
 
 - Users who are on shift during the time that the incident is triggeres and the Logic App runs.
-- Users who still have at least **2** hours left before going off shift. 
+- Users who still have at least **1** hours left before going off shift. 
   
   You can change this value by modifying the below variable:
 
@@ -79,3 +89,13 @@ Incidents are assigned to users based on the following criteria:
   Although not recommended, but you can modify the following variable to allow reassignment:
 
     <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts/media/pic5.png" width="500" height="180">
+
+
+## Email Notification:
+
+- When an incident is assigned, the incident owner will be notified via email.
+- Below is the sample email notification:
+
+   <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts/media/pic6.png" width="500" height="240">
+
+- The email body has a banner with colour mapped to incident's severity (High=red, Medium=orange, Low=yellow and Informational=grey).
