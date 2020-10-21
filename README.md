@@ -67,6 +67,46 @@ your table schema is defined in json file in the folder *Azure-Sentinel\\.script
   ]
 }
 ```
+### Run Kql Validation Locally
+In order to run the kql validation before submitting Pull Request in you local machine:
+* You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
+* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\KqlvalidationsTests\`
+* Execute `dotnet test`
+
+Example of output (in Ubuntu):
+```
+Welcome to .NET Core 3.1!
+---------------------
+SDK Version: 3.1.403
+
+Telemetry
+---------
+The .NET Core tools collect usage data in order to help us improve your experience. The data is anonymous. It is collected by Microsoft and shared with the community. You can opt-out of telemetry by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your favorite shell.
+
+Read more about .NET Core CLI Tools telemetry: https://aka.ms/dotnet-cli-telemetry
+
+----------------
+Explore documentation: https://aka.ms/dotnet-docs
+Report issues and find source on GitHub: https://github.com/dotnet/core
+Find out what's new: https://aka.ms/dotnet-whats-new
+Learn about the installed HTTPS developer cert: https://aka.ms/aspnet-core-https
+Use 'dotnet --help' to see available commands or visit: https://aka.ms/dotnet-cli-docs
+Write your first app: https://aka.ms/first-net-core-app
+--------------------------------------------------------------------------------------
+Test run for /mnt/c/git/Azure-Sentinel/.script/tests/KqlvalidationsTests/bin/Debug/netcoreapp3.1/Kqlvalidations.Tests.dll(.NETCoreApp,Version=v3.1)
+Microsoft (R) Test Execution Command Line Tool Version 16.7.0
+Copyright (c) Microsoft Corporation.  All rights reserved.
+
+Starting test execution, please wait...
+
+A total of 1 test files matched the specified pattern.
+
+Test Run Successful.
+Total tests: 171
+     Passed: 171
+ Total time: 25.7973 Seconds
+```
+
 
 
 When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
