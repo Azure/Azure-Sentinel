@@ -2,17 +2,33 @@
 // Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. afad_parser).
 // Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
 
-AlsidForADLog_CL
-| parse kind = regex RawData with Time:datetime  " "
+let Common = AlsidForADLog_CL
+| parse RawData with
+                     Time:datetime  " "
                      Host:string  " "
-                     Product:string "\\["
-                     PID:int "\\]: \""
+                     Product:string "["
+                     PID:int "]: \""
                      MessageType:int "\" \""
                      AlertID:int "\" \""
                      Forest:string "\" \""
-                     Domain:string "\" \""
+                     Domain:string "\" "
+                     DistinctPart:string;
+let Deviances = Common
+| where MessageType == 0 | parse DistinctPart with "\""
+                     Codename:string "\" \""
+                     Severity:string "\" \""
+                     ADObject:string "\" \""
+                     DevianceID:string "\" \""
+                     ProfileID:string "\" \""
+                     ReasonCodename:string "\" \""
+                     EventID:string "\" "
+                     Attributes:string "\r\n";
+let Changes = Common
+| where MessageType == 1
+| parse kind=regex DistinctPart with "\""
                      ADObject:string "\" \""
                      EventID:string "\" \""
-                     EventType:string "\" \""
-                     AttributeName:string "\"=\""
-                     AttributeValue:string "\"\r?\n"
+                     EventType:string "\" "
+                     Attributes:string "\r?\n";
+union Changes, Deviances
+| project-away DistinctPart, Product, _ResourceId, _SubscriptionId;
