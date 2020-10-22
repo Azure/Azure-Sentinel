@@ -1,30 +1,49 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
-  "parameters": {    
+  "parameters": {
     "FunctionName": {
       "defaultValue": "GitHubLogs",
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Specifies the name of the Function App."
+      }
     },
     "PersonalAccessToken": {
       "defaultValue": "Enter the personal access token",
-      "type": "string"
-    },
-    "workspaceId": {
       "type": "string",
-      "defaultValue": "<workspaceId>"
+      "metadata": {
+        "description": "Specifies GitHub Enterprise Personal Access Token."
+      }
     },
-    "workSpaceKey": {
+    "WorkspaceId": {
       "type": "string",
-      "defaultValue": "<workspaceKey>"
+      "defaultValue": "<WorkspaceId>",
+      "metadata": {
+        "description": "Specifies the Log Analytics Workspace Id."
+      }
+    },
+    "WorkspaceKey": {
+      "type": "string",
+      "defaultValue": "<WorkspaceKey>",
+      "metadata": {
+        "description": "Specifies the Log Analytics Workspace Key."
+      }
     },
     "TimeInterval": {
       "type": "string",
-      "defaultValue": "5"
+      "defaultValue": "5",
+      "metadata": {
+        "description": "Specifies the Time Interval (in minutes), default set value of to 5 to correspond to the default Timer Trigger of every 5 minutes. Note that modifying time interval will require modifying the Function App Timer Trigger accordingly to prevent overlapping data.."
+      }
     }
   },
   "variables": {
-    "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",    
+    "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+    "KeyVaultName": "[tolower(concat('githubkv', uniqueString(resourceGroup().id, subscription().id)))]",
+    "GitAPIToken": "GitAPIToken",
+    "StorageAccountKey": "StorageAccountKey",
+    "LogAnalyticsWorkspaceKey": "LogAnalyticsWorkspaceKey",
     "StorageContainerName": "github-repos-lastrun-contexts"
   },
   "resources": [
@@ -49,7 +68,7 @@
         "tier": "Standard"
       },
       "kind": "StorageV2",
-      "properties": {        
+      "properties": {
         "networkAcls": {
           "bypass": "AzureServices",
           "virtualNetworkRules": [
@@ -157,7 +176,11 @@
           "type": "config",
           "name": "appsettings",
           "dependsOn": [
-            "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+            "[concat('Microsoft.Web/sites/', variables('FunctionName'))]",
+            "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('GitAPIToken'))]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('StorageAccountKey'))]",
+            "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('LogAnalyticsWorkspaceKey'))]"
           ],
           "properties": {
             "FUNCTIONS_EXTENSION_VERSION": "~3",
@@ -167,19 +190,99 @@
             "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
             "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
             "WEBSITE_CONTENTSHARE": "[toLower(variables('FunctionName'))]",
-            "PersonalAccessToken": "[parameters('PersonalAccessToken')]",
+            "PersonalAccessToken": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('GitAPIToken')).secretUriWithVersion, ')')]",
             "StorageAccountContainer": "[variables('StorageContainerName')]",
-            "StorageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value]",
+            "StorageAccountKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('StorageAccountKey')).secretUriWithVersion, ')')]",
             "StorageAccountName": "[tolower(variables('FunctionName'))]",
             "TMPDIR": "D:\\local\\Temp",
-            "WorkspaceId": "[parameters('workspaceId')]",
-            "WorkspaceKey": "[parameters('workspaceKey')]",
+            "WorkspaceId": "[parameters('WorkspaceId')]",
+            "WorkspaceKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('LogAnalyticsWorkspaceKey')).secretUriWithVersion, ')')]",
             "timeInterval": "[parameters('TimeInterval')]",
             "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/githubazurefunctionzip"
           }
         }
       ]
     },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2016-10-01",
+      "name": "[variables('KeyVaultName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+      ],
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "Standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "accessPolicies": [
+          {
+            "tenantId": "[subscription().tenantId]",
+            "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')),'2019-08-01', 'full').identity.principalId]",
+            "permissions": {
+              "secrets": [ "get",
+                           "list"
+              ]
+            }
+          }
+        ],
+        "enabledForDeployment": false,
+        "enabledForDiskEncryption": false,
+        "enabledForTemplateDeployment": true,
+        "enableSoftDelete": true
+      },
+      "resources": [
+        {
+          "type": "secrets",
+          "apiVersion": "2016-10-01",
+          "name": "[variables('GitAPIToken')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('PersonalAccessToken')]",
+            "contentType": "string",
+            "attributes": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "type": "secrets",
+          "apiVersion": "2016-10-01",
+          "name": "[variables('StorageAccountKey')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]",
+            "[resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName')))]"
+          ],
+          "properties": {
+            "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value]",
+            "contentType": "string",
+            "attributes": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "type": "secrets",
+          "apiVersion": "2016-10-01",
+          "name": "[variables('LogAnalyticsWorkspaceKey')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('WorkspaceKey')]",
+            "contentType": "string",
+            "attributes": {
+              "enabled": true
+            }
+          }
+        }
+
+      ]
+    },    
     {
       "type": "Microsoft.Web/sites/hostNameBindings",
       "apiVersion": "2018-11-01",
@@ -240,6 +343,6 @@
       "properties": {
         "shareQuota": 5120
       }
-    }    
+    }
   ]
 }
