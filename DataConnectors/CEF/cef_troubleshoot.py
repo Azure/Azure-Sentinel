@@ -460,8 +460,9 @@ def check_file_permissions(file_path, permissions=file_default_permissions):
         return False
     octal_permissions = o.strip("\'\n")
     if octal_permissions != permissions:
-        print_error("Wrong permissions for file: {} \nTo fix this please run the following command:"
-                    " \"chmod {} {} \"".format(file_path, permissions, file_path))
+        # prompt the user to change the file permissions to default file permissions in consts
+        print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
+                    " \"chmod {} {}\"".format(file_path, permissions, file_path))
         return False
     print_ok("File permissions valid")
     return True
