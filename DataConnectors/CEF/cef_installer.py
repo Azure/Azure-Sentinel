@@ -214,8 +214,8 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
     if e is not None:
         handle_error(e, error_response_str="Error: could not download omsagent configuration.")
         return False
-    # set permissions to the configuration file after downloaded and created
-    set_file_permissions(configuration_path)
+    # set read permissions to the configuration file after downloaded and created
+    set_file_read_permissions(configuration_path)
     print_ok("Configuration for omsagent downloaded successfully.")
     print("Trying to change omsagent configuration")
     if omsagent_incoming_port is not omsagent_default_incoming_port:
@@ -355,8 +355,8 @@ def change_omsagent_protocol(configuration_path):
     if e is not None:
         handle_error(e, error_response_str="Error: could not change omsagent configuration port in ." + configuration_path)
         return False
-    # set permissions to file after recreated with the move command
-    set_file_permissions(configuration_path)
+    # set read permissions to file after recreated with the move command
+    set_file_read_permissions(configuration_path)
     print_ok("Omsagent configuration was changed to fit required protocol - " + configuration_path)
     return True
 
@@ -378,8 +378,8 @@ def change_omsagent_configuration_port(omsagent_incoming_port, configuration_pat
     if e is not None:
         handle_error(e, error_response_str="Error: could not change omsagent configuration port in ." + configuration_path)
         return False
-    # set permissions to file after recreated with the move command
-    set_file_permissions(configuration_path)
+    # set read permissions to file after recreated with the move command
+    set_file_read_permissions(configuration_path)
     print_ok("Omsagent incoming port was changed in configuration - " + configuration_path)
     return True
 
