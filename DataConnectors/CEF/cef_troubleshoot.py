@@ -56,7 +56,7 @@ syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 tcpdump_time_restriction = 60
-file_default_permissions = '644'
+file_read_permissions_octal_representation = 4
 
 
 def print_error(input_str):
@@ -451,7 +451,7 @@ def file_contains_string(file_tokens, file_path):
     return all(check_token(token, content) for token in file_tokens)
 
 
-def check_file_permissions(file_path, permissions=file_default_permissions):
+def check_file_read_permissions(file_path):
     # get the octal representation of the file permissions
     get_permissions = subprocess.Popen(["stat", "-c", "'%a'", file_path], stdout=subprocess.PIPE)
     o, e = get_permissions.communicate()
@@ -459,10 +459,11 @@ def check_file_permissions(file_path, permissions=file_default_permissions):
         print_warning("Unable to verify file permissions for path:" + file_path)
         return False
     octal_permissions = o.strip("\'\n")
-    if octal_permissions != permissions:
+    other_permissions = octal_permissions[-1]
+    if int(other_permissions) < file_read_permissions_octal_representation:
         # prompt the user to change the file permissions to default file permissions in consts
         print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
-                    " \"chmod {} {}\"".format(file_path, permissions, file_path))
+                    " \"chmod o+r {}\"".format(file_path, file_path))
         return False
     print_ok("File permissions valid")
     return True
@@ -539,7 +540,7 @@ def omsagent_security_event_conf_validation(workspace_id):
         print_error("Could not locate necessary port and ip in the agent's configuration.\npath:" + path)
     else:
         print_ok("Omsagent event configuration content is valid")
-    check_file_permissions(path)
+    check_file_read_permissions(path)
 
 
 def check_daemon(daemon_name):
