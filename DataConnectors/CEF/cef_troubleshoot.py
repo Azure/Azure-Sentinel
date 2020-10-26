@@ -466,7 +466,6 @@ def check_file_read_permissions(file_path):
                     " \"chmod o+r {}\"".format(file_path, file_path))
         return False
     print_ok("File permissions valid")
-    return True
 
 
 def sudo_read_file_contains_string(file_tokens, file_path):
