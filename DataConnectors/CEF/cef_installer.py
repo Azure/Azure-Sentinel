@@ -30,7 +30,6 @@ import sys
 import os
 import re
 
-default_file_permissions = '644'
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
 omsagent_file_name = "onboard_agent.sh"
@@ -275,17 +274,16 @@ def append_content_to_file(line, file_path, overide = False):
     if e is not None:
         handle_error(e, error_response_str="Error: could not change Rsyslog.conf configuration add line \"" + line + "\" to file -" + rsyslog_conf_path)
         return False
-    set_file_permissions(file_path)
+    set_file_read_permissions(file_path)
     return True
 
 
-def set_file_permissions(file_path, permissions = default_file_permissions):
+def set_file_read_permissions(file_path):
     """
     :param  file_path: the path to change the permissions for
-    :param2 permissions: set to the default file permissions
-    :return: True if changes successfully otherwise false
+    :return: True if successfully added read permissions to other in file otherwise false
     """
-    command_tokens = ["sudo", "chmod", permissions, file_path]
+    command_tokens = ["sudo", "chmod", "o+r", file_path]
     change_permissions = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
     o, e = change_permissions.communicate()
