@@ -24,7 +24,7 @@ def change_events_timegenerated():
     grep = subprocess.Popen(["grep", "-i", "'Timestamp' => OMS::Common::fast_utc_to_iso8601_format(Time.now.utc),",
                              oms_agent_field_mapping_configuration], stdout=subprocess.PIPE)
     o, e = grep.communicate()
-    if not o:
+    if not o or e is not None:
         print_error("Couldn't locate TimeGenerated configuration set to log collection time")
     else:
         print_notice(
