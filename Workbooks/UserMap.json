@@ -15,7 +15,7 @@
             "name": "Subscription",
             "type": 6,
             "isRequired": true,
-            "value": null,
+            "value": "",
             "typeSettings": {
               "additionalResourceOptions": [],
               "includeAll": false
@@ -47,7 +47,7 @@
             "type": 4,
             "isRequired": true,
             "value": {
-              "durationMs": 5184000000
+              "durationMs": 7776000000
             },
             "typeSettings": {
               "selectableValues": [
@@ -106,7 +106,8 @@
             "typeSettings": {
               "additionalResourceOptions": []
             },
-            "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n {\"value\": \"No\", \"label\": \"No\", \"selected\":true },\r\n { \"value\": \"Change Log\", \"label\": \"Change Log\"}\r\n]"
+            "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n {\"value\": \"No\", \"label\": \"No\", \"selected\":true },\r\n { \"value\": \"Change Log\", \"label\": \"Change Log\"}\r\n]",
+            "value": "Change Log"
           }
         ],
         "style": "above",
@@ -130,7 +131,8 @@
             "typeSettings": {
               "additionalResourceOptions": []
             },
-            "jsonData": "[\r\n{\"value\": \"KM\", \"label\": \"KM\"},\r\n{\"value\": \"Miles\", \"label\": \"Miles\", \"selected\":true}\r\n]"
+            "jsonData": "[\r\n{\"value\": \"KM\", \"label\": \"KM\"},\r\n{\"value\": \"Miles\", \"label\": \"Miles\", \"selected\":true}\r\n]",
+            "value": "KM"
           },
           {
             "id": "ba4eb749-336e-4aa0-8a4b-2b7987507852",
@@ -161,6 +163,7 @@
         "style": "tabs",
         "links": [
           {
+            "id": "8f36c3bf-807c-4478-bfc2-570584d36bb9",
             "cellValue": "selectedTab",
             "linkTarget": "parameter",
             "linkLabel": "Malicious IP",
@@ -168,10 +171,19 @@
             "style": "link"
           },
           {
+            "id": "0d78c03f-f8d7-40da-8761-3ef454b14ad8",
             "cellValue": "selectedTab",
             "linkTarget": "parameter",
             "linkLabel": "User Data",
             "subTarget": "UserData",
+            "style": "link"
+          },
+          {
+            "id": "d5ae52bd-03a5-452e-a395-98fbe02b6e20",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Microsoft WAF",
+            "subTarget": "WAF",
             "style": "link"
           }
         ]
@@ -194,8 +206,7 @@
     {
       "type": 1,
       "content": {
-        "json": "### Change Log\r\n\tv1.0\tInitial Version\r\n\tV1.1.0\tUpdated from 2019 version, combining new features and improving the look and feel.  \r\n\r\n",
-        "style": "info"
+        "json": "### Change Log\r\n|Version|Description|\r\n|---|---|\r\n|v1.0\t|Initial Version|\r\n|V1.1.0\t|Updated from 2019 version, combining new features and improving the look and feel. | \r\n|V1.1.1\t|Updated chart to display Location, Latitude, Longitude when a region is clicked|  \r\n|V1.2\t|Added info when you select a region on the 'Map showing locations for User', fixed a time display message.  Added dwell time (the time delay betwen the entires), in the \"looking for\" grid to augment the distance travelled.|"
       },
       "conditionalVisibility": {
         "parameterName": "Help",
@@ -229,7 +240,8 @@
                   "jsonData": "[\r\n { \"value\": \"mylist\", \"label\": \"From a list\",\"selected\":true},\r\n {\"value\": \"aad\", \"label\": \"From AAD\"},\r\n { \"value\": \"manual\", \"label\": \"Add a manual entry\"}\r\n]",
                   "timeContext": {
                     "durationMs": 86400000
-                  }
+                  },
+                  "value": "aad"
                 }
               ],
               "style": "above",
@@ -499,6 +511,7 @@
                 "durationMs": 5184000000
               },
               "timeContextFromParameter": "TimeRange",
+              "exportParameterName": "Selected",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
@@ -554,6 +567,94 @@
                 }
               }
             },
+            "customWidth": "50",
+            "name": "query - 8"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// Look back at data and see if any from six named tables have Malicious IP info \r\n// This query is based on the Sentinel home page \"Potential malicious events\" view \r\n// We'll also enrich the data with distance data (in KM or miles) of each entry to defined home location \r\n//\r\n// Please enter how many days worth of data to look at?\r\n// Microsoft Campus UK is used as a base parameter - adjust as required with your own Location Longitude / Latitude \r\n// isFuzzy will allow us to continue on errors or if a table is empty etc...\r\nunion isfuzzy=true \r\n(W3CIISLog\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude), \r\n(DnsEvents\r\n| extend TrafficDirection = \"InboundOrUnknown\", Country= RemoteIPCountry, Latitude = RemoteIPLatitude, Longitude = RemoteIPLongitude),\r\n(WireData\r\n| extend TrafficDirection = iff(Direction != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteIPCountry, Latitude=RemoteIPLatitude, Longitude=RemoteIPLongitude), \r\n(WindowsFirewall\r\n| extend TrafficDirection = iff(CommunicationDirection != \"SEND\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude), \r\n(CommonSecurityLog\r\n| extend TrafficDirection = iff(CommunicationDirection != \"Outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=MaliciousIPCountry, Latitude=MaliciousIPLatitude, Longitude=MaliciousIPLongitude, Confidence=ThreatDescription, Description=ThreatDescription), \r\n(\r\nAzureDiagnostics\r\n| where ResourceType == \"FRONTDOORS\" and Category == \"FrontdoorWebApplicationFirewallLog\"\r\n| extend TrafficDirection = iff(isReceivedFromClient_b != false,\"InboundOrUnknown\", \"Outbound\")\r\n),\r\n(VMConnection\r\n| where Type == \"VMConnection\"\r\n| extend TrafficDirection = iff(Direction != \"outbound\",\"InboundOrUnknown\", \"Outbound\"), Country=RemoteCountry, Latitude=RemoteLatitude, Longitude=RemoteLongitude)\r\n// Start of main logic\r\n// Supply a default location (long/lat) from selected parameter \r\n| extend myLatitude = case( \r\n                            '{getLocation}' == 'mylist', todouble(split('{CityList:value}',\",\").[0]),\r\n                            '{getLocation}' == 'aad' ,   todouble(split('{defaultCityListAAD:value}',\",\").[1]),\r\n                            '{getLocation}' == 'manual', todouble({Latitude}),\r\n                            //else\r\n                            todouble(0)\r\n                           )\r\n| extend myLongitude = case( \r\n                            '{getLocation}' == 'mylist', todouble(split('{CityList:value}',\",\").[1]),\r\n                            '{getLocation}' == 'aad' ,   todouble(split('{defaultCityListAAD:value}',\",\").[2]),\r\n                            '{getLocation}' == 'manual', todouble({Longitude}),\r\n                            //else\r\n                            todouble(0)\r\n                           )\r\n| where isnotempty(MaliciousIP) and isnotempty(Country) and isnotempty(Latitude) and isnotempty(Longitude)\r\n// measure the distance between the base/city and maliciousIP location in km or miles\r\n| extend distance_in = iif('{Measurement}' == \"KM\", geo_distance_2points(Longitude, Latitude, myLongitude, myLatitude)/1000.00, geo_distance_2points(Longitude, Latitude, myLongitude, myLatitude)/1609.344 )\r\n| summarize count(), arg_max(TimeGenerated,TimeGenerated) by Country, distance_in, Latitude , Longitude, '{getLocation}', myLatitude, myLongitude\r\n| top {Top} by count_\r\n\r\n",
+              "size": 0,
+              "title": "Top: '{Top}' Malicious IP distances from {locationName} in ('{Measurement}') ",
+              "timeContext": {
+                "durationMs": 5184000000
+              },
+              "timeContextFromParameter": "TimeRange",
+              "exportParameterName": "Selected",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "distance_in",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "distance_in",
+                  "sortOrder": 2
+                }
+              ],
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "Country",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "distance_in",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "sizeSettings": "count_",
+                "sizeAggregation": "Sum",
+                "labelSettings": "Country",
+                "legendMetric": "distance_in",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "count_",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "orange"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 8 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "extend a = parse_json('{Selected}')\r\n| project ['region']=a.regionName, ['latitude']=a.latitude, ['longitude']=a.longitude\r\n| limit 1",
+              "size": 4,
+              "title": "Please select a map region for more details",
+              "noDataMessage": "Please click on a map region ",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ]
+            },
+            "customWidth": "50",
             "name": "query - 8"
           },
           {
@@ -765,9 +866,17 @@
                 "durationMs": 5184000000
               },
               "timeContextFromParameter": "TimeRange",
-              "exportFieldName": "Namespace",
-              "exportParameterName": "Namespace",
-              "exportDefaultValue": "All",
+              "exportedParameters": [
+                {
+                  "fieldName": "Namespace",
+                  "parameterName": "Namespace",
+                  "defaultValue": "All"
+                },
+                {
+                  "parameterName": "SelectedUsers",
+                  "parameterType": 1
+                }
+              ],
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
@@ -894,19 +1003,36 @@
                 }
               }
             },
+            "customWidth": "50",
             "name": "query - 6 - Copy - Copy"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SigninLogs\r\n| where UserDisplayName !=\"On-Premises Directory Synchronization Service Account\"\r\n| where UserDisplayName == '{SelectUser}'\r\n| extend city_  = tostring(LocationDetails.city) \r\n| extend state_ = tostring(LocationDetails.state) \r\n| extend countryOrRegion_ = tostring(LocationDetails.countryOrRegion) \r\n| extend latitude_  = tostring(parse_json(tostring(LocationDetails.geoCoordinates)).latitude) \r\n| extend longitude_ = tostring(parse_json(tostring(LocationDetails.geoCoordinates)).longitude) \r\n| order by TimeGenerated asc , city_ asc\r\n| serialize \r\n| extend pLat = prev(latitude_,1)\r\n| extend pLon = prev(longitude_,1)\r\n| extend distanceType = iif('{Measurement}' == \"KM\", todouble(1000), todouble(1609.344))\r\n| extend distance_in = iif(row_number() > 1,tostring(round(geo_distance_2points(todouble(longitude_), todouble(latitude_), todouble(pLon), todouble(pLat))/distanceType ,2)),\"FirstLocation\")\r\n| where distance_in !=\"0.0\"\r\n| summarize by bin(TimeGenerated, {TimeRange:grain}),\r\n                       UserDisplayName,\r\n                       City=city_ ,\r\n                       CountryorRegion=countryOrRegion_, \r\n                       visitedInThisOrder = row_number(),\r\n                       distanceBetweenLocations = strcat(distance_in,' ','({Measurement})')\r\n| order by TimeGenerated asc, visitedInThisOrder asc",
+              "query": "extend a = parse_json('{SelectedUsers}')\r\n| project  ['User']='{SelectUser}', ['region']=a.regionName, ['latitude']=a.latitude, ['longitude']=a.longitude\r\n| limit 1",
+              "size": 4,
+              "title": "Please select a map region for more details",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 8"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SigninLogs\r\n| where UserDisplayName !=\"On-Premises Directory Synchronization Service Account\"\r\n| where UserDisplayName == '{SelectUser}'\r\n| extend city_  = tostring(LocationDetails.city) \r\n| extend state_ = tostring(LocationDetails.state) \r\n| extend countryOrRegion_ = tostring(LocationDetails.countryOrRegion) \r\n| extend latitude_  = tostring(parse_json(tostring(LocationDetails.geoCoordinates)).latitude) \r\n| extend longitude_ = tostring(parse_json(tostring(LocationDetails.geoCoordinates)).longitude) \r\n| order by TimeGenerated asc , city_ asc\r\n| serialize \r\n| extend pLat = prev(latitude_,1)\r\n| extend pLon = prev(longitude_,1)\r\n| extend distanceType = iif('{Measurement}' == \"KM\", todouble(1000), todouble(1609.344))\r\n| extend distance_in = iif(row_number() > 1,tostring(round(geo_distance_2points(todouble(longitude_), todouble(latitude_), todouble(pLon), todouble(pLat))/distanceType ,2)),strcat(\"FirstLocation\",' ','({Measurement})') ) \r\n| extend dwell_in = datetime_diff(\"second\",TimeGenerated, prev(TimeGenerated))\r\n| where distance_in !=\"0.0\"\r\n| summarize by TimeGenerated,\r\n                       UserDisplayName,\r\n                       City=city_ ,\r\n                       Location=countryOrRegion_, \r\n                       visitOrder = row_number(),\r\n                       distanceBetweenLocations = distance_in, // strcat(distance_in,' ','({Measurement})')\r\n                       dwell_in\r\n| order by TimeGenerated asc, visitOrder asc",
               "size": 1,
               "showAnalytics": true,
               "title": "Looking for '{SelectUser}'",
               "color": "green",
               "timeContext": {
-                "durationMs": 5184000000
+                "durationMs": 0
               },
               "timeContextFromParameter": "TimeRange",
               "exportFieldName": "Namespace",
@@ -922,12 +1048,33 @@
               "gridSettings": {
                 "formatters": [
                   {
+                    "columnMatch": "dwell_in",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "palette": "greenRed"
+                    },
+                    "numberFormat": {
+                      "unit": 24,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": false,
+                        "maximumSignificantDigits": 3
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "distanceBetweenLocations",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "palette": "greenRed"
+                    }
+                  },
+                  {
                     "columnMatch": "Table Entries",
                     "formatter": 3,
                     "formatOptions": {
                       "min": 0,
-                      "palette": "green",
-                      "showIcon": true
+                      "palette": "green"
                     },
                     "numberFormat": {
                       "unit": 17,
@@ -941,8 +1088,7 @@
                     "formatter": 3,
                     "formatOptions": {
                       "min": 0,
-                      "palette": "blue",
-                      "showIcon": true
+                      "palette": "blue"
                     },
                     "numberFormat": {
                       "unit": 2,
@@ -956,12 +1102,26 @@
                     "formatter": 9,
                     "formatOptions": {
                       "min": 0,
-                      "palette": "blue",
-                      "showIcon": true
+                      "palette": "blue"
                     }
                   }
                 ],
-                "filter": true
+                "filter": true,
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName"
+                  },
+                  {
+                    "columnId": "City"
+                  },
+                  {
+                    "columnId": "distanceBetweenLocations"
+                  },
+                  {
+                    "columnId": "dwell_in",
+                    "label": "Dwell time"
+                  }
+                ]
               },
               "sortBy": [],
               "tileSettings": {
@@ -1038,7 +1198,7 @@
                 }
               }
             },
-            "name": "query - 6 - Copy"
+            "name": "query - 6 - Copy - Copy"
           },
           {
             "type": 3,
@@ -1648,12 +1808,60 @@
         "value": "UserData"
       },
       "name": "group - UserMap"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Group: WAF",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "AzureDiagnostics\r\n| where ResourceType == \"FRONTDOORS\" and Category == \"FrontdoorWebApplicationFirewallLog\"\r\n",
+              "size": 0,
+              "title": "Front door",
+              "timeContext": {
+                "durationMs": 5184000000
+              },
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "AzureDiagnostics \r\n| where ResourceProvider == \"MICROSOFT.NETWORK\" and Category == \"ApplicationGatewayFirewallLog\"\r\n",
+              "size": 0,
+              "title": "Application Gateway Web Application Firewall (WAF) Logs",
+              "timeContext": {
+                "durationMs": 5184000000
+              },
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - 0 - Copy"
+          }
+        ]
+      },
+      "name": "group - WAF"
     }
   ],
-  "styleSettings": {},
-  "fromTemplateId": "community-Workbooks/Azure Sentinel - Workspaces/User Map",
   "fallbackResourceIds": [
     "Azure Monitor"
   ],
+  "fromTemplateId": "community-Workbooks/Azure Sentinel - Workbooks/User Map",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }

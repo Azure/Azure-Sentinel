@@ -1,0 +1,82 @@
+﻿id: 155f40c6-610d-497d-85fc-3cf06ec13256
+name: Known Phosphorus group domains/IP
+description: |
+  'Matches domain name IOCs related to Phosphorus group activity with CommonSecurityLog, DnsEvents, OfficeActivity and VMConnection dataTypes.
+  References: https://blogs.microsoft.com/on-the-issues/2019/03/27/new-steps-to-protect-customers-from-hacking/.'
+severity: High
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1043
+query: |
+
+  let timeframe = 1d;
+  let DomainNames = dynamic(["yahoo-verification.org","support-servics.com","verification-live.com","com-mailbox.com","com-myaccuants.com","notification-accountservice.com",
+  "accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net","verify-linkedin.net", 
+  "yahoo-verification.net","yahoo-verify.net","outlook-verify.net","com-users.net","verifiy-account.net","te1egram.net","account-verifiy.net","myaccount-services.net",
+  "com-identifier-servicelog.name","microsoft-update.bid","outlook-livecom.bid","update-microsoft.bid","documentsfilesharing.cloud","com-microsoftonline.club",
+  "confirm-session-identifier.info","session-management.info","confirmation-service.info","document-share.info","broadcast-news.info","customize-identity.info","webemail.info",
+  "com-identifier-servicelog.info","documentsharing.info","notification-accountservice.info","identifier-activities.info","documentofficupdate.info","recoveryusercustomer.info",
+  "serverbroadcast.info","account-profile-users.info","account-service-management.info","accounts-manager.info","activity-confirmation-service.info","com-accountidentifier.info",
+  "com-privacy-help.info","com-sessionidentifier.info","com-useraccount.info","confirmation-users-service.info","confirm-identity.info","confirm-session-identification.info",
+  "continue-session-identifier.info","customer-recovery.info","customers-activities.info","elitemaildelivery.info","email-delivery.info","identify-user-session.info",
+  "message-serviceprovider.info","notificationapp.info","notification-manager.info","recognized-activity.info","recover-customers-service.info","recovery-session-change.info",
+  "service-recovery-session.info","service-session-continue.info","session-mail-customers.info","session-managment.info","session-verify-user.info","shop-sellwear.info",
+  "supportmailservice.info","terms-service-notification.info","user-activity-issues.info","useridentity-confirm.info","users-issue-services.info","verify-user-session.info",
+  "login-gov.info","notification-signal-agnecy.info","notifications-center.info","identifier-services-sessions.info","customers-manager.info","session-manager.info",
+  "customer-managers.info","confirmation-recovery-options.info","service-session-confirm.info","session-recovery-options.info","services-session-confirmation.info",
+  "notification-managers.info","activities-services-notification.info","activities-recovery-options.info","activity-session-recovery.info","customers-services.info",
+  "sessions-notification.info","download-teamspeak.info","services-issue-notification.info","microsoft-upgrade.mobi","broadcastnews.pro","mobile-messengerplus.network"]);
+  let IPList = dynamic(["51.91.200.147"]);
+  let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
+  (union isfuzzy=true
+  (CommonSecurityLog 
+  | where TimeGenerated >= ago(timeframe)
+  | parse Message with * '(' DNSName ')' * 
+  | extend MessageIP = extract(IPRegex, 0, Message)
+  | extend RequestURLIP = extract(IPRegex, 0, Message)
+  | where (isnotempty(SourceIP) and SourceIP in (IPList)) or (isnotempty(DestinationIP) and DestinationIP in (IPList)) 
+  or (isnotempty(DNSName) and DNSName in~ (DomainNames)) or (isnotempty(DestinationHostName) and DestinationHostName in~ (DomainNames)) or (isnotempty(RequestURL) and (RequestURL has_any (DomainNames) or RequestURLIP in (IPList))) 
+  or (isnotempty(Message) and MessageIP in (IPList))
+  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", RequestURLIP in (IPList), "RequestUrl", "NoMatch") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP,IPMatch == "Message", MessageIP,
+  IPMatch == "RequestUrl", RequestURLIP,"NoMatch"), Account = SourceUserID, Host = DeviceName
+  ),
+  (DnsEvents 
+  | where TimeGenerated >= ago(timeframe) 
+  | extend DestinationIPAddress = IPAddresses, DNSName = Name, Host = Computer
+  | where  DestinationIPAddress in (IPList) or DNSName in~ (DomainNames) 
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host),
+  (VMConnection 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | where isnotempty(SourceIP) or isnotempty(DestinationIP) or isnotempty(DNSName)
+  | where SourceIP in (IPList) or DestinationIP in (IPList) or DNSName in~ (DomainNames)
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), Host = Computer),
+  (OfficeActivity
+  | where TimeGenerated >= ago(timeframe)
+  | extend SourceIPAddress = ClientIP, Account = UserId
+  | where  SourceIPAddress in (IPList)
+  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account )
+  )

@@ -1,0 +1,29 @@
+id: 97543188-a4e8-4439-980d-17b231149617
+name: Query data volume anomolies
+description: |
+  'This hunting query looks for anomalously large LA queries by users.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(Query Audit)
+    dataTypes:
+      - LAQueryLogs
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let lookback = 7d;
+  let threshold = 0;
+  LAQueryLogs
+  | make-series rows = sum(ResponseRowCount) on TimeGenerated in range(startofday(ago(lookback)), now(), 1h)
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(rows,3, -1, 'linefit')
+  | mv-expand anomalies to typeof(int), score to typeof(double), TimeGenerated to typeof(datetime)
+  | where anomalies > threshold 
+  | sort by score desc
+  | join kind=rightsemi (
+  LAQueryLogs
+  | summarize make_set(QueryText) by AADEmail, RequestTarget, TimeGenerated = bin(TimeGenerated, 1h))
+  on TimeGenerated
+  | project TimeGenerated, AADEmail, RequestTarget, set_QueryText
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AADEmail
+
