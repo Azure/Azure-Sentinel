@@ -21,14 +21,21 @@ query: |
   let v_EndTime = suspiciousEventTime+1d;
   SecurityAlert
   | where TimeGenerated between (v_StartTime .. v_EndTime)
-  | where ProcessName has v_Process
-  | extend Extprop = parsejson(ExtendedProperties)
-  | extend ProcessName = parse_json(ExtendedProperties).["Suspicious Process"]
-  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
-  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
-  | extend IpAddress = tostring(parse_json(ExtendedProperties).["Client Address"]) 
-  | project TimeGenerated, AlertName, ProcessName, Computer, Account, IpAddress, ExtendedProperties 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  | where Entities has v_Process
+  | extend Extprop = parsejson(Entities)
+  | mv-expand Extprop
+  | extend Extprop = parsejson(Extprop)
+  | extend CmdLine = iff(Extprop['Type']=="process", Extprop['CommandLine'], '')
+  | extend File = iff(Extprop['Type']=="file", Extprop['Name'], '')
+  | extend Account = Extprop['Name']
+  | extend Domain = Extprop['UPNSuffix']
+  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
+  | extend Computer = iff(Extprop['Type']=="host", Extprop['HostName'], '')
+  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
+  | extend Process = iff(isnotempty(CmdLine), CmdLine, File)
+  | summarize max(TimeGenerated), make_set(AlertName), make_set(Process), make_set(Computer), make_set(Account), make_set(IpAddress), make_set(Entities) by SystemAlertId
+  | project TimeGenerated = max_TimeGenerated, AlertName=set_AlertName[0], Process=set_Process[1], Account = set_Account[1], Computer=set_Computer[0], IPAddress = set_IpAddress[1], Entities=set_Entities
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress
   | top 10 by TimeGenerated desc nulls last
   };
   // change datetime value and <processname> value below
