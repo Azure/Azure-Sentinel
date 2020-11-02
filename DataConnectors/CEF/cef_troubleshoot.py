@@ -660,10 +660,10 @@ def check_portal_auto_sync():
         print_ok("No auto sync with the portal")
         return False
     print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
-                  "make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
-                  "the auto sync with the portal. Otherwise all changes will be overwritten ")
+                  "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal. Otherwise all changes will be overwritten. ")
     print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
-    print_warning("For more on how to avoid duplicate syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    print_warning("For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
     return True
 
 
