@@ -463,7 +463,7 @@ def check_file_read_permissions(file_path):
     if int(other_permissions) < file_read_permissions_octal_representation:
         # prompt the user to change the file permissions to default file permissions in consts
         print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
-                    " \"chmod o+r {}\" and re run the cef_installer.py script".format(file_path, file_path, workspace_id))
+                    " \"chmod o+r {}\" and re run the cef_installer.py script".format(file_path, file_path))
         sys.exit()
     print_ok("File permissions valid")
 
