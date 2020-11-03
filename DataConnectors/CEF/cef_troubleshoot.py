@@ -260,11 +260,6 @@ def handle_tcpdump_line(line, incoming_port, ok_message):
             "Notice: To tcp dump manually execute the following command - \'tcpdump -A -ni any port " + incoming_port + " -vv\'")
         time.sleep(1)
         return True
-    # Handle command not found
-    elif "command not found" in line:
-        print_error(
-            "Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
-        return False
     else:
         # print the output
         print_command_response(line.rstrip())
@@ -286,6 +281,11 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     command_tokens = ["sudo", "tcpdump", "-A", "-ni", "any", "port", incoming_port, "-vv"]
     print_notice(" ".join(command_tokens))
     tcp_dump = subprocess.Popen(command_tokens, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    line = str(tcp_dump.stdout.readline())
+    # Handle command not found
+    if "command not found" in line:
+        print_error("Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
+        return False
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
     while (end_seconds - start_seconds) < tcpdump_time_restriction:
