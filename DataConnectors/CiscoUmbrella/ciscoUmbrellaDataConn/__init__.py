@@ -49,6 +49,9 @@ def main(mytimer: func.TimerRequest) -> None:
         round(sum([x['Size'] for x in obj_list]) / 10**6, 2)
     ))
 
+    failed_sent_events_number = 0
+    successfull_sent_events_number = 0
+
     if DIVIDE_TO_MULTIPLE_TABLES:
         dns_files = []
         proxy_files = []
@@ -69,29 +72,42 @@ def main(mytimer: func.TimerRequest) -> None:
         with sentinel:
             for obj in dns_files:
                 cli.process_file(obj, dest=sentinel)
+        failed_sent_events_number += sentinel.failed_sent_events_number
+        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
         sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in proxy_files:
                 cli.process_file(obj, dest=sentinel)
+        failed_sent_events_number += sentinel.failed_sent_events_number
+        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
         sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in ip_files:
                 cli.process_file(obj, dest=sentinel)
+        failed_sent_events_number += sentinel.failed_sent_events_number
+        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
         sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in cdfw_files:
                 cli.process_file(obj, dest=sentinel)
+        failed_sent_events_number += sentinel.failed_sent_events_number
+        successfull_sent_events_number += sentinel.successfull_sent_events_number
     
     else:
         sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in obj_list:
                 cli.process_file(obj, dest=sentinel)
+        failed_sent_events_number += sentinel.failed_sent_events_number
+        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-    logging.info('Program finished. {} events have been sent'.format(cli.total_events))
+    if failed_sent_events_number:
+        logging.error('{} events have not been sent'.format(failed_sent_events_number))
+
+    logging.info('Program finished. {} events have been sent. {} events have not been sent'.format(successfull_sent_events_number, failed_sent_events_number))
 
 
 def convert_list_to_csv_line(ls):
@@ -378,6 +394,8 @@ class AzureSentinelConnector:
         self.queue_size_bytes = queue_size_bytes
         self._queue = []
         self._bulks_list = []
+        self.successfull_sent_events_number = 0
+        self.failed_sent_events_number = 0
 
     def send(self, event):
         self._queue.append(event)
@@ -446,8 +464,10 @@ class AzureSentinelConnector:
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
             logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
+            self.successfull_sent_events_number += events_number
         else:
             logging.error("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+            self.failed_sent_events_number += events_number
 
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
