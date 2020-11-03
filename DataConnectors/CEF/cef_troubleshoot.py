@@ -451,7 +451,7 @@ def file_contains_string(file_tokens, file_path):
     return all(check_token(token, content) for token in file_tokens)
 
 
-def check_file_read_permissions(file_path):
+def check_file_read_permissions(file_path, workspace_id):
     # get the octal representation of the file permissions
     get_permissions = subprocess.Popen(["stat", "-c", "'%a'", file_path], stdout=subprocess.PIPE)
     o, e = get_permissions.communicate()
@@ -463,8 +463,8 @@ def check_file_read_permissions(file_path):
     if int(other_permissions) < file_read_permissions_octal_representation:
         # prompt the user to change the file permissions to default file permissions in consts
         print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
-                    " \"chmod o+r {}\" and re run the cef_installer.py script".format(file_path, file_path))
-        sys.exit()
+                    " \"chmod o+r {} && sudo /opt/microsoft/omsagent/bin/service_control restart {}\"".format(file_path, file_path, workspace_id))
+        return False
     print_ok("File permissions valid")
 
 
@@ -539,7 +539,7 @@ def omsagent_security_event_conf_validation(workspace_id):
         print_error("Could not locate necessary port and ip in the agent's configuration.\npath:" + path)
     else:
         print_ok("Omsagent event configuration content is valid")
-    check_file_read_permissions(path)
+    check_file_read_permissions(path, workspace_id)
 
 
 def check_daemon(daemon_name):
