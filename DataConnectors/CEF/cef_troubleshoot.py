@@ -8,18 +8,18 @@
 # We send mock data to validate correctness of the pipeline
 # Supported OS:
 #   64-bit
-#       CentOS 6 and 7
+#       CentOS 7 and 8
 #       Amazon Linux 2017.09
-#       Oracle Linux 6 and 7
-#       Red Hat Enterprise Linux Server 6 and 7
-#       Debian GNU/Linux 8 and 9
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
+#       Debian GNU/Linux 8, 9 and 10
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
-#       SUSE Linux Enterprise Server 12
+#       SUSE Linux Enterprise Server 12, 15
 #   32-bit
-#       CentOS 6
-#       Oracle Linux 6
-#       Red Hat Enterprise Linux Server 6
-#       Debian GNU/Linux 8 and 9
+#       CentOS 7 and 8
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
+#       Debian GNU/Linux 8, 9 and 10
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
 #
