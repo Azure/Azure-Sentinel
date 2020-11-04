@@ -1,0 +1,89 @@
+id: 7249500f-3038-4b83-8549-9cd8dfa2d498
+name: Known PHOSPHORUS group domains/IP - October 2020
+description: |
+  'Matches IOCs related to PHOSPHORUS group activity published October 2020 with CommonSecurityLog, DnsEvents, OfficeActivity and VMConnection dataTypes.
+  References: '
+severity: High
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog (Cisco)
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog (PaloAlto)
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog (Zscaler)
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog (Fortinet)
+  - connectorId: OfficeATP
+    dataTypes:
+      - SecurityAlert (Office 365 Security & Compliance)
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics (Azure Firewall)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1043
+  - T1566
+query: |
+
+  let timeframe = 1d;
+  let DomainNames = dynamic(["de-ma.online", "g20saudi.000webhostapp.com", "ksat20.000webhostapp.com"]);
+  let EmailAddresses = dynamic(["munichconference1962@gmail.com","munichconference@outlook.de", "munichconference@outlook.com", "t20saudiarabia@gmail.com", "t20saudiarabia@hotmail.com", "t20saudiarabia@outlook.sa"]);
+  (union isfuzzy=true
+  (CommonSecurityLog 
+  | where TimeGenerated >= ago(timeframe)
+  | parse Message with * '(' DNSName ')' * 
+  | extend MessageIP = extract(IPRegex, 0, Message)
+  | extend RequestURLIP = extract(IPRegex, 0, Message)
+  | where (isnotempty(DNSName) and DNSName has_any (DomainNames)) 
+    or (isnotempty(DestinationHostName) and DestinationHostName has_any (DomainNames)) 
+    or (isnotempty(RequestURL) and (RequestURL has_any (DomainNames)))
+  | extend timestamp = TimeGenerated , AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName
+  ),
+  (DnsEvents 
+  | where TimeGenerated >= ago(timeframe) 
+  | extend DestinationIPAddress = IPAddresses, DNSName = Name, Host = Computer
+  | where DNSName has_any (DomainNames) 
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host),
+  (VMConnection 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | where isnotempty(DNSName)
+  | where DNSName has_any (DomainNames)
+  | extend timestamp = TimeGenerated , HostCustomEntity = Computer),
+  (SecurityAlert
+  | where TimeGenerated >= ago(timeframe) 
+  | where ProviderName =~ 'OATP'
+  | extend UPN = case(isnotempty(parse_json(Entities)[0].Upn), parse_json(Entities)[0].Upn, 
+                      isnotempty(parse_json(Entities)[1].Upn), parse_json(Entities)[1].Upn,
+                      isnotempty(parse_json(Entities)[2].Upn), parse_json(Entities)[2].Upn,
+                      isnotempty(parse_json(Entities)[3].Upn), parse_json(Entities)[3].Upn,
+                      isnotempty(parse_json(Entities)[4].Upn), parse_json(Entities)[4].Upn,
+                      isnotempty(parse_json(Entities)[5].Upn), parse_json(Entities)[5].Upn,
+                      isnotempty(parse_json(Entities)[6].Upn), parse_json(Entities)[6].Upn,
+                      isnotempty(parse_json(Entities)[7].Upn), parse_json(Entities)[7].Upn,
+                      isnotempty(parse_json(Entities)[8].Upn), parse_json(Entities)[8].Upn,
+                      parse_json(Entities)[9].Upn)
+  | where Entities has_any (EmailAddresses)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = tostring(UPN)),
+  (AzureDiagnostics
+  | where TimeGenerated >= ago(timeframe) 
+  | where ResourceType =~ "AZUREFIREWALLS"
+  | where msg_s has_any (DomainNames)
+  | extend timestamp = TimeGenerated))
+

@@ -6,17 +6,17 @@
 # syslog daemon on the linux machine.
 # Supported OS:
 #   64-bit
-#       CentOS 6 and 7
+#       CentOS 7 and 8
 #       Amazon Linux 2017.09
-#       Oracle Linux 6 and 7
-#       Red Hat Enterprise Linux Server 6 and 7
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
-#       SUSE Linux Enterprise Server 12
+#       SUSE Linux Enterprise Server 12, 15
 #   32-bit
-#       CentOS 6
-#       Oracle Linux 6
-#       Red Hat Enterprise Linux Server 6
+#       CentOS 7 and 8
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
@@ -28,6 +28,7 @@ import subprocess
 import time
 import sys
 import os
+import re
 
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
@@ -135,9 +136,14 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     install_omsagent_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     o, e = install_omsagent_command.communicate()
     time.sleep(3)
+    # Parsing the agent's installation return code
+    return_code = re.search(".*Shell bundle exiting with code (\d+)", o, re.IGNORECASE)
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
-        return False
+        sys.exit()
+    elif return_code is not None and return_code.group(1) != '0':
+        handle_error(o, error_response_str="Error: could not install omsagent.")
+        sys.exit()
     print_ok("Installed omsagent successfully.")
     return True
 
@@ -208,6 +214,8 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
     if e is not None:
         handle_error(e, error_response_str="Error: could not download omsagent configuration.")
         return False
+    # set read permissions to the configuration file after downloaded and created
+    set_file_read_permissions(configuration_path)
     print_ok("Configuration for omsagent downloaded successfully.")
     print("Trying to change omsagent configuration")
     if omsagent_incoming_port is not omsagent_default_incoming_port:
@@ -226,7 +234,7 @@ def set_omsagent_configuration(workspace_id, omsagent_incoming_port):
 def is_rsyslog_new_configuration():
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
-            if "module" in line and "load" in line:
+            if "module(load=" in line:
                 return True
         fin.close()
     return False
@@ -237,7 +245,14 @@ def set_rsyslog_new_configuration():
         with open("tmp.txt", "wt") as fout:
             for line in fin:
                 if "imudp" in line or "imtcp" in line:
-                    fout.write(line.replace("#", "")) if "#" in line else fout.write(line)
+                    # Load configuration line requires 1 replacement
+                    if "load" in line:
+                        fout.write(line.replace("#", "", 1))
+                    # Port configuration line requires 2 replacements
+                    elif "port" in line:
+                        fout.write(line.replace("#", "", 2))
+                    else:
+                        fout.write(line)
                 else:
                     fout.write(line)
     command_tokens = ["sudo", "mv", "tmp.txt", rsyslog_conf_path]
@@ -259,22 +274,43 @@ def append_content_to_file(line, file_path, overide = False):
     if e is not None:
         handle_error(e, error_response_str="Error: could not change Rsyslog.conf configuration add line \"" + line + "\" to file -" + rsyslog_conf_path)
         return False
+    set_file_read_permissions(file_path)
+    return True
+
+
+def set_file_read_permissions(file_path):
+    """
+    :param  file_path: the path to change the permissions for
+    :return: True if successfully added read permissions to other in file otherwise false
+    """
+    command_tokens = ["sudo", "chmod", "o+r", file_path]
+    change_permissions = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+    time.sleep(3)
+    o, e = change_permissions.communicate()
+    if e is not None:
+        handle_error(e, error_response_str="Error: could not change the permissions for the file -" + file_path)
+        return False
     return True
 
 
 def set_rsyslog_old_configuration():
     add_udp = False
     add_tcp = False
+    # Do the configuration lines exist
+    is_exist_udp_conf = False
+    is_exist_tcp_conf = False
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
             if "imudp" in line or "UDPServerRun" in line:
+                is_exist_udp_conf = True
                 add_udp = True if "#" in line else False
             elif "imtcp" in line or "InputTCPServerRun" in line:
+                is_exist_tcp_conf = True
                 add_tcp = True if "#" in line else False
         fin.close()
-    if add_udp is True:
+    if add_udp or not is_exist_udp_conf:
         append_content_to_file(rsyslog_old_config_udp_content, rsyslog_conf_path)
-    if add_tcp:
+    if add_tcp or not is_exist_tcp_conf:
         append_content_to_file(rsyslog_old_config_tcp_content, rsyslog_conf_path)
     print_ok("Rsyslog.conf configuration was changed to fit required protocol - " + rsyslog_conf_path)
     return True
@@ -319,6 +355,8 @@ def change_omsagent_protocol(configuration_path):
     if e is not None:
         handle_error(e, error_response_str="Error: could not change omsagent configuration port in ." + configuration_path)
         return False
+    # set read permissions to file after recreated with the move command
+    set_file_read_permissions(configuration_path)
     print_ok("Omsagent configuration was changed to fit required protocol - " + configuration_path)
     return True
 
@@ -340,6 +378,8 @@ def change_omsagent_configuration_port(omsagent_incoming_port, configuration_pat
     if e is not None:
         handle_error(e, error_response_str="Error: could not change omsagent configuration port in ." + configuration_path)
         return False
+    # set read permissions to file after recreated with the move command
+    set_file_read_permissions(configuration_path)
     print_ok("Omsagent incoming port was changed in configuration - " + configuration_path)
     return True
 
