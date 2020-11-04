@@ -12,14 +12,14 @@
 #       Amazon Linux 2017.09
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
-#       Debian GNU/Linux 8, 9 and 10
+#       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
 #       SUSE Linux Enterprise Server 12, 15
 #   32-bit
 #       CentOS 7 and 8
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
-#       Debian GNU/Linux 8, 9 and 10
+#       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
 #
