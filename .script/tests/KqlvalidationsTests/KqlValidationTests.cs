@@ -2,7 +2,6 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Xunit;
@@ -39,8 +38,6 @@ namespace Kqlvalidations.Tests
                 return;
             }
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
-            if (!validationRes.IsValid)
-                Debug.WriteLine(id);
             Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
     }
