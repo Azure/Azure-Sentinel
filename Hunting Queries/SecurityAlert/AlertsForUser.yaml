@@ -22,12 +22,15 @@ query: |
   let v_EndTime = suspiciousEventTime+6h;
   SecurityAlert
   | where TimeGenerated between (v_StartTime .. v_EndTime)
+  | extend Extprop = parsejson(Entities)
+  | mv-expand Extprop
+  | extend Extprop = parsejson(Extprop)
+  | extend Account = Extprop['Name']
+  | extend Domain = Extprop['UPNSuffix']
+  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
   | where Account contains v_User
-  // expand JSON properties
-  | extend Extprop = parsejson(ExtendedProperties)
-  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
-  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
-  | extend IpAddress = tostring(parse_json(ExtendedProperties).["Client Address"]) 
+  | extend Computer = iff(Extprop['Type']=="host", Extprop['HostName'], '')
+  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '') 
   | project TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties 
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   };
