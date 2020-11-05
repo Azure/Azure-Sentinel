@@ -13,9 +13,26 @@
     ],
     "sampleQueries": [
         {
-            "description" : "Extract raw data fields",
-            "query": "Kusto Query 1"
+            "description" : "parser",
+            "query" : "\/\/ Usage Instruction : \r\n\/\/ Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. afad_parser).\r\n\/\/ Reference : Using functions in Azure monitor log queries : https:\/\/docs.microsoft.com\/azure\/azure-monitor\/log-query\/functions\r\n\r\nlet Common = AlsidForADLog_CL\r\n| parse RawData with\r\n                     Time:datetime  \" \"\r\n                     Host:string  \" \"\r\n                     Product:string \"[\"\r\n                     PID:int \"]: \\\"\"\r\n                     MessageType:int \"\\\" \\\"\"\r\n                     AlertID:int \"\\\" \\\"\"\r\n                     Forest:string \"\\\" \\\"\"\r\n                     Domain:string \"\\\" \"\r\n                     DistinctPart:string;\r\nlet Deviances = Common\r\n| where MessageType == 0 | parse DistinctPart with \"\\\"\"\r\n                     Codename:string \"\\\" \\\"\"\r\n                     Severity:string \"\\\" \\\"\"\r\n                     ADObject:string \"\\\" \\\"\"\r\n                     DevianceID:string \"\\\" \\\"\"\r\n                     ProfileID:string \"\\\" \\\"\"\r\n                     ReasonCodename:string \"\\\" \\\"\"\r\n                     EventID:string \"\\\" \"\r\n                     Attributes:string \"\\r\\n\";\r\nlet Changes = Common\r\n| where MessageType == 1\r\n| parse kind=regex DistinctPart with \"\\\"\"\r\n                     ADObject:string \"\\\" \\\"\"\r\n                     EventID:string \"\\\" \\\"\"\r\n                     EventType:string \"\\\" \"\r\n                     Attributes:string \"\\r?\\n\";\r\nunion Changes, Deviances\r\n| project-away DistinctPart, Product, _ResourceId, _SubscriptionId;"
+        },
+        {
+            "description" : "Get the number of alerts triggered by each checker",
+            "query": "afad_parser\n | where MessageType == 0\n | summarize AlertCount = count() by Codename"
+        },
+        {
+            "description" : "Get all IoE alerts with severity superior to the threshold",
+            "query" : "let threshold = 2;\n let SeverityTable=datatable(Severity:string,Level:int) [\n \"low\", 1,\n \"medium\", 2,\n \"high\", 3,\n \"critical\", 4\n ];\n afad_parser\n | where MessageType == 0\n | lookup kind=leftouter SeverityTable on Severity\n | where Level >= ['threshold']"
+        },
+        {
+            "description" : "Get all IoE alerts",
+            "query" : "afad_parser\r\n| where MessageType == 0"
+        },
+        {
+            "description" : "Get all trailflow changes",
+            "query" : "afad_parser\r\n| where MessageType == 1"
         }
+        
     ],
     "dataTypes": [
         {
