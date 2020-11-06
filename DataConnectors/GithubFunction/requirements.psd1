@@ -2,5 +2,5 @@
 # See https://aka.ms/functionsmanageddependency for additional information.
 #
 @{    
-	'Az.Accounts' = '2.1.2'
+	'Az' = '4.8.0'
 }
