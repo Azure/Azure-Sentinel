@@ -8,17 +8,17 @@
 # We send mock data to validate correctness of the pipeline
 # Supported OS:
 #   64-bit
-#       CentOS 6 and 7
+#       CentOS 7 and 8
 #       Amazon Linux 2017.09
-#       Oracle Linux 6 and 7
-#       Red Hat Enterprise Linux Server 6 and 7
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
-#       SUSE Linux Enterprise Server 12
+#       SUSE Linux Enterprise Server 12, 15
 #   32-bit
-#       CentOS 6
-#       Oracle Linux 6
-#       Red Hat Enterprise Linux Server 6
+#       CentOS 7 and 8
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
@@ -33,22 +33,32 @@ import time
 
 daemon_port = "514"
 agent_port = "25226"
-rsyslog_security_config_omsagent_conf_content_tokens = ["*.", "*", "@127.0.0.1:25226", "CEF", "ASA"]
+rsyslog_security_config_omsagent_conf_content_tokens = ["if", "contains", "then", "@127.0.0.1:25226", "CEF:", "ASA-"]
+rh_firewalld_agent_exception_tokens = ["INPUT", "tcp", "--dport", "25226", "ACCEPT"]
 syslog_ng_security_config_omsagent_conf_content_tokens = ["f_oms_filter", "oms_destination", "port(25226)", "tcp",
                                                           "source", "s_src", "oms_destination"]
 oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
+oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
+oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
+oms_agent_selinux_documentation = "https://docs.microsoft.com/azure/azure-monitor/platform/agent-linux"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
-firewall_d_exception_configuration_file = "/etc/firewalld/zones/public.xml"
-red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
+red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
+red_hat_security_enhanced_permanent_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 rsyslog_daemon_forwarding_configuration_dir_path = "/etc/rsyslog.d/"
 syslog_ng_daemon_forwarding_configuration_dir_path = "/etc/syslog-ng/conf.d/"
 rsyslog_daemon_name = "rsyslog.d"
+rsyslog_process_name = "rsyslogd"
+syslog_ng_process_name = "syslog-ng"
 syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
+syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
+rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
-
+portal_auto_sync_disable_file = "omshelper_disable"
 
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
@@ -108,38 +118,49 @@ def check_red_hat_firewall_issue():
         if "running" in str(o):
             print_warning(
                 "Warning: you have a firewall running on your linux machine this can prevent communication between the syslog daemon and the omsagent.")
-            print("Checking if firewall has exception for omsagent port.[" + agent_port + "]")
-            if red_hat_firewall_d_exception_for_omsagent():
+            print_notice("Checking if firewall has exception for omsagent port [" + agent_port + "]")
+            if validate_rh_firewall_exception():
                 print_ok("Found exception in the firewalld for the omsagent port.[" + agent_port + "]")
-                restart_red_hat_firewall_d()
             else:
                 print_warning("Warning: no exception found for omsagent in the firewall")
                 print_warning(
                     "You can add exception for the agent port[" + agent_port + "] by using the following commands:")
                 print_warning("Add exception:")
-                print_notice(
-                    "sudo firewall-cmd --direct --add-rule ipv4 filter INPUT 0 -p tcp --dport " + agent_port + "  -j ACCEPT")
-                print_warning("Validate the exception was added in the configuration:")
-                print_notice("sudo firewall-cmd --direct --get-rules ipv4 filter INPUT")
+                print_notice("sudo firewall-cmd --direct --permanent --add-rule ipv4 filter INPUT 0 -p tcp --dport " + agent_port + "  -j ACCEPT")
                 print_warning("Reload the firewall:")
                 print_notice("sudo firewall-cmd --reload")
+                print_warning("Validate the exception was added in the configuration:")
+                print_notice("sudo firewall-cmd --direct --get-rules ipv4 filter INPUT")
                 print_warning("You can disable your firewall by using this command - not recommended:")
                 print_notice("sudo systemctl stop firewalld")
 
 
-def red_hat_firewall_d_exception_for_omsagent():
+def validate_rh_firewall_exception():
     '''
-    Check that the firewall_d has an exception for the omsagent
-    :return:
+    Validating that a firewall rule with the agents port as an exception exists
+    :return: True if exception was found, False otherwise
     '''
-    print("Checking for exception for omsagent")
-    print_notice(firewall_d_exception_configuration_file)
-    firewall_status = subprocess.Popen(["sudo", "cat", firewall_d_exception_configuration_file], stdout=subprocess.PIPE)
-    o, e = firewall_status.communicate()
-    if e is not None:
-        print_error("Error: could not get /etc/firewalld/zones/public.xml file holding firewall exceptions")
-    print_command_response(str(o))
-    return agent_port in str(o)
+    iptables = subprocess.Popen(["sudo", "iptables-save"], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(["sudo", "grep", agent_port], stdin=iptables.stdout, stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if e is not None or o is None:
+        # either an error running the command or no rules exist
+        return False
+    else:
+        content = o.decode(encoding='UTF-8')
+        rules = content.split('\n')
+        for rule in rules:
+            # reviewing all rules until a match is found
+            is_exception = True
+            for token in rh_firewalld_agent_exception_tokens:
+                # comparing expected rule tokens with existing rule key words
+                if token not in rule:
+                    # not an exception- exit loop and move to next rule
+                    is_exception = False
+                    break
+            if is_exception:
+                return True
+        return False
 
 
 def restart_red_hat_firewall_d():
@@ -160,15 +181,15 @@ def restart_red_hat_firewall_d():
 
 def security_enhanced_linux_enabled():
     print("Checking if security enhanced linux is enabled")
-    print_notice("sestatus")
-    command_tokens = ["sudo", "sestatus"]
-    sestatus_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
-    o, e = sestatus_command.communicate()
-    if e is not None:
-        print_error("Could not execute \'sestatus\' to check if security enhanced linux is enabled")
+    print_notice("getenforce")
+    command_tokens = ["sudo", "getenforce"]
+    getenforce_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+    o, e = getenforce_command.communicate()
+    if e is not None or getenforce_command.returncode != 0:
+        print_error("Could not execute \'getenforce\' to check if security enhanced linux is enabled")
+        print_notice("please install \'policycoreutils\' package and run the troubleshoot script again")
     else:
-        for line in o.decode('ascii').split('\n'):
-            if "SELinux status" in line and "enabled" in line:
+        if o == 'Enforcing\n':
                 return True
         return False
 
@@ -176,15 +197,16 @@ def security_enhanced_linux_enabled():
 def security_enhanced_linux():
     if security_enhanced_linux_enabled() is True:
         print_warning(
-            "Security enhanced linux is enabled.\nTo use TCP with syslog daemon the omsagent incoming port should be inserted")
-        print("Use elevated privileges to perform the following:")
-        print("\tTo enable the port")
-        print_notice("\tsemanage port -a -t syslogd_port_t -p tcp " + agent_port)
-        print("\tTo validate enabled port")
-        print_notice("\tsemanage port -l | grep " + agent_port)
-        print("\tTo install the policy editor")
-        print_notice("\tyum install policycoreutils-python")
-        print("For more information: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+            "Security enhanced linux is in Enforcing mode.\n"
+            "This is not supported by the OMS Agent and can harm the communication with it.\n"
+            "For more information: " + oms_agent_selinux_documentation)
+        print_notice("To set SELinux to Permissive mode use elevated privileges to perform the following:")
+        print_notice("Run the following command to temporarily change SELinux to permissive mode: \"setenforce 0\"")
+        print_notice("Please restart the syslog daemon running on your machine")
+        print_notice("In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
+        print_notice("For more information on SELinux: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+    else:
+        pass
 
 
 def rsyslog_get_cef_log_counter():
@@ -342,7 +364,7 @@ def locate_check(process_name):
 
 def omsagent_process_check(oms_process_name):
     tokens = process_check(oms_process_name)
-    if len(tokens) > 1:
+    if len(tokens) > 0:
         for single_token in tokens:
             if oms_agent_process_name in single_token:
                 print_ok("Found omsagent process running on this machine.")
@@ -359,7 +381,8 @@ def process_check(process_name):
     '''
     p1 = subprocess.Popen(["ps", "-ef"], stdout=subprocess.PIPE)
     p2 = subprocess.Popen(["grep", "-i", process_name], stdin=p1.stdout, stdout=subprocess.PIPE)
-    o, e = p2.communicate()
+    p3 = subprocess.Popen(["grep", "-v", "grep"], stdin=p2.stdout, stdout=subprocess.PIPE)
+    o, e = p3.communicate()
     tokens = o.decode(encoding='UTF-8').split('\n')
     tokens.remove('')
     return tokens
@@ -383,6 +406,44 @@ def check_oms_agent_status():
     else:
         return True
 
+def check_omsagent_cisco_asa_configuration(workspace_id):
+        '''
+        Checking if the OMS agent is able to parse Cisco ASA:
+        :return: True if the configuration is updated, false otherwise
+        '''
+        grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')",
+                                 oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
+        o, e = grep.communicate()
+        if not o:
+            print_warning("Warning: Current content of the omsagent security configuration doesn't support"
+                          " Cisco ASA parsing.\nTo enable Cisco ASA firewall events parsing run the following: \n"
+                          "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
+                          "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
+                          " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"\n")
+            return False
+        else:
+            print_ok("omsagent security configuration supports Cisco ASA parsing \n")
+            return True
+
+
+def check_syslog_computer_field_mapping(workspace_id):
+    '''
+    Checking if the OMS agent maps the Computer field correctly:
+    :return: True if the mapping configuration is correct, false otherwise
+    '''
+    grep = subprocess.Popen(["grep", "-i", "'Host' => record\['host'\]",
+                             oms_agent_field_mapping_configuration], stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if not o:
+        print_warning("Warning: Current content of the omsagent syslog filter mapping configuration doesn't map the"
+                      " Computer field from your hostname.\nTo enable the Computer field mapping, please run: \n"
+                      "\"sed -i -e \"/'Severity' => tags\[tags.size - 1\]/ a \ \\t  'Host' => record['host']\""
+                      " -e \"s/'Severity' => tags\[tags.size - 1\]/&,/\" " + oms_agent_field_mapping_configuration +
+                      " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"")
+        return False
+    else:
+        print_ok("OMS Agent syslog field mapping is correct \n")
+        return True
 
 def file_contains_string(file_tokens, file_path):
     print_notice(file_path)
@@ -438,11 +499,8 @@ def validate_daemon_configuration_content(daemon_name, valid_content_tokens_arr)
     # set path according to the daemon
     path = rsyslog_daemon_forwarding_configuration_path if daemon_name == rsyslog_daemon_name else syslog_ng_daemon_forwarding_configuration_path
     if not file_contains_string(valid_content_tokens_arr, path):
-        print_error(
-            "Error - security-config-omsagent.conf does not contain " + daemon_name + " daemon routing to oms-agent")
         return False
     else:
-        print_ok("Security-config-omsagent.conf contains " + daemon_name + " routing configuration")
         return True
 
 
@@ -470,7 +528,7 @@ def omsagent_security_event_conf_validation(workspace_id):
 def check_daemon(daemon_name):
     tokens = process_check(daemon_name)
     print(tokens)
-    if len(tokens) > 1:
+    if len(tokens) > 0:
         for single_token in tokens:
             if "/usr/sbin/" + daemon_name in single_token:
                 print_ok("Found " + daemon_name + " process running on this machine.")
@@ -569,10 +627,12 @@ def handle_rsyslog(workspace_id):
         daemon_config_valid = validate_daemon_configuration_content("rsyslog.d",
                                                                     rsyslog_security_config_omsagent_conf_content_tokens)
         if not daemon_config_valid:
-            print_error("Error: rsyslog daemon configuration was found invalid. ")
-            print_notice("Notice: please make sure:")
-            print_notice("\t1. /etc/rsyslog.d/security-config-omsagent.conf file exists")
-            print_notice("\t2. File contains the following content:" + "\":rawmsg, regex, \"CEF\"|\"ASA\" \n*.* @@127.0.0.1:" + agent_port + "\"")
+            print_error("Error: found an outdated rsyslog daemon configuration file: " + rsyslog_daemon_forwarding_configuration_path)
+            print_notice("The updated file should contain the following configuration: \'if $rawmsg contains \"CEF:\""
+                         " or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port + "\'")
+            print_notice("Notice: Please run the following command to update the configuration and restart the rsyslog daemon:")
+            print_notice("\"echo \'if $rawmsg contains \"CEF:\" or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port +
+                         "\' > /etc/rsyslog.d/security-config-omsagent.conf && service rsyslog restart\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")
@@ -595,6 +655,34 @@ def handle_rsyslog(workspace_id):
             time.sleep(1)
 
 
+def check_portal_auto_sync():
+    if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
+        print_ok("No auto sync with the portal")
+        return False
+    print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
+                  "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal. Otherwise all changes will be overwritten. ")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    return True
+
+
+def print_full_disk_warning():
+    warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
+                   "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
+                   " For more information:"
+
+    if check_daemon(rsyslog_process_name):
+        if check_daemon(syslog_ng_process_name):
+            print_warning(warn_message + '\n' + rsyslog_documantation_path + '\n' + syslog_ng_documantation_path)
+        else:
+            print_warning(warn_message + '\n' + rsyslog_documantation_path)
+    elif check_daemon(syslog_ng_process_name):
+        print_warning(warn_message + '\n' + syslog_ng_documantation_path)
+    else:
+        print_warning("No daemon was found on the machine")
+
+
 def main():
     print_notice("Note this script should be run in elevated privileges")
     print_notice("Please validate you are sending CEF messages to agent machine.")
@@ -609,9 +697,11 @@ def main():
     # test oms agent configuration
     security_config_omsagent_test(workspace_id=workspace_id)
     omsagent_security_event_conf_validation(workspace_id=workspace_id)
+    check_omsagent_cisco_asa_configuration(workspace_id=workspace_id)
+    check_syslog_computer_field_mapping(workspace_id=workspace_id)
     # validate firewalld
     check_red_hat_firewall_issue()
-    # Check issue regarding security enhanced linux blocking tcp ports
+    # Check issue regarding security enhanced linux
     security_enhanced_linux()
     # testing that the daemon is running
     if check_daemon("rsyslog"):
@@ -620,7 +710,10 @@ def main():
         handle_syslog_ng(workspace_id)
     print("Simulating mock data which you can find in your workspace")
     # we always simulate to the daemon port
-    incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True)
+    if not incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True):
+        print_error("Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
+    check_portal_auto_sync()
+    print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(
         "Please check Log Analytics to see if your logs are arriving. All events streamed from these appliances appear in raw form in Log Analytics under CommonSecurityLog type")

@@ -1,0 +1,49 @@
+id: 074ce265-f684-41cd-af07-613c5f3e6d0d
+name: Known STRONTIUM group domains - July 2019
+description: |
+  'Matches domain name IOCs related to Strontium group activity published July 2019 with CommonSecurityLog, DnsEvents and VMConnection dataTypes.
+  References: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'
+severity: High
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1043
+query: |
+
+  let timeframe = 1d;
+  let DomainNames = dynamic(["irf.services","microsoft-onthehub.com","msofficelab.com","com-mailbox.com","my-sharefile.com","my-sharepoints.com",
+  "accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net",
+  "onedrive-sharedfile.com","onedrv-live.com","transparencyinternational-my-sharepoint.com","transparencyinternational-my-sharepoints.com","soros-my-sharepoint.com"]);
+  (union isfuzzy=true
+  (CommonSecurityLog 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse Message with * '(' DNSName ')' * 
+  | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP),
+  (DnsEvents 
+  | where TimeGenerated >= ago(timeframe) 
+  | extend IPAddress = ClientIP, DNSName = Name, Host = Computer),
+  (VMConnection 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | extend IPAddress = RemoteIp, Host = Computer)
+  )
+  | where isnotempty(DNSName)
+  | where DNSName  in~ (DomainNames)
+  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = Account, HostCustomEntity = Host

@@ -1,0 +1,61 @@
+// Usage Instruction : 
+// Paste below query in Sentinel, click on Save button and select as Function from drop down by specifying function name and alias.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries.
+// Reference: Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Reference: Sentinel normalization documentation: https://aka.ms/sentinelnormalizationdocs
+//
+// Note: This parser only populates and shows relevant fields within the networking schema. Please use the meta parser to see all relevant fields, or union this parser with the empty network schema. 
+// Parser Version: 1.0.0
+// Schema version: 1.0.0
+// Alias name: CheckPoint-Network-NormalizedParser (please change hypens(-) to underscores(_) when creating the alias)
+let NetworkParserCheckPoint=(){
+CommonSecurityLog
+| where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
+| project-rename 
+    EventResourceId=_ResourceId
+    , EventVendor=DeviceVendor
+    , EventProduct=DeviceProduct
+    , NetworkProtocol=Protocol
+	, EventSeverity=LogSeverity 
+    , SrcNatIpAddr=SourceTranslatedAddress
+    , SrcNatPortNumber=SourceTranslatedPort
+    , DstNatIpAddr=DestinationTranslatedAddress
+    , DstNatPortNumber=DestinationTranslatedPort
+    , DstBytes=ReceivedBytes
+    , SrcBytes=SentBytes
+    , DvcMacAddr=DeviceMacAddress
+    , DstDvcHostname=DestinationHostName
+    , DstMacAddr=DestinationMACAddress
+	, SrcMacAddr=SourceMACAddress
+	, DvcAction=DeviceAction
+| extend
+    EventSchemaVersion="1.0.0"
+	, EventCount=tolong(1)
+	, EventUid=_ItemId
+    , EventOriginalUid=extract(@'loguid=(\{[^\}]+\})',1,AdditionalExtensions, typeof(string))
+    , EventTimeIngested =ingestion_time()
+    , DvcHostname=extract(@'originsicname=cn\\\\=([^,]+),',1,AdditionalExtensions, typeof(string))
+    , EventType="Traffic"
+    , EventResult=case(isempty(DvcAction),"", DvcAction=="Accept","Success","Failure") 
+    , SrcZone=extract(@'inzone=([^;]+);',1,AdditionalExtensions, typeof(string))
+    , DstZone=extract(@'outzone=([^;]+);',1,AdditionalExtensions, typeof(string))
+    , NetworkRuleName=iff (DvcAction=="Accept" ,"", coalesce( DeviceCustomString2 , extract(@'(action_reason=|tcp_packet_out_of_state=)([^;]+)',2,AdditionalExtensions, typeof(string)), Activity))
+    , NetworkApplicationProtocol=iff (DvcAction !="Accept", Activity,"")
+    , ["NetworkRuleNumber"]=extract(@"rule_uid=([0-9a-f\x2d]+)",1, AdditionalExtensions)
+// Trivial rename for mitigating autocomplete
+| project-rename
+    NetworkDirection=CommunicationDirection
+    , EventEndTime=EndTime
+	, EventStartTime= StartTime
+	, EventMessage=Message
+	, TimeGenerated=TimeGenerated
+    , DstIpAddr=DestinationIP
+    , DstPortNumber=DestinationPort
+   	, SrcPortNumber=SourcePort
+    , SrcIpAddr=SourceIP
+  	, DstUserName=DestinationUserName
+	, DvcOutboundInterface=DeviceOutboundInterface
+	, DvcInboundInterface=DeviceInboundInterface
+	, SrcUserName=SourceUserName
+};
+NetworkParserCheckPoint

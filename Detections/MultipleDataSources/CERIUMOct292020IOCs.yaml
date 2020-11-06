@@ -1,0 +1,54 @@
+id: c87fb346-ea3a-4c64-ba92-3dd383e0f0b5
+name: Known CERIUM domains and hashes
+description: |
+  'CERIUM malicious webserver and hash values for maldocs and malware. 
+   Matches domain name IOCs related to the CERIUM activity group with CommonSecurityLog, DnsEvents, and VMConnection dataTypes.'
+severity: High
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights) 
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - CredentialAccess
+query: |
+  let timeframe = 1d;
+  let DomainNames = "miniodaum.ml";
+  let SHA256Hash = dynamic (["53f5773bbfbfbee660989d135c042c9f6f69024b9a4b65bdc0dfd44771762257", "0897c80df8b80b4c49bf1ccf876f5f782849608b830c3b5cb3ad212dc3e19eff"]);
+  (union isfuzzy=true
+  (CommonSecurityLog 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse Message with * '(' DNSName ')' * 
+  | where isnotempty(FileHash)
+  | where FileHash in (SHA256Hash) or DNSName =~ DomainNames
+  | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
+  ),
+  (DnsEvents 
+  | where TimeGenerated >= ago(timeframe) 
+  | extend DNSName = Name
+  | where isnotempty(DNSName)
+  | where DNSName =~ DomainNames
+  | extend IPAddress = ClientIP
+  ),
+  (VMConnection 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | where isnotempty(DNSName)
+  | where DNSName =~ DomainNames
+  | extend IPAddress = RemoteIp
+  )
+  )
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress

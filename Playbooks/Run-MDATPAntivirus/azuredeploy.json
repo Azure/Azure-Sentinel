@@ -88,7 +88,7 @@
                     "actions": {
                         "Alert_-_Get_hosts": {
                             "runAfter": {
-                                "Alert_-_Get_incidents": [
+                                "Alert_-_Get_incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -104,7 +104,7 @@
                                 "path": "/entities/host"
                             }
                         },
-                        "Alert_-_Get_incidents": {
+                        "Alert_-_Get_incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -114,52 +114,48 @@
                                     }
                                 },
                                 "method": "get",
-                                "path": "/cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
                             }
                         },
                         "For_each": {
                             "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
                             "actions": {
-                                "For_each_2": {
-                                    "foreach": "@body('Alert_-_Get_incidents')?['value']",
-                                    "actions": {
-                                        "Actions_-_Run_antivirus_scan": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "Comment": "AV run from playbook for Azure Sentinel Incident: @{items('For_each_2')?['properties']?['Title']}",
-                                                    "ScanType": "Full"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}/runAntiVirusScan"
+                                "Actions_-_Run_antivirus_scan": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "Comment": "AV Scan run from playbook for Azure Sentinel Incident: @{body('Alert_-_Get_incident')?['properties']?['CaseNumber']} -  @{body('Alert_-_Get_incident')?['properties']?['Title']}",
+                                            "ScanType": "Full"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
                                             }
                                         },
-                                        "Incident_-_Add_comment": {
-                                            "runAfter": {
-                                                "Actions_-_Run_antivirus_scan": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent(items('For_each_2')?['name'])}/@{encodeURIComponent('Machine (',items('For_each')?['HostName'],') had full AV scann triggered in MDATP.  The status was ',body('Actions_-_Run_antivirus_scan')?['status'],'.')}"
-                                            }
-                                        }
+                                        "method": "post",
+                                        "path": "/api/machines/@{encodeURIComponent(items('For_each')?['MdatpDeviceId'])}/runAntiVirusScan"
+                                    }
+                                },
+                                "Add_comment_to_incident_(V2)": {
+                                    "runAfter": {
+                                        "Actions_-_Run_antivirus_scan": [
+                                            "Succeeded"
+                                        ]
                                     },
-                                    "runAfter": {},
-                                    "type": "Foreach"
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "Value": "@{items('For_each')?['HostName']} had a full AV scan triggered and the status was @{body('Actions_-_Run_antivirus_scan')?['status']}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}"
+                                    }
                                 }
                             },
                             "runAfter": {

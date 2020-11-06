@@ -1,10 +1,10 @@
 ﻿id: e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
-name: Failed logon attempts via authpriv
+name: Failed logon attempts in authpriv
 description: |
   'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in 
   isn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. 
   If there are many of hits, especially from outside your network, it could indicate a brute force attack. 
-  Default threshold for logon attempts is 6.'
+  Default threshold for logon attempts is 15.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Syslog
@@ -25,16 +25,16 @@ query: |
   // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.
   // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages
   // are aggregated.
-  let authfail = Syslog     
+  let authfail = Syslog
+  | where TimeGenerated >= ago(startdate)     
   | where Facility =~ "authpriv"   // looks at authpriv messages
-  | where TimeGenerated >= ago(startdate)
   | where SyslogMessage contains "authentication failure" and SyslogMessage contains " uid=0"
   | parse SyslogMessage with * "rhost=" ExternalIP
   | project TimeGenerated, Computer, ProcessName, HostIP, ExternalIP, ProcessID;  
   // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. 
   let userfail = Syslog 
-  | where Facility =~ "authpriv" 
   | where TimeGenerated >= ago(startdate)
+  | where Facility =~ "authpriv" 
   | where SyslogMessage contains "user unknown"
   | project TimeGenerated, Computer, HostIP, ProcessID;
   // Join the two log messages above

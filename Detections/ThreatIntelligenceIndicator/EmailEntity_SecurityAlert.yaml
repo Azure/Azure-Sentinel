@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -26,21 +29,21 @@ query: |
   | where Active == true
   //Filtering the table for Email related IOCs
   | where isnotempty(EmailRecipient)
-  | join (   
+  | join (
       SecurityAlert | where TimeGenerated >= ago(dt_lookBack)
       // Converting Entities into dynamic data type and use mv-expand to unpack the array
       | extend EntitiesDynamicArray = parse_json(Entities) | mv-expand EntitiesDynamicArray
       // Parsing relevant entity column to filter type account and creating new column by combining account and UPNSuffix
-      | extend Entitytype = tostring(parse_json(EntitiesDynamicArray).Type), EntityName = tostring(parse_json(EntitiesDynamicArray).Name), 
+      | extend Entitytype = tostring(parse_json(EntitiesDynamicArray).Type), EntityName = tostring(parse_json(EntitiesDynamicArray).Name),
       EntityUPNSuffix = tostring(parse_json(EntitiesDynamicArray).UPNSuffix)
-      | where Entitytype =~ "account" 
+      | where Entitytype =~ "account"
       | extend EntityEmail = tolower(strcat(EntityName, "@", EntityUPNSuffix))
       | where EntityEmail matches regex emailregex
       | extend SecurityAlert_TimeGenerated = TimeGenerated
   )
   on $left.EmailRecipient == $right.EntityEmail
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, SecurityAlert_TimeGenerated, 
-  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, EntityEmail, AlertName, AlertType, 
-  AlertSeverity, Entities, ProviderName, VendorName 
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, SecurityAlert_TimeGenerated,
+  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, EntityEmail, AlertName, AlertType,
+  AlertSeverity, Entities, ProviderName, VendorName
   | extend timestamp = SecurityAlert_TimeGenerated, AccountCustomEntity = EntityEmail, URLCustomEntity = Url

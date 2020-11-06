@@ -1,0 +1,100 @@
+// Usage Instruction : 
+// Paste below query in Sentinel, click on Save button and select as Function from drop down by specifying function name and alias.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries
+// Reference: Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Reference: Sentinel normalization documentation: https://aka.ms/sentinelnormalizationdocs
+//
+// Note: This parser only populates and shows relevant fields within the networking schema. Please use the meta parser to see all relevant fields, or union this parser with the empty network schema. 
+// Parser Version: 1.0.0
+// Schema version: 1.0.0
+// Alias name: PAN-9-Network-NormalizedParser (please change hypens(-) to underscores(_) when creating the alias)
+let IP_TYPE=(ip:string){case(ip has ".", "IPv4", ip contains ":", "IPv6", "unknown")};
+let NetworkParserPaloAltoNetworks=(){
+CommonSecurityLog
+| where DeviceVendor=="Palo Alto Networks" and (Activity=="TRAFFIC" or (Activity=="THREAT" and DeviceEventClassID=="url"))
+| parse AdditionalExtensions with "PanOSDstPackets="DstPackets:long";PanOSsrc_packets="src_packets:long";start="EventStartTime:datetime";reason="*
+| project-rename 
+      EventVendor=DeviceVendor
+    , EventProduct=DeviceProduct
+    , DvcHostname=DeviceName
+    , EventResourceId=_ResourceId 
+    , NetworkApplicationProtocol=ApplicationProtocol
+    , SrcZone=DeviceCustomString4 
+    , DstZone=DeviceCustomString5
+    , NetworkRuleName=DeviceCustomString1
+    , NetworkProtocol=Protocol
+    , SrcBytes=SentBytes
+    , DstBytes=ReceivedBytes 
+    , SrcUserUpn=SourceUserID
+    , DstUserUpn=DestinationUserID 
+    , EventProductVersion=DeviceVersion
+    , EventSeverity=LogSeverity
+    , NetworkPackets=DeviceCustomNumber2
+    , SrcNatIpAddr=SourceTranslatedAddress
+    , DstNatIpAddr=DestinationTranslatedAddress
+    , UrlCategory=DeviceCustomString2
+    , LogProfile=DeviceCustomString6
+    , Flags=FlexString1
+    , VirtualSystem=DeviceCustomString3
+	// Proxy
+	, UrlOriginal=RequestURL
+	, HttpUserAgentOriginal=RequestClientApplication
+	, HttpContentType=RequestContext
+	, HttpRequestMethod=RequestMethod
+| extend
+    NetworkBytes=tolong(FlexNumber1)
+    , EventOriginalUid=_ItemId
+    , TimeGenerated  
+    , EventTimeIngested =ingestion_time()
+    , EventType="Traffic"
+    , EventCount=tolong(1)
+    , EventResult=case(DeviceAction=="allow","Success","Failure")
+    , NetworkSessionId=tostring(DeviceCustomNumber1)
+    , NetworkDuration=DeviceCustomNumber3
+    , EventSchemaVersion="1.0.0"
+////////////////////////////////////////////////////////
+// Mitigating LA Autocomplete
+| project-rename
+      DvcMacAddr=DeviceMacAddress 
+    , DstDvcHostname=DestinationHostName
+    , DstMacAddr=DestinationMACAddress
+	, SrcMacAddr=SourceMACAddress
+	// Trivial renames to mitigate Autocomplete
+    , NetworkDirection=CommunicationDirection
+    , EventEndTime=EndTime
+	, EventStartTime=EventStartTime
+	, EventMessage=Message
+	, TimeGenerated=TimeGenerated
+    , DstIpAddr=DestinationIP
+    , DstPortNumber=DestinationPort
+    , DstNatPortNumber=DestinationTranslatedPort
+	, SrcPortNumber=SourcePort
+    , SrcIpAddr=SourceIP
+    , DvcAction=DeviceAction
+	, DstUserName=DestinationUserName
+	, SrcNatPortNumber=SourceTranslatedPort
+	, DvcOutboundInterface=DeviceOutboundInterface
+	, DvcInboundInterface=DeviceInboundInterface
+	, SrcUserName=SourceUserName 
+// parsed from additional extensions:
+| parse AdditionalExtensions with unparsedURL "PanOSActionFlags="ActionFlags
+                                          ";cat="Category //https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClmHCAS
+                                         // ";PanOSXForwarderfor="HttpXff
+                                         // ";PanOSReferer="Referer 
+                                          ";"temp"l1="temp2"Gl4="temp3
+                                          //";PanOSVsysName="VirtualSystem
+                                          //";PanOSSrcUUID="SrcUUID
+                                          //";PanOSDstUUID="DstUUID
+                                          //";PanOSTunnelID="TunnelId
+                                          //";PanOSMonitorTag="MonitorTag
+                                          //";PanOSParentSessionID="ParentSessionId
+                                          //";PanOSParentStartTime="ParentStartTime
+                                          //";PanOSTunnelType="TunnelType
+                                          ";PanOSThreatCategory="ThreatCategory
+                                          ";PanOSContentVer="ContentVer
+// for EventClassIds=="url" it parses theses additional fields  
+| parse temp with "PanOSXForwarderfor="HttpRequestXff";PanOSReferer="HttpReferrerOriginal	";" *
+| extend UrlOriginal=coalesce(UrlOriginal, unparsedURL)
+| project-away temp, temp2, temp3, unparsedURL
+};
+NetworkParserPaloAltoNetworks
