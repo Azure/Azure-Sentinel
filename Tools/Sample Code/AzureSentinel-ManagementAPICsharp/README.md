@@ -162,7 +162,7 @@ The API currently has some limitations, and here are a few things to note regard
         "classificationComment": "",
         "classificationReason": ""
 
-3. Actions: To select a playbook for an analytic rule, you can either use Option 1 (Create Action) or option 9 (Create Alert rule) in the menu. Open your **ActionPayload.json** file in **templates** folder and ill in values of these fields:
+3. Actions: To select a playbook for an analytic rule, you can either use Option 1 (Create Action) or option 9 (Create Alert rule) in the menu. Open your **ActionPayload.json** file in **Templates** folder and fill in values of these fields:
     1. **triggerUri**: Callback URL for your playbook trigger. To get this URL, make a POST request to [WorkflowTrigger CallbackUrl](https://docs.microsoft.com/rest/api/logic/workflowtriggers/listcallbackurl). You can easily obtain the value using this [code-try](https://docs.microsoft.com/rest/api/logic/workflowtriggers/listcallbackurl#code-try-0). The **value** field in the response should be the URL.
     2. **logicAppResourceId**: Azure ARM resource ID of your logic app. Fill in the Subscription Id, Resource Group Name, and Playbook Name in the value.
 
@@ -170,7 +170,7 @@ The API currently has some limitations, and here are a few things to note regard
         {
             "properties": {
             "triggerUri": "<enter_Trigger_URI_of_your_playbook>",
-            "logicAppResourceId": "/subscriptions/<subscrition-ID>/resourceGroups/<resource-group-name>/providers/Microsoft.Logic/workflows/<logic-app-name>"
+            "logicAppResourceId": "/subscriptions/<subscription-ID>/resourceGroups/<resource-group-name>/providers/Microsoft.Logic/workflows/<logic-app-name>"
             }
         },
     ```
