@@ -1,4 +1,5 @@
 # Azure Sentinel Management API C# Sample
+Author: Chi Nguyen
 
 ## Description
 This repo contains a C# .NET Core 3.1 console application to demonstrate how you can leverage the Azure Sentinel Management API to programmatically manage your Azure Sentinel workspace(s).
@@ -11,7 +12,7 @@ What can you use this solution for?
 
 Please refer to the documentation and specs below for more details on Azure Sentinel API.
 * [Sentinel API documentation](https://docs.microsoft.com/rest/api/securityinsights/)
-* [Saved Searches/Hunting queries API documentation](https://docs.microsoft.com/en-us/rest/api/loganalytics/savedsearches)
+* [Saved Searches/Hunting queries API documentation](https://docs.microsoft.com/rest/api/loganalytics/savedsearches)
 * [Sentinel API specs - Stable: 2020-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/stable/2020-01-01/SecurityInsights.json)
 * [Sentinel API specs - Preview: 2019-01-01 version](https://github.com/Azure/azure-rest-api-specs/blob/master/specification/securityinsights/resource-manager/Microsoft.SecurityInsights/preview/2019-01-01-preview/SecurityInsights.json)
 
