@@ -241,7 +241,7 @@ foreach($org in $githubOrgs){
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
             #write to log A to be added later            
-            SendToLogA -gitHubData $results, -customLogName $AuditLogTable
+            SendToLogA -gitHubData $results.data.organization.auditLog.edges, -customLogName $AuditLogTable
         }
         $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
         $lastRunContext = $results.data.organization.auditLog.pageInfo.endCursor
