@@ -11,8 +11,9 @@
 
 # Authenticate with Azure PowerShell using MSI.
 # Remove this if you are not planning on using MSI or Azure PowerShell.
-
-if ($env:MSI_SECRET) {    
+Import-Module Az.Accounts -RequiredVersion '1.9.5'
+if ($env:MSI_SECRET) {
+	Disable-AzContextAutosave -Scope Process
     Connect-AzAccount -Identity
 }
 
