@@ -123,7 +123,7 @@ function Write-OMSLogfile {
             "x-ms-date"            = $rfc1123date
             "time-generated-field" = $dateTime
         }
-        $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $ContentType -Headers $headers -Body $body -UseBasicParsing
+        $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $ContentType -Headers $headers -Body $Body -UseBasicParsing
         Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
         return $response.statuscode
     }
@@ -153,9 +153,9 @@ function SendToLogA ($gitHubData, $customLogName) {
     #Test Size; Log A limit is 30MB
     $tempdata = @()
     $tempDataSize = 0
-    Write-Host "Checking if upload is over 25MB"
+    
     if ((($gitHubData |  Convertto-json -depth 20).Length) -gt 25MB) {
-        Write-Host "Upload needs to be split"
+        Write-Host "Upload is over 25MB, needs to be split"
         foreach ($record in $gitHubData) {
             $tempdata += $record
             $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
