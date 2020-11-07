@@ -139,7 +139,7 @@ function Write-OMSLogfile {
     #$logdata.add("DateTime", $dateTime)
     $logdata | Add-Member -MemberType NoteProperty -Name "DateTime" -Value $dateTime
 
-    #BuildShe JSON file
+    #Build the JSON file
     $logMessage = ConvertTo-Json $logdata -Depth 20
     Write-Verbose -Message $logMessage
 
@@ -154,9 +154,9 @@ function SendToLogA ($gitHubData, $customLogName) {
     $tempdata = @()
     $tempDataSize = 0
     
-    if ((($gitHubData |  Convertto-json -depth 20).Length) -gt 25MB) {
-        Write-Host "Upload is over 25MB, needs to be split"
-        foreach ($record in $gitHubData) {
+    if ((($gitHubData |  Convertto-json -depth 20).Length) -gt 25MB) {        
+		Write-Host "Upload is over 25MB, needs to be split"									 
+        foreach ($record in $gitHubData) {            
             $tempdata += $record
             $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
             if ($tempDataSize -gt 25MB) {
@@ -171,8 +171,7 @@ function SendToLogA ($gitHubData, $customLogName) {
         Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $gitHubData -CustomerID $workspaceId -SharedKey $workspaceKey
     }
     Else {
-        #Send to Log A as is
-        Write-Host "Upload does not need to be split, sending to Log A"
+        #Send to Log A as is        
         Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $gitHubData -CustomerID $workspaceId -SharedKey $workspaceKey
     }
 }
@@ -240,8 +239,8 @@ foreach($org in $githubOrgs){
         $results = $null
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
-            #write to log A to be added later            
-            SendToLogA -gitHubData $results.data.organization.auditLog.edges, -customLogName $AuditLogTable
+            #write to log A to be added later           
+            SendToLogA -gitHubData ($results.data.organization.auditLog.edges |  Convertto-json -depth 20) -customLogName $AuditLogTable
         }
         $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
         $lastRunContext = $results.data.organization.auditLog.pageInfo.endCursor
@@ -309,7 +308,7 @@ foreach($org in $githubOrgs){
             $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
             #Send to log A;
-            SendToLogA -gitHubData $referrerLogs, -customLogName $RepoLogTable
+            SendToLogA -gitHubData $referrerLogs -customLogName $RepoLogTable
             
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
@@ -319,7 +318,7 @@ foreach($org in $githubOrgs){
             $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
             #Send to log A;
-            SendToLogA -gitHubData $pathLogs, -customLogName $RepoLogTable
+            SendToLogA -gitHubData $pathLogs -customLogName $RepoLogTable
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
             $viewLogs = $null
@@ -328,7 +327,7 @@ foreach($org in $githubOrgs){
             $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
             #Send to log A
-            SendToLogA -gitHubData $viewLogs, -customLogName $RepoLogTable            
+            SendToLogA -gitHubData $viewLogs -customLogName $RepoLogTable            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
             $cloneLogs = $null
@@ -337,7 +336,7 @@ foreach($org in $githubOrgs){
             $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
             #Send to log A
-            SendToLogA -gitHubData $cloneLogs, -customLogName $RepoLogTable            
+            SendToLogA -gitHubData $cloneLogs -customLogName $RepoLogTable            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
             $commitLogs = $null
@@ -346,7 +345,7 @@ foreach($org in $githubOrgs){
             $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
             #Send to log A
-            SendToLogA -gitHubData $commitLogs, -customLogName $RepoLogTable
+            SendToLogA -gitHubData $commitLogs -customLogName $RepoLogTable
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
             $collaboratorLogs = $null
@@ -355,7 +354,7 @@ foreach($org in $githubOrgs){
             $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
             #Send to log A
-            SendToLogA -gitHubData $collaboratorLogs, -customLogName $RepoLogTable            
+            SendToLogA -gitHubData $collaboratorLogs -customLogName $RepoLogTable            
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
             $forkLogs = $null
@@ -364,7 +363,7 @@ foreach($org in $githubOrgs){
             $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
             $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
             #Send to log A
-            SendToLogA -gitHubData $forkLogs, -customLogName $RepoLogTable            
+            SendToLogA -gitHubData $forkLogs -customLogName $RepoLogTable            
         }
         else {
             Write-Host "$repoName is empty"
@@ -418,7 +417,7 @@ foreach($org in $githubOrgs){
                 $vulnList | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
                 $vulnList | Add-Member -NotePropertyName LogType -NotePropertyValue vulnerabilityAlerts
                 #send to log A; Name:GitHubRepoLogs
-                SendToLogA -gitHubData $vulnList, -customLogName $RepoLogTable                
+                SendToLogA -gitHubData $vulnList -customLogName $RepoLogTable                
             }
             $hasNextPage = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.hasNextPage
             $lastRunContext = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.endCursor
