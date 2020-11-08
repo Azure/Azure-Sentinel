@@ -10,13 +10,13 @@ Note: Azure AD Identity Protection is a premium feature. You need an Azure AD Pr
 
 <br><br>
 Overall:
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse/images/designerView.png"/>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-TeamsBotResponse/images/designerView.png"/>
 <br><br>
 Card to be sent by Microsoft Teams bot:
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse/images/msg.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-TeamsBotResponse/images/msg.png"/><br><br>
 
 Response Part:
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse/images/responsePart.png"/>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-TeamsBotResponse/images/responsePart.png"/>
 <br><br>
 Documentation references:
 

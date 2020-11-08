@@ -7,7 +7,7 @@ When a new Azure Sentinel alert is created, the playbook iterates over the ident
 For each identity, playbook will send to the SOC email address (which is configured when deploying) an informative mail including the Risk history of this user, given by Azure AD Identity Protection.
 Than it offers an option to confirm this user as compromised, dismiss it from being a risky user or ignore, by one button click.
 
-<img src="https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-EmailBotResponse/images/designerView.png"/>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-EmailResponse/images/designerView.png"/>
 
 Note: Azure AD Identity Protection is a premium feature. You need an Azure AD Premium P1 or P2 license to access the riskDetection API (note: P1 licenses receive limited risk information). The riskyUsers API is only available to Azure AD Premium P2 licenses only.
 
