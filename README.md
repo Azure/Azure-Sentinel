@@ -107,6 +107,10 @@ Total tests: 171
  Total time: 25.7973 Seconds
 ```
 
+### Detection validation tests
+Similarly to KQL Validation, there is an automatic validation the structure of a detection.
+The structure includes the detection's frequency and period, the detection's trigger type and threshold, etc.
+A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
 
 When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
