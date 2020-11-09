@@ -1,7 +1,7 @@
 id: 884be6e7-e568-418e-9c12-89229865ffde
 name: Failed Logins from Unknown or Invalid User
 description: |
-  'This creates an incident in the event that numerous login attempts to the management console with an unknown or invalid user name'
+  'This query searches for numerous login attempts to the management console with an unknown or invalid user name'
 severity: Medium
 requiredDataConnectors:
   - connectorId: OktaSSO
@@ -21,14 +21,15 @@ query: |
   let FailureThreshold = 15;
   let FailedLogins = Okta_CL
   | where TimeGenerated > timeframe
-  | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "UNKNOWN_USER"
-  | summarize count() by client_ipAddress_s, bin(TimeGenerated, 5m)
+  | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "VERIFICATION_ERROR"
+  | summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)
   | where count_ > FailureThreshold
-  | project client_ipAddress_s;
+  | project client_ipAddress_s, actor_alternateId_s;
   Okta_CL
-  | where published_t > timeframe
-  | join kind=inner FailedLogins () on client_ipAddress_s
-  | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "UNKNOWN_USER"
-  | summarize count() by ClientIP = client_ipAddress_s, City = client_geographicalContext_city_s, Country = client_geographicalContext_country_s, bin(TimeGenerated, 5m)
-  | sort by TimeGenerated desc
-  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP
+  | where TimeGenerated > timeframe
+  | join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s
+  | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "VERIFICATION_ERROR"
+  | summarize count() by actor_alternateId_s, ClientIP = client_ipAddress_s, City = client_geographicalContext_city_s, Country = client_geographicalContext_country_s, published_t
+  | sort by published_t desc
+  | extend timestamp = published_t, IPCustomEntity = ClientIP, AccountCustomEntity = actor_alternateId_s
+ 

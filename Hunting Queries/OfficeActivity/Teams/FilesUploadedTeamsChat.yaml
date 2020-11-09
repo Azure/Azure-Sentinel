@@ -1,0 +1,33 @@
+id: 94588842-7e24-470e-97ef-983d8d85355c
+name: Summarize files uploads in a Teams chat
+description: |
+  'This hunting queries identifies files uploaded to SharePoint via a Teams chat and
+  summarizes users and IP addresses that have accessed these files. This allows for 
+  identification of anomolous file sharing patterns.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+
+  let timeframe = 7d;
+  OfficeActivity
+  | where TimeGenerated > ago(timeframe)
+  | where RecordType =~ "SharePointFileOperation"
+  | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+  | where Operation =~ "FileUploaded"
+  | join kind= leftouter (
+    OfficeActivity
+      | where TimeGenerated > ago(timeframe)
+      | where RecordType =~ "SharePointFileOperation"
+      | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+      | where Operation =~ "FileDownloaded" or Operation =~ "FileAccessed"
+  ) on OfficeObjectId
+  | extend userBag = pack(UserId1, ClientIP1)
+  | summarize make_set(UserId1), make_bag(userBag) by TimeGenerated, UserId, OfficeObjectId, SourceFileName
+  | project UploadTime=TimeGenerated, Uploader=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag
+  | extend timestamp=UploadTime, AccountCustomEntity=Uploader 
