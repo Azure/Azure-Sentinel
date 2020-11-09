@@ -1,0 +1,61 @@
+// Usage Instruction : 
+// Paste below query in Sentinel, click on Save button and select as Function from drop down by specifying function name and alias.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries
+// Reference: Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Reference: Sentinel normalization documentation: https://aka.ms/sentinelnormalizationdocs
+//
+// Note: This parser only populates and shows relevant fields within the networking schema. Please use the meta parser to see all relevant fields, or union this parser with the empty network schema. 
+// Parser Version: 1.0.0
+// Schema version: 1.0.0
+// Alias name: ZScaler-Network-NormalizedParser (please change hypens(-) to underscores(_) when using the alias)
+let NetworkParserZscaler=(){
+    CommonSecurityLog
+    | where DeviceVendor == "Zscaler" and DeviceProduct == "NSSFWlog"
+    | project-rename 
+         EventOriginalUid = _ItemId 
+        , EventVendor=DeviceVendor
+        , EventProduct=DeviceProduct
+        , EventResourceId=_ResourceId 
+        //, TenantId=TenantId
+		//, DestinationUserId=DestinationUserID 
+        , NetworkRuleName=Activity 
+        , NetworkProtocol=Protocol
+        , NetworkApplicationProtocol=DeviceCustomString2
+        , SrcBytes=SentBytes
+        , DstBytes=ReceivedBytes 
+		, NetworkDuration=DeviceCustomNumber1
+        , EventProductVersion=DeviceVersion
+        , EventSeverity=LogSeverity 
+        , SrcNatIpAddr=SourceTranslatedAddress
+        , DstNatIpAddr=DestinationTranslatedAddress
+        , DstDvcHostname=DestinationHostName
+		, DvcMacAddress=DeviceMacAddress
+		, DstMacAddr=DestinationMACAddress 
+		, SrcMacAddr=SourceMACAddress
+    | extend
+        EventTimeIngested =ingestion_time()
+        , EventCount=tolong(EventCount)
+        , EventType="Traffic"
+        , EventResult=case(DeviceAction has "Allow","Success","Failure") 
+        , EventSchemaVersion="1.0.0"
+//  Auto complete bug mitigation
+//  Trivial renames to mitigate Autocomplete
+| project-rename
+     NetworkDirection=CommunicationDirection
+    , EventEndTime=EndTime
+	, EventStartTime= StartTime
+	, EventMessage=Message
+	, TimeGenerated=TimeGenerated
+    , DstIpAddr=DestinationIP
+    , DstPortNumber=DestinationPort
+    , DstNatPortNumber=DestinationTranslatedPort
+	, SrcPortNumber=SourcePort
+    , SrcIpAddr=SourceIP
+    , DeviceAction=DeviceAction
+	, DstUserName=DestinationUserName
+	, SrcNatPortNumber=SourceTranslatedPort
+	, DvcOutboundInterface=DeviceOutboundInterface
+	, DvcInboundInterface=DeviceInboundInterface
+	, SrcUserName=SourceUserName 
+};
+NetworkParserZscaler

@@ -1,0 +1,37 @@
+id: 9736e5f1-7b6e-4bfb-a708-e53ff1d182c3
+name: Creation of expensive computes in Azure
+description: |
+  'Identifies the creation of large size/expensive VMs (GPU or with large no of virtual CPUs) in Azure.
+  Adversary may create new or update existing virtual machines sizes to evade defenses 
+  or use it for cryptomining purposes.
+  For Windows/Linux Vm Sizes - https://docs.microsoft.com/azure/virtual-machines/windows/sizes 
+  Azure VM Naming Conventions - https://docs.microsoft.com/azure/virtual-machines/vm-naming-conventions'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1578
+query: |
+  let timeframe = 1d;
+  let tokens = dynamic(["416","208","128","120","96","80","72","64","48","44","40","g5","gs5","g4","gs4","nc12","nc24","nv12"]);
+  let operationList = dynamic(["Create or Update Virtual Machine", "Create Deployment"]);
+  AzureActivity
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName in (operationList)
+  | where ActivityStatus == "Accepted" 
+  | where isnotempty(Properties)
+  | extend vmSize = tolower(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).hardwareProfile)).vmSize))
+  | where isnotempty(vmSize)
+  | where vmSize has_any (tokens) 
+  | extend ComputerName = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).osProfile)).computerName)
+  | extend clientIpAddress = tostring(parse_json(HTTPRequest).clientIpAddress)
+  | project TimeGenerated, OperationName, ActivityStatus, Caller, CallerIpAddress, ComputerName, vmSize
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress

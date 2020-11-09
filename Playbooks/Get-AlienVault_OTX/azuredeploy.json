@@ -1,0 +1,474 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will copy AlienVault OTC IOC data using the Security Graph API. Requires an AlienVault API Key and registered Azure AD app. Update the AlienVault, tenant ID, client ID (app ID), and secret. Refer to MS Docs and Sentinel Threat Intelligence blogs for more information.",
+        "author": "Andrew Blumhardt"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-AlienVault_OTX",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+            "triggers": {
+                "Recurrence": {
+                    "recurrence": {
+                        "frequency": "Day",
+                        "interval": 1
+                    },
+                    "type": "Recurrence"
+                }
+            },
+            "actions": {
+                "AppSecret": {
+                    "runAfter": {
+                        "ClientID": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "AppSecret",
+                                "type": "string",
+                                "value": "Update with your App Secret"
+                            }
+                        ]
+                    }
+                },
+                "ClientID": {
+                    "runAfter": {
+                        "TennantID": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "ClientID",
+                                "type": "string",
+                                "value": "Update with your App ID"
+                            }
+                        ]
+                    }
+                },
+                "For_each": {
+                    "foreach": "@body('Parse_JSON_Results')?['results']",
+                    "actions": {
+                        "Switch": {
+                            "runAfter": {},
+                            "cases": {
+                                "Domains": {
+                                    "case": "domain",
+                                    "actions": {
+                                        "HTTP_3": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "domainName": "@{items('For_each')?['indicator']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Emails": {
+                                    "case": "email",
+                                    "actions": {
+                                        "HTTP_4": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "emailRecipient": "@{items('For_each')?['indicator']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                },
+                                "FileHash-MD5": {
+                                    "case": "FileHash-MD5",
+                                    "actions": {
+                                        "HTTP_5": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "IP": "0.0.0.0",
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "fileHashType": "md5",
+                                                    "fileHashValue": "@{items('For_each')?['indicator']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                },
+                                "FileHash-SHA1": {
+                                    "case": "FileHash-SHA1",
+                                    "actions": {
+                                        "HTTP_6": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "IP": "0.0.0.0",
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "fileHashType": "sha1",
+                                                    "fileHashValue": "@{items('For_each')?['indicator']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                },
+                                "FileHash-SHA256": {
+                                    "case": "FileHash-SHA256",
+                                    "actions": {
+                                        "HTTP_7": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "IP": "0.0.0.0",
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "fileHashType": "sha256",
+                                                    "fileHashValue": "@{items('For_each')?['indicator']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                },
+                                "IP_Addresses": {
+                                    "case": "IPv4",
+                                    "actions": {
+                                        "HTTP_2": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "networkIPv4": "@{items('For_each')?['indicator']}",
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                },
+                                "URLs": {
+                                    "case": "URL",
+                                    "actions": {
+                                        "HTTP": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@variables('ClientID')",
+                                                    "secret": "@variables('AppSecret')",
+                                                    "tenant": "@variables('Tennant')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "action": "alert",
+                                                    "activityGroupNames": [],
+                                                    "confidence": 0,
+                                                    "description": "OTX Threat Indicator - @{items('For_each')?['type']}",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@{items('For_each')?['id']}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 0,
+                                                    "tags": [],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white",
+                                                    "url": "@{items('For_each')?['indicator']}"
+                                                },
+                                                "headers": {
+                                                    "content-type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://graph.microsoft.com/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {}
+                            },
+                            "expression": "@items('For_each')?['type']",
+                            "type": "Switch"
+                        }
+                    },
+                    "runAfter": {
+                        "Parse_JSON_Results": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "Get_IOCs_from_AV-OTX": {
+                    "runAfter": {
+                        "AppSecret": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Http",
+                    "inputs": {
+                        "headers": {
+                            "X-OTX-API-KEY": "Enter your OTX Key Here"
+                        },
+                        "method": "GET",
+                        "queries": {
+                            "modified_since": "@{addDays(utcNow(),-1)}",
+                            "types": "IPv4,domain,email,URL,FileHash-MD5,FileHash-SHA1,FileHash-SHA256"
+                        },
+                        "uri": "https://otx.alienvault.com/api/v1/indicators/export"
+                    }
+                },
+                "Parse_JSON_Results": {
+                    "runAfter": {
+                        "Get_IOCs_from_AV-OTX": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ParseJson",
+                    "inputs": {
+                        "content": "@body('Get_IOCs_from_AV-OTX')",
+                        "schema": {
+                            "properties": {
+                                "count": {
+                                    "type": "integer"
+                                },
+                                "next": {},
+                                "previous": {},
+                                "results": {
+                                    "items": {
+                                        "properties": {
+                                            "content": {
+                                                "type": "string"
+                                            },
+                                            "description": {},
+                                            "id": {
+                                                "type": "integer"
+                                            },
+                                            "indicator": {
+                                                "type": "string"
+                                            },
+                                            "title": {},
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "indicator",
+                                            "description",
+                                            "title",
+                                            "content",
+                                            "type",
+                                            "id"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "TennantID": {
+                    "runAfter": {},
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "Tennant",
+                                "type": "string",
+                                "value": "Update with your Tennant ID"
+                            }
+                        ]
+                    }
+                }
+            },
+                    "outputs": {
+                    }
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}
