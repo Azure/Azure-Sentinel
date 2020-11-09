@@ -115,7 +115,7 @@ A wrong format or missing attributes will result with an informative check failu
 ### Run Detection Structure Validation Locally
 In order to run the kql validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\TemplateStructureValidation\`
+* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateStructureValidation\`
 * Execute `dotnet test`
 
 

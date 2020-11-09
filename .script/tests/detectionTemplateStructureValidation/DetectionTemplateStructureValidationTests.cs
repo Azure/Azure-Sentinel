@@ -1,6 +1,6 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
+using FluentAssertions;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -9,7 +9,7 @@ using YamlDotNet.Serialization;
 
 namespace Kqlvalidations.Tests
 {
-    public class TemplateStructureValidationTests
+    public class DetectionTemplateStructureValidationTests
     {
         private static readonly string DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
 
@@ -31,7 +31,8 @@ namespace Kqlvalidations.Tests
 
             var jObj = JObject.Parse(ConvertYamlToJson(yaml));
 
-            jObj.ToObject<ScheduledTemplateInternalModel>();
+            var exception = Record.Exception(() => jObj.ToObject<ScheduledTemplateInternalModel>());
+            exception.Should().BeNull();
         }
 
         public static string ConvertYamlToJson(string yaml)
