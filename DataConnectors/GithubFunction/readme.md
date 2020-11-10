@@ -13,8 +13,8 @@ Following are the configuration steps to deploy Function App.
 2. Deploy the ARM template and fill in the parameters.
 ```
 "PersonalAccessToken": This is the GITHUB PAT​
-"workspaceId": The Sentinel Workspace ID​
-"workSpaceKey": The Sentinel Workspace Key
+"Workspace Id": The Sentinel Log Analytics Workspace Id​
+"Workspace Key": The Sentinel Log Analytics Workspace Key
  ```
 4. There are two json files (ORGS.json and lastrun-Audit.json).
 5. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name.  If you have addtional orgs, add another line 
@@ -22,7 +22,22 @@ Following are the configuration steps to deploy Function App.
 {"org": "sampleorg"} 
 ```
 for each org.
+
 6. Upload the ORGS.json, and lastrun-Audit.json to the storage account "github-repo-logs" container.
+
+7. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault "githubkv<uniqueid>" with only Azure Function access policy. If you want to see/update these secrets,
+
+```
+    a. Go to Azure KeyVault "githubkv<uniqueid>"
+    b. Click on "Access Policies" under Settings
+    c. Click on "Add Access Policy"
+        i. Configure from template : Secret Management
+        ii. Key Permissions : GET, LIST, SET
+        iii. Select Prinicpal : <<Your Account>>
+        iv. Add
+    d. Click "Save"
+
+```
 
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHub] to make the logs useful
 
