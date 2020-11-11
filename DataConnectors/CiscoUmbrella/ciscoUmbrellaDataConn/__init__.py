@@ -29,7 +29,7 @@ sentinel_log_type = 'Cisco_Umbrella'
 
 aws_s3_bucket = os.environ.get('S3Bucket')
 aws_access_key_id = os.environ.get('AWSAccessKeyId')
-aws_secret_acces_key = os.environ.get('AWSSecretAccesKey')
+aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 aws_region_name = os.environ.get('AWSRegionName')
 
 
