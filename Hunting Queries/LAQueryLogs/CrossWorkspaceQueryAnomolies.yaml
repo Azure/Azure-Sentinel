@@ -1,0 +1,41 @@
+id: 8f18c6ea-fcd0-4d9a-a8fd-19a6aaa1660c
+name: Cross workspace query anomolies
+description: |
+  'This hunting query looks for increases in the number of workspaces queried by a user.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(Query Audit)
+    dataTypes:
+      - LAQueryLogs
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1530
+  - T1213
+  - T1020
+query: |
+
+  let lookback = 30d;
+  let timeframe = 1d;
+  let threshold = 0;
+  LAQueryLogs
+  | where TimeGenerated between (ago(lookback)..ago(timeframe))
+  | mv-expand(RequestContext)
+  | extend RequestContextExtended = split(RequestTarget, "/") 
+  | extend Subscription = tostring(RequestContextExtended[2]), ResourceGroups = tostring(RequestContextExtended[4]), Workspace = tostring(RequestContextExtended[8])
+  | summarize count(), HistWorkspaceCount=dcount(Workspace) by AADEmail
+  | join (
+  LAQueryLogs
+  | where TimeGenerated > ago(timeframe)
+  | mv-expand(RequestContext)
+  | extend RequestContextExtended = split(RequestTarget, "/") 
+  | extend Subscription = tostring(RequestContextExtended[2]), ResourceGroups = tostring(RequestContextExtended[4]), Workspace = tostring(RequestContextExtended[8])
+  | summarize make_set(Workspace), count(), CurrWorkspaceCount=dcount(Workspace) by AADEmail
+  ) on AADEmail
+  | where CurrWorkspaceCount > HistWorkspaceCount
+  // Uncomment follow rows to see queries made by these users
+  //| join (
+  //LAQueryLogs
+  //| where TimeGenerated > ago(timeframe))
+  //on AADEmail
+  //| extend timestamp = TimeGenerated, AccountCustomEntity = AADEmail

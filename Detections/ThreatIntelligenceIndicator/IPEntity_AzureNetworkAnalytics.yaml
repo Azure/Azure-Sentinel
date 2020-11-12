@@ -1,0 +1,51 @@
+id: a4025a76-6490-4e6b-bb69-d02be4b03f07
+name: (Preview) TI map IP entity to AzureNetworkAnalytics_CL (NSG Flow Logs)
+description: |
+  'Identifies a match in AzureNetworkAnalytics_CL (NSG Flow Logs) from any IP IOC from TI that was Allowed'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureNetworkAnalytics_CL(NSG Flow Logs)
+    dataTypes:
+      - AzureNetworkAnalytics_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | join (
+      AzureNetworkAnalytics_CL
+      | where TimeGenerated >= ago(dt_lookBack)
+      // renaming time column so it is clear the log this came from
+      | extend AzureNetworkAnalytics_CL_TimeGenerated = TimeGenerated
+      // NSG Flow Logs have additional information concat with Public IP, removing onlp Public IP
+      | extend PIPs = split(PublicIPs_s, '|', 0)
+      | extend PIP = tostring(PIPs[0])
+  )
+  on $left.TI_ipEntity == $right.PIP
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  // Set to alert on Allowed NSG Flows from TI Public IP IOC
+  | where FlowStatus_s == "A"
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, AzureNetworkAnalytics_CL_TimeGenerated,
+  TI_ipEntity, Computer, FlowDirection_s, FlowStatus_s, FlowType_s, SrcPublicIPs_s, DestPublicIPs_s, PublicIPs_s, L7Protocol_s, DestPort_d, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = AzureNetworkAnalytics_CL_TimeGenerated, IPCustomEntity = TI_ipEntity, HostCustomEntity = Computer, URLCustomEntity = Url

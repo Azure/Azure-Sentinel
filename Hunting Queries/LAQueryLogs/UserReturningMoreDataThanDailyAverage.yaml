@@ -1,0 +1,37 @@
+id: 8699df3f-f89e-431f-9dea-056c4ce7014a
+name: User returning more data than daily average
+description: |
+  'This hunting query looks for users whose total returned data for a day is significantly above their monthly average.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(Query Audit)
+    dataTypes:
+      - LAQueryLogs
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let threshold = 10;
+  let lookback = 7d;
+  let timeframe = 1d;
+  let baseline = 10000;
+  let diff = 5;
+  let anomolous_users = (
+  LAQueryLogs
+  | where TimeGenerated between(startofday(ago(lookback))..startofday(ago(timeframe)))
+  | summarize score=sum(ResponseRowCount) by AADEmail
+  | join kind = fullouter (LAQueryLogs
+  | where TimeGenerated > startofday(ago(timeframe))
+  | summarize score_now=sum(ResponseRowCount) by AADEmail)
+  on AADEmail
+  | extend hist_score = iif((score/29)*threshold > baseline, (score/29)*threshold, baseline)
+  | where isnotempty(score)
+  | where score_now > hist_score*diff
+  | project AADEmail);
+  LAQueryLogs
+  | where TimeGenerated > ago(timeframe)
+  | where AADEmail in(anomolous_users)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AADEmail
+  // Comment out the line below to see the queries run by users.
+  | summarize total_rows = sum(ResponseRowCount), NoQueries = count(), AvgQuerySize = sum(ResponseRowCount)/count() by AADEmail

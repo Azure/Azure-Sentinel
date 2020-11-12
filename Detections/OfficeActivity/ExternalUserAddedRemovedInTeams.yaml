@@ -1,0 +1,36 @@
+id: bff093b2-500e-4ae5-bb49-a5b1423cbd5b
+name: External user added and removed in short timeframe
+description: |
+  'This detection flags the occurances of external user accounts that are added to a Team and then removed within
+  one hour.This data is a part of Office 365 Connector in Azure Sentinel.'
+severity: Low
+requiredDataConnectors:
+- connectorId: Office365
+dataTypes:
+- OfficeActivity (Teams)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+  OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "MemberAdded"
+  | extend UPN = tostring(parse_json(Members)[0].UPN)
+  | where UPN contains ("#EXT#")
+  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName
+  | join (
+   OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "MemberRemoved"
+  | extend UPN = tostring(parse_json(Members)[0].UPN)
+  | where UPN contains ("#EXT#")
+  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName
+  ) on UPN
+  | where TimeDeleted < TimeAdded
+  | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName
+  | extend timestamp = TimeAdded, AccountCustomEntity = UPN
