@@ -19,11 +19,19 @@ Following are the configuration steps to deploy Function App.
 4. There are two json files (ORGS.json and lastrun-Audit.json).
 5. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name.  If you have addtional orgs, add another line 
 ```
-{"org": "sampleorg"} 
+{"org": "sampleorg1"} 
+{"org": "sampleorg2"}
+.
+.
+.
 ```
 for each org.
 
-6. Upload the ORGS.json, and lastrun-Audit.json to the storage account "github-repo-logs" container.
+6. Upload the following files to the storage account "github-repo-logs" container.
+```
+ORGS.json
+lastrun-Audit.json
+```
 
 7. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault "githubkv<uniqueid>" with only Azure Function access policy. If you want to see/update these secrets,
 
@@ -42,9 +50,9 @@ for each org.
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHub] to make the logs useful
 
 ## Deploy the Logic App template
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fandedevsecops%2FAzure-Sentinel%2Faz-func-github-dataconnector%2FDataConnectors%2FGithubFunction%2Fazuredeploy_GitHubData.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGithubFunction%2Fazuredeploy_GitHubFunctionApp.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fandedevsecops%2FAzure-Sentinel%2Faz-func-github-dataconnector%2FDataConnectors%2FGithubFunction%2Fazuredeploy_GitHubData.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGithubFunction%2Fazuredeploy_GitHubFunctionApp.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
