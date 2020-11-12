@@ -26,11 +26,11 @@ def prompt_messages():
     ws_id = 0
     if check_logs_timestamp():
         input_message = "would you like to change the log timestamp from log collection time to log creation time?" \
-                        "Enter Yes/No\n"
+                        "\nEnter Yes/No\n"
         print_notice("We have recognized your logs timestamp is set to: Log collection time\n")
     else:
         input_message = "would you like to change the log timestamp from log creation time to log collection time?" \
-                        "Enter Yes/No\n"
+                        "\nEnter Yes/No\n"
         print_notice("We have recognized your logs timestamp is set to: Log creation time\n")
     # to be compatible with both python 2.7 and python 3
     try:
