@@ -120,7 +120,7 @@ def restart_omsagent(workspace_id):
     if error_decode is not None and error_decode != "":
         print_error("Failed to restart the OMS agent")
         sys.exit()
-    print_ok("Successfully restart the OMS agent")
+    print_ok("Successfully restarted the OMS agent")
 
 
 def main():
