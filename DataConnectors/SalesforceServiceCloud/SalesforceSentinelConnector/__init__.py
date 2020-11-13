@@ -110,7 +110,7 @@ def gen_chunks_to_object(file_in_tmp_path, chunksize=100):
     yield chunk
 
 def gen_chunks(file_in_tmp_path):
-    for chunk in gen_chunks_to_object(file_in_tmp_path, chunksize=10000):
+    for chunk in gen_chunks_to_object(file_in_tmp_path, chunksize=2000):
         obj_array = []
         for row in chunk:
             row = enrich_event_with_user_email(row)
