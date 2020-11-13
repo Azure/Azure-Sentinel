@@ -1,0 +1,47 @@
+id: 3174a9ec-d0ad-4152-8307-94ed04fa450a
+name: Known ZINC related maldoc hash
+description: |
+  'Document hash used by ZINC in highly targeted spear phishing campaign.'
+severity: High
+requiredDataConnectors:
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - CredentialAccess
+query: |
+  let timeframe = 1d;
+  let SHA256Hash = "1174fd03271f80f5e2a6435c72bdd0272a6e3a37049f6190abf125b216a83471" ;
+  (union isfuzzy=true
+  (CommonSecurityLog 
+  | where TimeGenerated >= ago(timeframe) 
+  | parse Message with * '(' DNSName ')' * 
+  | where isnotempty(FileHash)
+  | where FileHash in (SHA256Hash) 
+  | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
+  ),
+  (Event
+  //This query uses sysmon data depending on table name used this may need updataing
+  | where TimeGenerated >= ago(3d)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend Hashes = EventDetail.[16].["#text"]
+  | parse Hashes with * 'SHA256=' SHA265 ',' * 
+  | where isnotempty(Hashes)
+  | where Hashes in (SHA256Hash) 
+  | extend Account = UserName
+  )
+  )
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress
