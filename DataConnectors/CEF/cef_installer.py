@@ -6,17 +6,17 @@
 # syslog daemon on the linux machine.
 # Supported OS:
 #   64-bit
-#       CentOS 6 and 7
+#       CentOS 7 and 8
 #       Amazon Linux 2017.09
-#       Oracle Linux 6 and 7
-#       Red Hat Enterprise Linux Server 6 and 7
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
-#       SUSE Linux Enterprise Server 12
+#       SUSE Linux Enterprise Server 12, 15
 #   32-bit
-#       CentOS 6
-#       Oracle Linux 6
-#       Red Hat Enterprise Linux Server 6
+#       CentOS 7 and 8
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
@@ -38,6 +38,7 @@ help_text = "Optional arguments for the python script are:\n\t-T: for TCP\n\t-U:
 omsagent_default_incoming_port = "25226"
 daemon_default_incoming_port = "514"
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 syslog_ng_source_content = "source s_src { udp( port(514)); tcp( port(514));};"
@@ -49,8 +50,9 @@ rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imud
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
-
+portal_auto_sync_disable_file = "omshelper_disable"
 
 
 
@@ -137,7 +139,8 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     o, e = install_omsagent_command.communicate()
     time.sleep(3)
     # Parsing the agent's installation return code
-    return_code = re.search(".*Shell bundle exiting with code (\d+)", o, re.IGNORECASE)
+    output_decoded = o.decode(encoding='UTF-8')
+    return_code = re.search(".*Shell bundle exiting with code (\d+)", output_decoded, re.IGNORECASE)
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
         sys.exit()
@@ -291,6 +294,22 @@ def set_file_read_permissions(file_path):
         handle_error(e, error_response_str="Error: could not change the permissions for the file -" + file_path)
         return False
     return True
+
+
+def check_file_in_directory(file_name, path):
+    '''
+    Check if the given file is found in the current directory.
+    :param path:
+    :param file_name:
+    :return: return True if it is found elsewhere False
+    '''
+    current_dir = subprocess.Popen(["ls", "-ltrh", path], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(["grep", "-i", file_name], stdin=current_dir.stdout, stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    output = o.decode(encoding='UTF-8')
+    if e is None and file_name in output:
+        return True
+    return False
 
 
 def set_rsyslog_old_configuration():
@@ -544,6 +563,19 @@ def set_syslog_ng_configuration():
     return True
 
 
+def check_portal_auto_sync():
+    if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
+        print_ok("No auto sync with the portal")
+        return False
+    print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
+                  "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal. Otherwise all changes will be overwritten.")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    return True
+
+
+
 def print_full_disk_warning():
     '''
     Warn from potential full disk issues that can be caused by the daemon running on the machine.
@@ -611,6 +643,7 @@ def main():
         restart_syslog_ng()
     restart_omsagent(workspace_id=workspace_id)
     check_syslog_computer_field_mapping(workspace_id=workspace_id)
+    check_portal_auto_sync()
     print_full_disk_warning()
     print_ok("Installation completed")
 

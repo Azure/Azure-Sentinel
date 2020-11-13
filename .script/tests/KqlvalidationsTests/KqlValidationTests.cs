@@ -38,7 +38,7 @@ namespace Kqlvalidations.Tests
                 return;
             }
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
-            Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : validationRes.Diagnostics.Select(d => d.Message).ToList().Aggregate((s1, s2) => s1 + "," + s2));
+            Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
     }
 

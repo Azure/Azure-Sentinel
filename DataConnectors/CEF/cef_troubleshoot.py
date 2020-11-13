@@ -8,17 +8,17 @@
 # We send mock data to validate correctness of the pipeline
 # Supported OS:
 #   64-bit
-#       CentOS 6 and 7
+#       CentOS 7 and 8
 #       Amazon Linux 2017.09
-#       Oracle Linux 6 and 7
-#       Red Hat Enterprise Linux Server 6 and 7
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
-#       SUSE Linux Enterprise Server 12
+#       SUSE Linux Enterprise Server 12, 15
 #   32-bit
-#       CentOS 6
-#       Oracle Linux 6
-#       Red Hat Enterprise Linux Server 6
+#       CentOS 7 and 8
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
@@ -41,6 +41,7 @@ oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
 oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
 oms_agent_selinux_documentation = "https://docs.microsoft.com/azure/azure-monitor/platform/agent-linux"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
@@ -55,8 +56,9 @@ syslog_ng_process_name = "syslog-ng"
 syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
-
+portal_auto_sync_disable_file = "omshelper_disable"
 
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
@@ -260,11 +262,6 @@ def handle_tcpdump_line(line, incoming_port, ok_message):
             "Notice: To tcp dump manually execute the following command - \'tcpdump -A -ni any port " + incoming_port + " -vv\'")
         time.sleep(1)
         return True
-    # Handle command not found
-    elif "command not found" in line:
-        print_error(
-            "Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
-        return False
     else:
         # print the output
         print_command_response(line.rstrip())
@@ -286,6 +283,11 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     command_tokens = ["sudo", "tcpdump", "-A", "-ni", "any", "port", incoming_port, "-vv"]
     print_notice(" ".join(command_tokens))
     tcp_dump = subprocess.Popen(command_tokens, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    line = str(tcp_dump.stdout.readline())
+    # Handle command not found
+    if "command not found" in line:
+        print_error("Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
+        return False
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
     while (end_seconds - start_seconds) < tcpdump_time_restriction:
@@ -653,6 +655,18 @@ def handle_rsyslog(workspace_id):
             time.sleep(1)
 
 
+def check_portal_auto_sync():
+    if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
+        print_ok("No auto sync with the portal")
+        return False
+    print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
+                  "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal. Otherwise all changes will be overwritten. ")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    return True
+
+
 def print_full_disk_warning():
     warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
@@ -698,6 +712,7 @@ def main():
     # we always simulate to the daemon port
     if not incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True):
         print_error("Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
+    check_portal_auto_sync()
     print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(
