@@ -33,7 +33,7 @@ ORGS.json
 lastrun-Audit.json
 ```
 
-7. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault "githubkv<<uniqueid>>" with only Azure Function access policy. If you want to see/update these secrets,
+7. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault `githubkv<<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
 
 ```
     a. Go to Azure KeyVault "githubkv<<uniqueid>>"
