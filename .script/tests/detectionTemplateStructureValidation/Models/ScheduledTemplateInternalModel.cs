@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.ModelValidations;
 using Newtonsoft.Json;
@@ -38,6 +39,10 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [JsonProperty("triggerThreshold", Required = Required.Always)]
         [Range(0, 10000)]
         public int TriggerThreshold { get; set; }
+
+        [JsonProperty("entityMappings", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
+        [ValidEntityMappings(entityMappingsMinLength: 1, entityMappingsMaxLength: 5, fieldMappingsMinLength: 1, fieldMappingsMaxLength: 3)]
+        public List<EntityMapping> EntityMappings { get; set; }
     }
 
     public enum Severity
