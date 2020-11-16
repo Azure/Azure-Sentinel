@@ -293,7 +293,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
     while (end_seconds - start_seconds) < tcpdump_time_restriction:
-        if mock_message is True and mock_message_counter < :
+        if mock_message is True and mock_message_counter < mock_message_max:
             # Sending mock messages
             mock_message_counter += 1
             send_cef_message_local(daemon_port, 1)
