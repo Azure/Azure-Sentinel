@@ -58,6 +58,7 @@ syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/do
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
+mock_message_max = 5
 portal_auto_sync_disable_file = "omshelper_disable"
 
 def print_error(input_str):
@@ -279,6 +280,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     '''
     start_seconds = int(round(time.time()))
     end_seconds = int(round(time.time()))
+    mock_message_counter = 0
     print("This will take " + str(tcpdump_time_restriction) + " seconds.")
     command_tokens = ["sudo", "tcpdump", "-A", "-ni", "any", "port", incoming_port, "-vv"]
     print_notice(" ".join(command_tokens))
@@ -291,8 +293,9 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
     while (end_seconds - start_seconds) < tcpdump_time_restriction:
-        if mock_message is True:
+        if mock_message is True and mock_message_counter < :
             # Sending mock messages
+            mock_message_counter += 1
             send_cef_message_local(daemon_port, 1)
         poll_result = poll_obj.poll(0)
         if poll_result:
