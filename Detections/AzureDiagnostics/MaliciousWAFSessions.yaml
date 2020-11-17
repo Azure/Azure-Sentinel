@@ -1,11 +1,11 @@
 id: 46ac55ae-47b8-414a-8f94-89ccd1962178
 name: A potentially malicious web request was executed against a web server
 description: |
-  ‘Detects unobstructed Web Applicatio Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the 
+  'Detects unobstructed Web Applicatio Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the 
   ratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric). A high ratio value for 
   a given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number 
   of blocked requests and a few unobstructed logs which may be malicious but have passed undetected through the WAF. The successCode 
-  variable defines what the detection thinks is a successful status code, and should be altered to fit the environment.’
+  variable defines what the detection thinks is a successful status code, and should be altered to fit the environment.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: WAF
@@ -16,7 +16,7 @@ queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - Exploitation
+  - InitialAccess
 relevantTechniques:
   - T1190
 query: |
@@ -42,9 +42,10 @@ query: |
   | extend TimeKey = range(bin(TimeGenerated-maxSessionWindow, sessionBin), bin(TimeGenerated, sessionBin), sessionBin)
   | mv-expand TimeKey to typeof(datetime)
   ) on $left.hostname_s == $right.host_s, $left.clientIp_s == $right.clientIP_s, TimeKey
-  | where (TimeGenerated - SessionStarted) between (0min .. duration)
-  | summarize SuccessfulAccessLogCount = count(), make_set(userAgent_s), make_set(originalRequestUriWithArgs_s), make_set(serverStatus_s), 
-  make_set(httpStatus_d) by SessionStarted, hostname_s, clientIP_s, SessionBlockedCount
+  | where (TimeGenerated - SessionStarted) between (0m .. duration)
+  | extend timestamp = SessionStarted, HostCustomEntity = hostname_s, IPCustomEntity = clientIP_s
+  | summarize SuccessfulAccessLogCount = count(), UserAgents = make_set(userAgent_s), RequestURIs = make_set(originalRequestUriWithArgs_s), 
+  SuccessCodes = make_set(httpStatus_d), SuccessCodes_BackendServer = make_set(serverStatus_s) by timestamp, HostCustomEntity, IPCustomEntity, SessionBlockedCount
   | extend BlockvsSuccessRatio = SessionBlockedCount/SuccessfulAccessLogCount
-  | sort by BlockvsSuccessRatio desc, SessionStarted asc
+  | sort by BlockvsSuccessRatio desc, timestamp asc
   | where SessionBlockedCount > SuccessfulAccessLogCount 
