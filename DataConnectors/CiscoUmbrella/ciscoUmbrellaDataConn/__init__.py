@@ -123,7 +123,8 @@ class UmbrellaClient:
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_acces_key = aws_secret_acces_key
         self.aws_region_name = aws_region_name
-        self.aws_s3_bucket = aws_s3_bucket
+        self.aws_s3_bucket = self._get_s3_bucket_name(aws_s3_bucket)
+        self.aws_s3_prefix = self._get_s3_prefix(aws_s3_bucket)
         self.total_events = 0
         self.input_date_format = '%Y-%m-%d %H:%M:%S'
         self.output_date_format = '%Y-%m-%dT%H:%M:%SZ'
@@ -134,6 +135,30 @@ class UmbrellaClient:
             aws_secret_access_key=self.aws_secret_acces_key,
             region_name=self.aws_region_name
         )
+
+    def _get_s3_bucket_name(self, aws_s3_bucket):
+        aws_s3_bucket = self._normalize_aws_s3_bucket_string(aws_s3_bucket)
+        tokens = aws_s3_bucket.split('/')
+        aws_s3_bucket = tokens[0]
+        return aws_s3_bucket
+
+    def _get_s3_prefix(self, aws_s3_bucket):
+        aws_s3_bucket = self._normalize_aws_s3_bucket_string(aws_s3_bucket)
+        tokens = aws_s3_bucket.split('/')
+        if len(tokens) > 1:
+            prefix = '/'.join(tokens[1:]) + '/'
+        else:
+            prefix = ''
+        return prefix
+
+    def _normalize_aws_s3_bucket_string(self, aws_s3_bucket):
+        aws_s3_bucket = aws_s3_bucket.strip()
+        aws_s3_bucket = aws_s3_bucket.replace('s3://', '')
+        if aws_s3_bucket.startswith('/'):
+            aws_s3_bucket = aws_s3_bucket[1:]
+        if aws_s3_bucket.endswith('/'):
+            aws_s3_bucket = aws_s3_bucket[:-1]
+        return aws_s3_bucket
 
     def get_time_interval(self):
         ts_from = datetime.datetime.utcnow() - datetime.timedelta(minutes=TIME_INTERVAL_MINUTES + 1)
@@ -161,6 +186,8 @@ class UmbrellaClient:
     def get_files_list(self, ts_from, ts_to):
         files = []
         folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        if self.aws_s3_prefix:
+            folders = [self.aws_s3_prefix + folder for folder in folders]
 
         marker_end = (ts_from - datetime.timedelta(minutes=60)).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
 
