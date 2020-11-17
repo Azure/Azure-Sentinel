@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using FluentAssertions;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model;
@@ -31,7 +32,13 @@ namespace Kqlvalidations.Tests
 
             var jObj = JObject.Parse(ConvertYamlToJson(yaml));
 
-            var exception = Record.Exception(() => jObj.ToObject<ScheduledTemplateInternalModel>());
+            var exception = Record.Exception(() =>
+            {
+                var templateObject = jObj.ToObject<ScheduledTemplateInternalModel>();
+                var validationContext = new ValidationContext(templateObject);
+                Validator.ValidateObject(templateObject, validationContext, true);
+            });
+
             exception.Should().BeNull();
         }
 
