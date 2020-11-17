@@ -101,20 +101,21 @@ def expand_data(obj):
                 event.update({'event_type': nested["type"]})
             if 'parameters' in nested:
                 for parameter in nested["parameters"]:
-                    if 'value' in parameter:
-                        event.update({parameter["name"]: parameter["value"]})
-                    if 'boolValue' in parameter:
-                        event.update({parameter["name"]: parameter["boolValue"]})
-                    if 'multiValue' in parameter:
-                        event.update({parameter["name"]: parameter["multiValue"]})
-                    if 'multiMessageValue' in parameter:
-                        event.update({parameter["name"]: parameter["multiMessageValue"]})
-                    if 'multiIntValue' in parameter:
-                        event.update({parameter["name"]: parameter["multiIntValue"]})
-                    if 'messageValue' in parameter:
-                        event.update({parameter["name"]: parameter["messageValue"]})
-                    if 'intValue' in parameter:
-                        event.update({parameter["name"]: parameter["intValue"]})
+                    if 'name' in parameter:
+                        if 'value' in parameter:
+                            event.update({parameter["name"]: parameter["value"]})
+                        if 'boolValue' in parameter:
+                            event.update({parameter["name"]: parameter["boolValue"]})
+                        if 'multiValue' in parameter:
+                            event.update({parameter["name"]: parameter["multiValue"]})
+                        if 'multiMessageValue' in parameter:
+                            event.update({parameter["name"]: parameter["multiMessageValue"]})
+                        if 'multiIntValue' in parameter:
+                            event.update({parameter["name"]: parameter["multiIntValue"]})
+                        if 'messageValue' in parameter:
+                            event.update({parameter["name"]: parameter["messageValue"]})
+                        if 'intValue' in parameter:
+                            event.update({parameter["name"]: parameter["intValue"]})
     return obj
 
 def gen_chunks_to_object(data,chunksize=100):
@@ -138,8 +139,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Starting program')
     global creds
     creds = get_credentials()
-    start_time = generate_date()[0]
-    end_time = generate_date()[1]
+    start_time, end_time = generate_date()
     logging.info('Data processing. Period(UTC): {} - {}'.format(start_time,end_time))
     for line in activities:
         result_obj = get_result(line,start_time,end_time)
