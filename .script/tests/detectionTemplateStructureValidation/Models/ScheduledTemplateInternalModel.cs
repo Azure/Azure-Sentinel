@@ -10,6 +10,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
 {
     [PeriodGreaterThanOrEqualFrequency]
     [FrequencyLimitationForLongPeriodQuery]
+    [NewEntityMappings]
     public class ScheduledTemplateInternalModel : AnalyticsTemplateInternalModelBase
     {
         [JsonProperty("requiredDataConnectors", Required = Required.Always)]
