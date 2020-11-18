@@ -35,13 +35,13 @@ def prompt_messages():
     # to be compatible with both python 2.7 and python 3
     try:
         response = raw_input(input_message)
-        if response in yes_response:
-            ws_id = raw_input("Please enter your Workspace ID:\n")
+        if response not in yes_response:
+            sys.exit()
     except NameError:
         response = input(input_message)
-        if response in yes_response:
-            ws_id = input("Please enter your Workspace ID:\n")
-    return ws_id
+        if response not in yes_response:
+            sys.exit()
+    return
 
 
 def is_logs_collection_time():
@@ -124,10 +124,14 @@ def restart_omsagent(workspace_id):
 
 
 def main():
-    ws_id = prompt_messages()
-    if ws_id == 0:
-        print_notice("Exiting script")
-        sys.exit()
+    print_notice("Note this script should be run in elevated privileges")
+    if len(sys.argv) != 2:
+        print_error("The installation script is expecting 1 arguments:")
+        print_error("\t1) workspace id")
+        return
+    else:
+        ws_id = sys.argv[1]
+    prompt_messages()
     change_events_timegenerated()
     restart_omsagent(ws_id)
 
