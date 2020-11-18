@@ -7,7 +7,7 @@
     Comment:        Initial Release
 
     DESCRIPTION
-    This Function App calls the Netskope Platform API (https://innovatechcloud.goskope.com/docs/Netskope_Help/en/rest-api-v2-overview.html) to pull alert and events data. The response from the Okta API is recieved in JSON format. This function will build the signature and authorization header 
+    This Function App calls the Netskope Platform API (https://innovatechcloud.goskope.com/docs/Netskope_Help/en/rest-api-v2-overview.html) to pull alert and events data. The response from the Netskope API is recieved in JSON format. This function will build the signature and authorization header 
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post to the Netskope_CL table in the Log Analytics workspace.
 #>
 
@@ -23,7 +23,7 @@ if ($Timer.IsPastDue) {
 }
 
 # Function to contruct the Netskope Uri for alerts, event types, and to accomodate for pagination
-function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page){
+function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     if("$logtype" -eq "alert") {
          $url = "$uri/api/v1/alerts?token=$ApiKey&limit=$Page&starttime=$StartTime&endtime=$EndTime"
     }
@@ -31,7 +31,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page){
        $url = "$uri/api/v1/events?token=$ApiKey&limit=$Page&type=$LogType&starttime=$StartTime&endtime=$EndTime"
     }
     if($skip -ne 0){
-        $url = "$url&skip=$skip"
+        $url = "$url&skip=$Skip"
         Write-Host "Retrieving next page of $LogType events skipping the previous $skip records"
         return $url
     }
@@ -40,9 +40,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page){
     }
 }
 
+
 # Function for retrieving alerts and events from Netskope's APIs
-function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page){
-    $url = GetUrl -Uri $Uri -ApiKey $ApiKey -StartTime $StartTime -EndTime $EndTime -logtype $LogType -Page $Page
+function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
+    $url = GetUrl -Uri $Uri -ApiKey $ApiKey -StartTime $StartTime -EndTime $EndTime -logtype $LogType -Page $Page -Skip $skip
     $obfurl = $url -replace "token=[a-z0-9]+\&", "token=<apiToken>&"
     Write-Host "Retrieving '$LogType' events from $obfurl"
     $response = Invoke-RestMethod -Uri $url
@@ -55,6 +56,7 @@ function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page){
        return $response      
     }
 }
+
 
 # Function to retrieve the checkpoint start time of the last successful API call for a given logtype. Checkpoint file will be created if none exists
 function GetStartTime($CheckpointFile, $LogType, $TimeInterval){
@@ -109,7 +111,7 @@ function Netskope () {
         $alleventobjs = @()
         $count = 0
         Do {
-            $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit                         
+            $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
             $netskopeevents = $response.data
             $dataLength = $response.data.Length
             $alleventobjs += $netskopeevents
@@ -126,7 +128,10 @@ function Netskope () {
                     }
          
         } while ($count -eq 0)
-        if ($alleventobjs.Length -ne 0){
+
+        $allEventsLength = $alleventobjs.Length
+
+        if ($allEventsLength -ne 0){
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count/1024/1024
           
