@@ -40,8 +40,8 @@ class Proofpoint_api:
 
     def gen_timeframe(self, time_delay_minutes):
         before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
-        self.before_time = before_time.strftime("%Y-%m-%dT%H:59:00.000000")
-        self.after_time = before_time.strftime("%Y-%m-%dT%H:01:00.000000")
+        self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
+        self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
 
     def set_websocket_conn(self, event_type):
         url = f"wss://logstream.proofpoint.com:443/v1/stream?cid={self.cluster_id}&type={event_type}&sinceTime={self.after_time}&toTime={self.before_time}"
@@ -63,7 +63,6 @@ class Proofpoint_api:
             print(
                 'Websocket connection established to cluster_id={}, event_type={}'.format(self.cluster_id, event_type))
             return ws
-
         except Exception as err:
             logging.error('Error while connectiong to websocket {}'.format(err))
             print('Error while connectiong to websocket {}'.format(err))
@@ -86,7 +85,6 @@ class Proofpoint_api:
                 if row != None and row != '':
                     y = json.loads(row)
                     y.update({'event_type': event_type})
-                    #print(y)
                     obj_array.append(y)
             body = json.dumps(obj_array)
             self.post_data(body,len(obj_array),event_type)
@@ -128,7 +126,6 @@ class Proofpoint_api:
         sent_events = 0
         ws = self.set_websocket_conn(event_type)
         time.sleep(2)
-        print(ws)
         if ws is not None:
             events = []
             while True:
@@ -136,7 +133,6 @@ class Proofpoint_api:
                     data = ws.recv()
                     events.append(data)
                     sent_events += 1
-                    #print(len(events))
                     if len(events) > 500:
                         self.gen_chunks(events,event_type)
                         events = []
@@ -146,6 +142,11 @@ class Proofpoint_api:
                     logging.error('Error while receiving data: {}'.format(err))
                     print('Error while receiving data: {}'.format(err))
                     break
+            try:
+                ws.close()
+            except Exception as err:
+                logging.error('Error while closing socket: {}'.format(err))
+                print('Error while closing socket: {}'.format(err))                
             if sent_events > 0:
                 self.gen_chunks(events,event_type)           
         logging.info('Total events sent: {}. Type: {}. Period(UTC): {} - {}'.format(sent_events, event_type,
