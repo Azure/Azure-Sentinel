@@ -32,7 +32,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     }
     if($skip -ne 0){
         $url = "$url&skip=$Skip"
-        Write-Host "Retrieving next page of $LogType events skipping the previous $skip records"
+        Write-Host "Retrieving next page of $LogType events skipping the previous $Skip records"
         return $url
     }
     else{
@@ -43,7 +43,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
 # Function for retrieving alerts and events from Netskope's APIs
 function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
-    $url = GetUrl -Uri $Uri -ApiKey $ApiKey -StartTime $StartTime -EndTime $EndTime -logtype $LogType -Page $Page -Skip $skip
+    $url = GetUrl -Uri $Uri -ApiKey $ApiKey -StartTime $StartTime -EndTime $EndTime -logtype $LogType -Page $Page -Skip $Skip
     $obfurl = $url -replace "token=[a-z0-9]+\&", "token=<apiToken>&"
     Write-Host "Retrieving '$LogType' events from $obfurl"
     $response = Invoke-RestMethod -Uri $url
