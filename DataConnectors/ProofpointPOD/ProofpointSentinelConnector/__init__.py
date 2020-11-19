@@ -11,6 +11,7 @@ import hmac
 import requests
 import azure.functions as func
 import logging
+import certifi
 
 
 customer_id = os.environ['WorkspaceID'] 
@@ -54,8 +55,13 @@ class Proofpoint_api:
             "Sec-WebSocket-Key": "SGVsbG8sIHdvcmxkIQ==",
             "Sec-WebSocket-Version": "13"
         }
+        sslopt = {
+            'cert_reqs': ssl.CERT_REQUIRED,
+            'ca_certs': certifi.where(),
+            'check_hostname': True
+        }
         try:
-            ws = websocket.create_connection(url, header=header, sslopt={"cert_reqs": ssl.CERT_NONE})
+            ws = websocket.create_connection(url, header=header, sslopt=sslopt)
             ws.settimeout(20)
             time.sleep(2)
             logging.info(
@@ -119,8 +125,8 @@ class Proofpoint_api:
             logging.info("Chunk was processed({} events)".format(chunk_count))
             print("Chunk was processed({} events)".format(chunk_count))
         else:
-            print("Response code: {}".format(response.status_code))
-            logging.warn("Response code: {}".format(response.status_code))
+            print("Error during sending events to Azure Sentinel. Response code:{}".format(response.status_code))
+            logging.warn("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
 
     def get_data(self, event_type=None):
         sent_events = 0
