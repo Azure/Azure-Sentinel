@@ -19,7 +19,6 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-
   let timeframe = 1d;
   let spanoftime = 10m;
   let threshold = 0;
@@ -28,28 +27,30 @@ query: |
   // A user account was enabled
   | where EventID == 4722
   | where AccountType =~ "User"
-  | project creationTime = TimeGenerated, CreateEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
-  AccountUsedToCreate = SubjectUserName, TargetSid, SubjectUserSid , SubjectDomainName
+  | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer, UserPrincipalName, 
+  AccountUsedToEnable = strcat(SubjectDomainName, '\\', SubjectUserName), TargetAccount, TargetSid, SIDofAccountUsedToEnable = SubjectUserSid
   | join kind= inner (
     SecurityEvent
     | where TimeGenerated > ago(timeframe) 
     // A user account was disabled 
     | where EventID == 4725
   | where AccountType == "User"
-  | project deletionTime = TimeGenerated, DeleteEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
-  AccountUsedToDelete = SubjectUserName, TargetSid, SubjectUserSid 
-  ) on Computer, TargetUserName
-  | where deletionTime - creationTime < spanoftime
-  | extend TimeDelta = deletionTime - creationTime
+  | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer, UserPrincipalName, 
+  AccountUsedToDisable = strcat(SubjectDomainName, '\\', SubjectUserName), TargetAccount, TargetSid, SIDofAccountUsedToDisable = SubjectUserSid 
+  ) on Computer, TargetAccount
+  | where DisableTime - EnableTime < spanoftime
+  | extend TimeDelta = DisableTime - EnableTime
   | where tolong(TimeDelta) >= threshold
-  | project TimeDelta, creationTime, CreateEventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate, 
-  deletionTime, DeleteEventID, AccountUsedToDelete, SubjectDomainName
-  | extend timestamp = creationTime, AccountCustomEntity = strcat(SubjectDomainName,'\\',AccountUsedToCreate), HostCustomEntity = Computer
+  | project TimeDelta, EnableTime, EnableEventID, EnableActivity, Computer, TargetAccount, TargetSid, UserPrincipalName, AccountUsedToEnable, SIDofAccountUsedToEnable, 
+  DisableTime, DisableEventID, DisableActivity, AccountUsedToDisable, SIDofAccountUsedToDisable
+  | extend timestamp = EnableTime, AccountCustomEntity = AccountUsedToEnable, HostCustomEntity = Computer
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
+      - identifier: SID
+        columnName: SIDofAccountUsedToEnable
   - entityType: Host
     fieldMappings:
       - identifier: FullName

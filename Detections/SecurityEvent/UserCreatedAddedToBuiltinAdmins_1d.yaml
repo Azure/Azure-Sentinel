@@ -19,15 +19,14 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-
   let timeframe = 1d;
   SecurityEvent
   | where TimeGenerated > ago(timeframe) 
   | where EventID == 4720
   | where AccountType == "User"
   | project CreatedUserTime = TimeGenerated, CreatedUserEventID = EventID, CreatedUserActivity = Activity, Computer = toupper(Computer), 
-  CreatedUser = tolower(TargetUserName), Domain = toupper(TargetDomainName), CreatedUserSid = TargetSid, AccountUsedToCreateUser = SubjectUserName
-  |join (
+  CreatedUser = tolower(TargetAccount), CreatedUserSid = TargetSid, AccountUsedToCreateUser = strcat(SubjectAccount), SidofAccountUsedToCreateUser = SubjectUserSid
+  | join (
   SecurityEvent 
   | where TimeGenerated > ago(timeframe) 
   | where AccountType == "User"
@@ -35,20 +34,21 @@ query: |
   | where EventID == 4732
   //TargetSid is the builin Admins group: S-1-5-32-544
   | where TargetSid == "S-1-5-32-544"
-  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = TargetUserName, 
-  Domain = toupper(TargetDomainName), GroupSid = TargetSid, UserAdded = SubjectUserName, UserAddedSid = SubjectUserSid, CreatedUser = tolower(SubjectUserName), 
-  CreatedUserSid = MemberSid
+  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, Computer = toupper(Computer), GroupName = tolower(TargetAccount), 
+  GroupSid = TargetSid, AccountThatAddedUser = SubjectAccount, SIDofAccountThatAddedUser = SubjectUserSid, CreatedUserSid = MemberSid
   )
   on CreatedUserSid
   //Create User first, then the add to the group.
-  | project Computer, CreatedUserTime, CreatedUserEventID, CreatedUserActivity, CreatedUser, CreatedUserSid, Domain, GroupAddTime, GroupAddEventID, 
-  GroupAddActivity, AccountUsedToCreateUser, GroupName, GroupSid, UserAdded, UserAddedSid 
-  | extend timestamp = CreatedUserTime, AccountCustomEntity = strcat(Domain, '\\', CreatedUser), HostCustomEntity = Computer
+  | project Computer, CreatedUserTime, CreatedUserEventID, CreatedUserActivity, CreatedUser, CreatedUserSid, GroupAddTime, GroupAddEventID, 
+  GroupAddActivity, AccountUsedToCreateUser, GroupName, GroupSid, AccountThatAddedUser, SIDofAccountThatAddedUser 
+  | extend timestamp = CreatedUserTime, AccountCustomEntity = CreatedUser, HostCustomEntity = Computer
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
+      - identifier: SID
+        columnName: CreatedUserSid
   - entityType: Host
     fieldMappings:
       - identifier: FullName

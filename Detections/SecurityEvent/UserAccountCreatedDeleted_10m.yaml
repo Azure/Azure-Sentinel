@@ -19,7 +19,6 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-
   let timeframe = 1d;
   let spanoftime = 10m;
   let threshold = 0;
@@ -28,28 +27,30 @@ query: |
   // A user account was created
   | where EventID == 4720
   | where AccountType =~ "User"
-  | project creationTime = TimeGenerated, CreateEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
-  AccountUsedToCreate = SubjectUserName, TargetSid, SubjectUserSid, SubjectDomainName
+  | project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer, UserPrincipalName, 
+  AccountUsedToCreate = strcat(SubjectDomainName, '\\', SubjectUserName), TargetAccount, TargetSid, SIDofAccountUsedToCreate = SubjectUserSid
   | join kind= inner (
     SecurityEvent
     | where TimeGenerated > ago(timeframe) 
     // A user account was deleted 
     | where EventID == 4726
   | where AccountType == "User"
-  | project deletionTime = TimeGenerated, DeleteEventID = EventID, Activity, Computer, TargetUserName, UserPrincipalName, 
-  AccountUsedToDelete = SubjectUserName, TargetSid, SubjectUserSid 
-  ) on Computer, TargetUserName
+  | project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer, UserPrincipalName, 
+  AccountUsedToDelete = strcat(SubjectDomainName, '\\', SubjectUserName), TargetAccount, TargetSid, SIDofAccountUsedToDelete = SubjectUserSid 
+  ) on Computer, TargetAccount
   | where deletionTime - creationTime < spanoftime
   | extend TimeDelta = deletionTime - creationTime
   | where tolong(TimeDelta) >= threshold
-  | project TimeDelta, creationTime, CreateEventID, Computer, TargetUserName, UserPrincipalName, AccountUsedToCreate, 
-  deletionTime, DeleteEventID, AccountUsedToDelete, SubjectDomainName
-  | extend timestamp = creationTime, AccountCustomEntity = strcat(SubjectDomainName,'\\',AccountUsedToCreate), HostCustomEntity = Computer
+  | project TimeDelta, creationTime, CreateEventID, CreateActivity, Computer, TargetAccount, TargetSid, UserPrincipalName, AccountUsedToCreate, SIDofAccountUsedToCreate,
+  deletionTime, DeleteEventID, DeleteActivity, AccountUsedToDelete, SIDofAccountUsedToDelete
+  | extend timestamp = creationTime, AccountCustomEntity = AccountUsedToCreate, HostCustomEntity = Computer
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
+      - identifier: SID
+        columnName: SIDofAccountUsedToCreate
   - entityType: Host
     fieldMappings:
       - identifier: FullName
