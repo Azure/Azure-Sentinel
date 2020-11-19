@@ -139,12 +139,11 @@ def check_multi_homing(workspace_id):
         current_ws_id = re.search("(?<=WORKSPACE_ID=).*", output_decoded).group(0)
         if current_ws_id != workspace_id:
             print_error("This server already has an omsagent installed and connected to a different workspace- {}. \nThe omsagent"
-                        " does not currently support multi-homing.\nIf you wish to overeide this workspace connection"
+                        " does not currently support sending data to multiple workspaces (multi-homing).\nIf you wish to overeide this workspace connection"
                         " please remove the existing omsagent using the command: \"{}\" \nand rerun this installation script"
                         .format(current_ws_id, oms_agent_purge_command))
             print_error("For more on this issue please visit " + oms_agent_documentation)
             sys.exit()
-    print_ok("OMS agent multi-homing check passed")
 
 
 def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
