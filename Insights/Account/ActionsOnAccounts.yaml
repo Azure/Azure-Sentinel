@@ -12,25 +12,36 @@ RequiredInputFieldsSets:
   - - Account_AADUserId
   - - Account_SID
 BaseQuery: |
-  let GetAccountActions = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_UPNSuffix:string, v_Account_AADUserId:string, v_Account_SID:string){
-  AuditLogs
-  | where OperationName in~ ('Delete user', 'Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', 'Update user')
-  | extend UserPrincipalName = tostring(TargetResources[0].userPrincipalName)
-  | extend Account_Name = tostring(split(UserPrincipalName, '@')[0])
-  | extend Account_UPNSuffix = tostring(split(UserPrincipalName, '@')[1])
-  | extend Action = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0])))
-  | extend ModifiedProperty = parse_json(Action).displayName
-  | extend ModifiedValue = parse_json(Action).newValue
-  | extend Account_AADUserId = tostring(TargetResources[0].id)
-  | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')
-  | union isfuzzy=true (
-  SecurityEvent
-  | where EventID in (4720, 4722, 4723, 4724, 4725, 4726, 4740)
-  | extend OperationName = tostring(EventID)
-  | where AccountType =~ "user" or isempty(AccountType)
-  | extend Account_Name = TargetUserName, Account_NTDomain = TargetDomainName, Account_SID = TargetSid
+  let GetAccountActions = (Account_Name:string, Account_NTDomain:string, Account_UPNSuffix:string, Account_AADUserId:string, Account_SID:string){
+  let Account_UPN = strcat(Account_Name, '@', Account_UPNSuffix);
+  let Account_Win = strcat(Account_NTDomain,'\\', Account_Name);
+  union isfuzzy=true
+  (AuditLogs
+    | where  tostring(bag_keys(InitiatedBy)[0]) == "user"
+    | where Account_UPN =~ tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName) or Account_AADUserId =~ tostring(parse_json(tostring(InitiatedBy.user)).id)
+    | where OperationName in~ ('Add user', 'Update user', 'Delete user', 'Change user password', 'Reset user password',  'Reset password (by admin)', 'Change password (self-service)', 'Reset password (self-service)')
+    | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | parse userPrincipalName with userName:string '@' userUpnSuffix:string
+    //| extend userName=tostring(split(userPrincipalName, '@')[0]), userUpnSuffix=tostring(split(userPrincipalName, '@')[1])
+    | extend userId=tostring(parse_json(tostring(InitiatedBy.user)).id)
+    | extend Target_UPN = tostring(TargetResources[0].userPrincipalName)
+    //| extend Target_Name = tostring(split(Target_UPN, '@')[0])
+    //| extend Target_UPNSuffix = tostring(split(Target_UPN, '@')[1])
+    | parse Target_UPN with Target_Name:string '@' Target_UPNSuffix:string
+    | extend Target_AADUserId = tostring(TargetResources[0].id)
+    | extend Action = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0])))
+    | extend ModifiedProperty = tostring(parse_json(Action).displayName), ModifiedValue = tostring(parse_json(Action).newValue)
+    | extend DisableUser = iif(ModifiedProperty =~ 'AccountEnabled' and ModifiedValue =~ '[false]', 'True', 'False')
+  ),
+  (SecurityEvent
+    | where AccountType =~ "user" or isempty(AccountType)
+    | where Account_Win =~ SubjectAccount or Account_SID =~ SubjectUserSid
+    | where EventID in (4720, 4722, 4723, 4724, 4725, 4726, 4740)
+    | parse SubjectAccount with userNTDomain '\\' userName
+    //| extend userName=tostring(split(Account,"\\")[1]), userNTDomain=tostring(split(Account,"\\")[0]), 
+    | extend userSid = SubjectUserSid, OperationName = tostring(EventID), ModifiedProperty = Activity
+    | extend Target_Name = TargetUserName, Target_NTDomain = TargetDomainName, Target_SID = TargetSid
   )
-  | where (Account_Name =~ v_Account_Name and (Account_UPNSuffix =~ v_Account_UPNSuffix or Account_NTDomain =~ v_Account_NTDomain)) or Account_AADUserId =~ v_Account_AADUserId or Account_SID =~ v_Account_SID
   };
   GetAccountActions('{{Account_Name}}', '{{Account_NTDomain}}', '{{Account_UPNSuffix}}', '{{Account_AADUserId}}', '{{Account_SID}}')
 # The queries for the insights.
@@ -47,6 +58,9 @@ Insights:
   - Header: Action
     OutputType: String
     SupportDeepLink: false
+  - Header: Change
+    OutputType: String
+    SupportDeepLink: false
   - Header: Most Recent
     OutputType: Date
     SupportDeepLink: false
@@ -57,57 +71,57 @@ Insights:
   QueriesDefinitions:
   # Account Password Resets
     - Filter:     "where OperationName in~ ('Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', '4724', '4723')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Disabled by Policy
     - Filter:     "where OperationName in~ ('Blocked from self-service password reset', '4740')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Disabled by Admin
-    - Filter:     "where OperationName  == '4725' or (OperationName  =~ 'Update user' and DisableUser =~ 'True')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+    - Filter:     "where OperationName =~ '4725'"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Created
     - Filter:     "where OperationName in~ ('Add user', '4720')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Deleted
     - Filter:     "where OperationName in~ ('Delete user', '4726')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Deleted or Disabled
     - Filter:     "where OperationName in~ ('4725', 'Blocked from self-service password reset', '4740') or (OperationName  =~ 'Update user' and DisableUser =~ 'True')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Created or Enabled
     - Filter:     "where OperationName in~ ('4722', '4767') or (OperationName  =~ 'Update user' and DisableUser =~ 'False')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
   # Account Setting Changed
-    - Filter:     "where OperationName in~ ('Update user','4738')"
-      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName"
-      Project:    "project Title = OperationName, MostRecent, Count"
+    - Filter:     "where OperationName =~ '4738'"
+      Summarize:  "summarize MostRecent = max(TimeGenerated), Count = count() by OperationName, ModifiedProperty"
+      Project:    "project Title = OperationName, ModifiedProperty, MostRecent, Count"
       LinkColumnsDefinitions:
       - ProjectedName: Count
         Query: "{{BaseQuery}} | {{RowFilter}}"
@@ -123,4 +137,29 @@ Insights:
 
  AdditionalQuery:
   Text: "See all account activity"
-  Query: "project TimeGenerated, UserPrincipalName, Account_Name, OperationName, Activity, DisableUser, TargetSid, AADUserId, InitiatedBy, AADTenantId, AccountType, Computer, SubjectAccount, SubjectUserSid, EventData"
+  Query: "project TimeGenerated, UserPrincipalName, OperationName, Activity, DisableUser, Target_Name, Target_NTDomain, Target_UPNSuffix, Target_SID, AADUserId, InitiatedBy, AADTenantId, AccountType, Computer, SubjectAccount, SubjectUserSid, EventData"
+
+Activities:
+ EnabledByDefault: true
+ Items:
+ - Id: d6d08c94-455f-4ea5-8f76-fc6c0c442cfa
+   Title: "The user has created an account"
+   Content: "The user has created the account {{Target_Name}} {{Count}} time(s)"
+   Description: "This activity displays account creation events performed by the user"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Add user', '4720')"
+    SummarizeBy: "Target_Name, Target_NTDomain, Target_UPNSuffix"
+ - Id: e0459780-ac9d-4b72-8bd4-fecf6b46a0a1
+   Title: "The user has deleted an account"
+   Content: "The user has deleted the account {{Target_Name}} {{Count}} time(s)"
+   Description: "This activity displays account deletion events performed by the user"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Delete user', '4726')"
+    SummarizeBy: "Target_Name, Target_NTDomain, Target_UPNSuffix"
+ - Id: ad1f4269-5418-4c46-a3b6-4ec01031de60
+   Title: "The user has reset an account's password"
+   Content: "The user has reset the password for account {{Target_Name}} {{Count}} time(s)"
+   Description: "This activity displays password reset events performed by the user"
+   QueryDefinitions:
+    Filter: "where OperationName in~ ('Change user password', 'Reset user password', 'Change password (self-service)',  'Reset password (by admin)', 'Reset password (self-service)', '4723', '4724')"
+    SummarizeBy: "Target_Name, Target_NTDomain, Target_UPNSuffix"
