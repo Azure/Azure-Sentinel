@@ -1,8 +1,10 @@
 import subprocess
 import sys
+import re
 
 oms_agent_field_mapping_configuration = "/opt/microsoft/omsagent/plugin/filter_syslog_security.rb"
 oms_agent_service_control = "/opt/microsoft/omsagent/bin/service_control"
+oms_agent_extract_ws_id_url = "/etc/opt/microsoft/omsagent/"
 yes_response = ["Yes", "YES", "yes", "Y", "y"]
 
 
@@ -110,6 +112,29 @@ def change_events_timegenerated():
     return True
 
 
+def validate_workspace(workspace_id):
+    """
+    Check if the given workspace is the one connected to the agent
+    """
+
+    grep1 = subprocess.Popen(["grep", "-ri", "WORKSPACE_ID=", oms_agent_extract_ws_id_url], stdout=subprocess.PIPE)
+    grep2 = subprocess.Popen(["grep", "-v", "%"], stdin=grep1.stdout, stdout=subprocess.PIPE)
+    o, e = grep2.communicate()
+    output_decoded = o.decode(encoding='UTF-8')
+    if e is not None:
+        print_error("Failed to validate agent's workspace")
+    elif output_decoded is not None and output_decoded != "":
+        # Extract the workspace id from the agent configuration
+        current_ws_id = re.search("(?<=WORKSPACE_ID=).*", output_decoded).group(0)
+        if current_ws_id != workspace_id:
+            print_error(
+                "This server already has an omsagent connected to a different workspace than the one given as paramater, \n"
+                "Therefor this script will not be able to restart the agent and will not change the timegenerated configuration.\n"
+                "Please change the workspace id given as a parameter to the the agent is already connected to- {}"
+                .format(current_ws_id))
+            sys.exit()
+
+
 def restart_omsagent(workspace_id):
     print_notice("Attempting to restart the OMS agent")
     agent_restart = subprocess.Popen(["sudo", oms_agent_service_control, "restart", workspace_id],
@@ -132,6 +157,7 @@ def main():
     else:
         ws_id = sys.argv[1]
     prompt_messages()
+    validate_workspace(ws_id)
     change_events_timegenerated()
     restart_omsagent(ws_id)
 
