@@ -128,9 +128,9 @@ def validate_workspace(workspace_id):
         current_ws_id = re.search("(?<=WORKSPACE_ID=).*", output_decoded).group(0)
         if current_ws_id != workspace_id:
             print_error(
-                "This server already has an omsagent connected to a different workspace than the one given as paramater, \n"
-                "Therefor this script will not be able to restart the agent and will not change the timegenerated configuration.\n"
-                "Please change the workspace id given as a parameter to the the agent is already connected to- {}"
+                "Failed to run the script.\n"
+                "The omsagent installed on the machine is already connected to a different workspace- {}"
+
                 .format(current_ws_id))
             sys.exit()
 
