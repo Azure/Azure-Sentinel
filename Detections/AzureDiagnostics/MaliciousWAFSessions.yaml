@@ -43,9 +43,21 @@ query: |
   | mv-expand TimeKey to typeof(datetime)
   ) on $left.hostname_s == $right.host_s, $left.clientIp_s == $right.clientIP_s, TimeKey
   | where (TimeGenerated - SessionStarted) between (0m .. duration)
-  | extend timestamp = SessionStarted, HostCustomEntity = hostname_s, IPCustomEntity = clientIP_s
-  | summarize SuccessfulAccessLogCount = count(), UserAgents = make_set(userAgent_s), RequestURIs = make_set(originalRequestUriWithArgs_s), 
-  SuccessCodes = make_set(httpStatus_d), SuccessCodes_BackendServer = make_set(serverStatus_s) by timestamp, HostCustomEntity, IPCustomEntity, SessionBlockedCount
+  | extend originalRequestUriWithArgs_s = column_ifexists("originalRequestUriWithArgs_s", "")
+  | extend serverStatus_s = column_ifexists("serverStatus_s", "")
+  | extend timestamp = SessionStarted, IPCustomEntity = clientIP_s
+  | summarize SuccessfulAccessLogCount = count(), UserAgents = make_set(userAgent_s), RequestURIs = make_set(requestUri_s) , OriginalRequestURIs = make_set(originalRequestUriWithArgs_s), 
+  SuccessCodes = make_set(httpStatus_d), SuccessCodes_BackendServer = make_set(serverStatus_s) by timestamp, hostname_s, IPCustomEntity, SessionBlockedCount
   | extend BlockvsSuccessRatio = SessionBlockedCount/SuccessfulAccessLogCount
   | sort by BlockvsSuccessRatio desc, timestamp asc
   | where SessionBlockedCount > SuccessfulAccessLogCount 
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: DNS
+    fieldMappings:
+      - identifier: HostIpAddress 
+        columnName: hostname_s
+
