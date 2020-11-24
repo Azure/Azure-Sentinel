@@ -1,0 +1,51 @@
+// Title:           Symantec Data Loss Prevention (DLP) Parser
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    11/24/2020
+// Comment:         Initial Release
+//  
+// DESCRIPTION:
+// This parser takes raw Symantec DLP logs from a Syslog stream and parses the logs into a normalized schema.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    It is recommended to name the Function Alias, as SymantecDLP
+// 3. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+//<13>Sep 5 08:22:01 data.example.com CEF:0|Symantec|DLP|12.5.0|ruleID|Policy|5|BLOCKED=Passed INCIDENT_ID=204529 INCIDENT_SNAPSHOT=https://main.example.com/Path/Address MATCH_COUNT=3 PROTOCOL=SMTP RECIPIENTS=email@example.com SENDER=sender@example.com SUBJECT=Sensitive Data (attachment included) SEVERITY=1:High FILE_NAME=myfile.xml
+//
+// 
+CommonSecurityLog
+| where DeviceVendor == "Symantec" and DeviceProduct == "DLP"
+| extend Parser = extract_all(@"(^|;)(?P<key>[^=]+)\=(?P<value>[^;]+)(;|$)", dynamic(["key","value"]), AdditionalExtensions)
+| mv-apply Parser on (summarize Parser = make_bag(pack(tostring(Parser[0]), Parser[1])))
+| evaluate bag_unpack(Parser)
+| project SourceSystem, TimeGenerated, Type, TenantId, ReceiptTime, DeviceVendor, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, DeviceAction, SimplifiedDeviceAction, Computer, CommunicationDirection, DeviceFacility, DestinationPort, DeviceVersion, Activity, AdditionalExtensions,_ResourceId,
+                Blocked = column_ifexists("BLOCKED",""),
+                ApplicationName = column_ifexists("APPLICATION_NAME",""),
+                IncidentId = column_ifexists("INCIDENT_ID",""),
+                AttachedFileName = column_ifexists("ATTACHMENT_FILENAME",""),
+                FileName = column_ifexists("FILE_NAME",""),
+                MatchCount = column_ifexists("MATCH_COUNT",""),
+                Protocol = column_ifexists("PROTOCOL",""),
+                Recipients = column_ifexists("RECIPIENTS",""),
+                Sender = column_ifexists("SENDER",""),
+                Subject = column_ifexists("SUBJECT",""),
+                Severity = column_ifexists("SEVERITY",""),
+                DvcHostname = column_ifexists("ENDPOINT_MACHINE",""),
+                UserName = column_ifexists("ENDPOINT_DEVICE_ID",""),
+                SrcIpAddr = column_ifexists("MACHINE_IP",""),
+                OccuredOn = column_ifexists("OCCURRED_ON",""),
+                ReportedOn = column_ifexists("REPORTED_ON",""),
+                Url = column_ifexists("URL",""),
+                DstIpAddr = column_ifexists("DESTINATION_IP",""),
+                Scan = column_ifexists("SCAN",""),
+                PolicyRuleViolated = column_ifexists("POLICY_RULE_VIOLATED",""),
+                QuarantinePath = column_ifexists("QUARANTINE_PATH","") 
