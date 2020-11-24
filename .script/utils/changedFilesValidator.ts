@@ -1,5 +1,5 @@
-import { GetDiffFiles } from "./gitWrapper";
 import { ExitCode } from "./exitCode";
+import { GetDiffFiles } from "./gitWrapper";
 import * as logger from "./logger";
 
 export type CheckOptions = {
@@ -8,8 +8,8 @@ export type CheckOptions = {
   onFinalFailed(): Promise<unknown>;
 };
 
-async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
-  const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPreffixes);
+async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPrefixes?: string[]) {
+  const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
   if (changedFiles === undefined) {
     return;
   }
@@ -35,8 +35,8 @@ async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: stri
   process.exit(retCode);
 }
 
-export function runCheckOverChangedFiles(options: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
-  changedFilesValidator(options, fileKinds, fileTypeSuffixes, filePathFolderPreffixes).catch(e => {
+export function runCheckOverChangedFiles(options: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPrefixes?: string[]) {
+  changedFilesValidator(options, fileKinds, fileTypeSuffixes, filePathFolderPrefixes).catch(e => {
     console.error(e);
     logger.logError(`Error. If issue persists - please open an issue`);
     process.exit(ExitCode.ERROR);

@@ -1,0 +1,70 @@
+// Title:           Cisco Unified Computing System (UCS)
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    11/13/2020
+// Comment:         Inital Release
+//  
+// DESCRIPTION:
+// This parser takes raw Cisco UCS logs from a Syslog stream and parses the Audit, Fault and Event logs into a normalized schema.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. In the query window, on the second line of the query, enter the hostname(s) of your Cisco UCS device(s) and any other unique identifiers for the logstream. 
+//    For example: | where Computer in ("server1" , "server2")
+// 3. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    It is recommended to name the Function Alias, as CiscoUCS
+// 4. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// 1603399381.121    346 ::1 TCP_MISS/301 419 GET http://httpvshttps.com/ - HIER_DIRECT/45.33.7.16 text/html
+// 
+// 
+let LogHeader = Syslog
+| where Computer in ("UCSserver1", "UCSserver2") // UCSserver1 and UCSserver2 are examples, replace this list with your Cisco UCS devices
+| extend Parser = extract_all(@"^(\d+\s+[\w]+\s+\d+\s[0-9\:]+)\s\w+\:\s([\w%]+)\-(\d+)\-([\w\_]+)\:\s([\S\s]+)?", dynamic([1,2,3,4,5]), SyslogMessage)
+| mv-expand Parser
+| extend EventTime = tostring(Parser[0]),
+         Facility = tostring(Parser[1]),
+         SeverityNumber = tostring(Parser[2]),
+         Mneumonic = tostring(Parser[3]),
+         Substring = tostring(Parser[4])
+| project-away Parser;
+// Parse and normalize AUDIT logs
+let AuditLog = LogHeader
+| where Mneumonic == "AUDIT"
+| extend Parser = extract_all(@"^\[([\w\d\.\_\-]+)?\]\[([\w\d\.\_\-\\]+)?\]\[(\w+)?\]\[([\w+\_\-\.]+)?\]\[?(\w+)?\]?\[?([\w\d\.\_\-\\\/]+)?\]?\[?([\w\d\.\_\-\\\/]+)?\]?\[?([\w\d\.\_\-\\\/]+)?\]?([\S\s]+)?", dynamic([1,2,3,4,5,6,7,8,9]), Substring)
+| mv-expand Parser 
+| extend SrcUserName = tostring(Parser[0]),
+         DstUserName = tostring(Parser[1]),
+         Action = tostring(Parser[2]),
+         System = tostring(Parser[5]),
+         Description = tostring(Parser[8])
+| project-away Substring, Parser;
+let EventLog = LogHeader
+// Parse and normalize EVENT logs
+| where Mneumonic == "EVENT"
+| extend Parser = extract_all(@"^\[(\w+)?\]\[(\w+)?\]\[(\w+)?\]\[([\w\-\\\_]+)?\]\[(\w+)?\]\s+\[([\w\:\-\_]+)\]\:\s?([\S\s]+)?", dynamic([1,2,3,4,5,6,7]), Substring)
+| mv-expand Parser
+| extend EventId = tostring(Parser[0]),
+         Action = tostring(Parser[2]),
+         UserName = tostring(Parser[3]),
+         Status = tostring(Parser[5]),
+         Description = tostring(Parser[6])
+| project-away Substring, Parser;
+// Parse and normalize FAULT logs
+let FaultLog = LogHeader
+| where Mneumonic !in ("AUDIT", "EVENT")
+| extend Parser = extract_all(@"^\[(\w+)?\]\[(\w+)?\]\[([\w\-\_]+)?\]\[([\w\-\_\/]+)?\]\s+([\s\S]+)?", dynamic([1,2,3,4,5]), Substring)
+| mv-expand Parser 
+| extend EventId = tostring(Parser[0]),
+         EventSeverity = tostring(Parser[1]),
+         FaultType = tostring(Parser[2]),
+         System = tostring(Parser[3]),
+         Description = tostring(Parser[4])
+| project-away Substring, Parser;
+union AuditLog, EventLog, FaultLog
