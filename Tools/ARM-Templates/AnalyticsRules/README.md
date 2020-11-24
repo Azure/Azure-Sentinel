@@ -1,6 +1,6 @@
 # Azure Sentinel Analytics Rules sample ARM templates
 
-The templates in this folder allow you to create analytics rules Azure Sentinel. You can try them with the following links:
+The templates in this folder allow you to create analytics rules in Azure Sentinel. You can try them with the following links:
 
 | Rule Type | Deploy |
 | :---| :---|
