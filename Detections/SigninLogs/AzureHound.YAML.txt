@@ -1,0 +1,55 @@
+
+
+id: 25a3fd0b-8fc1-42b9-8eca-867477218aea
+name: Azure AD Discovery attempt with AzureHound
+description: |
+  'The AzureHound collector for BloodHound (https://bloodhound.readthedocs.io/en/latest/data-analysis/bloodhound-gui.html) requires authentication using Connect-AzureAD and Connect-AZAccount. This detection checks for successfull authentication to Azure Active Directory PowerShell and then within 5 minutes also to Microsoft Azure PowerShell to try and identify possible use of AzureHound.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: SignInLogs
+    dataTypes:
+      - SignInLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1087
+query: 
+  let TimeDelta = 5m; //Maximum amount of time between an actor running Connect-AzureAD and Connect-AzAccount  
+  let ConnectAzureADEvents = SigninLogs 
+    | where AppDisplayName =~ "Azure Active Directory PowerShell" and ResultType == "0" and IsInteractive == true
+    | extend AADSignInTime = TimeGenerated, DeviceID = tostring(DeviceDetail.deviceId), DeviceName = tostring(DeviceDetail.displayName)
+    | distinct AADSignInTime, AppDisplayName, UserPrincipalName, UserDisplayName, Location, DeviceID, DeviceName, IPAddress //Remove duplicate events
+  ;
+  let ConnectAzAccountEvents = SigninLogs
+    | where AppDisplayName =~ "Microsoft Azure PowerShell" and ResultType == "0" and IsInteractive == true
+    | extend AzSignInTime = TimeGenerated, DeviceID = tostring(DeviceDetail.deviceId), DeviceName = tostring(DeviceDetail.displayName)
+    | distinct AzSignInTime, AppDisplayName, UserPrincipalName, UserDisplayName, Location, DeviceID, DeviceName, IPAddress //Remove duplicate events
+  ;
+  ConnectAzureADEvents
+  | join kind=leftouter (
+      ConnectAzAccountEvents
+      ) on UserPrincipalName, Location, DeviceID, IPAddress
+  | project AADSignInTime, AzSignInTime, AppDisplayName, UserPrincipalName, UserDisplayName, Location, DeviceID, DeviceName, IPAddress
+  | extend TimeDiff = AzSignInTime - AADSignInTime
+  | where TimeDiff < TimeDelta and TimeDiff > 0s
+  | extend timestamp = AADSignInTime
+  | extend AccountCustomEntity = UserPrincipalName
+  | extend HostCustomEntity = DeviceName
+  | extend IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: UserPrincipalName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: DeviceName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: IPAddress
+        columnName: IPCustomEntity
