@@ -27,10 +27,8 @@ def get_credentials():
         try:
             creds = pickle.loads(pickle_string)
         except Exception as pickle_read_exception:
-            print("ERROR " + str(pickle_read_exception))
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
-        print("ERROR - pickle_string is empty. Exit")
         logging.error('Error - pickle_string is empty. Exit')
         exit(1)
     return creds
@@ -55,11 +53,10 @@ def get_result(activity,start_time, end_time):
         result = results.get('items', [])
         result_activities.extend(result)
     if result_activities == None or len(result_activities) == 0:
-        print("Logs not founded for {} activity".format(activity))
         logging.info("Logs not founded for {} activity".format(activity))
-        logging.info("Activity - {}, {} events was processed)".format(activity, len(result_activities)))
+        logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
     else:
-        logging.info("Activity - {}, {} events was processed)".format(activity, len(result_activities)))
+        logging.info("Activity - {}, processing {} events)".format(activity, len(result_activities)))
         return result_activities
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
@@ -102,20 +99,9 @@ def expand_data(obj):
             if 'parameters' in nested:
                 for parameter in nested["parameters"]:
                     if 'name' in parameter:
-                        if 'value' in parameter:
-                            event.update({parameter["name"]: parameter["value"]})
-                        if 'boolValue' in parameter:
-                            event.update({parameter["name"]: parameter["boolValue"]})
-                        if 'multiValue' in parameter:
-                            event.update({parameter["name"]: parameter["multiValue"]})
-                        if 'multiMessageValue' in parameter:
-                            event.update({parameter["name"]: parameter["multiMessageValue"]})
-                        if 'multiIntValue' in parameter:
-                            event.update({parameter["name"]: parameter["multiIntValue"]})
-                        if 'messageValue' in parameter:
-                            event.update({parameter["name"]: parameter["messageValue"]})
-                        if 'intValue' in parameter:
-                            event.update({parameter["name"]: parameter["intValue"]})
+                        for param_name in ["value", "boolValue", "multiValue", "multiMessageValue", "multiIntValue", "messageValue", "intValue"]:
+                            if param_name in parameter:
+                                event.update({parameter["name"]: parameter[param_name]})
     return obj
 
 def gen_chunks_to_object(data,chunksize=100):
@@ -129,7 +115,6 @@ def gen_chunks_to_object(data,chunksize=100):
 
 def gen_chunks(data,log_type):
     for chunk in gen_chunks_to_object(data, chunksize=2000):
-        obj_array = []
         body = json.dumps(chunk)
         post_data(customer_id, shared_key,body,log_type)
 
