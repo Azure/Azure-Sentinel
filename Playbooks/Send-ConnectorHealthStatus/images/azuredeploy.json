@@ -1,0 +1,296 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ConnectorHealthApp",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+
+        "SentinelWSResourceGroup": {
+            "defaultValue": "az-sentinel-rg",
+            "type": "string"
+        },
+        "SentinelWSName": {
+            "defaultValue": "az-sentinel-ws-name",
+            "type": "string"
+        },
+        "SentinelSubID": {
+            "defaultValue": "00000000-0000-0000-0000-000000000000",
+            "type": "string"
+        },
+        "MailList": {
+            "defaultValue": "<user1>@<domain>;<user2>@<domain>;...",
+            "type": "string"
+        }
+    },
+    
+    "variables": {
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]",
+        "sentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "azuremonitorlogsConnectionName": "[concat('azuremon-', parameters('PlaybookName'))]"
+     
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[variables('sentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+          
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            
+            "dependsOn": [
+                                                "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                                                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]"
+                                            
+                                            ],  
+                      
+                "properties": { 
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                            }
+                        },
+                        "Heartbeat_Query": {
+                            "runAfter": {
+                                "Ingestion_Anomaly_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "Heartbeat\n| summarize LastHeartbeat = max(TimeGenerated) by Computer\n| where isnotempty(Computer)\n| where LastHeartbeat < ago(5h)",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/visualizeQuery",
+                                "queries": {
+                                    "resourcegroups": "[parameters('SentinelWSResourceGroup')]",
+                                    "resourcename": "[parameters('SentinelWSName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SentinelSubID')]",
+                                    "timerange": "@body('Parse_JSON')?['Query Period']",
+                                    "visType": "Html Table"
+                                }
+                            }
+                        },
+                        "Ingestion_Anomaly_Query": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@body('Parse_JSON')?['Query']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/visualizeQuery",
+                                "queries": {
+                                    "resourcegroups": "[parameters('SentinelWSResourceGroup')]",
+                                    "resourcename": "[parameters('SentinelWSName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SentinelSubID')]",
+                                    "timerange": "@body('Parse_JSON')?['Query Period']",
+                                    "visType": "Html Table"
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['ExtendedProperties']",
+                                "schema": {
+                                    "properties": {
+                                        "Analytic Rule Ids": {
+                                            "type": "string"
+                                        },
+                                        "Analytic Rule Name": {
+                                            "type": "string"
+                                        },
+                                        "Data Sources": {
+                                            "type": "string"
+                                        },
+                                        "Event Grouping": {
+                                            "type": "string"
+                                        },
+                                        "Query": {
+                                            "type": "string"
+                                        },
+                                        "Query End Time UTC": {
+                                            "type": "string"
+                                        },
+                                        "Query Period": {
+                                            "type": "string"
+                                        },
+                                        "Query Start Time UTC": {
+                                            "type": "string"
+                                        },
+                                        "Search Query Results Overall Count": {
+                                            "type": "string"
+                                        },
+                                        "Status": {
+                                            "type": "string"
+                                        },
+                                        "Trigger Operator": {
+                                            "type": "string"
+                                        },
+                                        "Trigger Threshold": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                       
+                        "Send_an_email_to_the_SOC_Team": {
+                            "runAfter": {
+                                "Heartbeat_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p><span style=\"font-size: 14px; color: rgb(44,130,201)\"><strong>Tables with Data Ingestion Anomalies</strong></span><span style=\"font-size: 14px\"><strong><br>\n</strong></span><br>\n@{base64ToString(body('Ingestion_Anomaly_Query')?['body'])}<br>\n<br>\n<span style=\"color: rgb(147,101,184)\"><strong>Virtual Machines without Heartbeat</strong></span><span style=\"color: rgb(26,188,156)\"><strong><br>\n<br>\n</strong></span><span style=\"color: rgb(26,188,156)\"><strong>@{base64ToString(body('Heartbeat_Query')?['body'])}</strong></span><span style=\"color: rgb(26,188,156)\"><strong></strong></span><br>\n</p>",
+                                    "Importance": "High",
+                                    "Subject": "Data Ingestion & Heartbeat Anomaly Incident Summary",
+                                    "To": "[parameters('MailList')]"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                   
+                     
+                            "$connections": {
+                                "value": {
+                                    "azuremonitorlogs": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                                        "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                                    },
+                                    "azuresentinel": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                                        "connectionName": "[variables('sentinelConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                    },
+                                    "office365": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                        "connectionName": "[variables('o365ConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                                    }  
+                                     
+                                }
+                           }
+                       }
+                   }
+               }
+    ]
+}
