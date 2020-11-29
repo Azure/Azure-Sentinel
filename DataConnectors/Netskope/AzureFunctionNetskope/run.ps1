@@ -101,7 +101,7 @@ function Netskope () {
     $skip = 0
     $loggingOptions = $env:logTypes
     $apitypes = @($loggingOptions.split(",").Trim())
-    $checkPointFile = ".\NetskopeCheckpoint.csv"
+    $checkPointFile = "C:\home\site\NetskopeCheckpoint.csv"
             
     foreach($logtype in $apitypes){
 
