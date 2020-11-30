@@ -139,7 +139,8 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     o, e = install_omsagent_command.communicate()
     time.sleep(3)
     # Parsing the agent's installation return code
-    return_code = re.search(".*Shell bundle exiting with code (\d+)", o, re.IGNORECASE)
+    output_decoded = o.decode(encoding='UTF-8')
+    return_code = re.search(".*Shell bundle exiting with code (\d+)", output_decoded, re.IGNORECASE)
     if e is not None:
         handle_error(e, error_response_str="Error: could not install omsagent.")
         sys.exit()
