@@ -1,4 +1,4 @@
-# Fusion Rule sample ARM template
+# Scheduled Rule sample ARM template
 
 Author: Javier Soriano
 
