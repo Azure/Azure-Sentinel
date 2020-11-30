@@ -4,4 +4,4 @@ Author: Javier Soriano
 
 This template enables the Azure ATP connector on your Sentinel workspace
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjaviersoriano%2FAzure-Sentinel%2Fjavier-arm%2FTools%2FARM-Templates%2FDataConnectors%2FAzureATP%2FAzureATP.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjaviersoriano%2FAzure-Sentinel%2Fmaster%2FTools%2FARM-Templates%2FDataConnectors%2FAzureATP%2FAzureATP.json)
