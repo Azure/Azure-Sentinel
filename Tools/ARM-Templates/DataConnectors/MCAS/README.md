@@ -1,4 +1,4 @@
-#Microsoft Cloud App Security connector template
+# Microsoft Cloud App Security connector template
 
 Author: Javier Soriano
 

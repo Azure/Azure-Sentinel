@@ -1,4 +1,4 @@
-#Office 365 connector template
+# Office 365 connector template
 
 Author: Javier Soriano
 

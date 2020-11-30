@@ -1,4 +1,4 @@
-#Microsoft Defender Advanced Threat Protection connector template
+# Microsoft Defender Advanced Threat Protection connector template
 
 Author: Javier Soriano
 

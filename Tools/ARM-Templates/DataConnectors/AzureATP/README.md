@@ -1,4 +1,4 @@
-#Azure Advanced Threat Protection connector template
+# Azure Advanced Threat Protection connector template
 
 Author: Javier Soriano
 

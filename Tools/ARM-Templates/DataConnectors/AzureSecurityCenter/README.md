@@ -1,4 +1,4 @@
-#Azure Security Center connector template
+# Azure Security Center connector template
 
 Author: Javier Soriano
 
