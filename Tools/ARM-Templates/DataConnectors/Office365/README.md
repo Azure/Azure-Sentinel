@@ -1,0 +1,7 @@
+#Office 365 connector template
+
+Author: Javier Soriano
+
+This template enables the Office 365 connector on your Sentinel workspace
+
+[Azure ATP](https://github.com/javiersoriano/Azure-Sentinel/blob/javier-arm/Tools/ARM-Templates/DataConnectors/Office365/Office365.json) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjaviersoriano%2FAzure-Sentinel%2Fjavier-arm%2FTools%2FARM-Templates%2FDataConnectors%2FOffice365%2FOffice365.json)
