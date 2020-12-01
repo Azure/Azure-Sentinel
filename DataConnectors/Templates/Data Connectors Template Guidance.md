@@ -91,4 +91,11 @@ A data connector can have multiple data types and these can be represented by co
   * For CEF and Syslog, leverage the existing text as-is and add anything custom as needed.
   * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Azure Sentinel **or** provide detailed guidance for customers to send data to Azure Sentinel.<p>
   
+# What is the format for redirection/Short links?
+1. Redirection link for **Parser** - https://aka.ms/sentinel-[connectorid]-parser
+2. Redirection link for **AzureDeploy** - https://aka.ms/sentinel-[connectorid]-azuredeploy
+3. Redirection link for **Raw .zip file** link to download the package - https://aka.ms/sentinel-[connectorid]-functionapp
+4. Redirection link for **RAW run.ps1** for function manual deployment - https://aka.ms/sentinel-[connectorid]-functioncode
+
+
 Expand and add multiple instructions as needed by adding more title and description elements in this block.
