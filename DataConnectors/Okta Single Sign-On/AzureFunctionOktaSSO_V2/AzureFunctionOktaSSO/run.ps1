@@ -59,6 +59,9 @@ $sharedKey =  $env:workspaceKey
 $LogType = "Okta"
 $TimeStampField = "published"
 
+#To support both Azure Commercial & Azure Gov Cloud
+$AzureTenant = $env:AZURE_TENANT
+
 
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
@@ -144,7 +147,7 @@ do {
             -method $method `
             -contentType $contentType `
             -resource $resource
-        $LAuri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+        $LAuri = "https://" + $customerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
