@@ -57,9 +57,13 @@ $StartDate = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddT00:00:00.000Z") # se
 $customerId = $env:workspaceId
 $sharedKey =  $env:workspaceKey
 $LogType = "Okta"
-$TimeStampField = "published"
 
-#To support both Azure Commercial & Azure Gov Cloud
+# Value "published" breaking the inbuilt OKTA rules & charts
+#$TimeStampField = "published"
+
+$TimeStampField = ""
+
+#The AzureTenant variable is used to specify other cloud environments like Azure Gov(.us) etc.,
 $AzureTenant = $env:AZURE_TENANT
 
 
@@ -147,7 +151,15 @@ do {
             -method $method `
             -contentType $contentType `
             -resource $resource
-        $LAuri = "https://" + $customerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+		if ($null -ne $AzureTenant){
+			$LAuri = "https://" + $customerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+		}
+		else{
+			$LAuri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		}
+
+		
+        
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
