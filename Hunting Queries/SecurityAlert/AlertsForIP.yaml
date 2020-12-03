@@ -23,11 +23,15 @@ query: |
   SecurityAlert
   | where TimeGenerated between (v_StartTime .. v_EndTime)
   // expand JSON properties
-  | where ExtendedProperties contains v_ipAddress or Entities contains v_ipAddress
-  | extend Extprop = parsejson(ExtendedProperties)
-  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
-  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
-  | extend IpAddress = tostring(parse_json(ExtendedProperties).["Client Address"]) 
+  | extend Extprop = parsejson(Entities)
+  | mv-expand Extprop
+  | extend Extprop = parsejson(Extprop)
+  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '') 
+  | where IpAddress == v_ipAddress
+  | extend Account = Extprop['Name']
+  | extend Domain = Extprop['UPNSuffix']
+  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
+  | extend Computer = iff(Extprop['Type']=="host", Extprop['HostName'], '')
   | project StartTimeUtc = StartTime, EndTimeUtc = EndTime, AlertName, Computer, Account, IpAddress, ExtendedProperties, Entities
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   };

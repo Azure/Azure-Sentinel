@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
+    "metadata": {
         "comments": "This playbook will call the collect invesitgation package in MDATP.  It will then loop until thats complete, once complete it will add a comment to the incident and post a message in teams with the URL to download the package.",
         "author": "Nicholas DiCola"
     },
@@ -75,250 +75,261 @@
             ],
             "properties": {
                 "state": "Enabled",
-                "definition": {
-                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
-                    "actions": {
-                        "Alert_-_Get_hosts": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "@triggerBody()?['Entities']",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/entities/host"
-                            }
-                        },
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
-                        },
-                        "For_each": {
-                            "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
-                            "actions": {
-                                "For_each_2": {
-                                    "foreach": "@body('Alert_-_Get_incident')?['value']",
-                                    "actions": {
-                                        "Actions_-_Collect_investigation_package": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "Comment": "Collect investigation package from playbook for Azure Sentinel Incident: @{body('Alert_-_Get_incident')?['properties']?['Title']}"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}/collectInvestigationPackage"
-                                            }
-                                        },
-                                        "Actions_-_Get_investigation_package_download_URI": {
-                                            "runAfter": {
-                                                "Until": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/api/machineactions/@{encodeURIComponent(body('Actions_-_Get_single_machine_action')?['id'])}/getPackageUri"
-                                            }
-                                        },
-                                        "Add_comment_to_incident": {
-                                            "runAfter": {
-                                                "Actions_-_Get_investigation_package_download_URI": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}/@{encodeURIComponent(body('Actions_-_Get_investigation_package_download_URI')?['value'])}"
-                                            }
-                                        },
-                                        "Post_a_message_(V3)": {
-                                            "runAfter": {
-                                                "Add_comment_to_incident": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "body": {
-                                                        "content": "<p>The investigation package is ready for download at @{body('Actions_-_Get_investigation_package_download_URI')?['value']}</p>",
-                                                        "contentType": "html"
-                                                    },
-                                                    "subject": "MDATP Investgation Package for @{body('Alert_-_Get_incident')?['properties']?['Title']} is Ready"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['teams']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/v3/beta/teams/@{encodeURIComponent('7fdb6cff-0779-45ac-aefd-da589fc62729')}/channels/@{encodeURIComponent('19:2df964c9afc44d60a51bc282f56bacef@thread.skype')}/messages"
-                                            }
-                                        },
-                                        "Set_variable": {
-                                            "runAfter": {
-                                                "Actions_-_Collect_investigation_package": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "MachineActionStatus",
-                                                "value": "@body('Actions_-_Collect_investigation_package')?['status']"
-                                            }
-                                        },
-                                        "Until": {
-                                            "actions": {
-                                                "Actions_-_Get_single_machine_action": {
-                                                    "runAfter": {},
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "get",
-                                                        "path": "/api/machineactions/@{encodeURIComponent(body('Actions_-_Collect_investigation_package')?['id'])}"
-                                                    }
-                                                },
-                                                "Set_variable_2": {
-                                                    "runAfter": {
-                                                        "Actions_-_Get_single_machine_action": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "MachineActionStatus",
-                                                        "value": "@body('Actions_-_Get_single_machine_action')?['status']"
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "Set_variable": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "expression": "@equals(variables('MachineActionStatus'), 'Succeeded')",
-                                            "limit": {
-                                                "count": 60,
-                                                "timeout": "PT1H"
-                                            },
-                                            "type": "Until"
+                {
+                    "definition": {
+                        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                        "actions": {
+                            "Alert_-_Get_hosts": {
+                                "inputs": {
+                                    "body": "@triggerBody()?['Entities']",
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                         }
                                     },
-                                    "runAfter": {},
-                                    "type": "Foreach"
-                                }
+                                    "method": "post",
+                                    "path": "/entities/host"
+                                },
+                                "runAfter": {
+                                    "Alert_-_Get_incident": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ApiConnection"
                             },
-                            "runAfter": {
-                                "Initialize_variable": [
-                                    "Succeeded"
-                                ]
+                            "Alert_-_Get_incident": {
+                                "inputs": {
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        }
+                                    },
+                                    "method": "get",
+                                    "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                                },
+                                "runAfter": {},
+                                "type": "ApiConnection"
                             },
-                            "type": "Foreach"
-                        },
-                        "Initialize_variable": {
-                            "runAfter": {
-                                "Alert_-_Get_hosts": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "MachineActionStatus",
-                                        "type": "String",
-                                        "value": "null"
+                            "For_each": {
+                                "actions": {
+                                    "Actions_-_Collect_investigation_package": {
+                                        "inputs": {
+                                            "body": {
+                                                "Comment": "Collect investigation package from playbook for Azure Sentinel Incident: @{body('Alert_-_Get_incident')?['properties']?['Title']}"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/machines/@{encodeURIComponent(body('Machines_-_Get_single_machine')?['id'])}/collectInvestigationPackage"
+                                        },
+                                        "runAfter": {
+                                            "Machines_-_Get_single_machine": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "Actions_-_Get_investigation_package_download_URI_2": {
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                }
+                                            },
+                                            "method": "get",
+                                            "path": "/api/machineactions/@{encodeURIComponent(body('Actions_-_Collect_investigation_package')?['id'])}/getPackageUri"
+                                        },
+                                        "runAfter": {
+                                            "Until": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "Add_comment_to_incident": {
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}/@{encodeURIComponent('The investigation package is ready for download at ',body('Actions_-_Get_investigation_package_download_URI_2')?['value'])}"
+                                        },
+                                        "runAfter": {
+                                            "Actions_-_Get_investigation_package_download_URI_2": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "Machines_-_Get_single_machine": {
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                }
+                                            },
+                                            "method": "get",
+                                            "path": "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}"
+                                        },
+                                        "runAfter": {},
+                                        "type": "ApiConnection"
+                                    },
+                                    "Post_a_message_(V3)": {
+                                        "inputs": {
+                                            "body": {
+                                                "body": {
+                                                    "content": "<p>The investigation package is ready for download at</p>",
+                                                    "contentType": "html"
+                                                },
+                                                "subject": "MDATP Investgation Package for @{body('Alert_-_Get_incident')?['properties']?['Title']} is Ready"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['teams']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/v3/beta/teams/@{encodeURIComponent('7fdb6cff-0779-45ac-aefd-da589fc62729')}/channels/@{encodeURIComponent('19:2df964c9afc44d60a51bc282f56bacef@thread.skype')}/messages"
+                                        },
+                                        "runAfter": {
+                                            "Add_comment_to_incident": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "Set_variable": {
+                                        "inputs": {
+                                            "name": "MachineActionStatus",
+                                            "value": "@body('Actions_-_Collect_investigation_package')?['status']"
+                                        },
+                                        "runAfter": {
+                                            "Actions_-_Collect_investigation_package": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable"
+                                    },
+                                    "Until": {
+                                        "actions": {
+                                            "Actions_-_Get_single_machine_action": {
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/api/machineactions/@{encodeURIComponent(body('Actions_-_Collect_investigation_package')?['id'])}"
+                                                },
+                                                "runAfter": {},
+                                                "type": "ApiConnection"
+                                            },
+                                            "Set_variable_2": {
+                                                "inputs": {
+                                                    "name": "MachineActionStatus",
+                                                    "value": "@body('Actions_-_Get_single_machine_action')?['status']"
+                                                },
+                                                "runAfter": {
+                                                    "Actions_-_Get_single_machine_action": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable"
+                                            }
+                                        },
+                                        "expression": "@equals(variables('MachineActionStatus'), 'Succeeded')",
+                                        "limit": {
+                                            "count": 60,
+                                            "timeout": "PT1H"
+                                        },
+                                        "runAfter": {
+                                            "Set_variable": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Until"
                                     }
-                                ]
+                                },
+                                "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
+                                "runAfter": {
+                                    "Initialize_variable": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Foreach"
+                            },
+                            "Initialize_variable": {
+                                "inputs": {
+                                    "variables": [
+                                        {
+                                            "name": "MachineActionStatus",
+                                            "type": "String",
+                                            "value": "null"
+                                        }
+                                    ]
+                                },
+                                "runAfter": {
+                                    "Alert_-_Get_hosts": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "InitializeVariable"
+                            }
+                        },
+                        "contentVersion": "1.0.0.0",
+                        "outputs": {},
+                        "parameters": {
+                            "$connections": {
+                                "defaultValue": {},
+                                "type": "Object"
+                            }
+                        },
+                        "triggers": {
+                            "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                                "inputs": {
+                                    "body": {
+                                        "callback_url": "@{listCallbackUrl()}"
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        }
+                                    },
+                                    "path": "/subscribe"
+                                },
+                                "type": "ApiConnectionWebhook"
                             }
                         }
                     },
-                    "outputs": {}
-                },
-                "parameters": {
-                    "$connections": {
-                        "value": {
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                            },
-                            "teams": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
-                                "connectionName": "[variables('TeamsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
-                            },
-                            "wdatp": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]",
-                                "connectionName": "[variables('MDATPConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                    "parameters": {
+                        "$connections": {
+                            "value": {
+                                "azuresentinel": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                    "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                },
+                                "teams": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                    "connectionName": "[variables('TeamsConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                                },
+                                "wdatp": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]",
+                                    "connectionName": "[variables('MDATPConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                                }
+
                             }
-                            
                         }
                     }
                 }
             }
-        }
     ]
 }
