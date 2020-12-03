@@ -17,7 +17,7 @@
     },
     "variables": {
 	"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-	"Office365ConnectionName": "[concat('teams', parameters('PlaybookName'))]",
+	"Office365ConnectionName": "[concat('office365', parameters('PlaybookName'))]",
 	"MicrosoftTeamsConnectionName": "[concat('teams', parameters('PlaybookName'))]",
     "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
 	},	
@@ -101,7 +101,6 @@
                     },
                     "triggers": {
                         "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
-                            "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -112,206 +111,213 @@
                                     }
                                 },
                                 "path": "/incident-creation"
-                            }
+                            },
+                            "type": "ApiConnectionWebhook"
                         }
                     },
-                    "actions": {
-                        "Add_comment_to_incident_(V2)": {
-                            "runAfter": {
-                                "For_each": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "Value": "## Safe Ips\n### The following IPs were found in the Watchlist  @{variables('WatchlistName')} :\n@{join(variables('SafeIPs'), '\\n')}\n\n## Not safe Ips\n###The following IPs were not found in the Watchlist  @{variables('WatchlistName')} :\n@{join(variables('notSafeIPs'), '\\n')}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "put",
-                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            }
-                        },
-                        "Condition": {
-                            "actions": {
-                                "Change_incident_status": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "CloseReason": "BenignPositive",
-                                            "CloseReasonText": "All containing IPs found in  watchlist of safe IPs: @{variables('WatchlistName')}\n@{join(variables('SafeIPs'),',')}"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "put",
-                                        "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/Status/@{encodeURIComponent('Closed')}"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Add_comment_to_incident_(V2)": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@length(variables('notSafeIPs'))",
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "description": "This condition checks if all IPs involved in this alert are safe (found in watchlist)"
-                        },
-                        "Entities_-_Get_IPs": {
-                            "runAfter": {
-                                "Initialize_variable_-_not_safe_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "@triggerBody()?['Entities']",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/entities/ip"
-                            }
-                        },
-                        "For_each": {
-                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
-                            "actions": {
-                                "Condition_-_if_IP_found_in_watchlist": {
-                                    "actions": {
-                                        "Append_to_array_variable_-_add_to_safe_list": {
-                                            "runAfter": {},
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "SafeIPs",
-                                                "value": "@items('For_each')?['Address']"
-                                            }
+        "actions": {
+            "For_each_Alert": {
+                "actions": {
+                    "Condition": {
+                        "actions": {
+                            "Post_a_message_as_the_Flow_bot_to_a_user": {
+                                "inputs": {
+                                    "body": {
+                                        "messageBody": " Hi  @{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerName']}\n\nA new alert was triggered on your subscription: @{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['SubscriptionName']} by Azure Security Center.\n\nAn incident was created in Azure Sentinel.\n\nAlert title: @{items('For_each_Alert')?['properties']?['alertDisplayName']}\n\nDescription: @{items('For_each_Alert')?['properties']?['description']}\n\nThe Azure resource that triggered the alert:\n@{first(body('Filter_array_to_get_AzureResource_identifier'))['resourceId']}\n\nLink to the ASC alert:  @{items('For_each_Alert')?['properties']?['alertLink']}\n\nLink to the Azure Sentinel incident: @{triggerBody()?['object']?['properties']?['incidentUrl']}",
+                                        "messageTitle": "New alert from Azure Sentinel in your subscription",
+                                        "recipient": {
+                                            "isAlert": true,
+                                            "summary": "New Alert from Azure Sentinel in subscription @{body('Parse_JSON_to_get_subscriptionId')?['properties']?['effectiveSubscriptionId']}",
+                                            "to": "@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerEmail']}"
                                         }
                                     },
-                                    "runAfter": {
-                                        "Run_query_and_list_results": [
-                                            "Succeeded"
-                                        ]
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['teams']['connectionId']"
+                                        }
                                     },
-                                    "else": {
-                                        "actions": {
-                                            "Append_to_array_variable_-_add_to_not_safe_list": {
-                                                "runAfter": {},
-                                                "type": "AppendToArrayVariable",
-                                                "inputs": {
-                                                    "name": "notSafeIPs",
-                                                    "value": "@items('For_each')?['Address']"
+                                    "method": "post",
+                                    "path": "/flowbot/actions/notification/recipienttypes/user"
+                                },
+                                "runAfter": {},
+                                "type": "ApiConnection"
+                            },
+                            "Send_an_email_(V2)": {
+                                "inputs": {
+                                    "body": {
+                                        "Body": "<p><strong>&nbsp;Hi &nbsp; </strong><strong>@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerName']}</strong><strong><br>\n<br>\nA new alert was triggered on your subscription: </strong><strong>@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['SubscriptionName']}</strong><strong>  by Azure Security Center.<br>\n<br>\nAn incident was created in Azure Sentinel.<br>\n<br>\n</strong>Alert title: <strong></strong><strong>@{items('For_each_Alert')?['properties']?['alertDisplayName']}</strong><strong><br>\n<br>\n</strong>Description:<strong> </strong><strong>@{items('For_each_Alert')?['properties']?['description']}</strong><strong><br>\n<br>\n</strong>The <strong>Azure resource</strong> that triggered the alert:<strong><br>\n</strong><strong>@{first(body('Filter_array_to_get_AzureResource_identifier'))['resourceId']}</strong><strong><br>\n<br>\n</strong>Link to the<strong> ASC alert: &nbsp;</strong><strong>@{items('For_each_Alert')?['properties']?['alertLink']}</strong><strong><br>\n<br>\n</strong>Link to the <strong>Azure Sentinel incident: </strong><strong>@{triggerBody()?['object']?['properties']?['incidentUrl']}</strong><strong></strong></p>",
+                                        "Subject": "New Alert from Azure Sentinel in subscription @{body('Parse_JSON_to_get_subscriptionId')?['properties']?['effectiveSubscriptionId']}",
+                                        "To": "@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerEmail']}"
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/v2/Mail"
+                                },
+                                "runAfter": {
+                                    "Post_a_message_as_the_Flow_bot_to_a_user": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ApiConnection"
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "greater": [
+                                        "@length(body('Run_query_and_list_results_-_Get_Watchlist')?['value'])",
+                                        0
+                                    ]
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Run_query_and_list_results_-_Get_Watchlist": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "If"
+                    },
+                    "Filter_array_to_get_AzureResource_identifier": {
+                        "inputs": {
+                            "from": "@items('For_each_Alert')?['properties']?['resourceIdentifiers']",
+                            "where": "@equals(item()['type'], 'AzureResource')"
+                        },
+                        "runAfter": {},
+                        "type": "Query"
+                    },
+                    "Parse_JSON_to_get_subscriptionId": {
+                        "description": "This action parses the additional data of the ASC alert, to get the subscription id field",
+                        "inputs": {
+                            "content": "@items('For_each_Alert')?['properties']?['additionalData']",
+                            "schema": {
+                                "properties": {
+                                    "ActionTaken": {
+                                        "type": "string"
+                                    },
+                                    "Entities": {
+                                        "items": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "kind": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "properties": {
+                                                    "properties": {
+                                                        "address": {
+                                                            "type": "string"
+                                                        },
+                                                        "friendlyName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "type": {
+                                                    "type": "string"
                                                 }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "greater": [
-                                                    "@length(body('Run_query_and_list_results')?['value'])",
-                                                    0
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If",
-                                    "description": "This condition returns true if IP was found in watchlist, and false if ip was not found."
-                                },
-                                "Run_query_and_list_results": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| extend items = todynamic(WatchlistItem)\n| evaluate bag_unpack(items)\n| where ipaddress == \"@{items('For_each')?['Address']}\"",
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
-                                            }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "name",
+                                                "type",
+                                                "kind",
+                                                "properties"
+                                            ],
+                                            "type": "object"
                                         },
-                                        "method": "post",
-                                        "path": "/queryData",
-                                        "queries": {
-                                            "resourcegroups": "ResoueceGroup",
-                                            "resourcename": "Workspace",
-                                            "resourcetype": "Log Analytics Workspace",
-                                            "subscriptions": "subscription",
-                                            "timerange": "Last 12 hours"
-                                        }
+                                        "type": "array"
                                     },
-                                    "description": "Check if IP address is in watchlist"
+                                    "Hit Count": {
+                                        "type": "string"
+                                    },
+                                    "Management URL": {
+                                        "type": "string"
+                                    },
+                                    "ProcessingData": {
+                                        "type": "string"
+                                    },
+                                    "Source IPs": {
+                                        "type": "string"
+                                    },
+                                    "StoreAlertPublisher": {
+                                        "type": "string"
+                                    },
+                                    "effectiveSubscriptionId": {
+                                        "type": "string"
+                                    },
+                                    "resourceType": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "runAfter": {
+                            "Filter_array_to_get_AzureResource_identifier": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson"
+                    },
+                    "Run_query_and_list_results_-_Get_Watchlist": {
+                        "inputs": {
+                            "body": "_GetWatchlist('SubOwners')\n| project SubscriptionId, OwnerName, SubscriptionName, OwnerEmail\n| where SubscriptionId == \"@{body('Parse_JSON_to_get_subscriptionId')?['effectiveSubscriptionId']}\"",
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
                                 }
                             },
-                            "runAfter": {
-                                "Entities_-_Get_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
-                        "Initialize_variable_-_Watchlist_name": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "WatchlistName",
-                                        "type": "string",
-                                        "value": "ipwatchlist"
-                                    }
-                                ]
+                            "method": "post",
+                            "path": "/queryData",
+                            "queries": {
+                                "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                "resourcetype": "Log Analytics Workspace",
+                                "subscriptions": "@variables('SubscriptionID')",
+                                "timerange": "Last 24 hours"
                             }
                         },
-                        "Initialize_variable_-_not_safe_IPs": {
-                            "runAfter": {
-                                "Initialize_variable_-_safe_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "notSafeIPs",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
+                        "runAfter": {
+                            "Parse_JSON_to_get_subscriptionId": [
+                                "Succeeded"
+                            ]
                         },
-                        "Initialize_variable_-_safe_IPs": {
-                            "runAfter": {
-                                "Initialize_variable_-_Watchlist_name": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "SafeIPs",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
+                        "type": "ApiConnection"
+                    }
+                },
+                "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                "runAfter": {
+                    "Initialize_variable_-_subscriptionId": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "Initialize_variable_-_subscriptionId": {
+                "description": "The subscription where watchlist is under. Will be used to query watchlist in Azure Monitor Logs",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "SubscriptionID",
+                            "type": "string",
+                            "value": "[subscription().subscriptionId]"
                         }
-                    },
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            }
+        },
                     "outputs": {}
                 },
                 "parameters": {
