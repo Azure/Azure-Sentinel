@@ -31,7 +31,7 @@ requiredDataConnectors:
   - connectorId: PaloAltoNetworks
     dataTypes:
       - CommonSecurityLog
-queryFrequency: 1h
+queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 3
@@ -45,19 +45,19 @@ query: |
   let endtime = 1d;
   let timeframe = 1h;
   let scorethreshold = 5;
-  let percentotalthreshold = 25;
+  let percentotalthreshold = 50;
   let TimeSeriesData = CommonSecurityLog 
   | where isnotempty(DestinationIP) and isnotempty(SourceIP)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | project TimeGenerated,SourceIP, DestinationIP, DeviceVendor
   | make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor;
-  //Filtering specific records associated with spikes as outliers
+  // Filtering specific records associated with spikes as outliers
   let TimeSeriesAlerts=TimeSeriesData
   | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
   | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
   | where anomalies > 0 | extend score = round(score,2), AnomalyHour = TimeGenerated
   | project DeviceVendor,AnomalyHour, TimeGenerated, Total, baseline, anomalies, score;
-  //Join anomalies with Base Data to popalate associated records for investigation - Results sorted by score in descending order 
+  // Join anomalies with Base Data to popalate associated records for investigation - Results sorted by score in descending order 
   TimeSeriesAlerts 
   | join (
       CommonSecurityLog 
