@@ -1,6 +1,10 @@
 # Azure Sentinel Data Connector sample ARM templates
 
-The templates in this folder allow you to onboard data connectors in Azure Sentinel. You can try them with the following links:
+The templates in this folder allow you to onboard data connectors in Azure Sentinel. 
+
+***DISCLAIMER:*** *as of today, these templates can be used only for first time deployment and not for updates. We are working to add update support soon.*
+
+You can try them with the following links:
 
 | Data Connector | Deploy |
 | :---| :---|
