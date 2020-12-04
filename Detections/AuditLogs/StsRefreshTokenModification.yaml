@@ -25,13 +25,14 @@ query: |
   | where OperationName has 'StsRefreshTokenValidFrom'
   | where TargetResources[0].modifiedProperties != '[]'
   | where TargetResources[0].modifiedProperties !has 'DirectorySync'
+  | extend TargetResourcesModProps = TargetResources[0].modifiedProperties
+  | mv-expand TargetResourcesModProps
+  | where tostring(TargetResourcesModProps.displayName) =~ 'StsRefreshTokensValidFrom'
   | extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
   | extend targetUserOrApp = TargetResources[0].userPrincipalName
-  | mv-expand TargetResources[0].modifiedProperties
-  | extend eventName = TargetResources_0_modifiedProperties.displayName
-  | where TargetResources_0_modifiedProperties.displayName == 'StsRefreshTokensValidFrom'
-  | extend LastDirSyncTimeOld = TargetResources_0_modifiedProperties.oldValue
-  | extend LastDirSyncTimeNew = TargetResources_0_modifiedProperties.newValue
+  | extend eventName = tostring(TargetResourcesModProps.displayName)
+  | extend LastDirSyncTimeOld = todatetime(parse_json(tostring(TargetResourcesModProps.oldValue))[0])
+  | extend LastDirSyncTimeNew = todatetime(parse_json(tostring(TargetResourcesModProps.newValue))[0])
   | project-reorder Result, AADOperationType
   | extend InitiatingIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
   | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingUserOrApp, IPCustomEntity = InitiatingIpAddress
