@@ -26,7 +26,7 @@ query: |
   let timeframe = 1h;
   let scorethreshold = 1.5;
   let percentthreshold = 50;
-  // Preparing the time series data aggregated on BytesTransferredOut column in the form of multi-value array so that it can be used with time series anomaly function.
+  // Preparing the time series data aggregated hourly count of MailItemsAccessd Operation in the form of multi-value array to use with time series anomaly function.
   let TimeSeriesData=
   OfficeActivity 
   | where TimeGenerated  between (startofday(ago(starttime))..startofday(ago(endtime)))
@@ -41,12 +41,14 @@ query: |
   | project TimeGenerated, Total, baseline, anomalies, score;
   // Joining the flagged outlier from the previous step with the original dataset to present contextual information during the anomalyhour to analysts to conduct investigation or informed decistions.
   TimeSeriesAlerts
+  | where TimeGenerated > ago(2d)
   // Join against base logs since specified timeframe to retrive records associated with the hour of anomoly
   | join kind=inner ( 
   OfficeActivity 
   | where TimeGenerated  between (startofday(ago(starttime))..startofday(ago(endtime)))
   | where OfficeWorkload=~ "Exchange" and Operation =~ "MailItemsAccessed" and ResultStatus =~ "Succeeded"
   | summarize HourlyCount=count(), TimeGeneratedMax = arg_max(TimeGenerated, *), IPAdressList = make_set(Client_IPAddress), SourceIPMax= arg_max(Client_IPAddress, *), ClientInfoStringList= make_set(ClientInfoString) by bin(TimeGenerated,1h), MailboxOwnerUPN, Logon_Type, TenantId, UserType
+  | where HourlyCount > 25 // Only considering operations with more than 25 hourly count to reduce False Positivies
   | order by HourlyCount desc 
   ) on TimeGenerated
   | extend PercentofTotal = round(HourlyCount/Total, 2) * 100 
