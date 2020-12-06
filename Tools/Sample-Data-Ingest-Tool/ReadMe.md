@@ -1,5 +1,5 @@
 # Sample Data Ingest Tool
-Author: Chi Nguyen
+Author: Chi yoyo
 
 ## Description
 This repository contains a tool in C# console application that allows users to post sample data of custom format to their Azure Log Analytics Custom logs. The sample data is found in Custom folder under Sample Data directory. The posted data can then be accessed via their Azure Log Analytics Custom logs or Azure Sentinel Custom Log table.
