@@ -55,9 +55,9 @@ def getWorkbenchList():
 # Get each Workbench Data from API and return Json Data
 def getWorkbench(workbenchIds):
     url_path = '/v2.0/xdr/workbench/workbenches/'+workbenchIds
-    url1 = url_base+url_path
+    url = url_base+url_path
     headers = {'Authorization': 'Bearer ' + api_id, 'Content-Type': 'application/json;charset=utf-8'}
-    response_event = requests.get(url1, headers=headers)
+    response_event = requests.get(url, headers=headers)
     workbench_details = response_event.json()
     workbench_details_json = workbench_details['data']
     return workbench_details_json
