@@ -1,4 +1,4 @@
-# Taken from https://docs.microsoft.com/nl-nl/azure/azure-monitor/platform/data-collector-api
+# Taken from https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api
 
 import json
 import requests
