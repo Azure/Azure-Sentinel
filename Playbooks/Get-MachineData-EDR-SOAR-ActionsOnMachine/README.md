@@ -13,7 +13,7 @@ Also should be able to perform some actions like:
 -	Start AV scan
 
 ## Prerequisites
-1. Defender for Endpoint 
+1. Defender for Endpoint / MDATP / EDR
 2. Microsoft SharePoint online
 3. Microsoft Teams
 4. Azure AD App registerd with the following permissions under "WindowsDefenderATP"
