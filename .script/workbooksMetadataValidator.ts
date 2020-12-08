@@ -8,7 +8,7 @@ import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker"
 
 export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
   let workbooksMetadata = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/WorkbooksMetadataSchema.json", "utf8"));
+  let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/workbooksMetadataSchema.json", "utf8"));
 
   isValidSchema(workbooksMetadata, schema);
   isUniqueKeys(workbooksMetadata);

@@ -3,8 +3,8 @@
     Language:       PowerShell    
     Version:        1.1
     Author(s):      Microsoft
-    Last Modified:  6/30/2020
-    Comment:        Minor fixes to reduce execution time
+    Last Modified:  12/04/2020
+    Comment:        Added support for special characters in username and/or password
 
     DESCRIPTION
     This Function App calls the Qualys Vulnerability Management (VM) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) specifically for Host List Detection data (/api/2.0/fo/asset/host/vm/detection/).
@@ -32,8 +32,8 @@ $TimeStampField = "DateValue"
 $TableName = "QualysHostDetection"
 
 # Build the headers for the Qualys API request
-$username = $env:apiUserName
-$password = $env:apiPassword
+$username = [uri]::EscapeDataString($env:apiUsername)
+$password = [uri]::EscapeDataString($env:apiPassword)
 $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
 $filterParameters = $env:filterParameters       
