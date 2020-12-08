@@ -45,5 +45,6 @@ API connections for the above mentioned prerequisites must be created in the res
 6. Deploy the template
 7. Once deployment is complete, open the deployed logic app and select the SharePoint site in the "Create new subfolder under Documents to store all csv files" block of the logic app and select "List or Library" as "Documents
 8. Make sure to give to same SharePoint site URL given in the above step at the blocks "Create missing KBs csv file", "Create installed software csv file", "Create alerts csv file", "Create recommendation csv file" and "Create vulnerabilities csv file" under the "For each MDATP host - get missing KBs", "For each MDATP host - get software inventory", "For each MDATP host - get alerts", "For each MDATP host - get recommendations" and "For each MDATP host - get vulnerabilities" blocks respectivly.
+9. Also make sure "Create sharing link for the subfolder which contains all csv files" is given the same SharePoint site URL given in (7)
 
 Optionally, you can always reachout to kloudynetklassrooms@kloudynet.com to get further assistance.
