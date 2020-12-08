@@ -95,322 +95,356 @@
                                 "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
                             }
                         },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
                         "For_each": {
                             "foreach": "@body('Parse_query_results')?['value']",
                             "actions": {
-                                "Add_comment_to_incident_(V2)_2": {
-                                    "runAfter": {
-                                        "Parse_SnapshotData": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "Value": "Created snapshot \"@{body('Parse_VMData')?['name']}\" of VM. Saved at: @{body('Parse_SnapshotData')?['id']}"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V2)_2": {
+                                            "runAfter": {
+                                                "Parse_SnapshotData": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Value": "Created snapshot \"@{body('Parse_VMData')?['name']}\" of VM. Saved at: @{body('Parse_SnapshotData')?['id']}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                                             }
                                         },
-                                        "method": "put",
-                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                                    }
-                                },
-                                "Create_Snapshot": {
-                                    "runAfter": {
-                                        "Parse_VMData": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "authentication": {
-                                            "type": "ManagedServiceIdentity"
-                                        },
-                                        "body": {
-                                            "location": "@{body('Parse_VMData')?['location']}",
-                                            "properties": {
-                                                "creationData": {
-                                                    "createOption": "Copy",
-                                                    "sourceResourceId": "@{body('Parse_VMData')?['properties']?['storageProfile']?['osDisk']?['managedDisk']?['id']}"
-                                                }
-                                            }
-                                        },
-                                        "method": "PUT",
-                                        "uri": "https://management.azure.com/subscriptions/@{split(body('Parse_VMData')?['id'],'/')[2]}/resourceGroups/@{split(body('Parse_VMData')?['id'],'/')[4]}/providers/Microsoft.Compute/snapshots/@{body('Parse_VMData')?['properties']?['osProfile']?['computerName']}@{body('Alert_-_Get_incident')?['properties']?['CaseNumber']}?api-version=2019-07-01"
-                                    }
-                                },
-                                "Get-AzureVM": {
-                                    "runAfter": {},
-                                    "type": "Http",
-                                    "inputs": {
-                                        "authentication": {
-                                            "type": "ManagedServiceIdentity"
-                                        },
-                                        "method": "GET",
-                                        "uri": "https://management.azure.com/@{items('For_each')['ResourceId']}?api-version=2019-07-01"
-                                    }
-                                },
-                                "Parse_SnapshotData": {
-                                    "runAfter": {
-                                        "Create_Snapshot": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@body('Create_Snapshot')",
-                                        "schema": {
-                                            "properties": {
-                                                "id": {
-                                                    "type": "string"
+                                        "Create_Snapshot": {
+                                            "runAfter": {
+                                                "Parse_VMData": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
                                                 },
-                                                "location": {
-                                                    "type": "string"
-                                                },
-                                                "name": {
-                                                    "type": "string"
-                                                },
-                                                "properties": {
+                                                "body": {
+                                                    "location": "@{body('Parse_VMData')?['location']}",
                                                     "properties": {
                                                         "creationData": {
-                                                            "properties": {
-                                                                "createOption": {
-                                                                    "type": "string"
-                                                                },
-                                                                "sourceResourceId": {
-                                                                    "type": "string"
-                                                                },
-                                                                "sourceUniqueId": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "diskSizeBytes": {
-                                                            "type": "integer"
-                                                        },
-                                                        "diskSizeGB": {
-                                                            "type": "integer"
-                                                        },
-                                                        "diskState": {
-                                                            "type": "string"
-                                                        },
-                                                        "encryption": {
-                                                            "properties": {
-                                                                "type": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "hyperVGeneration": {
-                                                            "type": "string"
-                                                        },
-                                                        "incremental": {
-                                                            "type": "boolean"
-                                                        },
-                                                        "osType": {
-                                                            "type": "string"
-                                                        },
-                                                        "provisioningState": {
-                                                            "type": "string"
-                                                        },
-                                                        "timeCreated": {
-                                                            "type": "string"
-                                                        },
-                                                        "uniqueId": {
-                                                            "type": "string"
+                                                            "createOption": "Copy",
+                                                            "sourceResourceId": "@{body('Parse_VMData')?['properties']?['storageProfile']?['osDisk']?['managedDisk']?['id']}"
                                                         }
-                                                    },
-                                                    "type": "object"
+                                                    }
                                                 },
-                                                "sku": {
+                                                "method": "PUT",
+                                                "uri": "https://management.azure.com/subscriptions/@{split(body('Parse_VMData')?['id'],'/')[2]}/resourceGroups/@{split(body('Parse_VMData')?['id'],'/')[4]}/providers/Microsoft.Compute/snapshots/@{body('Parse_VMData')?['properties']?['osProfile']?['computerName']}@{body('Alert_-_Get_incident')?['properties']?['CaseNumber']}?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "Get-AzureVM": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com@{items('For_each')['ResourceId']}?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "Parse_SnapshotData": {
+                                            "runAfter": {
+                                                "Create_Snapshot": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Create_Snapshot')",
+                                                "schema": {
                                                     "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "location": {
+                                                            "type": "string"
+                                                        },
                                                         "name": {
                                                             "type": "string"
                                                         },
-                                                        "tier": {
+                                                        "properties": {
+                                                            "properties": {
+                                                                "creationData": {
+                                                                    "properties": {
+                                                                        "createOption": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sourceResourceId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sourceUniqueId": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "diskSizeBytes": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "diskSizeGB": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "diskState": {
+                                                                    "type": "string"
+                                                                },
+                                                                "encryption": {
+                                                                    "properties": {
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "hyperVGeneration": {
+                                                                    "type": "string"
+                                                                },
+                                                                "incremental": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "osType": {
+                                                                    "type": "string"
+                                                                },
+                                                                "provisioningState": {
+                                                                    "type": "string"
+                                                                },
+                                                                "timeCreated": {
+                                                                    "type": "string"
+                                                                },
+                                                                "uniqueId": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sku": {
+                                                            "properties": {
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tier": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
                                                             "type": "string"
                                                         }
                                                     },
                                                     "type": "object"
-                                                },
-                                                "type": {
-                                                    "type": "string"
                                                 }
+                                            }
+                                        },
+                                        "Parse_VMData": {
+                                            "runAfter": {
+                                                "Get-AzureVM": [
+                                                    "Succeeded"
+                                                ]
                                             },
-                                            "type": "object"
-                                        }
-                                    }
-                                },
-                                "Parse_VMData": {
-                                    "runAfter": {
-                                        "Get-AzureVM": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@body('Get-AzureVM')",
-                                        "schema": {
-                                            "properties": {
-                                                "id": {
-                                                    "type": "string"
-                                                },
-                                                "location": {
-                                                    "type": "string"
-                                                },
-                                                "name": {
-                                                    "type": "string"
-                                                },
-                                                "properties": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get-AzureVM')",
+                                                "schema": {
                                                     "properties": {
-                                                        "diagnosticsProfile": {
-                                                            "properties": {
-                                                                "bootDiagnostics": {
-                                                                    "properties": {
-                                                                        "enabled": {
-                                                                            "type": "boolean"
-                                                                        },
-                                                                        "storageUri": {
-                                                                            "type": "string"
-                                                                        }
-                                                                    },
-                                                                    "type": "object"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "hardwareProfile": {
-                                                            "properties": {
-                                                                "vmSize": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "networkProfile": {
-                                                            "properties": {
-                                                                "networkInterfaces": {
-                                                                    "items": {
-                                                                        "properties": {
-                                                                            "id": {
-                                                                                "type": "string"
-                                                                            }
-                                                                        },
-                                                                        "required": [
-                                                                            "id"
-                                                                        ],
-                                                                        "type": "object"
-                                                                    },
-                                                                    "type": "array"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "osProfile": {
-                                                            "properties": {
-                                                                "adminUsername": {
-                                                                    "type": "string"
-                                                                },
-                                                                "allowExtensionOperations": {
-                                                                    "type": "boolean"
-                                                                },
-                                                                "computerName": {
-                                                                    "type": "string"
-                                                                },
-                                                                "requireGuestProvisionSignal": {
-                                                                    "type": "boolean"
-                                                                },
-                                                                "secrets": {
-                                                                    "type": "array"
-                                                                },
-                                                                "windowsConfiguration": {
-                                                                    "properties": {
-                                                                        "enableAutomaticUpdates": {
-                                                                            "type": "boolean"
-                                                                        },
-                                                                        "provisionVMAgent": {
-                                                                            "type": "boolean"
-                                                                        }
-                                                                    },
-                                                                    "type": "object"
-                                                                }
-                                                            },
-                                                            "type": "object"
-                                                        },
-                                                        "provisioningState": {
+                                                        "id": {
                                                             "type": "string"
                                                         },
-                                                        "storageProfile": {
+                                                        "location": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "properties": {
                                                             "properties": {
-                                                                "dataDisks": {
-                                                                    "type": "array"
-                                                                },
-                                                                "imageReference": {
+                                                                "diagnosticsProfile": {
                                                                     "properties": {
-                                                                        "exactVersion": {
-                                                                            "type": "string"
-                                                                        },
-                                                                        "offer": {
-                                                                            "type": "string"
-                                                                        },
-                                                                        "publisher": {
-                                                                            "type": "string"
-                                                                        },
-                                                                        "sku": {
-                                                                            "type": "string"
-                                                                        },
-                                                                        "version": {
+                                                                        "bootDiagnostics": {
+                                                                            "properties": {
+                                                                                "enabled": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "storageUri": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "hardwareProfile": {
+                                                                    "properties": {
+                                                                        "vmSize": {
                                                                             "type": "string"
                                                                         }
                                                                     },
                                                                     "type": "object"
                                                                 },
-                                                                "osDisk": {
+                                                                "networkProfile": {
                                                                     "properties": {
-                                                                        "caching": {
+                                                                        "networkInterfaces": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "id": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "id"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "osProfile": {
+                                                                    "properties": {
+                                                                        "adminUsername": {
                                                                             "type": "string"
                                                                         },
-                                                                        "createOption": {
+                                                                        "allowExtensionOperations": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "computerName": {
                                                                             "type": "string"
                                                                         },
-                                                                        "managedDisk": {
+                                                                        "requireGuestProvisionSignal": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "secrets": {
+                                                                            "type": "array"
+                                                                        },
+                                                                        "windowsConfiguration": {
                                                                             "properties": {
-                                                                                "id": {
+                                                                                "enableAutomaticUpdates": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "provisionVMAgent": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "provisioningState": {
+                                                                    "type": "string"
+                                                                },
+                                                                "storageProfile": {
+                                                                    "properties": {
+                                                                        "dataDisks": {
+                                                                            "type": "array"
+                                                                        },
+                                                                        "imageReference": {
+                                                                            "properties": {
+                                                                                "exactVersion": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "offer": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "publisher": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "sku": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "version": {
                                                                                     "type": "string"
                                                                                 }
                                                                             },
                                                                             "type": "object"
                                                                         },
-                                                                        "name": {
-                                                                            "type": "string"
-                                                                        },
-                                                                        "osType": {
-                                                                            "type": "string"
+                                                                        "osDisk": {
+                                                                            "properties": {
+                                                                                "caching": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "createOption": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "managedDisk": {
+                                                                                    "properties": {
+                                                                                        "id": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "osType": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
                                                                         }
                                                                     },
                                                                     "type": "object"
+                                                                },
+                                                                "vmId": {
+                                                                    "type": "string"
                                                                 }
                                                             },
                                                             "type": "object"
                                                         },
-                                                        "vmId": {
+                                                        "type": {
                                                             "type": "string"
                                                         }
                                                     },
                                                     "type": "object"
-                                                },
-                                                "type": {
-                                                    "type": "string"
                                                 }
-                                            },
-                                            "type": "object"
+                                            }
                                         }
-                                    }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@first(body('Parse_JSON')?['Entities'])?['Name']",
+                                                    "@last(split(items('For_each')['ResourceId'],'/'))"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
                                 }
                             },
                             "runAfter": {
@@ -420,9 +454,34 @@
                             },
                             "type": "Foreach"
                         },
+                        "Get_Full_Alert_Details": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": " @{body('Parse_JSON')?['ExtendedProperties']?['Query']}",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@triggerBody()?['WorkspaceResourceGroup']",
+                                    "resourcename": "[parameters('SentinelResourceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@triggerBody()?['WorkspaceSubscriptionId']",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        },
                         "Parse_JSON": {
                             "runAfter": {
-                                "Alert_-_Get_incident": [
+                                "Entities_-_Get_Hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -474,8 +533,6 @@
                                                 "required": [
                                                     "$id",
                                                     "Name",
-                                                    "UPNSuffix",
-                                                    "IsDomainJoined",
                                                     "Type"
                                                 ],
                                                 "type": "object"
@@ -631,71 +688,91 @@
                                         "value": {
                                             "items": {
                                                 "properties": {
-                                                    "AlertLink": {
+                                                    "AccountCustomEntity": {
                                                         "type": "string"
                                                     },
-                                                    "AlertName": {
+                                                    "ActivityStatus": {
                                                         "type": "string"
                                                     },
-                                                    "AlertSeverity": {
+                                                    "ActivityStatusValue": {
                                                         "type": "string"
                                                     },
-                                                    "AlertType": {
+                                                    "ActivitySubstatus": {
                                                         "type": "string"
                                                     },
-                                                    "ConfidenceLevel": {
+                                                    "ActivitySubstatusValue": {
                                                         "type": "string"
                                                     },
-                                                    "ConfidenceScore": {},
-                                                    "Description": {
+                                                    "Authorization": {
                                                         "type": "string"
                                                     },
-                                                    "DisplayName": {
+                                                    "Authorization_d": {},
+                                                    "Caller": {
                                                         "type": "string"
                                                     },
-                                                    "EndTime": {
+                                                    "CallerIpAddress": {
                                                         "type": "string"
                                                     },
-                                                    "Entities": {
+                                                    "Category": {
                                                         "type": "string"
                                                     },
-                                                    "ExtendedLinks": {
+                                                    "CategoryValue": {
                                                         "type": "string"
                                                     },
-                                                    "ExtendedProperties": {
+                                                    "Claims": {
                                                         "type": "string"
                                                     },
-                                                    "IsIncident": {
-                                                        "type": "boolean"
-                                                    },
-                                                    "ProcessingEndTime": {
+                                                    "Claims_d": {},
+                                                    "CorrelationId": {
                                                         "type": "string"
                                                     },
-                                                    "ProductComponentName": {
+                                                    "EventDataId": {
                                                         "type": "string"
                                                     },
-                                                    "ProductName": {
+                                                    "EventSubmissionTimestamp": {
                                                         "type": "string"
                                                     },
-                                                    "ProviderName": {
+                                                    "HTTPRequest": {
                                                         "type": "string"
                                                     },
-                                                    "RemediationSteps": {
+                                                    "Hierarchy": {
+                                                        "type": "string"
+                                                    },
+                                                    "Level": {
+                                                        "type": "string"
+                                                    },
+                                                    "OperationId": {
+                                                        "type": "string"
+                                                    },
+                                                    "OperationName": {
+                                                        "type": "string"
+                                                    },
+                                                    "OperationNameValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "Properties": {
+                                                        "type": "string"
+                                                    },
+                                                    "Properties_d": {},
+                                                    "Resource": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceGroup": {
                                                         "type": "string"
                                                     },
                                                     "ResourceId": {
                                                         "type": "string"
                                                     },
-                                                    "SourceComputerId": {
+                                                    "ResourceProvider": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceProviderValue": {
                                                         "type": "string"
                                                     },
                                                     "SourceSystem": {
                                                         "type": "string"
                                                     },
-                                                    "StartTime": {
-                                                        "type": "string"
-                                                    },
-                                                    "SystemAlertId": {
+                                                    "SubscriptionId": {
                                                         "type": "string"
                                                     },
                                                     "TenantId": {
@@ -707,50 +784,12 @@
                                                     "Type": {
                                                         "type": "string"
                                                     },
-                                                    "VendorName": {
-                                                        "type": "string"
-                                                    },
-                                                    "VendorOriginalId": {
-                                                        "type": "string"
-                                                    },
-                                                    "WorkspaceResourceGroup": {
-                                                        "type": "string"
-                                                    },
-                                                    "WorkspaceSubscriptionId": {
+                                                    "_ResourceId": {
                                                         "type": "string"
                                                     }
                                                 },
                                                 "required": [
-                                                    "TenantId",
-                                                    "TimeGenerated",
-                                                    "DisplayName",
-                                                    "AlertName",
-                                                    "AlertSeverity",
-                                                    "Description",
-                                                    "ProviderName",
-                                                    "VendorName",
-                                                    "VendorOriginalId",
-                                                    "SystemAlertId",
-                                                    "ResourceId",
-                                                    "SourceComputerId",
-                                                    "AlertType",
-                                                    "ConfidenceLevel",
-                                                    "ConfidenceScore",
-                                                    "IsIncident",
-                                                    "StartTime",
-                                                    "EndTime",
-                                                    "ProcessingEndTime",
-                                                    "RemediationSteps",
-                                                    "ExtendedProperties",
-                                                    "Entities",
-                                                    "SourceSystem",
-                                                    "WorkspaceSubscriptionId",
-                                                    "WorkspaceResourceGroup",
-                                                    "ExtendedLinks",
-                                                    "ProductName",
-                                                    "ProductComponentName",
-                                                    "AlertLink",
-                                                    "Type"
+                                                    "ResourceId"
                                                 ],
                                                 "type": "object"
                                             },
@@ -758,31 +797,6 @@
                                         }
                                     },
                                     "type": "object"
-                                }
-                            }
-                        },
-                        "Get_Full_Alert_Details": {
-                            "runAfter": {
-                                "Parse_JSON": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": " @{body('Parse_JSON')?['ExtendedProperties']?['Query']}",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/queryData",
-                                "queries": {
-                                    "resourcegroups": "@triggerBody()?['WorkspaceResourceGroup']",
-                                    "resourcename": "[parameters('SentinelResourceName')]",
-                                    "resourcetype": "Log Analytics Workspace",
-                                    "subscriptions": "@triggerBody()?['WorkspaceSubscriptionId']",
-                                    "timerange": "Last 12 hours"
                                 }
                             }
                         }
