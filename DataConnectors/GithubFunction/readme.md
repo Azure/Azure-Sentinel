@@ -55,7 +55,7 @@ lastrun-Audit.json
 	will be C:\local\Temp\ or D:\local\Temp\.
 
 11. After finding Temp folder path, go to `githublogs<<uniqueid>>` --> Click on "Configuration" under Settings --> Click on "TMPDIR" under "Application Settings" --> update Drive (C//D) based on your deployment.
-	Note: Make sure the value in "TMPDIR" doesnt have "\" at the end.
+	Note: Make sure the value in "TMPDIR" doesnt have "\\" at the end.
 
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHub] to make the logs useful
 
