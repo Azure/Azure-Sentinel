@@ -138,14 +138,12 @@ function SendToLogA ($gitHubData, $customLogName) {
 			}
 			$body = Convertto-Json ($gitHubData[$start..$finish]) -Depth 5 -Compress
 			$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $customLogName -TimeStampField $TimeStampField -ResourceId $ResourceID			
-			Write-Host "GitHub Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $customLogName"			
 			$start = $Finish + 1
 		}
 		$null = Remove-variable -name body        
 
 	}
-	Else {
-		#$logEvents = Convertto-Json $events -depth 20 -compress
+	Else {		
 		$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $coreJson -LogTable $customLogName -TimeStampField $TimeStampField -ResourceId $ResourceID		
 	}
 }
