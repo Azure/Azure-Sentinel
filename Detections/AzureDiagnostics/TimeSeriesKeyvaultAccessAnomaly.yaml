@@ -1,4 +1,4 @@
-﻿id: 0914adab-90b5-47a3-a79f-7cdcac843aa7
+id: 0914adab-90b5-47a3-a79f-7cdcac843aa7
 name: Azure Key Vault access TimeSeries anomaly
 description: |
   'Indentifies a sudden increase in count of Azure Key Vault secret or vault access operations by CallerIPAddress. The query leverages a built-in KQL anomaly detection algorithm 
@@ -10,7 +10,7 @@ requiredDataConnectors:
   - connectorId: AzureMonitor(Keyvault)
     dataTypes:
       - AzureDiagnostics
-queryFrequency: 1h
+queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
@@ -42,13 +42,16 @@ query: |
   | where anomalies > 0 | extend AnomalyHour = TimeGenerated
   | where baseline > baselinethreshold // Filtering low count events per baselinethreshold
   | project Resource, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
+  let AnomalyHours = TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated;
   // Filter the alerts since specified timeframe
   TimeSeriesAlerts
-  | where TimeGenerated > ago(timeframe)
+  | where TimeGenerated > ago(2d)
   // Join against base logs since specified timeframe to retrive records associated with the hour of anomoly
   | join (
   AzureDiagnostics
   | where TimeGenerated > ago(timeframe)
+  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours   
   | extend ResultType = columnifexists("ResultType", "NoResultType")
   | extend requestUri_s = columnifexists("requestUri_s", "None"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists("identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g", "None")
   | extend id_s = columnifexists("id_s", "None"), CallerIPAddress = columnifexists("CallerIPAddress", "None"), clientInfo_s = columnifexists("clientInfo_s", "None")
@@ -62,7 +65,7 @@ query: |
   | where OperationName in (OperationList)  
   | summarize PerOperationCount=count(), LatestAnomalyTime = arg_max(TimeGenerated,*) by bin(TimeGenerated,1h), Resource, OperationName, id_s, CallerIPAddress, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, requestUri_s, clientInfo_s     
   ) on Resource, TimeGenerated 
-  | summarize EventCount=count(), OperationNameList = make_set(OperationName), RequestURLList = make_set(requestUri_s), AccountList = make_set(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g), AccountMax = arg_max(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g,*) by Resource, id_s, clientInfo_s, LatestAnomalyTime
+  | summarize EventCount=count(), OperationNameList = make_set(OperationName), RequestURLList = make_set(requestUri_s, 100), AccountList = make_set(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, 100), AccountMax = arg_max(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g,*) by Resource, id_s, clientInfo_s, LatestAnomalyTime
   | extend timestamp = LatestAnomalyTime, IPCustomEntity = CallerIPAddress, AccountCustomEntity = AccountMax
 entityMappings:
   - entityType: Account

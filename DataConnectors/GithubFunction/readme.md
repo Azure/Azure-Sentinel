@@ -51,6 +51,12 @@ lastrun-Audit.json
 
 9. For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 5 minutes is `0 */5 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 5, for any hour, day of the month, month, day of the week, or year".
 
+10. Once Azure Function App is deployed, go to `githublogs<<uniqueid>>` --> Click on "Advanced Tools" under Development Tools --> Click on Go --> You will be redirected to Web App --> Check Temp folder path. Sometimes it
+	will be C:\local\Temp\ or D:\local\Temp\.
+
+11. After finding Temp folder path, go to `githublogs<<uniqueid>>` --> Click on "Configuration" under Settings --> Click on "TMPDIR" under "Application Settings" --> update Drive (C//D) based on your deployment.
+	Note: Make sure the value in "TMPDIR" doesnt have "\\" at the end.
+
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHub] to make the logs useful
 
 ## Deploy the Function App template
