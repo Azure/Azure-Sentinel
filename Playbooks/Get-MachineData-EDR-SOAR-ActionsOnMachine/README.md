@@ -47,4 +47,13 @@ API connections for the above mentioned prerequisites must be created in the res
 8. Make sure to give to same SharePoint site URL given in the above step at the blocks "Create missing KBs csv file", "Create installed software csv file", "Create alerts csv file", "Create recommendation csv file" and "Create vulnerabilities csv file" under the "For each MDATP host - get missing KBs", "For each MDATP host - get software inventory", "For each MDATP host - get alerts", "For each MDATP host - get recommendations" and "For each MDATP host - get vulnerabilities" blocks respectivly.
 9. Also make sure "Create sharing link for the subfolder which contains all csv files" is given the same SharePoint site URL given in (7)
 
+## Deploy to Azure
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Ftemplate.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Ftemplate.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
+## Support
 Optionally, you can always reachout to kloudynetklassrooms@kloudynet.com to get further assistance.
