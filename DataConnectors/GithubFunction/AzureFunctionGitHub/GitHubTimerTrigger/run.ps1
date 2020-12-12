@@ -94,12 +94,12 @@ Function Invoke-LogAnalyticsData {
         -contentType $contentType `
         -resource $resource
     
-    if ($null -ne $AzureTenant){
-		$uri = "https://" + $CustomerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
-	}
-	else{
+    if ([string]::IsNullOrEmpty($AzureTenant)){
 		$uri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 	}
+	else{		
+        $uri = "https://" + $CustomerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+    }
     
     $headers1 = @{
         "Authorization"        = $signature;
@@ -121,11 +121,10 @@ Function Invoke-LogAnalyticsData {
     return $response.StatusCode    
 }
 
-function SendToLogA ($gitHubData, $customLogName) {
-    $coreJson = convertto-json $gitHubData -depth 5 -Compress    
-    IF (($corejson.Length) -gt 28MB) {
+function SendToLogA ($gitHubData, $customLogName) {    
+    IF (($gitHubData.Length) -gt 28MB) {
 		Write-Host "Log length is greater than 28 MB, splitting and sending to Log Analytics"
-		$bits = [math]::Round(($corejson.length) / 20MB) + 1
+		$bits = [math]::Round(($gitHubData.length) / 20MB) + 1
 		$TotalRecords = $gitHubData.Count
 		$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
 		$start = 0
@@ -144,7 +143,7 @@ function SendToLogA ($gitHubData, $customLogName) {
 
 	}
 	Else {		
-		$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $coreJson -LogTable $customLogName -TimeStampField $TimeStampField -ResourceId $ResourceID		
+		$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $gitHubData -LogTable $customLogName -TimeStampField $TimeStampField -ResourceId $ResourceID		
 	}
 }
 
