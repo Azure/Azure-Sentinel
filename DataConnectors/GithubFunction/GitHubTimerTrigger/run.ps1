@@ -275,7 +275,7 @@ foreach($org in $githubOrgs){
     $pageNumber = 1
     do {
         $uri = "https://api.github.com/orgs/$orgName/repos?page=$pageNumber"
-        $results = Invoke-RestMethod -Method GET -Uri $uri
+        $results = Invoke-RestMethod -Method GET -Uri $uri -Headers $headers
         $repoList += $results
         if($results.Count -eq 0){
             Write-Host "No more repos found for Org: $orgName"
