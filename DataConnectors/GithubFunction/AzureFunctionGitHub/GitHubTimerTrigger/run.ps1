@@ -40,113 +40,151 @@ $workspaceKey = $env:WorkspaceKey
 $storageAccountContainer = "github-repo-logs"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
-$ResourceID = ""
-$TimeStampField = ""
 #The AzureTenant variable is used to specify other cloud environments like Azure Gov(.us) etc.,
 $AzureTenant = $env:AZURE_TENANT
 
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
 
-#function to create HTTP Header signature required to authenticate post
-Function New-BuildSignature {
-    param(
-        $customerId, 
-        $sharedKey, 
-        $date, 
-        $contentLength, 
-        $method, 
-        $contentType, 
-        $resource )
-    
-    $xHeaders = "x-ms-date:" + $date
-    $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
-    $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash)
-    $keyBytes = [Convert]::FromBase64String($sharedKey)
-    $sha256 = New-Object System.Security.Cryptography.HMACSHA256
-    $sha256.Key = $keyBytes
-    $calculatedHash = $sha256.ComputeHash($bytesToHash)
-    $encodedHash = [Convert]::ToBase64String($calculatedHash)
-    $authorization = 'SharedKey {0}:{1}' -f $customerId, $encodedHash
-    return $authorization
-}
-        
-# Function to create and post the request
-Function Invoke-LogAnalyticsData {
-    Param( 
-        $CustomerId, 
-        $SharedKey, 
-        $Body, 
-        $LogTable, 
-        $timeStampField,
-        $resourceId)
+function Write-OMSLogfile {
+    <#
+    .SYNOPSIS
+    Inputs a hashtable, date and workspace type and writes it to a Log Analytics Workspace.
+    .DESCRIPTION
+    Given a  value pair hash table, this function will write the data to an OMS Log Analytics workspace.
+    Certain variables, such as Customer ID and Shared Key are specific to the OMS workspace data is being written to.
+    This function will not write to multiple OMS workspaces.  BuildSignature and post-analytics function from Microsoft documentation
+    at https://docs.microsoft.com/azure/log-analytics/log-analytics-data-collector-api
+    .PARAMETER DateTime
+    date and time for the log.  DateTime value
+    .PARAMETER Type
+    Name of the logfile or Log Analytics "Type".  Log Analytics will append _CL at the end of custom logs  String Value
+    .PARAMETER LogData
+    A series of key, value pairs that will be written to the log.  Log file are unstructured but the key should be consistent
+    withing each source.
+    .INPUTS
+    The parameters of data and time, type and logdata.  Logdata is converted to JSON to submit to Log Analytics.
+    .OUTPUTS
+    The Function will return the HTTP status code from the Post method.  Status code 200 indicates the request was received.
+    .NOTES
+    Version:        2.0
+    Author:         Travis Roberts
+    Creation Date:  7/9/2018
+    Purpose/Change: Crating a stand alone function    
+    #>
+    [cmdletbinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [datetime]$dateTime,
+        [parameter(Mandatory = $true, Position = 1)]
+        [string]$type,
+        [Parameter(Mandatory = $true, Position = 2)]
+        [psobject]$logdata,
+        [Parameter(Mandatory = $true, Position = 3)]
+        [string]$CustomerID,
+        [Parameter(Mandatory = $true, Position = 4)]
+        [string]$SharedKey
+    )
+    Write-Verbose -Message "DateTime: $dateTime"
+    Write-Verbose -Message ('DateTimeKind:' + $dateTime.kind)
+    Write-Verbose -Message "Type: $type"
+    write-Verbose -Message "LogData: $logdata"   
 
-    $method = "POST"
-    $contentType = "application/json"
-    $resource = "/api/logs"
-    $rfc1123date = [DateTime]::UtcNow.ToString("r")
-    $contentLength = $Body.Length
-    $signature = New-BuildSignature `
-        -customerId $CustomerId `
-        -sharedKey $SharedKey `
-        -date $rfc1123date `
-        -contentLength $contentLength `
-        -method $method `
-        -contentType $contentType `
-        -resource $resource
-    
-    if ([string]::IsNullOrEmpty($AzureTenant)){
-		$uri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
-	}
-	else{		
-        $uri = "https://" + $CustomerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+    # Supporting Functions
+    # Function to create the auth signature
+    function BuildSignature ($CustomerID, $SharedKey, $Date, $ContentLength, $method, $ContentType, $resource) {
+        $xheaders = 'x-ms-date:' + $Date
+        $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
+        $bytesToHash = [text.Encoding]::UTF8.GetBytes($stringToHash)
+        $keyBytes = [Convert]::FromBase64String($SharedKey)
+        $sha256 = New-Object System.Security.Cryptography.HMACSHA256
+        $sha256.key = $keyBytes
+        $calculateHash = $sha256.ComputeHash($bytesToHash)
+        $encodeHash = [convert]::ToBase64String($calculateHash)
+        $authorization = 'SharedKey {0}:{1}' -f $CustomerID, $encodeHash
+        return $authorization
     }
-    
-    $headers1 = @{
-        "Authorization"        = $signature;
-        "Log-Type"             = $LogTable;
-        "x-ms-date"            = $rfc1123date;
-        "x-ms-AzureResourceId" = $resourceId;
-        "time-generated-field" = $timeStampField;
-    }  
-    $status = $false
-    do {
-        $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers1 -Body $Body
-        If ($reponse.StatusCode -eq 429) {
-            $rand = get-random -minimum 10 -Maximum 80
-            start-sleep -seconds $rand 
+    # Function to create and post the request
+    Function PostLogAnalyticsData ($CustomerID, $SharedKey, $Body, $Type) {
+        $method = "POST"
+        $ContentType = 'application/json'
+        $resource = '/api/logs'
+        $rfc1123date = ($dateTime).ToString('r')
+        $ContentLength = $Body.Length
+        $signature = BuildSignature `
+            -customerId $CustomerID `
+            -sharedKey $SharedKey `
+            -date $rfc1123date `
+            -contentLength $ContentLength `
+            -method $method `
+            -contentType $ContentType `
+            -resource $resource
+        
+		# Compatible with Commercial and Gov Tenants
+		if ([string]::IsNullOrEmpty($AzureTenant)){
+			$uri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		}
+		else{		
+			$uri = "https://" + $CustomerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+		}
+		
+        $headers = @{
+            "Authorization"        = $signature;
+            "Log-Type"             = $type;
+            "x-ms-date"            = $rfc1123date
+            "time-generated-field" = $dateTime
         }
-        else { $status = $true }
-    }until($status) 
-    Remove-variable -name Body
-    return $response.StatusCode    
+        $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $ContentType -Headers $headers -Body $Body -UseBasicParsing
+        Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
+        return $response.statuscode
+    }
+
+    # Check if time is UTC, Convert to UTC if not.
+    # $dateTime = (Get-Date)
+    if ($dateTime.kind.tostring() -ne 'Utc') {
+        $dateTime = $dateTime.ToUniversalTime()
+        Write-Verbose -Message $dateTime
+    }
+
+    # Add DateTime to hashtable
+    #$logdata.add("DateTime", $dateTime)
+    $logdata | Add-Member -MemberType NoteProperty -Name "DateTime" -Value $dateTime
+
+    #Build the JSON file
+    $logMessage = ConvertTo-Json $logdata -Depth 20
+    Write-Verbose -Message $logMessage
+
+    #Submit the data
+    $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body ([System.Text.Encoding]::UTF8.GetBytes($logMessage)) -Type $type
+    Write-Verbose -Message "Post Statement Return Code $returnCode"
+    return $returnCode
 }
 
 function SendToLogA ($gitHubData, $customLogName) {    
-    IF (($gitHubData.Length) -gt 28MB) {
-		Write-Host "Log length is greater than 28 MB, splitting and sending to Log Analytics"
-		$bits = [math]::Round(($gitHubData.length) / 20MB) + 1
-		$TotalRecords = $gitHubData.Count
-		$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
-		$start = 0
-		For ($x = 0; $x -lt $bits; $X++) {
-			IF ( ($start + $recsetsize) -gt $TotalRecords) {
-				$finish = $totalRecords
-			}
-			ELSE {
-				$finish = $start + $RecSetSize
-			}
-			$body = Convertto-Json ($gitHubData[$start..$finish]) -Depth 5 -Compress
-			$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $customLogName -TimeStampField $TimeStampField -ResourceId $ResourceID			
-			$start = $Finish + 1
-		}
-		$null = Remove-variable -name body        
-
-	}
-	Else {		
-		$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $gitHubData -LogTable $customLogName -TimeStampField $TimeStampField -ResourceId $ResourceID		
-	}
+    #Test Size; Log A limit is 30MB
+    $tempdata = @()
+    $tempDataSize = 0
+    
+    if ((($gitHubData |  Convertto-json -depth 20).Length) -gt 25MB) {        
+		Write-Host "Upload is over 25MB, needs to be split"									 
+        foreach ($record in $gitHubData) {            
+            $tempdata += $record
+            $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
+            if ($tempDataSize -gt 25MB) {
+                Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $tempdata -CustomerID $workspaceId -SharedKey $workspaceKey
+                write-Host "Sending data = $TempDataSize"
+                $tempdata = $null
+                $tempdata = @()
+                $tempDataSize = 0
+            }
+        }
+        Write-Host "Sending left over data = $Tempdatasize"
+        Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $gitHubData -CustomerID $workspaceId -SharedKey $workspaceKey
+    }
+    Else {
+        #Send to Log A as is        
+        Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $gitHubData -CustomerID $workspaceId -SharedKey $workspaceKey
+    }
 }
-
 # header for API calls
 $headers = @{
     Authorization = "bearer $personalAccessToken"
