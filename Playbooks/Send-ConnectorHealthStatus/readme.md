@@ -69,4 +69,4 @@ union withsource=TableName1 *
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
-<em>This solution was built in close collaboration with Jeremy Tan, Benjamin Kovasevic & Javier Soriano</em>
+<em>This solution was built in close collaboration with Jeremy Tan, Benjamin Kovacevic & Javier Soriano</em>
