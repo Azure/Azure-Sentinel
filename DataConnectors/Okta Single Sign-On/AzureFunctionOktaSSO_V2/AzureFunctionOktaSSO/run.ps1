@@ -151,14 +151,15 @@ do {
             -method $method `
             -contentType $contentType `
             -resource $resource
-		if ($null -ne $AzureTenant){
-			$LAuri = "https://" + $customerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
-		}
-		else{
+		
+		# Compatible with Commercial and Gov Tenants
+		if ([string]::IsNullOrEmpty($AzureTenant)){
 			$LAuri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 		}
-
-		
+		else{
+			$LAuri = "https://" + $customerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+		}	
+			
         
         $LAheaders = @{
             "Authorization" = $signature;

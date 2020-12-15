@@ -1,3 +1,9 @@
+## 2.1.2
+- Implemented logic to support functionality for both Azure Commercial and Azure Gov (.US)
+- Created ARM Template for Azure Gov (.US) Tenants
+- Added "FunctionSchedule" parameter to both Azure Commercial and Azure Gov ARM Templates.
+- With "FunctionSchedule" parameter, users have now control to change Function App trigger schedule
+
 ## 2.1.1
 - Moved version 2.1.0 to sub folder AzureFunctionOktaSSO_V2 under Azure-Sentinel/DataConnectors/Okta Single Sign-On/
 - Created V2 versions of Azure Deploy and Connector Json files to enable both versions to co-exist
