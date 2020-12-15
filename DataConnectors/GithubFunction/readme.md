@@ -8,47 +8,92 @@ Author: Nicholas DiCola, Sreedhar Ande
 
 Following are the configuration steps to deploy Function App.
 
+## **Pre-requisites**
+
+A GitHub API Token is required. See the documentation to learn more about the [GitHub Personal Access Token](https://github.com/settings/tokens/).
+
 ## Configuration Steps
-1. Generate a GitHub (Personal Access Token)[https://github.com/settings/tokens].  GitHub user settings -> Developer settings -> Personal access tokens.
-2. Deploy the ARM template and fill in the parameters.
-```
-"PersonalAccessToken": This is the GITHUB PAT​
-"Workspace Id": The Sentinel Log Analytics Workspace Id​
-"Workspace Key": The Sentinel Log Analytics Workspace Key
-"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule
- ```
-4. There are two json files (ORGS.json and lastrun-Audit.json) in Function Dependencies folder
-5. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name.  If you have addtional orgs, add another line 
-```
-{"org": "sampleorg1"} 
-{"org": "sampleorg2"}
-.
-.
-.
-```
-for each org.
+1. Deploy the ARM template and fill in the parameters.
+	```
+	"PersonalAccessToken": This is the GITHUB PAT​
+	"Workspace Id": The Sentinel Log Analytics Workspace Id​
+	"Workspace Key": The Sentinel Log Analytics Workspace Key
+	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule
+	```
+2. There are two json files (ORGS.json and lastrun-Audit.json) in Function Dependencies folder
+3. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name. 
+	```
+	If you have single org
+	[
+		{
+			"org": "sampleorg1"
+		}
+	]  
 
-6. Upload the following files to the storage account "github-repo-logs" container from 
-```
-ORGS.json
-lastrun-Audit.json
-```
+	If you have multiple org's
+	[
+		{
+			"org": "sampleorg1"
+		},
+		{
+			"org": "sampleorg2"
+		},
+		{
+			"org": "sampleorg3"
+		}
+	]
+	```
 
-7. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault `githubkv<<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
+4. Edit lastrun-Audit.json and update "org": "sampleorg" and replace sample org with your org name
 
-```
-    a. Go to Azure KeyVault "githubkv<<uniqueid>>"
-    b. Click on "Access Policies" under Settings
-    c. Click on "Add Access Policy"
-        i. Configure from template : Secret Management
-        ii. Key Permissions : GET, LIST, SET
-        iii. Select Prinicpal : <<Your Account>>
-        iv. Add
-    d. Click "Save"
+	```
+	If you have single org
 
-```
+	[
+		{
+			"org":  "sampleorg1",
+			"lastContext":  "",
+			"lastRun":  ""
+		}
+	]  
 
-8. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
+	If you have multiple org's
+
+	[
+		{
+			"org":  "sampleorg1",
+			"lastContext":  "",
+			"lastRun":  ""
+		},
+		{
+			"org":  "sampleorg2",
+			"lastContext":  "",
+			"lastRun":  ""
+		}
+	]
+	```
+
+5. Upload the following files to the storage account "github-repo-logs" container from 
+	```
+	ORGS.json
+	lastrun-Audit.json
+	```
+
+6. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault `githubkv<<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
+
+	```
+		a. Go to Azure KeyVault "githubkv<<uniqueid>>"
+		b. Click on "Access Policies" under Settings
+		c. Click on "Add Access Policy"
+			i. Configure from template : Secret Management
+			ii. Key Permissions : GET, LIST, SET
+			iii. Select Prinicpal : <<Your Account>>
+			iv. Add
+		d. Click "Save"
+
+	```
+
+7. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
    the schedule 
    ```
    a.	Click on Function App "Configuration" under Settings 
@@ -57,14 +102,14 @@ lastrun-Audit.json
    ```
    **Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 5 minutes is `0 */5 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 5, for any hour, day of the month, month, day of the week, or year".**
 
-9. Once Azure Function App is deployed
+8. Once Azure Function App is deployed
 	 ```
 	a.	Go to `githublogs<<uniqueid>>`
 	b.	Click on "Advanced Tools" under Development Tools 
 	c.	Click on Go --> You will be redirected to Web App --> Check Temp folder path. 
-	d.	Sometimes it will be C:\local\Temp\ or D:\local\Temp\.
+	d.	It can be either C:\local\Temp\ or D:\local\Temp\.
 	 ```
-10. After finding Temp folder path
+9. After finding Temp folder path
 	```
 	a.	Go to `githublogs<<uniqueid>>`
 	b.	Click on "Configuration" under Settings
@@ -73,8 +118,8 @@ lastrun-Audit.json
 	```
 	**Note: Make sure the value in "TMPDIR" doesnt have "\\" at the end.**
 
-11.	For Azure Gov customers, you will see additional environment variable "Azure Tenant" under "Configuration" --> "Application Settings" and its default value is ".us"
-	Currently this function app supports only ".US" tenants
+10.	**For Azure Gov customers only**, You will see additional environment variable "Azure Tenant" under "Configuration" --> "Application Settings" and its default value is ".us"
+	Currently this Function App supports "Azure Gov(.US)" tenants
 	Ex: https://portal.azure.us
 	
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHubFunction] to make the logs useful
