@@ -1,0 +1,334 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: Heartbeat
+  - DataType: VMConnection
+  - DataType: VMComputer
+  - DataType: ServiceMapComputer_CL
+  - DataType: WireData
+  - DataType: ProtectionStatus
+  - DataType: DeviceNetworkInfo
+  - DataType: DeviceNetworkEvents
+  - DataType: AzureNetworkAnalytics_CL
+  - DataType: DnsEvents
+  - DataType: CommonSecurityLog
+  - DataType: Event
+  - DataType: SecurityEvent
+  - DataType: Syslog
+  - DataType: ThreatIntelligenceIndicator
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+  - Linux
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |  
+  let GetIPResolutionWithHost = (Host_Name:string, Host_NTDomain:string, Host_DnsDomain:string, Host_AzureID:string, Host_OMSAgentID:string){
+  let Host_Name_chk = iff(isnotempty(Host_Name), Host_Name, '<NotIncluded>');
+  let Host_WinNT = iff(isnotempty(Host_NTDomain), strcat(Host_NTDomain,'\\', Host_Name_chk), Host_Name_chk);
+  let Host_WinDns = iff(isnotempty(Host_DnsDomain), strcat(Host_Name_chk,'.', Host_DnsDomain), Host_Name_chk);
+  let Host_AzureId = iff(isnotempty(Host_AzureID), Host_AzureID, '<NotIncluded>');
+  let Host_OMSAgentId = iff(isnotempty(Host_OMSAgentID), Host_OMSAgentID, '<NotIncluded>');
+  let IpInfo = (union isfuzzy=true
+  (
+  Heartbeat
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(ComputerIP), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  VMConnection
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | extend IPAddress = iff(Direction =~ "outbound", SourceIp, DestinationIp) 
+  | where IPAddress !in ("127.0.0.1", "0.0.0.0")
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress, Type, AzureResourceId = _ResourceId
+  ),
+  (
+  VMComputer
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(Ipv4Addresses)
+  | mv-expand Ipv4Addresses
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(Ipv4Addresses), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  VMComputer
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(Ipv6Addresses)
+  | mv-expand Ipv6Addresses
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(Ipv6Addresses), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  ServiceMapComputer_CL
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(Ipv4Addresses_s)
+  | mv-expand todynamic(Ipv4Addresses_s)
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(Ipv4Addresses_s), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  ServiceMapComputer_CL
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(Ipv6Addresses_s)
+  | mv-expand todynamic(Ipv6Addresses_s)
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(Ipv6Addresses_s), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  WireData
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where LocalIP !in~ ("null", "::1", "127.0.0.1", "-") 
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = LocalIP, Type
+  ),
+  (
+  ProtectionStatus
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(ComputerIP_Hidden)
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(ComputerIP_Hidden), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  DeviceNetworkInfo
+  | where DeviceName has_any (Host_WinNT, Host_WinDns)
+  | mv-expand IPAddresses
+  | extend IPAddress = tostring(IPAddresses.IPAddress)
+  | where tostring(IPAddresses.AddressType) =~ 'Private'
+  | summarize TimeGenerated = max(TimeGenerated) by Computer = DeviceName, IPAddress, Type
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where tostring(split(VirtualMachine_s, '/')[1]) has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(PrivateIPAddresses_s) and PrivateIPAddresses_s != 'null'
+  | extend Computer = tostring(split(VirtualMachine_s, '/')[1])
+  | where isnotempty(Computer)
+  | extend PrivateIPAddresses_s = split(PrivateIPAddresses_s, ' ')
+  | mv-expand PrivateIPAddresses_s
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(PrivateIPAddresses_s), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where tostring(split(VirtualMachine_s, '/')[1]) has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where isnotempty(PublicIPAddresses_s) and PublicIPAddresses_s != 'null'
+  | extend Computer = tostring(split(VirtualMachine_s, '/')[1])
+  | where isnotempty(Computer)
+  | extend PublicIPAddresses_s = split(PublicIPAddresses_s, ' ')
+  | mv-expand PublicIPAddresses_s
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(PublicIPAddresses_s), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  SecurityEvent
+  | where WorkstationName has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where EventID  in ("4624","4625")
+  | where IpAddress !in~ ("null", "::1", "127.0.0.1", "-")
+  | summarize TimeGenerated = max(TimeGenerated) by Computer = WorkstationName, IPAddress = tostring(IpAddress), Type, AzureResourceId = _ResourceId
+  ),
+  (
+  DnsEvents
+  | where SubType =~ "DynamicRegistration"
+  | where Name has_any (Host_WinNT, Host_WinDns)
+  | extend IP = iff(IPAddresses has ',', split(IPAddresses, ','), todynamic(IPAddresses)) 
+  | mv-expand IP
+  | summarize TimeGenerated = max(TimeGenerated) by Computer = Name, IPAddress = tostring(IP), Type
+  ),
+  (Syslog
+  | where HostName has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | summarize TimeGenerated = max(TimeGenerated) by Computer = HostName, IPAddress = tostring(HostIP), Type, AzureResourceId = _ResourceId
+  ),
+  (CommonSecurityLog
+  | where SourceHostName has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | summarize TimeGenerated = max(TimeGenerated) by Computer = SourceHostName, IPAddress = tostring(SourceIP), Type, AzureResourceId = _ResourceId
+  ),
+  (Event
+  | where Computer has_any (Host_WinNT, Host_WinDns) or _ResourceId =~ Host_AzureId
+  | where Source == 'Microsoft-Windows-Sysmon' and EventID == '3'
+  | parse EventData with * 'SourceIp">' SourceIp "<" *
+  | where isnotempty(SourceIp) and isnotempty(Computer)
+  | summarize TimeGenerated = max(TimeGenerated) by Computer, IPAddress = tostring(SourceIp), Type = 'SysmonEvent', AzureResourceId = _ResourceId
+  )
+  );
+  // Create list for comparison back againsts Network logs to gather statistics for a given IP.
+  let IpList = IpInfo | summarize make_set(IPAddress);
+  let Host_Account = IpInfo | extend HostIPAddress = IPAddress | distinct Computer, HostIPAddress;
+  let IpStats = (union isfuzzy=true
+  (
+  VMConnection
+  | where SourceIp in (IpList)
+  | where SourceIp != DestinationIp
+  | extend HostIPAddress = iff(Direction =~ "outbound", SourceIp, DestinationIp)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = DestinationIp
+  ),
+  (
+  VMConnection
+  | where DestinationIp in (IpList)
+  | where SourceIp != DestinationIp
+  | extend HostIPAddress = iff(Direction =~ "inbound", SourceIp, DestinationIp)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = SourceIp
+  ),
+  (
+  WireData
+  | where LocalIP in (IpList)
+  | where LocalIP != RemoteIP
+  | extend HostIPAddress = iff(Direction =~ "outbound", LocalIP, RemoteIP)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = RemoteIP, Direction
+  ),
+  (
+  WireData
+  | where RemoteIP in (IpList)
+  | where LocalIP != RemoteIP
+  | extend HostIPAddress = iff(Direction =~ "inbound", LocalIP, RemoteIP)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = LocalIP, Direction
+  ),
+  (
+  DeviceNetworkEvents
+  | where LocalIP in (IpList)
+  | where LocalIP != RemoteIP
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess"), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by HostIPAddress = LocalIP, Type, DestinationIPAddress = RemoteIP
+  ),
+  (
+  DeviceNetworkEvents
+  | where RemoteIP in (IpList)
+  | where LocalIP != RemoteIP
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess"), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by HostIPAddress = RemoteIP, Type, DestinationIPAddress = LocalIP
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where DestIP_s in (IpList)
+  | where isnotempty(DestIP_s) and isnotempty(SrcPublicIPs_s)
+  | extend SrcPublicIPs_s = split(SrcPublicIPs_s, ' ')
+  | mv-expand SrcPublicIPs_s
+  | extend SrcPublicIPs_s = tostring(split(SrcPublicIPs_s, '|')[0])
+  | where DestIP_s != SrcPublicIPs_s
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by HostIPAddress = DestIP_s, Type, DestinationIPAddress = SrcPublicIPs_s
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where SrcIP_s in (IpList)
+  | where isnotempty(SrcIP_s) and isnotempty(DestPublicIPs_s)
+  | extend DestPublicIPs_s = split(DestPublicIPs_s, ' ')
+  | mv-expand DestPublicIPs_s
+  | extend DestPublicIPs_s = tostring(split(DestPublicIPs_s, '|')[0])
+  | where SrcIP_s != DestPublicIPs_s
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by HostIPAddress = SrcIP_s, Type, DestinationIPAddress = DestPublicIPs_s
+  ),
+  (
+  CommonSecurityLog
+  | where SourceIP in (IpList)
+  | where SourceIP != DestinationIP
+  | where not(DeviceAction has_any ('deny', 'denied', 'rst', 'blocked', 'teardown'))
+  | extend CommunicationDirection = iff(CommunicationDirection !~ 'outbound' or CommunicationDirection !~ 'inbound', 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(CommunicationDirection =~ 'Inbound'), OutboundCount = countif(CommunicationDirection =~ 'Outbound'), UnknownDirection = countif(CommunicationDirection =~ 'NotAvailable') by HostIPAddress = SourceIP, Type, DestinationIPAddress = DestinationIP
+  ),
+  (
+  CommonSecurityLog
+  | where DestinationIP in (IpList)
+  | where SourceIP != DestinationIP
+  | where not(DeviceAction has_any ('deny', 'denied', 'rst', 'blocked', 'teardown'))
+  | extend CommunicationDirection = iff(CommunicationDirection !~ 'outbound' or CommunicationDirection !~ 'inbound', 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(CommunicationDirection =~ 'Inbound'), OutboundCount = countif(CommunicationDirection =~ 'Outbound'), UnknownDirection = countif(CommunicationDirection =~ 'NotAvailable') by HostIPAddress = DestinationIP, Type, DestinationIPAddress = SourceIP
+  )
+  );
+  IpStats | join kind=leftouter Host_Account on HostIPAddress | project-away HostIPAddress1
+  | join kind=leftouter (ThreatIntelligenceIndicator
+  | where Active = true and isnotempty(NetworkIP)
+  | summarize by ThreatIntelMatch = Description, ThreatType, NetworkIP) on $left.DestinationIPAddress == $right.NetworkIP
+  };
+  GetIPResolutionWithHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+
+Insights:
+ Id: 2ed19a9a-7ebe-4941-a6a0-fa0b020c48da
+ DisplayName: "Host IP address remote connections with TI"
+ Description: |
+  'Provides the remote IP connection count information for outbound and inbound connections to an IP address associated with a given host, along with any threat intelligence related hits for the remote IP address'
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Category"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: "HostIP"
+    OutputType: String
+    SupportDeepLink: true
+  - Header: "RemoteIP"
+    OutputType: String
+    SupportDeepLink: true
+  - Header: "Inbound"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "Outbound"
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: "TI Match"
+    OutputType: String
+    SupportDeepLink: false
+  QueriesDefinitions:
+  # Top inbound counts with TI
+  - Filter:    "project HostIPAddress, DestinationIPAddress, InboundCount, OutboundCount, ThreatType"
+    Summarize: "summarize Inbound = sum(InboundCount), Outbound = sum(OutboundCount) by HostIPAddress, DestinationIPAddress, ThreatType | top 1 by Inbound"
+    Project:   "project Category = 'Top In', HostIP = HostIPAddress, RemoteIP = DestinationIPAddress, Inbound, Outbound, TIMatch = ThreatType"
+    LinkColumnsDefinitions:
+    - ProjectedName: Category
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Inbound
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Outbound
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: TIMatch
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Top outbound counts with TI
+  - Filter:    "project HostIPAddress, DestinationIPAddress, InboundCount, OutboundCount, ThreatType"
+    Summarize: "summarize Inbound = sum(InboundCount), Outbound = sum(OutboundCount) by HostIPAddress, DestinationIPAddress, ThreatType | top 1 by Outbound"
+    Project:   "project Category = 'Top Out', HostIP = HostIPAddress, RemoteIP = DestinationIPAddress, Inbound, Outbound, TIMatch = ThreatType"
+    LinkColumnsDefinitions:
+    - ProjectedName: Category
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Inbound
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Outbound
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: TIMatch
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Inbound and Outbound connection counts with TI
+  - Filter:    "project HostIPAddress, DestinationIPAddress, InboundCount, OutboundCount, ThreatType"
+    Summarize: "summarize Inbound = sum(InboundCount), Outbound = sum(OutboundCount), DestIPs = make_set(DestinationIPAddress), TIMatches = make_set(ThreatType) by HostIPAddress"
+    Project:   "project Category = 'All', HostIP = HostIPAddress, RemoteIP = case(array_length(DestIPs) == 1, tostring(DestIPs[0]), array_length(DestIPs) > 1, 'Many', 'None'), Inbound, Outbound, TIMatch = case(isempty(tostring(TIMatches)), 'None', array_length(TIMatches) == 1, tostring(TIMatches[0]), array_length(TIMatches) > 1, 'Many', 'None')"
+    LinkColumnsDefinitions:
+    - ProjectedName: Category
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: HostIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Inbound
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Outbound
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: TIMatch
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Remote Connections over time"
+  DataSets: 
+   - Query: "summarize Inbound = sum(InboundCount), DestIPs = dcount(DestinationIPAddress) by Time = bin(StartTime, 1h), HostIPAddress"
+     XColumnName: Time
+     YColumnName: Inbound
+     LegendColumnName: DestIPs
+   - Query: "summarize Outbound = sum(OutboundCount), DestIPs = dcount(DestinationIPAddress) by Time = bin(StartTime, 1h), HostIPAddress"
+     XColumnName: Time
+     YColumnName: Outbound
+     LegendColumnName: DestIPs
+  Type: BarChart
+
+ AdditionalQuery: 
+  Text: "See All connections"
+  Query: "project StartTime, EndTime, HostIPAddress, DestinationIPAddress, InboundCount, OutboundCount, UnknownDirection, Type, ThreatType, ThreatIntelMatch"
