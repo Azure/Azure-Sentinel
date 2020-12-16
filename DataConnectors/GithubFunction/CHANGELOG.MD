@@ -1,0 +1,13 @@
+## 1.1
+- Added CHANGELOG.MD to track future code changes
+- Updated "lastrun-Audit.json" to support multiple org's
+- Implemented logic to support multiple org's in Function App code
+- Implemented logic to support Azure Gov (.US) Tenants in Function App code
+- Created new ARM Template to Support Azure Gov (.US) Tenants
+- Updated "function.json" inorder to accept TimeTrigger(CRON Expression) from Function App environment variable. Providing more flexibility to the user to change schedule to trigger Function App
+- Updated README.MD
+- Updated File structure
+
+## 1.0
+- Converted GitHub Data connector from Logic Apps to Azure Function
+- Splitting the data if it is more than 25MB
