@@ -38,10 +38,14 @@ query: |
   | where anomalies > 0
   | project Process, TimeGenerated, Total, baseline, anomalies, score
   | where Total > TotalEventsThreshold;
+  let AnomalyHours = TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated;  
   TimeSeriesAlerts
   | where TimeGenerated > ago(2d)
   | join (
   SecurityEvent
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours 
   | where EventID == 4688 | extend Process = tolower(Process)
   | summarize CommandlineCount = count() by bin(TimeGenerated, 1h), Process, CommandLine, Computer, Account
   ) on Process, TimeGenerated 
