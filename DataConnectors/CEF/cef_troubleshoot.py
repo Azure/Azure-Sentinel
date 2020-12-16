@@ -62,7 +62,6 @@ file_read_permissions_octal_representation = 4
 mock_message_max = 5
 portal_auto_sync_disable_file = "omshelper_disable"
 
-
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
 
