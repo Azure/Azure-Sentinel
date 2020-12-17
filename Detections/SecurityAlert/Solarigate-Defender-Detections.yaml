@@ -1,0 +1,40 @@
+id: e70fa6e0-796a-4e85-9420-98b17b0bb749
+name: Solarigate Defender Detections
+description: |
+  'Detects any Defender Alert for Solarigate Events'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+      - DeviceInfo
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1195
+query: |
+
+  DeviceInfo
+  | extend DeviceName = tolower(DeviceName)
+  | join (SecurityAlert
+  | where ProviderName =~ "MDATP"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | where ThreatName has "Solarigate"
+  | extend HostCustomEntity = tolower(CompromisedEntity)
+  | take 10) on $left.DeviceName == $right.HostCustomEntity
+  | project TimeGenerated, DisplayName, ThreatName, CompromisedEntity, PublicIP, MachineGroup, AlertSeverity, Description, LoggedOnUsers, DeviceId, TenantId
+  | extend timestamp = TimeGenerated, IPCustomEntity = PublicIP
+  
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
