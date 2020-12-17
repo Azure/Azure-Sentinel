@@ -1,0 +1,45 @@
+id: 0f153385-2050-4c49-b896-e167f8e18fbc
+name: Exchange workflow MailItemsAccessed operation anomaly
+description: |
+  'Identifies anomalous increases in Exchange mail items accessed operations. 
+  The query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns. 
+  Sudden increases in execution frequency of sensitive actions should be further investigated for malicious activity.
+  Manually change scorethreshold from 1.5 to 3 or higher to reduce the noise based on outliers flagged from the query criteria.
+  Read more about MailItemsAccessed: https://docs.microsoft.com/en-us/microsoft-365/compliance/advanced-audit?view=o365-worldwide#mailitemsaccessed'
+tactics:
+  - Collection
+relevantTechniques:
+  - T1114
+query: |
+
+  let starttime = 14d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let scorethreshold = 1.5;
+  let percentthreshold = 5;
+  // Preparing the time series data aggregated on BytesTransferredOut column in the form of multi-value array so that it can be used with time series anomaly function.
+  let TimeSeriesData=
+  OfficeActivity 
+  | where TimeGenerated  between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where OfficeWorkload=~ "Exchange" and Operation =~ "MailItemsAccessed" and ResultStatus =~ "Succeeded"
+  | project TimeGenerated, Operation, MailboxOwnerUPN 
+  | make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe;
+  // Use the time series data prepared in previous step with time series aomaly function to generate baseline pattern and flag the outlier based on scorethreshold value.
+  let TimeSeriesAlerts = TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
+  | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0
+  | project TimeGenerated, Total, baseline, anomalies, score;
+  // Joining the flagged outlier from the previous step with the original dataset to present contextual information during the anomalyhour to analysts to conduct investigation or informed decistions.
+  TimeSeriesAlerts
+  // Join against base logs since specified timeframe to retrive records associated with the hour of anomoly
+  | join kind=inner ( 
+  OfficeActivity 
+  | where TimeGenerated  between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where OfficeWorkload=~ "Exchange" and Operation =~ "MailItemsAccessed" and ResultStatus =~ "Succeeded"
+  | summarize Count=count(), IPAdresses = make_set(Client_IPAddress), ClientInfoStrings= make_set(ClientInfoString) by bin(TimeGenerated,1h), MailboxOwnerUPN, Logon_Type, TenantId, UserType
+  | order by Count desc 
+  ) on TimeGenerated
+  | extend PercentofTotal = round(Count/Total, 2) * 100 
+  | where PercentofTotal > percentthreshold // Filter Users with count of less than 5 percent of TotalEvents per Hour to remove FPs/ users with very low count of MailItemsAccessed events
+  | order by PercentofTotal desc 
