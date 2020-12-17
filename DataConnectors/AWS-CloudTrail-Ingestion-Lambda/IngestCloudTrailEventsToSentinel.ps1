@@ -33,6 +33,8 @@ $secretValue = ConvertFrom-Json (Get-SECSecretValue -SecretId $secretName -Error
 $workspaceId = $secretValue.LAWID
 $workspaceKey = $secretValue.LAWKEY
 $LATableName = $env:LogAnalyticsTableName
+$IsCoreFieldsAllTable = $env:CoreFieldsAllTable
+$IsSplitAWSResourceTypes = $env:SplitAWSResourceTypeTables
 $ResourceID = ''  
 
 #The $eventobjectlist is the Json Parameter field names that form the core of the Json message that we want in the ALL Table in Log Ananlytics
@@ -130,6 +132,98 @@ Function Invoke-LogAnalyticsData {
 }
 
 
+Function Ingest-Core-Fields-Single-Table {
+	Param(
+	$coreEvents)
+	
+	$coreJson = convertto-json $coreEvents -depth 5 -Compress    
+	$Table = "$LATableName" + "_All"
+	IF (($corejson.Length) -gt 28MB) {
+		Write-Host "Log length is greater than 28 MB, splitting and sending to Log Analytics"
+		$bits = [math]::Round(($corejson.length) / 20MB) + 1
+		$TotalRecords = $coreEvents.Count
+		$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
+		$start = 0
+		For ($x = 0; $x -lt $bits; $X++) {
+			IF ( ($start + $recsetsize) -gt $TotalRecords) {
+				$finish = $totalRecords
+			}
+			ELSE {
+				$finish = $start + $RecSetSize
+			}
+			$body = Convertto-Json ($coreEvents[$start..$finish]) -Depth 5 -Compress
+			$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID          
+			if ($result -eq 200)
+			{
+				Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
+			}
+			$start = $Finish + 1
+		}
+		$null = Remove-variable -name body        
+
+	}
+	Else {
+		#$logEvents = Convertto-Json $events -depth 20 -compress
+		$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $coreJson -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID
+		if ($result -eq 200)
+		{
+			Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
+		}
+	}
+
+	$null = remove-variable -name coreEvents
+	$null = remove-variable -name coreJson
+}
+
+
+
+Function Ingest-AWS-ResourceType-Multi-Tables {
+	Param(
+	$eventSources,
+	$groupEvents)
+	
+	$RecCount = 0
+	foreach ($d in $eventSources) { 
+		#$events = $groupevents[$d]
+		$eventsJson = ConvertTo-Json $groupEvents[$d] -depth 5 -Compress
+		$Table = $LATableName + '_' + $d
+		$TotalRecords = $groupEvents[$d].Count
+		$recCount += $TotalRecords
+		IF (($eventsjson.Length) -gt 28MB) {
+			#$events = Convertfrom-json $corejson
+			$bits = [math]::Round(($eventsjson.length) / 20MB) + 1
+			$TotalRecords = $groupEvents[$d].Count
+			$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
+			$start = 0
+			For ($x = 0; $x -lt $bits; $X++) {
+				IF ( ($start + $recsetsize) -gt $TotalRecords) {
+					$finish = $totalRecords
+				}
+				ELSE {
+					$finish = $start + $RecSetSize
+				}
+				$body = Convertto-Json ($groupEvents[$d][$start..$finish]) -Depth 5 -Compress
+				$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID                
+				if ($result -eq 200)
+				{
+					Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
+				}
+				$start = $Finish + 1
+			}
+			$null = Remove-variable -name body        
+		}
+		Else {
+			#$logEvents = Convertto-Json $events -depth 20 -compress
+			$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $eventsJson -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID
+			if ($result -eq 200)
+			{
+				Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
+			}
+		}
+	}
+	
+}
+
 foreach ($snsRecord in $LambdaInput.Records)
 {
     $snsMessage = ConvertFrom-Json -InputObject $snsRecord.Sns.Message
@@ -222,86 +316,22 @@ foreach ($snsRecord in $LambdaInput.Records)
 			
 			}
 
-			$coreJson = convertto-json $coreevents -depth 5 -Compress    
-			$Table = "$LATableName" + "_All"
-			IF (($corejson.Length) -gt 28MB) {
-				Write-Host "Log length is greater than 28 MB, splitting and sending to Log Analytics"
-				$bits = [math]::Round(($corejson.length) / 20MB) + 1
-				$TotalRecords = $coreEvents.Count
-				$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
-				$start = 0
-				For ($x = 0; $x -lt $bits; $X++) {
-					IF ( ($start + $recsetsize) -gt $TotalRecords) {
-						$finish = $totalRecords
-					}
-					ELSE {
-						$finish = $start + $RecSetSize
-					}
-					$body = Convertto-Json ($coreEvents[$start..$finish]) -Depth 5 -Compress
-					$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID          
-					if ($result -eq 200)
-					{
-						Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
-					}
-					$start = $Finish + 1
-				}
-				$null = Remove-variable -name body        
-
+			IF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "true") {
+				Ingest-Core-Fields-Single-Table -CoreEvents $coreEvents
+				Ingest-AWS-ResourceType-Multi-Tables -EventSources $eventSources -GroupEvents $groupevents
 			}
-			Else {
-				#$logEvents = Convertto-Json $events -depth 20 -compress
-				$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $coreJson -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID
-				if ($result -eq 200)
-				{
-					Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
-				}
+			ELSEIF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "false"){
+				Ingest-Core-Fields-Single-Table -CoreEvents $coreEvents
 			}
-    
-			$null = remove-variable -name coreEvents
-			$null = remove-variable -name coreJson
+			ELSEIF ($IsCoreFieldsAllTable -eq "false" -and $IsSplitAWSResourceTypes -eq "true"){
+				Ingest-AWS-ResourceType-Multi-Tables -EventSources $eventSources -GroupEvents $groupevents
+			}
+			ELSE {
+				Write-Host "Make sure you have correct values supplied in Environment Variables for CoreFieldsAllTable and SplitAWSResourceTypeTables"
+			}
 			
-			$RecCount = 0
-			foreach ($d in $eventSources) { 
-				#$events = $groupevents[$d]
-				$eventsJson = ConvertTo-Json $groupevents[$d] -depth 5 -Compress
-				$Table = $LATableName + '_' + $d
-				$TotalRecords = $groupevents[$d].Count
-				$recCount += $TotalRecords
-				IF (($eventsjson.Length) -gt 28MB) {
-					#$events = Convertfrom-json $corejson
-					$bits = [math]::Round(($eventsjson.length) / 20MB) + 1
-					$TotalRecords = $groupevents[$d].Count
-					$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
-					$start = 0
-					For ($x = 0; $x -lt $bits; $X++) {
-						IF ( ($start + $recsetsize) -gt $TotalRecords) {
-							$finish = $totalRecords
-						}
-						ELSE {
-							$finish = $start + $RecSetSize
-						}
-						$body = Convertto-Json ($groupevents[$d][$start..$finish]) -Depth 5 -Compress
-						$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID                
-						if ($result -eq 200)
-						{
-							Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
-						}
-						$start = $Finish + 1
-					}
-					$null = Remove-variable -name body        
-				}
-				Else {
-					#$logEvents = Convertto-Json $events -depth 20 -compress
-					$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $eventsJson -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID
-					if ($result -eq 200)
-					{
-						Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
-					}
-				}
-			}
-    
 			$null = Remove-Variable -Name groupevents
-			$null = Remove-Variable -Name LogEvents			
+			$null = Remove-Variable -Name LogEvents					
 		}
 	}
 }
