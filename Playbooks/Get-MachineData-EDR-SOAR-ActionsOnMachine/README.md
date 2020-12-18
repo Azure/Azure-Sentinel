@@ -34,14 +34,14 @@ API connections for the above mentioned prerequisites are created as a part of A
 1. Create an Azure AD App from Azure AD App Registrations
 2. Configure the App API Permissions
     - Refer above permissions mentioned under Prerequisites, point (4)
-3. Generate a secret and store it in the Azure Keyvault
+3. Generate a client secret for the created Azure AD App and store it in a Azure Keyvault
 4. Deploy the template
     - Give an appropriate name for the Playbook.
     - All the dependent API connections shall automatically be created as a part of the ARM tempate deployment.
 5. Once deployed, open the logic app and authorize and configure API connectors
     - Ensure all functions have been authorized with their appropriate connectors
     - Setup HTTP connector - Provide the Tenant ID, client/app ID of the app you registered
-    - Azure Key Vault - Provide the connection for the Azure Keyvault in which the client secret of the Azure AD App
+    - Azure Key Vault - Authorize the Azure Key Vault Connector with the Key Vault resource in which the client secret of the Azure AD App (mentioned in 1) is stored
     - SharePoint connection - To store all the reports
     - Teams connection - To send the notification
 6. Select the SharePoint site at the "Create new subfolder under Documents to store all csv files" block of the logic app and select "List or Library" as "Documents
