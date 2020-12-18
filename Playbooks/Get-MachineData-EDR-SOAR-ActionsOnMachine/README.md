@@ -28,24 +28,25 @@ Also should be able to perform some actions like:
 5. Azure Keyvault - To store the App Secret of the Azure AD Application
 
 ## API Connections
-API connections for the above mentioned prerequisites must be created in the resource group in which the resource needs to be created. 
+API connections for the above mentioned prerequisites are created as a part of ARM template deployment.
 
 ## Setup
 1. Create an Azure AD App from Azure AD App Registrations
 2. Configure the App API Permissions
     - Refer above permissions mentioned under Prerequisites, point (4)
 3. Generate a secret and store it in the Azure Keyvault
-4. Edit Playbook Configure connectors
-    - Ensure all functions have been configured with their appropriate connectors
+4. Deploy the template
+    - Give an appropriate name for the Playbook.
+    - All the dependent API connections shall automatically be created as a part of the ARM tempate deployment.
+5. Once deployed, open the logic app and authorize and configure API connectors
+    - Ensure all functions have been authorized with their appropriate connectors
     - Setup HTTP connector - Provide the Tenant ID, client/app ID of the app you registered
     - Azure Key Vault - Provide the connection for the Azure Keyvault in which the client secret of the Azure AD App
     - SharePoint connection - To store all the reports
-    - Teams connection - To send the notification\
-5. Make sure all the API connection values are provided correctly when the template is being deployed in the following format, "```/subscriptions/[subscription]/resourceGroups/SecureLab/providers/Microsoft.Web/connections/[connection_name]```".
-6. Deploy the template
-7. Once deployment is complete, open the deployed logic app and select the SharePoint site in the "Create new subfolder under Documents to store all csv files" block of the logic app and select "List or Library" as "Documents
-8. Make sure to give to same SharePoint site URL given in the above step at the blocks "Create missing KBs csv file", "Create installed software csv file", "Create alerts csv file", "Create recommendation csv file" and "Create vulnerabilities csv file" under the "For each MDATP host - get missing KBs", "For each MDATP host - get software inventory", "For each MDATP host - get alerts", "For each MDATP host - get recommendations" and "For each MDATP host - get vulnerabilities" blocks respectivly.
-9. Also make sure "Create sharing link for the subfolder which contains all csv files" is given the same SharePoint site URL given in (7)
+    - Teams connection - To send the notification
+6. Select the SharePoint site at the "Create new subfolder under Documents to store all csv files" block of the logic app and select "List or Library" as "Documents
+7. Make sure to give to same SharePoint site URL given in the above step at the blocks "Create missing KBs csv file", "Create installed software csv file", "Create alerts csv file", "Create recommendation csv file" and "Create vulnerabilities csv file" under the "For each MDATP host - get missing KBs", "For each MDATP host - get software inventory", "For each MDATP host - get alerts", "For each MDATP host - get recommendations" and "For each MDATP host - get vulnerabilities" blocks respectivly.
+8. Also make sure "Create sharing link for the subfolder which contains all csv files" is given the same SharePoint site URL and the Library Name  (Documents) in (6) and (7)
 
 ## Deploy to Azure
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Ftemplate.json" target="_blank">
