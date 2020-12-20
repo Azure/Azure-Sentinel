@@ -25,12 +25,12 @@ namespace Kqlvalidations.Tests
                 Validator.ValidateObject(templateObject, validationContext, true);
             };
 
-            validate(detectionsYamlFileName, validateConnectorSchema);
+            ValidateDetectionTemplate(detectionsYamlFileName, validateConnectorSchema);
         }
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionTemplates_HaveValidConnectorIds(string detectionsYamlFileName)
+        public void Validate_DetectionTemplates_HaveValidConnectorsIds(string detectionsYamlFileName)
         {
             Action<ScheduledTemplateInternalModel> validateConnectorsIds = (ScheduledTemplateInternalModel templateObject) => {
                 List<string> connectorIds = templateObject.RequiredDataConnectors
@@ -45,11 +45,11 @@ namespace Kqlvalidations.Tests
                 });
             };
 
-            validate(detectionsYamlFileName, validateConnectorsIds);
+            ValidateDetectionTemplate(detectionsYamlFileName, validateConnectorsIds);
         }
 
 
-        private void validate(string detectionsYamlFileName, Action<ScheduledTemplateInternalModel> testAction)
+        private void ValidateDetectionTemplate(string detectionsYamlFileName, Action<ScheduledTemplateInternalModel> testAction)
         {
             var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
             var yaml = File.ReadAllText(detectionsYamlFile);
