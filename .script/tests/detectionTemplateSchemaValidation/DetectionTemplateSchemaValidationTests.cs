@@ -40,7 +40,7 @@ namespace Kqlvalidations.Tests
                 connectorIds.ForEach(connectorId => {
                     if (!TemplatesSchemaValidationsReader.ValidConnectorIds.Contains(connectorId))
                     {
-                        throw new FormatException($"Not valid connectorId: {connectorId}. If it's a new connector and already configured in the Portal, please add it's Id to the list in 'ValidConnectorIds.json file.'");
+                        throw new FormatException($"Not valid connectorId: {connectorId}. If a new connector is used and already configured in the Portal, please add it's Id to the list in 'ValidConnectorIds.json' file.");
                     }
                 });
             };

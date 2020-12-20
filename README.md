@@ -130,9 +130,7 @@ Total tests: 171
 
 ### Detection schema validation tests
 Similarly to KQL Validation, there is an automatic validation of the schema of a detection.
-It includes two validations:
-* The detection's frequency and period, the detection's trigger type and threshold, existance of required fields, etc.
-* Validity of connectors Ids.
+The schema vlidation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids, etc.
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
 ### Run Detection Schema Validation Locally
