@@ -9,7 +9,7 @@ This Playbook is for sending Microsoft Teams notification when an alert is gener
 -	Software Inventory
 
 Also should be able to perform some actions like:
--	App Execution
+-	Restrict App Execution
 -	Start AV scan
 
 ## Prerequisites
