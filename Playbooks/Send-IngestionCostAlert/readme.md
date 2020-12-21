@@ -1,5 +1,5 @@
-# Ingestion Cost Push Notification Solution
-Managng cost for cloud services is an essential part of ensuring that you get maximium value for your investmet in solutions running on this computing platform. Azure Sentinel is no different. To help you exercise greater control over your budget for Azure Sentinel, this playbook will send you an alert should you exceed a budget that you define for your Azure Sentinel Worksapce. 
+# Ingestion Cost Alert Playbook
+Managing cost for cloud services is an essential part of ensuring that you get maximum value for your investment in solutions running on this computing platform. Azure Sentinel is no different. To help you exercise greater control over your budget for Azure Sentinel  this playbook will send you an alert should you exceed a budget that you define for your Azure Sentinel Workspace within a given time-frame. 
 
 ### Overview of the Logic App  
 
