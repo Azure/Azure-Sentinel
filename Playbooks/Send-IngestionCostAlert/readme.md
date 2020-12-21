@@ -24,7 +24,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 ![6-query](../Send-IngestionCostAlert/images/06-query.png)
 
-<em>Below is the query being executed in the step above in text format which you can use for validation directly in the Log Analytics query window. Ensure to replace the variables below with actual numbers if runing the query within the Log Analytics query window.</em>
+<em>Below is the query being executed in the step above in text format which you can use for validation directly in the Log Analytics query window. Ensure to replace the variables below with actual numbers if running the query within the Log Analytics query window.</em>
 
 ```
 let price_per_GB = price_per_GB;
@@ -47,6 +47,8 @@ Usage
 ### In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel of your choice
 
   ![8-sendmessage](../Send-IngestionCostAlert/images/08-sendmessage.png)
+
+  <em>Additional information on cost management can be found in this document: [https://docs.microsoft.com/en-us/azure/azure-monitor/platform/manage-cost-storage]</em>
  
 
 
