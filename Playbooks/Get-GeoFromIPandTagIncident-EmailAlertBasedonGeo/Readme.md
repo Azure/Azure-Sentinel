@@ -2,7 +2,7 @@ author: Rudi Jubran
 
 based on original playbook by: Nicholas DiCola [(Get-GeoFromIPAndTagIncident)](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/Get-GeoFromIpAndTagIncident)
 
-This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address. It will then write the City, Country, and Account entites to tags on the Incident. Then, these tags are compared to a user-defined standard, and unexpected City/Country/User become alerts. Expected incidents are closed.
+This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address. It will then write the City, Country, and Account entites to tags on the Incident. Then, these tags are compared to a user-defined condition, and unexpected City/Country/User become alerts. Expected incidents are closed.
 
 In summary, according to Incident tags, the playbook will either:
 
