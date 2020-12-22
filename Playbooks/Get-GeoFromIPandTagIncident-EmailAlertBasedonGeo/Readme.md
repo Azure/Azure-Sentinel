@@ -12,9 +12,11 @@ In summary, according to Incident tags, the playbook will either:
 Config via Logic App Designer:
 
 Define expected tags:
+
 ![image](https://user-images.githubusercontent.com/60908383/102939747-d67bc080-447c-11eb-840e-bdc4a1a51903.png)
 
 Define "to" address for alerts:
+
 ![image](https://user-images.githubusercontent.com/60908383/102939800-f1e6cb80-447c-11eb-8f12-9402ab76306a.png)
 
 
