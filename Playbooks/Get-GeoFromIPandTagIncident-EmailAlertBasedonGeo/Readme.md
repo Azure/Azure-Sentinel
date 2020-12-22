@@ -8,3 +8,4 @@ This playbook will take the IP address entities from the Incident and query a Ge
 2. Set the Incident to "In Progress", and email an alert containing the user, IP, geo tag and timestamp. (unexpected country/city/user combination)
 
 Tag conditions can be set via Logic app designer, found under "For each 4".
+![image](https://user-images.githubusercontent.com/60908383/102939370-2c9c3400-447c-11eb-8dca-ec6afbd51758.png)
