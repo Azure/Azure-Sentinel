@@ -1,6 +1,6 @@
-author: Rudi Jubran
+Author: Rudi Jubran
 
-based on original playbook by: Nicholas DiCola [(Get-GeoFromIPAndTagIncident)](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/Get-GeoFromIpAndTagIncident)
+Based on original playbook by: Nicholas DiCola [(Get-GeoFromIPAndTagIncident)](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/Get-GeoFromIpAndTagIncident)
 
 This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address. It will then write the City, Country, and Account entites to tags on the Incident. Then, these tags are compared to a user-defined condition, and unexpected City/Country/User become alerts. Expected incidents are closed.
 
@@ -21,6 +21,6 @@ _Define "to" address for alerts:_
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frjubran%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIPandTagIncident-EmailAlertBasedonGeo%2Fazuredeploy.json)
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frjubran%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIPandTagIncident-EmailAlertBasedonGeo%2Fazuredeploy.json">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frjubran%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIPandTagIncident-EmailAlertBasedonGeo%2Fazuredeploy.json">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
