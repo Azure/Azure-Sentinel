@@ -1,0 +1,49 @@
+id: 9e3fab4b-94dd-4cf9-b2aa-063d0fd25513
+name: Connection to multiple machines using multiple accounts 
+description: |
+  'Based on recent investigations related to Solorigate, adversaries were seen to obtain and abuse credentials of multiple accounts 
+   to connect to multiple machines in a short timeframe. This query uses Security Event 4648 (A logon was attempted using explicit credentials) 
+   to find machines in an environment where multiple accounts were used in a short timeframe to connect to multiple hosts. 
+   Every environment is different, so the threshold values for target account and target servers should be adjusted accordingly. 
+   While this mentions Solorigate, this hunting query can be used to identify this type of pattern for any attacker.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Discovery
+  - LateralMovement
+relevantTechniques:
+  - T1078
+query: |
+
+    let timeframe = 1d;
+    let Accountthreshold = 2;
+    let TargetServerthreshold = 5;
+    let lookupbin = 10m;
+    let protocols = dynamic(['cifs/', 'ldap/', 'RPCSS/', 'host/' , 'HTTP/', 'RestrictedKrbHost/', 'TERMSRV/']);
+    SecurityEvent 
+    | where TimeGenerated >= ago(timeframe)
+    | where EventID == '4648'
+    | where isnotempty(TargetInfo)
+    | summarize DistinctTargetAccountCount = dcount(Account),  DistinctTargetServerNameCount = dcount(TargetServerName), DistinctTargetServers = make_set(TargetServerName), DistinctTargetAccounts = make_set(Account) by Computer, bin(TimeGenerated,lookupbin), SubjectUserName
+    | where DistinctTargetAccountCount >= Accountthreshold and DistinctTargetServerNameCount  >= TargetServerthreshold
+    | join kind=inner
+    (
+    SecurityEvent
+    | where EventID == '4648'
+    | where isnotempty(TargetInfo)
+    | where TargetInfo has_any (protocols)
+    ) on Computer, SubjectUserName
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctAccountCount = dcount(Account),  DistinctTargetServerNameCount = dcount(TargetServerName),  DistinctAccounts = make_set(Account), DistinctTargetServers = make_set(TargetServerName) by Computer, SubjectUserName , Process
+    | extend timestamp = StartTime, AccountCustomEntity = SubjectUserName, HostCustomEntity = Computer
+    
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
