@@ -1,5 +1,5 @@
-# Ingestion Cost Push Notification Solution
-Managng cost for cloud services is an essential part of ensuring that you get maximium value for your investmet in solutions running on this computing platform. Azure Sentinel is no different. To help you exercise greater control over your budget for Azure Sentinel, this playbook will send you an alert should you exceed a budget that you define for your Azure Sentinel Worksapce. 
+# Ingestion Cost Alert Playbook
+Managing cost for cloud services is an essential part of ensuring that you get maximum value for your investment in solutions running on this computing platform. Azure Sentinel is no different. To help you exercise greater control over your budget for Azure Sentinel  this playbook will send you an alert should you exceed a budget that you define for your Azure Sentinel Workspace within a given time-frame. 
 
 ### Overview of the Logic App  
 
@@ -24,7 +24,7 @@ Managng cost for cloud services is an essential part of ensuring that you get ma
 
 ![6-query](../Send-IngestionCostAlert/images/06-query.png)
 
-<em>Below is the query being executed in the step above in text format which you can use for validation directly in the Log Analytics query window. Ensure to replace the variables below with actual numbers if runing the query within the Log Analytics query window.</em>
+<em>Below is the query being executed in the step above in text format which you can use for validation directly in the Log Analytics query window. Ensure to replace the variables below with actual numbers if running the query within the Log Analytics query window.</em>
 
 ```
 let price_per_GB = price_per_GB;
@@ -47,13 +47,15 @@ Usage
 ### In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel of your choice
 
   ![8-sendmessage](../Send-IngestionCostAlert/images/08-sendmessage.png)
+
+  <em>Additional information on cost management can be found in this document: [https://docs.microsoft.com/en-us/azure/azure-monitor/platform/manage-cost-storage]</em>
  
 
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-ConnectorHealthStatus%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-IngestionCostAlert%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2Send-ConnectorHealthStatus%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2Send-IngestionCostAlert%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
