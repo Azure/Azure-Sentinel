@@ -1,0 +1,43 @@
+id: 024b3726-add7-4e06-842d-932034ba21f7
+name: Windows System Shutdown/Reboot(Sysmon)
+description: |
+  'This detection uses Sysmon telemetry to detect System Shutdown/Reboot'
+severity: Low
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1529
+query: |
+  
+    
+let timeframe = 1d;
+Event
+| where TimeGenerated >= ago(timeframe)
+//This query uses sysmon data depending on table name used this may need updataing
+| where EventLog == "Microsoft-Windows-Sysmon/Operational"  
+| where (EventID == 1) 
+| parse EventData with * 'UtcTime">'UtcTime'</Data>' * 
+| parse EventData with * 'Image">'Image'</Data>' * 
+| parse EventData with *  'CommandLine">'Command'</Data>' * 
+| parse EventData with *  'User">'User'</Data>' *
+| where Image contains "shutdown.exe" 
+| where Command has_any ("/r /t" , "/s /t")
+| project UtcTime,User,Image, Command
+| sort by UtcTime desc 
+| extend  User, Image, Command
+
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: User
+        columnName: AccountCustomEntity
