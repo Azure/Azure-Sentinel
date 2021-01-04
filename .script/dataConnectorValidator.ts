@@ -2,6 +2,8 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import { isValidSchema } from "./utils/jsonSchemaChecker";
+import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
+import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
 import * as logger from "./utils/logger";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
@@ -9,6 +11,8 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/DataConnectorSchema.json", "utf8"));
 
   isValidSchema(dataConnector, schema);
+  isValidId(dataConnector.id);
+  isValidDataType(dataConnector.dataTypes);
 
   return ExitCode.SUCCESS;
 } 

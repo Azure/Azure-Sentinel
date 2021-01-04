@@ -14,6 +14,14 @@ describe("dataConnectorValidator", () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingRequiredPropertyDataConnectorSchema.json", "SchemaError");
   });
 
+  it("should throw an exception when dataConnectorSchema.json is having space in ID property", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceInDataConnectorId.json", "DataConnectorValidationError");
+  });
+
+  it("should throw an exception when dataConnectorSchema.json is having space in Data Type property", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceInDataConnectorDataType.json","DataConnectorValidationError");
+  });
+
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidDataConnectorSchema(filePath);
     expect(result).to.equal(ExitCode.SUCCESS);
