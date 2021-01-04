@@ -14,11 +14,11 @@ If you don't have an Azure subscription, create a [free Azure account](https://a
 
 This Logic App retrieves API keys from Key Vault and as such you should review and complete the steps in the article [Secure authentication for Conditional Access automation](https://github.com/Azure-Samples/azure-ad-conditional-access-apis/blob/main/00-prereq/readme.md) to create a Key Vault and connect to Managed Identity.
 
-This Logic App will require Graph API Permissions to [Update ipNamedlocation](https://docs.microsoft.com/en-us/graph/api/ipnamedlocation-update?view=graph-rest-1.0&tabs=http) - Policy.Read.All and Policy.ReadWrite.ConditionalAccess.
+This Logic App will require Graph API Permissions to [Update ipNamedlocation](https://docs.microsoft.com/graph/api/ipnamedlocation-update?view=graph-rest-1.0&tabs=http) - Policy.Read.All and Policy.ReadWrite.ConditionalAccess.
 
 This Logic App will require Sign-up (free) and an API Key generated for Big Data Cloud - https://www.bigdatacloud.com/insights-apis/tor-exit-nodes-geolocated-api. Store this Key in Azure Key Vault that your Managed Identity has access to and note the URI for secret retrieval.
 
-You will need an [Azure AD Named Location](https://docs.microsoft.com/en-us/azure/active-directory/reports-monitoring/quickstart-configure-named-locations) created to store Tor Exit Node IP Addresses. Each Named Location is only capable of holding 1000 IP Addresses. As a result you will need at least 3 to hold all the TOR Exit Node IP Addresses (~2800 at time of publishing this Playbook). Once you create them, use Graph Explorer to retireve the Named Location ID using [Get namedLocation](https://docs.microsoft.com/en-us/graph/api/namedlocation-get?view=graph-rest-1.0&tabs=http).
+You will need an [Azure AD Named Location](https://docs.microsoft.com/azure/active-directory/reports-monitoring/quickstart-configure-named-locations) created to store Tor Exit Node IP Addresses. Each Named Location is only capable of holding 1000 IP Addresses. As a result you will need at least 3 to hold all the TOR Exit Node IP Addresses (~2800 at time of publishing this Playbook). Once you create them, use Graph Explorer to retireve the Named Location ID using [Get namedLocation](https://docs.microsoft.com/graph/api/namedlocation-get?view=graph-rest-1.0&tabs=http).
 
 ![Deploy](./media/GraphExplorer.PNG)
 
@@ -28,7 +28,7 @@ If your Azure environment meets the prerequisites, and you're familiar with usin
 
 Select the following image to sign in with your Azure account and open the logic app in the Azure portal:
 
-   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-NamedLocations-TOR%2Fjson%2Fazuredeploy.json )
+   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-NamedLocations-TOR%2Fjson%2Fazuredeploy.json)
 
 1. In the portal, on the **Custom deployment** page, enter or select these values:
 
@@ -88,6 +88,6 @@ As Named Locations only support up to 1000 IP Addresses you will need to deploy 
 
 You should end up with 4 Logic Apps and 4 Named Locations, each responsible for updating a portion of the known TOR Exit Nodes, which at the time of writing is around 2800 IP Addresses.
 
-Finally you can configure a [Conditional Access rule](https://docs.microsoft.com/en-us/azure/active-directory/conditional-access/concept-conditional-access-conditions#locations) to block logins from the newly created list of TOR Exit Nodes.
+Finally you can configure a [Conditional Access rule](https://docs.microsoft.com/azure/active-directory/conditional-access/concept-conditional-access-conditions#locations) to block logins from the newly created list of TOR Exit Nodes.
 
 ![Select "CA Rule"](./media/conditionalaccess.png)
