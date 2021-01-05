@@ -66,17 +66,27 @@ namespace HoneyBucketLogParser
         /// <returns>File contents</returns>
         private static string GetData(string storageConnectionString, string containerName, string path)
         {
-            BlobServiceClient blobServiceClient = new BlobServiceClient(storageConnectionString);
-            var container = blobServiceClient.GetBlobContainerClient(containerName);
-            var blobRef = container.GetBlobClient(path);
-
-            using (var ms = new MemoryStream())
-            using (var sr = new StreamReader(ms))
+            if (CloudStorageAccount.TryParse(storageConnectionString, out var storageAccount))
             {
-                var task = blobRef.DownloadToAsync(ms);
-                task.Wait();
-                ms.Position = 0;
-                return sr.ReadToEnd();
+                // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
+                var cloudBlobClient = storageAccount.CreateCloudBlobClient();
+
+                var container = cloudBlobClient.GetContainerReference(containerName);
+
+                var blobRef = container.GetBlockBlobReference(path);
+
+                using (var ms = new MemoryStream())
+                using (var sr = new StreamReader(ms))
+                {
+                    var task = blobRef.DownloadToStreamAsync(ms);
+                    task.Wait();
+                    ms.Position = 0;
+                    return sr.ReadToEnd();
+                }
+            }
+            else
+            {
+                throw new InvalidProgramException("Invalid format string");
             }
         }
 
@@ -89,16 +99,21 @@ namespace HoneyBucketLogParser
         /// <param name="data">The data to write</param>
         private static void WriteData(string storageConnectionString, string containerName, string path, string data)
         {
-            BlobServiceClient blobServiceClient = new BlobServiceClient(storageConnectionString);
-
-            var container = blobServiceClient.GetBlobContainerClient(containerName);
-
-            var blobRef = container.GetBlockBlobClient(path);
-
-            var dataAsBytes = Encoding.UTF8.GetBytes(data);
-            using (Stream stream = new MemoryStream(dataAsBytes))
+            if (CloudStorageAccount.TryParse(storageConnectionString, out var storageAccount))
             {
-                blobRef.UploadAsync(stream).Wait();
+                // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
+                var cloudBlobClient = storageAccount.CreateCloudBlobClient();
+
+                var container = cloudBlobClient.GetContainerReference(containerName);
+
+                var blobRef = container.GetBlockBlobReference(path);
+
+                var dataAsBytes = Encoding.UTF8.GetBytes(data);
+                blobRef.UploadFromByteArrayAsync(dataAsBytes, 0, dataAsBytes.Length).Wait();
+            }
+            else
+            {
+                throw new InvalidProgramException("Invalid format string");
             }
         }
 
