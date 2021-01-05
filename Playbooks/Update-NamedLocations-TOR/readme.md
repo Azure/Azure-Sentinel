@@ -40,6 +40,7 @@ Select the following image to sign in with your Azure account and open the logic
    | **Client ID** | <*ClientID*> | The Client ID of your App Registration with Graph API Permissions.|
    | **Tenant ID** | <*TenantID*> | The Azure AD Tenant ID where your App Registration Resides.|
    | **Named Location ID** | <*NamedLocationID*> | The GUID of your Named Location List to Update - Find the GUID with Graph Explorer.|
+   | **Named Location DisplayName** | Tor Exit Nodes | The Display Name of your Named Location List to Update.|
    | **Key Vault Client Credentials URL-Big Data Cloud** | <*KeyVaultClientCredentialsURL-BigDataCloud*> | The URL for your Big Data Cloud API Key Secret from Azure Key Vault|
    | **Key Vault Client Credentials URL-GraphAPI** | <*KeyVaultClientCredentialsURL-GraphAPI*> | The URL for your Graph API Key Secret from Azure Key Vault|
 
