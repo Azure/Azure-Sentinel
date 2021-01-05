@@ -41,7 +41,7 @@ Select the following image to sign in with your Azure account and open the logic
    | **Tenant ID** | <*TenantID*> | The Azure AD Tenant ID where your App Registration Resides.|
    | **Named Location ID** | <*NamedLocationID*> | The GUID of your Named Location List to Update - Find the GUID with Graph Explorer.|
    | **Key Vault Client Credentials URL-Big Data Cloud** | <*KeyVaultClientCredentialsURL-BigDataCloud*> | The URL for your Big Data Cloud API Key Secret from Azure Key Vault|
-   | **Key Vault Client Credentials URL-GraphAPI** | <*KeyVaultClientCredentialsURL-GraphAPI*> | The URL for your Big Data Cloud API Key Secret from Azure Key Vault|
+   | **Key Vault Client Credentials URL-GraphAPI** | <*KeyVaultClientCredentialsURL-GraphAPI*> | The URL for your Graph API Key Secret from Azure Key Vault|
 
 1. When you're done, select **Review + Create** and finally **Create**.
 
@@ -57,7 +57,7 @@ This logic app uses Managed Identity to access secrets from Key Vault to call th
 
 ## Step 3: Update parameters
 
-1. In the left-hand navigation pane, select Logic App designer > Parameters > Ensure all the default values are updated with Key Vault URI (storing Client Secrets), Client ID and Tenant ID, and Named Location ID.
+1. In the left-hand navigation pane, select Logic App designer > Parameters > Ensure all the default values are updated with Key Vault URL's (storing Client Secrets), Client ID Tenant ID, and Named Location ID.
 
    ![Replace defaults with tenant specific values](./media/parameters.png)
 
