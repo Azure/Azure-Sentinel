@@ -10,6 +10,10 @@ describe("dataConnectorValidator", () => {
     await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validDataConnectorSchema.json");
   });
 
+  it("should skip .json file when missing ID or connectivityCriterias attributes", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/inValidDataConnectorSchema.json", "SchemaError");
+  });
+
   it("should throw an exception when dataConnectorSchema.json is missing a required property", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingRequiredPropertyDataConnectorSchema.json", "SchemaError");
   });

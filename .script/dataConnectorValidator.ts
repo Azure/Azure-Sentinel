@@ -9,10 +9,15 @@ import * as logger from "./utils/logger";
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
   let dataConnector = JSON.parse(fs.readFileSync(filePath, "utf8"));
   let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/DataConnectorSchema.json", "utf8"));
-
+if(dataConnector.id != undefined && dataConnector.connectivityCriterias != undefined)
+{
   isValidSchema(dataConnector, schema);
   isValidId(dataConnector.id);
   isValidDataType(dataConnector.dataTypes);
+}
+else{
+  console.log(`Skipping File path: ${filePath}`);
+}
 
   return ExitCode.SUCCESS;
 } 
