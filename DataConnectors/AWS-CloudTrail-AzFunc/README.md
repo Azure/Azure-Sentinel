@@ -34,5 +34,9 @@ To avoid additional billing and duplication:
 
 2. Select the preferred Subscription, Resource Group and Location
 
-3. Enter the Workspace ID, Workspace Key, AWS AccesKey, AWS Acces SecretKey and AWS S3 Bucket Name
-   Note: If using Azure Key Vault secrets for any of the values above, use the@Microsoft.KeyVault(SecretUri={Security Identifier})schema in place of the string values. Refer to <a target="_blank" href="https://docs.microsoft.com/azure/app-service/app-service-key-vault-references" rel="noopener">Key Vault references documentation</a> for further details.
+3. Enter the Workspace ID, Workspace Key, AWS AccesKey, AWS Acces SecretKey and AWS S3 Bucket Name  
+   **Note**  
+   
+   Securely store Workspace ID,  Workspace Key, AWS AccesKey, AWS Acces SecretKey in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and  retrieve key values.  
+   <a target="_blank" href="https://docs.microsoft.com/azure/app-service/app-service-key-vault-references" rel="noopener">Follow these instructions</a> to use Azure Key Vault with an Azure Function App.   
+   If using Azure Key Vault secrets for any of the values above, use the @Microsoft.KeyVault(SecretUri={Security Identifier})schema in place of the string values.  Refer to <a target="_blank" href="https://docs.microsoft.com/azure/app-service/app-service-key-vault-references" rel="noopener">Key Vault references documentation</a> for further details. 
