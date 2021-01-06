@@ -17,11 +17,15 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 ![Adaptive Card example](./IPGroupsAdaptiveCard.png)
 
 ### Prerequisites 
-1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
-1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.
-1. This playbook will query IP Groups that exist in the resource group of Azure Sentinel workspace. Make sure to create IP Groups and attach them to Azure Firewall rules prior to running the playbook. You can change the source of the IP groups in the playbook itself after deployment.
-1. To use VirusTotal connector, get your Virus Totan API key. [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
+1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
+1. This playbook will query IP Groups that exist in the resource group of Azure Sentinel workspace. Make sure to create IP Groups and attach them to Azure Firewall rules prior to running the playbook. You can change the source of the IP groups in the playbook itself after deployment.
+1. **Permissions required for this playbook** 
+This playbook **Gets** and **Updates** IP groups. The registered application/Service Principal that is authenticated to the connector needs to have the following RBAC Roles:
+
+	* **Contributor** on the IP Groups in the Azure Sentinel resource group.
+
+1. To use VirusTotal connector, get your Virus Totan API key. [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
 
 ### Deployment instructions 
