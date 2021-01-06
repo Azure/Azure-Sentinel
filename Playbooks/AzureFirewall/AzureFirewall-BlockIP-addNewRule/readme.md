@@ -21,8 +21,14 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-BlockIP-addNewRule%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-BlockIP-addNewRule%2Fazuredeploy.json&version=GBAzureFirewall) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-BlockIP-addNewRule%2Fazuredeploy.json&version=GBAzureFirewall) 
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-BlockIP-addNewRule%2Fazuredeploy.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+</a>
+
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (ex:AzureFirewall-BlockIP-addNewRule)
