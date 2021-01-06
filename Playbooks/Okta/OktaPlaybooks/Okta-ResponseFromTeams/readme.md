@@ -5,6 +5,20 @@ When a new sentinal incident is created,this playbook gets triggered and perform
 1.  An adaptvie card is sent to the SOC Teams channel with information collected from the incident and the risky user information from Okta. 
 2.  The SOC is allowed to take action on risky user based on the information provided in the adaptive card.
 
+
+![Playbook Designer view](./Okta-ResponseFromTeams.PNG)<br>
+
+**This is the adaptive card SOC will recieve when playbook is triggered:**<br><br>
+![Adaptive Card example](./AdaptiveCardtoSOCuser.PNG)<br><br>
+
+
+
+### Prerequisites 
+1. Okta Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.okta.com/docs/guides/create-an-api-token/overview/)
+
+### Deployment instructions 
+1. Deploy the playbook by clicking on "Deply to Azure" button. This will take you to deplyoing an ARM Template wizard.
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-ResponseFromTeams%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
@@ -13,12 +27,6 @@ When a new sentinal incident is created,this playbook gets triggered and perform
    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
 </a>
 
-### Prerequisites 
-1. Okta Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
-2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.okta.com/docs/guides/create-an-api-token/overview/)
-
-### Deployment instructions 
-1. Deploy the playbook by clicking on "Deply to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Playbook Name : Enter the playbook name here (ex:Oktaplaybook)
     * Teams GroupId : Enter the Teams channel id to send the adaptive card
@@ -26,7 +34,7 @@ When a new sentinal incident is created,this playbook gets triggered and perform
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
     
 ### Post-Deployment instructions 
-####a. Authorize connections
+#### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
@@ -34,7 +42,7 @@ Once deployment is complete, you will need to authorize each connection.
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connections such as Teams connection and Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
-####b. Configurations in Sentinel
+#### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account 
 2. Configure the automation rules to trigger this playbook
 
@@ -42,20 +50,20 @@ Once deployment is complete, you will need to authorize each connection.
 
 
 ## Playbook steps explained
-###When Azure Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 
 Azure Sentinel incident is created. The playbook receives the incident as the input.
-###Entities - Get Accounts
+### Entities - Get Accounts
 
 Get the list of risky/malicious accounts as entities from the Incident
-###List groups
+### List groups
 Playbook uses "List Groups" action to get all the group details present in the particular Okta domain
 This groups list will be used later in the adaptive card dropdown when SOC wants to add user to a group
-###For each group
+### For each group
  Select groups-preparing the group name and id from the list of groups to display in the adaptive card for user choice
-###Compose group information
+### Compose group information
 Compose the choice set dropdown for adaptive card for group names
-###For each-risky account received from the incident
+### For each-risky account received from the incident
 Iterates on the accounts found in this incident (probably one) and performs the following:
  1. For the risky user account, playbook uses "Get User" action to get user details from Okta
  2. Post an Adaptive Card to a SOC admin on teams channel with the incident information and risky user information and admin has a list of choices to perform different user actions on Okta
