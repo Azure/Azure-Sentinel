@@ -1,11 +1,11 @@
 # Okta-Prompt User Playbook
  ## Summary
 
-When a new sentinal incident is created, this playbook gets triggered and performs below actions
-1. An adaptive card is sent to the risky user asking if he has done any malicious activity on his Okta account
-2. If user confirms yes, the incident will be closed with the user details
-3. Else,the user sessions will be cleared and reset password link will be sent to user 
-4. An adaptvie card is sent to the SOC Teams channel, providing information about the incident and risky user details.The SOC can investigate further on the user.
+When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
+1. An adaptive card is sent to the risky user asking if they have done the malicious activity
+2. If user confirms yes, the incident will be closed  and enriched as a comment with the user details
+3. Else, the **user sessions will be cleared** and **reset password link will be sent to user** 
+4. An adaptive card is sent to the SOC Teams channel, providing information about the incident and risky user details. The SOC can investigate further on the user.
 
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser/azuredeploy.json" target="_blank">
