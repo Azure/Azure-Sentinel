@@ -1,4 +1,4 @@
-# Firewall incdent to add IP Address to IP Groups
+# Block IP by adding IP Address to IP Groups
 
  ## Summary
 
@@ -27,14 +27,21 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-BlockIP-addToIPGroup%2Fazuredeploy.json&version=GBAzureFirewall) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-BlockIP-addToIPGroup%2Fazuredeploy.json&version=GBAzureFirewall) 
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-BlockIP-addToIPGroup%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-BlockIP-addToIPGroup%2Fazuredeploy.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+</a>
+
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (ex:AzureFirewall-BlockIP-addToIPGroup)
     * SOC Email : Enter the SOC alias (ex: username@domain.com)
 
 ### Post-Deployment instructions 
-####a. Authorize connections
+#### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
@@ -52,33 +59,33 @@ Once deployment is complete, you will need to authorize each connection.
         
      d. Click Change connection [ Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. ]
 
-####b. Configurations in Sentinel
+#### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 
 ## Playbook steps explained
-###When Azure Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 
-###Varialbes 
+### Varialbes 
 
    a. List - IP Groups present with in the Resource Group to store IP Groups present with in the Resource Group.
 
    b. List - existing firewalls with in the Resource Group to store the Firewall - Rule collection choice list to show in the Adaptive Card
 
-###Gets all IpGroups in a resource group
+### Gets all IpGroups in a resource group
 Lists all the IP Groups present in the Resource Group
 
-###Select IPGroups Choice List to show in the Adaptive Card
+### Select IPGroups Choice List to show in the Adaptive Card
 Prepare IP Groups Choice list to show in the Adaptive Card
 
-###For each-malicious IP received from the incident
+### For each-malicious IP received from the incident
 Iterates on the IPs found in this incident (probably one) and performs the following:
 For the malicious IP Address, playbook uses "Ip scan report" action to get the information from Virus Total.
 #### Posts an Adaptive card to  user 
 In this step we post a message in Microsoft Teams to the SOC user with Incident details , IP Scan report and ask for his confirmation on the malicious activity described in the incident.
 
-####If malicious
+#### If malicious
 
  a. Gets the specified ipGroups
 
@@ -92,6 +99,6 @@ In this step we post a message in Microsoft Teams to the SOC user with Incident 
 
  f. Close the incident with the Severity and Classification reason selected from Adaptive Card
 
-####Else
+#### Else
  Add comment to incident with the endpoint information , action taken and virus total scan report
 
