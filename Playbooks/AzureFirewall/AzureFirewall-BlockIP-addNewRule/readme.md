@@ -14,8 +14,12 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 
 ### Prerequisites 
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
-1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.
 1. This playbook will add new rules to existing Network Collections in Azure Firewalls in your subscription. Make sure you have such prior to running the playbook. 
+1. **Permissions required for this playbook** 
+This playbook **Gets** and **Updates** Azure Firewalls. The registered application/Service Principal that is authenticated to the connector needs to have the following RBAC Roles:
+
+	* **Contributor** on the Azure Firewalls it should be able to get and update in the subscription.
+
 1. To use VirusTotal connector, get your Virus Totan API key. [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
 
