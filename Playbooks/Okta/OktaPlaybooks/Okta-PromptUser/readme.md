@@ -7,6 +7,21 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 3. Else, the **user sessions will be cleared** and **reset password link will be sent to user** 
 4. An adaptive card is sent to the SOC Teams channel, providing information about the incident and risky user details. The SOC can investigate further on the user.
 
+![Playbook Designer view](./designerScreenshot.PNG)<br>
+
+**This is the adaptive card user will recieve when playbook is triggered:**<br><br>
+![Adaptive Card example](./AdaptiveCardUser.png)
+
+**This is the adaptive card SOC will recieve if user confirms they didn't to the malicious activity:**<br><br>
+![Adaptive Card example](./AdaptiveCardSOC.png)
+
+
+### Prerequisites 
+1. Okta custom connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.okta.com/docs/guides/create-an-api-token/overview/)
+
+### Deployment instructions 
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser/azuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
@@ -16,12 +31,6 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
 </a>
 
-### Prerequisites 
-1. Okta custom connector needs to be deployed prior to the deployment of this playbook under the same subscription.
-2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.okta.com/docs/guides/create-an-api-token/overview/)
-
-### Deployment instructions 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Playbook Name : Enter the playbook name here (ex:OktaPlaybook)
     * Teams GroupId : Enter the Teams channel id to send the adaptive card
