@@ -26,6 +26,7 @@ Also should be able to perform some actions like:
     - Software.Read.All
     - Vulnerability.Read.All
 5. Azure Keyvault - To store the App Secret of the Azure AD Application
+    - Create a secret called "ClientAppSecret" and store the App Secret of the Azure AD Application
 
 ## API Connections
 API connections for the above mentioned prerequisites are created as a part of ARM template deployment.
@@ -35,6 +36,7 @@ API connections for the above mentioned prerequisites are created as a part of A
 2. Configure the App API Permissions
     - Refer above permissions mentioned under Prerequisites, point (4)
 3. Generate a client secret for the created Azure AD App and store it in a Azure Keyvault
+    - Create a secret called "ClientAppSecret" in the Azure Keyvault and store the App Secret of the Azure AD Application
 4. Deploy the template
     - Give an appropriate name for the Playbook.
     - All the dependent API connections shall automatically be created as a part of the ARM tempate deployment.
