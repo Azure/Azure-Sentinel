@@ -1,4 +1,4 @@
-# Firewall incdent to block IP Address while adding to the Deny network rules collection
+# Block IP Address in Azure Firewall by adding new rules to Network Rules Collection
 
  ## Summary
 When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
@@ -39,7 +39,7 @@ This playbook **Gets** and **Updates** Azure Firewalls. The registered applicati
     * SOC Email : Enter the SOC alias (ex: username@domain.com)
 
 ### Post-Deployment instructions 
-####a. Authorize connections
+#### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
@@ -55,14 +55,14 @@ Once deployment is complete, you will need to authorize each connection.
      d. Click Change connection
         a. Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. 
 
-####b. Configurations in Sentinel
+#### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
-###When Azure Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 
-###Varialbes 
+### Varialbes 
 
    a. Initialize Rule to store the new rule information
 
@@ -74,22 +74,22 @@ Once deployment is complete, you will need to authorize each connection.
 
    e. List - existing firewalls with in the Resource Group to store the Firewall - Rule collection choice list to show in the Adaptive Card
 
-###Lists all Firewall Policies in a resource group
+### Lists all Firewall Policies in a resource group
 Lists - Existing azure firewalls with in a Resource Group
 
-###Select Firewall Policies Choice List to show in the Adaptive Card
+### Select Firewall Policies Choice List to show in the Adaptive Card
 Prepare Firewall Policies Choice list to show in the Adaptive Card
 
-###For each-malicious IP received from the incident
+### For each-malicious IP received from the incident
 Iterates on the IPs found in this incident (probably one) and performs the following:
 For the malicious IP Address, playbook uses "Ip scan report" action to get the information from Virus Total.
 #### Posts an Adaptive card to  user 
 In this step we post a message in Microsoft Teams to the SOC user with Incident details , IP Scan report and ask for his confirmation on the malicious activity described in the incident.
 
-####If malicious
+#### If malicious
  Preparing an Array with SOC selected Firewall Options
 
-###For each rules collection selected from Adaptive Card
+### For each rules collection selected from Adaptive Card
 
  1. Reading the firewall name from the SOC selected Firewall Rule collection
 
@@ -125,7 +125,7 @@ In this step we post a message in Microsoft Teams to the SOC user with Incident 
 
  1. Updates tags for Azure Firewall resource
 
-####Else
+#### Else
  Add comment to incident with the endpoint information , action taken and virus total scan report
 
 
