@@ -9,7 +9,7 @@
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post Deployment Steps](#postdeployment)
-1. [References](#references)
+1. [Components of this integration](#components)
 
 
 <a name="overview">
@@ -26,7 +26,14 @@ This package includes:
 
 You can choose to deploy the whole package : connector + all three playbook templates, or each one seperately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fdev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBOkta&path=%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://login.microsoftonline.us/organizations/oauth2/v2.0/authorize?client_id=c836cbdb-7a5b-44cc-a54f-564b4b486fc6&response_type=code%20id_token&scope=https%3A%2F%2Fmanagement.core.usgovcloudapi.net%2F%2Fuser_impersonation%20openid%20email%20profile&state=OpenIdConnect.AuthenticationProperties%3DaURMJdv8OOjkos8hJrPp2UR3SiCuzPqKSCojZXlvmudMu2wCQivYUBL-PUpm2VklFejdDnBr9Us32MzfuH8tith-XldC_OIlCqCjwB950H9ELHA76IfBBh19cTzh9-nsHhkQkk8wQDSE6bot7rUuEQB8IDVJgDMCfv1HYuUg9brFyPen2T4DF7f3SxN7Wwxfj87B5iDMqyoU1AHKentIKfwHsDQCVmhbtWdvSgPbWWABKGY-a7b1vkmjWNmo8x5v&response_mode=form_post&nonce=637443070124899368.YjM5MDcwYzMtODJkZC00MzRmLTgxNDctMjhhZjY0MWRmNjcxZGRiOWNmMmItMDAyNS00MTIxLWE4MDUtMjdiOTE4MWJhMjg0&redirect_uri=https%3A%2F%2Fportal.azure.us%2Fsignin%2Findex%2F&site_id=501430&msafed=0&client-request-id=5cc07576-a6f1-4a94-b26f-830ed1c4ad77&x-client-SKU=ID_NET45&x-client-ver=5.3.0.0)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FOkta%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FOkta%2Fazuredeploy.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+</a>
+
 
 
 # Okta connector documentation 
@@ -90,17 +97,17 @@ Once deployment is complete, you will need to authorize each connection.
 2. Configure the automation rules to trigger the playbooks
 
 
-<a name="references">
+<a name="components">
 
-##  Reference to the playbook templates and the connector
+##  Components of this integration
 
  Connector
-* [OktaCustomConnector](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FOktaCustomConnector%2Fazuredeploy)
+* [OktaCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaCustomConnector)
 
 Playbooks
-* [Okta-Response From Teams : Playbook to perform different actions on user on Okta and add user deatils to incident](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FOktaPlaybooks%2FOkta-ResponseFromTeams%2Fazuredeploy.json)
-* [Okta-Enrich incident with user details : Playbook to enrich incident with user deatils and user groupdetails ](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FOktaPlaybooks%2FOkta-EnrichIncidentWithUserDetails%2Fazuredeploy.json)
-* [Okta-PromptUser : Playbook to prompt risky user about the malicious activity](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FOktaPlaybooks%2FOkta-PromptUser%2Fazuredeploy.json)
+* [Okta-Response From Teams : Playbook to perform different actions on user on Okta and add user deatils to incident](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
+* [Okta-Enrich incident with user details : Playbook to enrich incident with user deatils and user groupdetails ](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
+* [Okta-PromptUser : Playbook to prompt risky user about the malicious activity](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser)
 
 
 
