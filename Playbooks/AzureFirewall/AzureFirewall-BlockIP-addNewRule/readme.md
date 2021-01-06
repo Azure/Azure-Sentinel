@@ -83,6 +83,8 @@ In this step we post a message in Microsoft Teams to the SOC user with Incident 
 
  1. Reading the firewall name from the SOC selected Firewall Rule collection
 
+ 1. Reading the resource group name from the SOC selected Firewall Rule collection
+
  1. Gets the specified Azure Firewall information from the Azure Firewall Connector
 
  1. Array to Store the existing rule collection information for the selected firewall

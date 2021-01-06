@@ -27,21 +27,14 @@ When a new Azure Sentinel is created,this playbook gets triggered and performs b
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-</a>
-
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json" target="_blank">
-   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
-</a>
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json&version=GBAzureFirewall) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json&version=GBAzureFirewall) 
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (ex:AzureFirewall-BlockIP-addNewRule)
     * SOC Email : Enter the SOC alias (ex: username@domain.com)
 
 ### Post-Deployment instructions 
-#### a. Authorize connections
+####a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
@@ -59,48 +52,52 @@ Once deployment is complete, you will need to authorize each connection.
 
       d. Click Change connection -- Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. 
 
-#### b. Configurations in Sentinel
+####b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
 ###When Azure Sentinel incident creation rule is triggered
 
-### Varialbes 
+###Varialbes 
 
    * List - Threat intel IP Address allow list from the Resource Group
 
    * Compose to get the resource group name from the workflow.
 
-### Lists all Firewall Policies in a resource group
+###Lists all Firewall Policies in a resource group
 Lists - Existing azure firewalls with in a Resource Group
 
-### Select Firewall Policies Choice List to show in the Adaptive Card
+###Select Firewall Policies Choice List to show in the Adaptive Card
 Prepare Firewall Policies Choice list to show in the Adaptive Card
 
-### For each-malicious IP received from the incident
+###For each-malicious IP received from the incident
 Iterates on the IPs found in this incident (probably one) and performs the following:
 For the malicious IP Address, playbook uses "Ip scan report" action to get the information from Virus Total.
 #### Posts an Adaptive card to  user 
 In this step we post a message in Microsoft Teams to the SOC user with Incident details , IP Scan report and ask for his confirmation on the malicious activity described in the incident.
 
-#### If malicious
+####If malicious
 Preparing an Array with SOC selected Firewall Options
 
-### For each rules collection selected from Adaptive Card
+###For each rules collection selected from Adaptive Card
  
- a. Gets the specified Firewall Policy
+ a. Reading the resource group name from the SOC selected
 
- b. Assign Threat intel allow list values
+ b. Reading the firewall policy name from the SOC selected
 
- c. Append - IP Address to Threat intel allow list
+ c. Gets the specified Firewall Policy
 
- d. Creates or updates the specified Firewall Policy
+ d. Assign Threat intel allow list values
 
- e. Add comment to incident with the endpoint information , action taken and virus total scan report
+ e. Append - IP Address to Threat intel allow list
 
- f. Close the incident with the Severity and Classification reason selected from Adaptive Card
+ f. Creates or updates the specified Firewall Policy
 
-#### Else
+ g. Add comment to incident with the endpoint information , action taken and virus total scan report
+
+ h. Close the incident with the Severity and Classification reason selected from Adaptive Card
+
+####Else
  Add comment to incident with the endpoint information , action taken and virus total scan report
 
