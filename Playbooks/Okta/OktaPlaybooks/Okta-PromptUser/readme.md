@@ -8,7 +8,14 @@ When a new sentinal incident is created, this playbook gets triggered and perfor
 4. An adaptvie card is sent to the SOC Teams channel, providing information about the incident and risky user details.The SOC can investigate further on the user.
 
 
-![Okta-Prompt User](https://dev.azure.com/SentinelAccenture/a94836bc-ff1d-480a-af0f-79be76a3c9e4/_apis/git/repositories/d1bebabf-1feb-4577-8c0b-7d41b70f49df/items?path=%2FOktaPlaybooks%2FOkta-PromptUser%2FOkta-PromptUser.PNG&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=Okta&resolveLfs=true&%24format=octetStream&api-version=5.0)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser/azuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/SOAR-connectors-Private-Preview/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser/azuredeploy.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+</a>
+
 ### Prerequisites 
 1. Okta custom connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.okta.com/docs/guides/create-an-api-token/overview/)
