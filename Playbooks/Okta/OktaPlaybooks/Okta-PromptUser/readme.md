@@ -7,13 +7,13 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 3. Else, the **user sessions will be cleared** and **reset password link will be sent to user** 
 4. An adaptive card is sent to the SOC Teams channel, providing information about the incident and risky user details. The SOC can investigate further on the user.
 
-![Playbook Designer view](./designerScreenshot.PNG)<br>
+![Playbook Designer view](./Okta-PromptUser.PNG)<br>
 
 **This is the adaptive card user will recieve when playbook is triggered:**<br><br>
-![Adaptive Card example](./AdaptiveCardUser.png)
+![Adaptive Card example](./AdaptivecardtotheEnduser.PNG)<br><br>
 
 **This is the adaptive card SOC will recieve if user confirms they didn't to the malicious activity:**<br><br>
-![Adaptive Card example](./AdaptiveCardSOC.png)
+![Adaptive Card example](./AdaptivecardtoSOCadminon%20teamschannel.PNG)<br><br>
 
 
 ### Prerequisites 
