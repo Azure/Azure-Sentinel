@@ -6,7 +6,7 @@
 
 1. [Overview](#overview)
 1. [Deploy Custom Connector + 3 Playbook templates](#deployall)
-1. [Authentication](#importantnotes)
+1. [Authentication](#authentication)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post Deployment Steps](#postdeployment)
@@ -29,7 +29,13 @@ This package includes:
 
 You can choose to deploy the whole package: connector + all three playbook templates (below buttons), or each one seperately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2Fazuredeploy.json target="_blank") [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2Fazuredeploy.json)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FAzureFirewall%2Fazuredeploy.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+</a>
 
 
 # Firewall connector documentation 
@@ -140,12 +146,9 @@ Once deployment is complete, you will need to authorize each connection.
 ##  Reference to the playbook templates and the connector
 
  Connector
-* [AzureFirewallCustomConnector](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewallConnector%2Fazuredeploy.json&version=GBAzureFirewall)
+* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/AzureFirewall/AzureFirewallConnector)
 
 Playbooks
-* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-BlockIP-addNewRule%2Fazuredeploy.json&version=GBAzureFirewall)
-* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-BlockIP-addToIPGroup%2Fazuredeploy.json&version=GBAzureFirewall)
-* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json&version=GBAzureFirewall)
-
-
-
+* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addToIPGroup)
+* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addNewRule)
+* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/tree/SOAR-connectors-Private-Preview/Playbooks/AzureFirewall/AzureFirewall-AddIPtoTIAllowList)
