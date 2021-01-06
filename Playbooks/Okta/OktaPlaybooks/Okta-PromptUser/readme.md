@@ -29,7 +29,7 @@ When a new sentinal incident is created, this playbook gets triggered and perfor
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
 
 ### Post-Deployment instructions 
-####a. Authorize connections
+#### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
@@ -37,7 +37,7 @@ Once deployment is complete, you will need to authorize each connection.
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connections such as Teams connection and Okta Api  Connection (For authorizing the Okta API connection, the API Key needs to be provided)
-####b. Configurations in Sentinel
+#### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account 
 2. Configure the automation rules to trigger this playbook
 
@@ -46,13 +46,13 @@ Once deployment is complete, you will need to authorize each connection.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fdev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBOkta&path=%2FOktaPlaybooks%2FOkta-PromptUser%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://login.microsoftonline.us/organizations/oauth2/v2.0/authorize?client_id=c836cbdb-7a5b-44cc-a54f-564b4b486fc6&response_type=code%20id_token&scope=https%3A%2F%2Fmanagement.core.usgovcloudapi.net%2F%2Fuser_impersonation%20openid%20email%20profile&state=OpenIdConnect.AuthenticationProperties%3DaURMJdv8OOjkos8hJrPp2UR3SiCuzPqKSCojZXlvmudMu2wCQivYUBL-PUpm2VklFejdDnBr9Us32MzfuH8tith-XldC_OIlCqCjwB950H9ELHA76IfBBh19cTzh9-nsHhkQkk8wQDSE6bot7rUuEQB8IDVJgDMCfv1HYuUg9brFyPen2T4DF7f3SxN7Wwxfj87B5iDMqyoU1AHKentIKfwHsDQCVmhbtWdvSgPbWWABKGY-a7b1vkmjWNmo8x5v&response_mode=form_post&nonce=637443070124899368.YjM5MDcwYzMtODJkZC00MzRmLTgxNDctMjhhZjY0MWRmNjcxZGRiOWNmMmItMDAyNS00MTIxLWE4MDUtMjdiOTE4MWJhMjg0&redirect_uri=https%3A%2F%2Fportal.azure.us%2Fsignin%2Findex%2F&site_id=501430&msafed=0&client-request-id=5cc07576-a6f1-4a94-b26f-830ed1c4ad77&x-client-SKU=ID_NET45&x-client-ver=5.3.0.0)
 
 ## Playbook steps explained
-###When Azure Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 
 Azure Sentinel incident is created. The playbook receives the incident as the input.
-###Entities - Get Accounts
+### Entities - Get Accounts
 
 Get the list of risky/malicious accounts as entities from the Incident
-###For each-risky account received from the incident
+### For each-risky account received from the incident
 Iterates on the accounts found in this incident (probably one) and performs the following:
 For the risky user account, playbook uses "Get User" action to get user details from Okta
 #### Posts an Adaptive card to  user 
