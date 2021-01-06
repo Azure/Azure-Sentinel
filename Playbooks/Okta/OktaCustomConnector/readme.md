@@ -1,6 +1,6 @@
 # Okta Logic Apps Custom connector
 
-This custom connector connects to Okta service end point and perform defined automated actions on the Okta user accounts 
+This custom connector connects to Okta service end point and perform defined automated actions on the Okta user accounts.
 ### Authentication methods this connector supports
 
 *  API Key authentication
@@ -35,7 +35,14 @@ This custom connector connects to Okta service end point and perform defined aut
     * Custom Connector Name : Enter the Custom connector name (ex:contoso Okta connector)
     * Service Endpoint : Enter the okta service end point (ex:https://{yourOktaDomain})
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FOktaCustomConnector%2Fazuredeploy&version=GBOkta) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://login.microsoftonline.us/organizations/oauth2/v2.0/authorize?client_id=c836cbdb-7a5b-44cc-a54f-564b4b486fc6&response_type=code%20id_token&scope=https%3A%2F%2Fmanagement.core.usgovcloudapi.net%2F%2Fuser_impersonation%20openid%20email%20profile&state=OpenIdConnect.AuthenticationProperties%3DaURMJdv8OOjkos8hJrPp2UR3SiCuzPqKSCojZXlvmudMu2wCQivYUBL-PUpm2VklFejdDnBr9Us32MzfuH8tith-XldC_OIlCqCjwB950H9ELHA76IfBBh19cTzh9-nsHhkQkk8wQDSE6bot7rUuEQB8IDVJgDMCfv1HYuUg9brFyPen2T4DF7f3SxN7Wwxfj87B5iDMqyoU1AHKentIKfwHsDQCVmhbtWdvSgPbWWABKGY-a7b1vkmjWNmo8x5v&response_mode=form_post&nonce=637443070124899368.YjM5MDcwYzMtODJkZC00MzRmLTgxNDctMjhhZjY0MWRmNjcxZGRiOWNmMmItMDAyNS00MTIxLWE4MDUtMjdiOTE4MWJhMjg0&redirect_uri=https%3A%2F%2Fportal.azure.us%2Fsignin%2Findex%2F&site_id=501430&msafed=0&client-request-id=5cc07576-a6f1-4a94-b26f-830ed1c4ad77&x-client-SKU=ID_NET45&x-client-ver=5.3.0.0)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FOkta%2FOktaCustomConnector%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FOkta%2FOktaCustomConnector%2Fazuredeploy.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+</a>
+
 ## Usage Examples
 * Suspend/unsuspend user accounts on Okta through playbook
 * Expire password for user accounts on Okta through playbook
