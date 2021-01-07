@@ -3,6 +3,7 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import { isValidSchema } from "./utils/jsonSchemaChecker";
 import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
+import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
 import * as logger from "./utils/logger";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
@@ -12,6 +13,7 @@ if(typeof dataConnector.id != "undefined" && typeof dataConnector.connectivityCr
 {
   isValidSchema(dataConnector, schema);
   isValidId(dataConnector.id);
+  isValidDataType(dataConnector.dataTypes);
 }
 else{
   console.log(`Skipping File path: ${filePath}`);

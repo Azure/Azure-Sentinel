@@ -10,19 +10,20 @@ describe("dataConnectorValidator", () => {
     await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validDataConnectorSchema.json");
   });
 
+  // To identify data connector json file with ID and connectivityCriterias,skipping other json files.
   it("should skip .json file when missing ID or connectivityCriterias attributes", async () => {
-    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/inValidDataConnectorSchema.json");
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/missingIdAndConnectivityCriteria.json");
   });
 
   it("should throw an exception when dataConnectorSchema.json is missing a required property", async () => {
-    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingRequiredPropertyDataConnectorSchema.json", "SchemaError");
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingPublisherProperty.json", "SchemaError");
   });
 
   it("should throw an exception when dataConnectorSchema.json is having space in ID property", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceInDataConnectorId.json", "DataConnectorValidationError");
   });
 
-  it.skip("should throw an exception when dataConnectorSchema.json is having space in Data Type property", async () => {
+  it("should throw an exception when dataConnectorSchema.json is having space in Data Type property", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceInDataConnectorDataType.json","DataConnectorValidationError");
   });
 
