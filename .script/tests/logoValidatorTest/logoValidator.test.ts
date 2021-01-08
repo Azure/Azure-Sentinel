@@ -6,29 +6,39 @@ import { ExitCode } from "../../utils/exitCode";
 chai.use(chaiAsPromised);
 
 describe("logoValidator", () => {
-
-
-  it("Should not throw an exception", async () => {
+  it("Should not throw an exception as logo file should be in svg format", async () => {
     await checkValid(".script/tests/logoValidatorTest/testFiles/Morphisec_Logo.svg");
   });
 
-  it("Should throw an exception", async () => {
+  it("Should throw an exception as logo file should be in svg format", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/ForgeRock_Logo_Vert_75x75.png","logoValidationError");
   });
-  it("Should throw an exception", async () => {
+
+  it("Should throw an exception as logo file should not have style tag", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/Filewithstyletag.svg","logoValidationError");
   });
-  it("Should throw an exception", async () => {
+
+  it("Should throw an exception as logo file should not have embed png", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/FileWithPNGEmbed.svg","logoValidationError");
   });
-  it("Should throw an exception", async () => {
+
+  it("Should throw an exception as logo file should not have xmlns:xlink tag", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/filewithxmlnsxlink.svg","logoValidationError");
   });
-  it("Should throw an exception", async () => {
+
+  it("Should throw an exception as logo file should not have xmlns:herf tag", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/fileWithxmlnsHERF.svg","logoValidationError");
   });
   
-  it("Should throw an exception", async () => {
+  it("Should throw an exception as logo file should have id as guid", async () => {
+    await checkInvalid(".script/tests/logoValidatorTest/testFiles/FileWithInvalidGuidId.svg","logoValidationError");
+  });
+
+  it("Should throw an exception as logo file should not have same id of two tag", async () => {
+    await checkInvalid(".script/tests/logoValidatorTest/testFiles/FileWithSameGuidID.svg","logoValidationError");
+  });
+
+  it("Should not throw an exception as logo file should not have embed png", async () => {
     await checkValid(".script/tests/logoValidatorTest/testFiles/filewithoutpngembed.svg");
   });
   

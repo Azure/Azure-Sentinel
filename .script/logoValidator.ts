@@ -6,22 +6,18 @@ import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker";
 import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
-    
   isValidLogoImage(FileName);
     const svgContent: string = fs.readFileSync(FileName, { encoding: "utf8", flag: "r" });
-    console.log(svgContent)
-     //const object:Response = [XMLSerializer](svgContent) ;
-    // console.log(object)
     if(svgContent != "undefined")
     {
       isValidLogoImageSVGContent(svgContent)
     }
     return ExitCode.SUCCESS;
   }
-   let fileTypeSuffixes = undefined;
+ 
+let fileTypeSuffixes = undefined;
 let filePathFolderPrefixes = ["logo"];
-
-let fileKinds = ["Modified"];
+let fileKinds = ["Added","Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return IsValidLogo(filePath);
@@ -33,5 +29,4 @@ let CheckOptions = {
     logger.logError("An error occurred, please open an issue");
   },
 };
-
 runCheckOverChangedFiles(CheckOptions, fileKinds,fileTypeSuffixes,  filePathFolderPrefixes);
