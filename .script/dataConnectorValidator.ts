@@ -7,20 +7,28 @@ import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
 import * as logger from "./utils/logger";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
-  let dataConnector = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
   let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/DataConnectorSchema.json", "utf8"));
-if(typeof dataConnector.id != "undefined" && typeof dataConnector.connectivityCriterias != "undefined")
+if(isPotentialConnectorJson(jsonFile))
 {
-  isValidSchema(dataConnector, schema);
-  isValidId(dataConnector.id);
-  isValidDataType(dataConnector.dataTypes);
+  isValidSchema(jsonFile, schema);
+  isValidId(jsonFile.id);
+  isValidDataType(jsonFile.dataTypes);
 }
 else{
-  console.log(`Skipping File path: ${filePath}`);
+  console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
 }
 
   return ExitCode.SUCCESS;
-} 
+}
+
+function isPotentialConnectorJson(jsonFile: any) {
+  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined")
+  {
+    return true;
+  }
+  return false;
+}
 
 let fileTypeSuffixes = ["*.json"];
 let filePathFolderPrefixes = ["DataConnectors"];
