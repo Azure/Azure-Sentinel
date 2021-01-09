@@ -8,8 +8,8 @@ RequiredInputFieldsSets:
     - Account_NTDomain
   - - Account_SID
 BaseQuery: |
-  let WellKnownLocalSID = 'S-1-5-32-5[0-9][0-9]$';
-  let WellKnownGroupSID = 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$';
+  let WellKnownLocalGroupSID = 'S-1-5-32-5[0-9][0-9]$';
+  let WellKnownDomainGroupSID = 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$';
   let GetGroupAddForUser = (v_Account_Name:string, v_Account_NTDomain:string, v_Account_SID:string){
   SecurityEvent
   | where EventID in (4728, 4732, 4756)
@@ -35,7 +35,7 @@ BaseQuery: |
   | extend SubjectNTDomainMatch = iff(isnotempty(v_Account_NTDomain) and SubjectDomainName =~ v_Account_NTDomain, true, false)
   | extend SubjectSidMatch = iff(isnotempty(v_Account_SID) and SubjectUserSid has v_Account_SID, true, false)
   | where (MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true or (SubjectNameMatch == true and SubjectNTDomainMatch == true) or SubjectSidMatch == true 
-  | project TimeGenerated, EventID, Activity, Computer, MemberName, MemberAdded, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectAccount, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, 
+  | project TimeGenerated, EventID, Activity, Computer, MemberName, MemberAdded, MemberSid, TargetAccount, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectAccount, SubjectDomainName, SubjectUserName, SubjectUserSid, WellKnownDomainGroupSID, WellKnownLocalGroupSID, 
   MemberNameMatch, MemberNTDomainMatch, MemberSidMatch, SubjectNameMatch, SubjectNTDomainMatch, SubjectSidMatch  
   | extend GroupName = TargetUserName, AddedBy = SubjectAccount
   //support for Activities
@@ -65,7 +65,7 @@ Insights:
   QueriesDefinitions:
 
   # UserAddedToPrivilegedGroups
-  - Filter:    "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID)"
+  - Filter:    "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalGroupSID or TargetSid matches regex WellKnownDomainGroupSID)"
     Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer) by SubjectAccount"
     Project:   "project Title = 'Privileged', GroupCount, HostCount"
     LinkColumnsDefinitions:
@@ -85,7 +85,7 @@ Insights:
       Query: "{{BaseQuery}} | {{RowFilter}}"
 
   # UserAddedToPrivilegedGroupsExcludeRDP
-  - Filter:    "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID) | where TargetSid !in ('S-1-5-32-555')"
+  - Filter:    "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalGroupSID or TargetSid matches regex WellKnownDomainGroupSID) | where TargetSid !in ('S-1-5-32-555')"
     Summarize: "summarize GroupCount = dcount(GroupName), HostCount = dcount(Computer) by SubjectAccount"
     Project:   "project Title = 'Privileged(non-RDP)', GroupCount, HostCount"
     LinkColumnsDefinitions:
@@ -135,29 +135,72 @@ Insights:
 
  AdditionalQuery:
   Text: "See all group additions related to user"
-  Query: "project TimeGenerated, EventID, Activity, Computer, MemberName, MemberAdded, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectAccount, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID | order by TimeGenerated desc"
+  Query: "project TimeGenerated, EventID, Activity, Computer, MemberName, MemberAdded, MemberSid, TargetAccount, TargetDomainName, TargetUserName, TargetSid, UserPrincipalName, SubjectAccount, SubjectDomainName, SubjectUserName, SubjectUserSid, WellKnownDomainGroupSID, WellKnownLocalGroupSID | order by TimeGenerated desc"
 
 Activities:
  EnabledByDefault: true
  Items:
+# User added users to local priv groups
  - Id: febba410-e7d6-4c63-8fe5-2b93f448b7a1
-   Title: "The user has added an account to a privileged group"
-   Content: "The user has added an account to the privileged group, {{TargetDomainName}}\\{{TargetUserName}}, {{Count}} time(s)"
-   Description: "This activity displays the user that added an account and the account that was added to a privileged group"
+   Title: "The user has added accounts to a local privileged group"
+   Content: "The user has added accounts to the local privileged group, {{TargetAccount}}, {{Count}} time(s)"
+   Description: "This activity displays the user that added accounts to a local privileged group"
    QueryDefinitions:
-    Filter: "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and (TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID) | where TargetSid !in ('S-1-5-32-555')"
-    SummarizeBy: "SubjectAccount, TargetUserName, TargetSid, TargetDomainName"
+    Filter: "where ((MemberNameMatch == false and MemberNTDomainMatch == false) or MemberSidMatch == false) and TargetSid matches regex WellKnownLocalGroupSID | where TargetSid !in ('S-1-5-32-555')"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
+# User added users to domain priv groups
+ - Id: 0e98c61c-6ae0-4e13-8071-d807dc25082a
+   Title: "The user has added accounts to a domain privileged group"
+   Content: "The user has added accounts to the domain privileged group, {{TargetAccount}}, {{Count}} time(s)"
+   Description: "This activity displays the user that added accounts to a domain privileged group"
+   QueryDefinitions:
+    Filter: "where ((MemberNameMatch == false and MemberNTDomainMatch == false) or MemberSidMatch == false) and TargetSid matches regex WellKnownDomainGroupSID"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
+# User was added to a local priv group
+ - Id: 0caf9819-3269-48ac-b162-eeee638e4aa9
+   Title: "This user was added to a local privileged group"
+   Content: "This user was added to the local privileged group {{TargetAccount}}, {{Count}} time(s)"
+   Description: "This activity displays that this user was added to a local privileged group"
+   QueryDefinitions:
+    Filter: "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and TargetSid matches regex WellKnownLocalGroupSID | where TargetSid !in ('S-1-5-32-555')"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
+# User was added to domain priv group
+ - Id: d57681e4-18e6-459f-b61d-4d4a1f205b70
+   Title: "This user was added to a domain privileged group"
+   Content: "This user was added to the domain privileged group {{TargetAccount}}"
+   Description: "This activity displays that this user was added to a domain privileged group"
+   QueryDefinitions:
+    Filter: "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and TargetSid matches regex WellKnownDomainGroupSID"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
+# User added users to RDP
  - Id: 5ae2baf4-de7b-40f0-a861-8852266bfcd0
-   Title: "The user has added an account to the Remote Desktop Users group"
-   Content: "The user has added an account to the Remote Desktop Users group {{Count}} time(s)"
-   Description: "This activity displays the account was added to Remote Desktop group"
+   Title: "The user has added accounts to the Remote Desktop Users group"
+   Content: "The user has added accounts to the {{TargetAccount}}, {{Count}} time(s)"
+   Description: "This activity displays the user that added accounts to Remote Desktop group"
+   QueryDefinitions:
+    Filter: "where ((MemberNameMatch == false and MemberNTDomainMatch == false) or MemberSidMatch == false) and TargetSid in ('S-1-5-32-555')"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
+# User was added to RDP
+ - Id: 60ef2e21-5f90-48bf-9bbc-d2a1829c3861
+   Title: "This user was added to the Remote Desktop Users group"
+   Content: "This user was added to the {{TargetAccount}} group"
+   Description: "This activity displays that this user was added to the Remote Desktop group"
    QueryDefinitions:
     Filter: "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and TargetSid in ('S-1-5-32-555')"
-    SummarizeBy: "SubjectAccount, TargetUserName, TargetSid"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
+# User added accounts to security groups
  - Id: bf56473d-b9bd-4eb1-96d0-8569ec7a9003
    Title: "The user has added an account to a security group"
-   Content: "The user has added {{SubjectAccount}} to the {{TargetDomainName}}\\{{TargetUserName}} group"
+   Content: "The user has added {{MemberAdded}} to the {{TargetAccount}} group, {{Count}} time(s)"
    Description: "This activity displays the user that added an account and the account that was added to a security group"
    QueryDefinitions:
-    Filter: "where (SubjectNameMatch == true and SubjectNTDomainMatch == true) or SubjectSidMatch == true"
-    SummarizeBy: "SubjectAccount, TargetDomainName, TargetUserName, TargetSid"
+    Filter: "where ((SubjectNameMatch == true and SubjectNTDomainMatch == true) or SubjectSidMatch == true) and not(TargetSid matches regex WellKnownLocalGroupSID or TargetSid matches regex WellKnownDomainGroupSID)"
+    SummarizeBy: "SubjectAccount, MemberAdded, TargetAccount, TargetSid"
+# User was added to security groups
+ - Id: 252c9ad7-2957-43cd-8f33-4ac4bb56e119
+   Title: "This user was added to a security group"
+   Content: "This user was added to the {{TargetAccount}} group, {{Count}} time(s)"
+   Description: "This activity displays that this user was added to a security group"
+   QueryDefinitions:
+    Filter: "where ((MemberNameMatch == true and MemberNTDomainMatch == true) or MemberSidMatch == true) and not(TargetSid matches regex WellKnownLocalGroupSID or TargetSid matches regex WellKnownDomainGroupSID)"
+    SummarizeBy: "SubjectAccount, TargetAccount, TargetSid"
