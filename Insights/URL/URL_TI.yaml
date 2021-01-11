@@ -1,0 +1,44 @@
+SchemaVersion: '1.0'
+DataTypes:
+- DataType: ThreatIntelligenceIndicator
+Provider: Sentinel
+Type: KQL
+EntitiesFilter: {}
+BaseQuery: "ThreatIntelligenceIndicator | where isnotempty( Url ) or isnotempty( DomainName )| extend match = Url matches regex @'^\\w{2,6}://' | extend Url = iff(match, Url, strcat('Unknown://', Url))| extend parsedURL=parse_url(Url) | evaluate bag_unpack(parsedURL) | where parse_url('{{url}}')['Host'] == coalesce(tostring(parse_url(Url)['Host']),DomainName, Url) | parse Description with * 'iType: ' MaliciousType'; State:' State'; Org: 'Org'; Source: 'Source_"
+RequiredInputFieldsSets:
+- - URL_Url
+Insights:
+  Id: ece6fad7-591e-4aa2-9050-6780cab2ccd2
+  DisplayName: Threat Intelligence for URL
+  Description: "### Description \n___\n Indicates the threat intelligence available for Urls similar to this url"
+  DefaultTimeRange:
+    BeforeRange: 14d
+    AfterRange: 0d
+  ReferenceTimeRange:
+    BeforeRange: 0d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: Title
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Total
+      OutputType: Number
+      SupportDeepLink: true
+    QueriesDefinitions:
+    - Filter: ''
+      Summarize: " top-nested 5 of ThreatType with others='Other Types' by Count=count()"
+      Project: project Title = ThreatType, Total=Count
+      LinkColumnsDefinitions:
+      - ProjectedName: Total
+        Query: "{{BaseQuery}}"
+    - Filter: reduce by Path with threshold=0.3 | project ['Path patterns']=Pattern,
+        Count
+      Summarize: summarize Count= count()
+      Project: project Title='Folder patterns', Total=Count
+      LinkColumnsDefinitions:
+      - ProjectedName: Total
+        Query: "{{BaseQuery}} | {{RowSummarize}}'"
+  AdditionalQuery:
+    Text: View all for Url domain
+    Query: as TIs
