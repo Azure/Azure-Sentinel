@@ -18,6 +18,7 @@ When a new Azure Sentinel is created,this playbook gets triggered and performs b
 ![Adaptive Card example](./AdaptiveCard.jpg)
 
 ### Prerequisites 
+1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).**
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
 1. This playbook will add new rules to existing Network Collections in Azure Firewalls in your subscription. Make sure you have such prior to running the playbook. 
 1. **Permissions required for this playbook** <br>
