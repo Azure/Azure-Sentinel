@@ -41,6 +41,9 @@ describe("logoValidator", () => {
   it("Should not throw an exception as logo file should not have embed png", async () => {
     await checkValid(".script/tests/logoValidatorTest/testFiles/filewithoutpngembed.svg");
   });
+  it("Should throw an exception as logo file should be of less then or equal to 5 kb", async () => {
+    await checkInvalid(".script/tests/logoValidatorTest/testFiles/MoreThen5KB.svg","logoValidationError");
+  });
   
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidLogo(filePath);
