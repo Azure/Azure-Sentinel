@@ -6,4 +6,29 @@ The short answer is NO it simply won't! and this answer is applicable only to th
 
 Likely there is an easy way to do this and it's also meeting best practices by utilizing the playbooks in Azure sentinel itself.
 
-In following lines we can see an example of how to do this
+an Azure Sentenil incidents we can use the attribute VendorOriginID  to correlate the incident with
+its corresponding alert or incident in other products like wdatp.
+So apparently this is the matching attribute that we can use to build up the playbook.
+looking at the steps:
+
+Step#1: When a response to an Azure Sentinel alert is triggered:
+
+This step simply implies when the playbook will be triggered
+
+Step#2: Alert - Get incident
+
+In this step we will need to fill it up with dynamic attributes
+Step#3: Update incident
+
+In this step we set the incident status to "Closed" in Sentinel
+Step#4: Condition:
+
+Now it's time to set the condition and actions required to finish the task.
+
+the condition i used here is to set dynamic content attribute to: "Incident Alert product names"
+
+if condition is met then next step would be to set the corresponding alert status in MDATP to "Resolved"
+
+Here we will come to use the actual matching attribute called "provider alert ID" which is exactly same as VendorOriginID mentioned above
+Note also here that we retrieved attribute "provider Alert ID" and used the MDATP connector to pass it to. So it's exactly like sending a query to MDATP 
+
