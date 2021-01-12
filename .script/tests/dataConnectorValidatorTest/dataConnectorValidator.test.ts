@@ -27,6 +27,30 @@ describe("dataConnectorValidator", () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceInDataConnectorDataType.json","DataConnectorValidationError");
   });
 
+  it("should pass when CEF data connector have valid set of permissions", async () => {
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validCEFConnectorPermissions.json");
+  });
+
+  it("should throw an exception when CEF data connector have Invalid set of permissions", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/invalidCEFConnectorPermissions.json","DataConnectorValidationError");
+  });
+
+  it("should pass when Syslog data connector have valid set of permissions", async () => {
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorPermissions.json");
+  });
+
+  it("should throw an exception when Syslog data connector have Invalid set of permissions", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/invalidSyslogConnectorPermissions.json","DataConnectorValidationError");
+  });
+
+  it("should pass when Azure Function data connector have valid set of permissions", async () => {
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/Agari/validAzureFunctionConnectorPermissions.json");
+  });
+
+  it("should throw an exception when Azure Function data connector have Invalid set of permissions", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/invalidAzureFunctionConnectorPermissions.json","DataConnectorValidationError");
+  });
+
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidDataConnectorSchema(filePath);
     expect(result).to.equal(ExitCode.SUCCESS);

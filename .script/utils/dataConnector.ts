@@ -187,3 +187,10 @@ export interface InstructionStep {
   bottomBorder?: boolean;
   isComingSoon?: boolean;
 }
+
+export enum ConnectorCategory {
+  CEF="CEF",
+  SysLog="Syslog",
+  RestAPI="REST_API",
+  AzureFunction="Azure_Function",
+}

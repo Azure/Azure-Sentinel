@@ -4,23 +4,26 @@ import { ExitCode } from "./utils/exitCode";
 import { isValidSchema } from "./utils/jsonSchemaChecker";
 import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
 import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
+import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
 import * as logger from "./utils/logger";
+import { ConnectorCategory } from "./utils/dataConnector";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
   let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
   let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/DataConnectorSchema.json", "utf8"));
-if(isPotentialConnectorJson(jsonFile))
-{
-  isValidSchema(jsonFile, schema);
-  isValidId(jsonFile.id);
-  isValidDataType(jsonFile.dataTypes);
-}
-else{
-  console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
-}
+  if(isPotentialConnectorJson(jsonFile))
+  {
+    isValidSchema(jsonFile, schema);
+    isValidId(jsonFile.id);
+    isValidDataType(jsonFile.dataTypes);
+    isValidPermissions(jsonFile.permissions, getConnectorCategory(jsonFile.dataTypes, filePath));
+  }
+  else{
+    console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
+  }
 
-  return ExitCode.SUCCESS;
-}
+    return ExitCode.SUCCESS;
+  }
 
 function isPotentialConnectorJson(jsonFile: any) {
   if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined")
@@ -28,6 +31,35 @@ function isPotentialConnectorJson(jsonFile: any) {
     return true;
   }
   return false;
+}
+
+function getConnectorCategory(dataTypes : any, filePath: string)
+{
+  if (dataTypes[0].name.includes("CommonSecurityLog"))
+  {
+    return ConnectorCategory.CEF;
+  }
+  else if (dataTypes[0].name.includes("Syslog"))
+  {
+    return ConnectorCategory.SysLog;
+  }
+  else if(dataTypes[0].name.endsWith("_CL"))
+  {
+    let fileDirectory:string = filePath.substr(0, filePath.lastIndexOf('/'));
+    let isAzureFunction:boolean = false;
+
+    // reads all the file names in the directory to verify the existence of zip folder
+    fs.readdirSync(fileDirectory).forEach(file => {
+      if(file.includes(".zip"))
+      {
+        isAzureFunction = true;
+      }
+    });
+    
+    return isAzureFunction ? ConnectorCategory.AzureFunction: ConnectorCategory.RestAPI;
+  }
+
+  return "";
 }
 
 let fileTypeSuffixes = ["*.json"];
