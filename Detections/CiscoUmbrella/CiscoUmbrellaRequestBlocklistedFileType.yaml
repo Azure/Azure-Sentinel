@@ -14,18 +14,24 @@ triggerThreshold: 0
 tactics:
   - InitialAccess
 query: |
-let file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
-let lbtime = 10m;
-Cisco_Umbrella
-| where TimeGenerated > ago(lbtime)
-| where EventType == 'proxylogs'
-| where DvcAction =~ 'Allowed'
-| extend file_ext = extract(@'.*(\.\w+)$', 1, UrlOriginal)
-| extend Filename = extract(@'.*\/*\/(.*\.\w+)$', 1, UrlOriginal)
-| where file_ext in (file_ext_blocklist)
-| project TimeGenerated
-        , SrcIpAddr
-        , Identities
-        , Filename
-| extend IPCustomEntity = SrcIpAddr
-| extend AccountCustomEntity = Identities
+  let file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+  let lbtime = 10m;
+  Cisco_Umbrella
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'proxylogs'
+  | where DvcAction =~ 'Allowed'
+  | extend file_ext = extract(@'.*(\.\w+)$', 1, UrlOriginal)
+  | extend Filename = extract(@'.*\/*\/(.*\.\w+)$', 1, UrlOriginal)
+  | where file_ext in (file_ext_blocklist)
+  | project TimeGenerated, SrcIpAddr, Identities, Filename
+  | extend IPCustomEntity = SrcIpAddr
+  | extend AccountCustomEntity = Identities
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
