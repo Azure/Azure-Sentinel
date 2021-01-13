@@ -6,7 +6,7 @@ import { ExitCode } from "../../utils/exitCode";
 chai.use(chaiAsPromised);
 
 describe("logoValidator", () => {
-  it("Should not throw an exception as logo file should be in svg format", async () => {
+  it("Should pass when logo file is in svg format", async () => {
     await checkValid(".script/tests/logoValidatorTest/testFiles/Morphisec_Logo.svg");
   });
 
@@ -34,11 +34,11 @@ describe("logoValidator", () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/FileWithInvalidGuidId.svg","logoValidationError");
   });
 
-  it("Should throw an exception as logo file should not have same id of two tag", async () => {
+  it("Should pass when there is same id for two tag ", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/FileWithSameGuidID.svg","logoValidationError");
   });
 
-  it("Should not throw an exception as logo file should not have embed png", async () => {
+  it("Should pass when logo file has embed png", async () => {
     await checkValid(".script/tests/logoValidatorTest/testFiles/filewithoutpngembed.svg");
   });
   it("Should throw an exception as logo file should be of less then or equal to 5 kb", async () => {
