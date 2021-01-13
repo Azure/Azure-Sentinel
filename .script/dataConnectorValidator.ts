@@ -5,18 +5,21 @@ import { isValidSchema } from "./utils/jsonSchemaChecker";
 import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
 import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
 import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
+import { isValidFileName } from "./utils/dataConnectorCheckers/fileNameChecker";
 import * as logger from "./utils/logger";
 import { ConnectorCategory } from "./utils/dataConnector";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
   let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/DataConnectorSchema.json", "utf8"));
   if(isPotentialConnectorJson(jsonFile))
   {
+    let connectorCategory = getConnectorCategory(jsonFile.dataTypes, filePath);
+    let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/"+ connectorCategory +"_ConnectorSchema.json", "utf8"));
     isValidSchema(jsonFile, schema);
     isValidId(jsonFile.id);
     isValidDataType(jsonFile.dataTypes);
-    isValidPermissions(jsonFile.permissions, getConnectorCategory(jsonFile.dataTypes, filePath));
+    isValidFileName(filePath);
+    isValidPermissions(jsonFile.permissions, connectorCategory);
   }
   else{
     console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)

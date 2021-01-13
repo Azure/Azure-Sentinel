@@ -10,8 +10,8 @@ const CEFRestAPIPermissions = {
             "providerDisplayName": "Workspace",
             "scope": "Workspace",
             "requiredPermissions": {
-                "read": true,
                 "write": true,
+                "read": true,
                 "delete": true
             }
         },
@@ -73,26 +73,25 @@ const AzureFunctionPermissions = {
     ]
 };
 
-
 export function isValidPermissions(permissions: RequiredConnectorPermissions, connectorCategory: any) {   
     
     switch(connectorCategory)
     {
         case ConnectorCategory.CEF:
         case ConnectorCategory.RestAPI:
-            if(JSON.stringify(permissions.resourceProvider) !== JSON.stringify(CEFRestAPIPermissions.resourceProvider))
+            if(!_.isEqual(permissions.resourceProvider, CEFRestAPIPermissions.resourceProvider))
             {
                 throw new DataConnectorValidationError("Provided permissions does not match with "+ connectorCategory +" Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_"+ connectorCategory +"_template.json ");
             }
             break;
         case ConnectorCategory.SysLog:
-            if(JSON.stringify(permissions.resourceProvider) !== JSON.stringify(SysLogPermissions.resourceProvider))
+            if(!_.isEqual(permissions.resourceProvider, SysLogPermissions.resourceProvider))
             {
                 throw new DataConnectorValidationError("Provided permissions does not match with Syslog Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json ");
             }
             break;
             case ConnectorCategory.AzureFunction:
-            if(JSON.stringify(permissions).includes(JSON.stringify(AzureFunctionPermissions)))
+            if(!(_.isEqual(permissions.resourceProvider, AzureFunctionPermissions.resourceProvider) && isValidCustomPermission(permissions)))
             {
                 throw new DataConnectorValidationError("Provided permissions does not match with Azure Function Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json");
             }
@@ -102,4 +101,15 @@ export function isValidPermissions(permissions: RequiredConnectorPermissions, co
     }
 
     return true;
+}
+
+function isValidCustomPermission(permissions:RequiredConnectorPermissions)
+{
+    if(permissions.customs?.some(customPermission=>customPermission.name===(AzureFunctionPermissions.customs[0].name)
+    && customPermission.description===(AzureFunctionPermissions.customs[0].description)))
+    {
+        return true;
+    }
+    
+    return false;
 }
