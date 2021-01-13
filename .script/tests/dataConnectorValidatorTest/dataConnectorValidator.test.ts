@@ -35,6 +35,10 @@ describe("dataConnectorValidator", () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingAdditionalRequirementBanner.json", "SchemaError");
   });
 
+  it("should throw an exception when DataConnector FileName is having space in file name", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceIn DataConnector FileName.json", "DataConnectorValidationError");
+  });
+
   it("should throw an exception when dataConnectorSchema.json is having space in ID property", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceInDataConnectorId.json", "DataConnectorValidationError");
   });
