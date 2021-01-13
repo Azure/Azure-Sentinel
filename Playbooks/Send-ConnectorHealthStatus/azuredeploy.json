@@ -1,0 +1,261 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ConnectorHealthApp",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+
+        "SentinelWSResourceGroup": {
+            "defaultValue": "az-sentinel-rg",
+            "type": "string"
+        },
+        "SentinelWSName": {
+            "defaultValue": "az-sentinel-ws-name",
+            "type": "string"
+        },
+        "SentinelSubID": {
+            "defaultValue": "00000000-0000-0000-0000-000000000000",
+            "type": "string"
+        },
+        "MailList": {
+            "defaultValue": "<user1>@<domain>;<user2>@<domain>;...",
+            "type": "string"
+        }
+    },
+    "variables":{
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]",
+        "sentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "azuremonitorlogsConnectionName": "[concat('azuremon-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+     
+    },
+    "resources":  [
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('sentinelConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[parameters('UserName')]",
+          "customParameterValues": {},
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+          }
+        }
+      },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+
+        {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('TeamsConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[parameters('UserName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+          }
+        }
+      },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+          
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            
+            "dependsOn":[
+                "[resourceId('Microsoft.Web/connections',variables('sentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections',variables('o365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections',variables('azuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+                ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 48
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Heartbeat_Query": {
+                            "runAfter": {
+                                "Ingestion_Anomaly_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "Heartbeat\n| summarize LastHeartbeat = max(TimeGenerated) by Computer\n| where isnotempty(Computer)\n| where LastHeartbeat < ago(5h)",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/visualizeQuery",
+                                "queries": {
+                                    "resourcegroups": "[parameters('SentinelWSResourceGroup')]",
+                                    "resourcename": "[parameters('SentinelWSName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SentinelSubID')]",
+                                    "timerange": "Last 48 hours",
+                                    "visType": "Html Table"
+                                }
+                            }
+                        },
+                        "Ingestion_Anomaly_Query": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let UpperThreshold = 3 ; \nlet LowerThreshold = -3 ; \nlet TableIgnoreList = dynamic(['SecurityAlert', 'BehaviorAnalytics', 'SecurityBaseline', 'ProtectionStatus']); // select tables you want to EXCLUDE from the results\nunion withsource=TableName1 *\n| make-series count() on TimeGenerated from ago(14d) to now() step 1d by TableName1\n| extend (anomalies, score, baseline) = series_decompose_anomalies(count_, 1.5, 7, 'linefit', 1, 'ctukey', 0.01)\n| where anomalies[-1] == 1 or anomalies[-1] == -1\n| extend Score = score[-1]\n| where Score >= UpperThreshold or Score <= LowerThreshold | where TableName1 !in (TableIgnoreList)\n| project TableName=TableName1, ExpectedCount=round(todouble(baseline[-1]),1), ActualCount=round(todouble(count_[-1]),1), AnomalyScore = round(todouble(score[-1]),1)",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/visualizeQuery",
+                                "queries": {
+                                    "resourcegroups": "[parameters('SentinelWSResourceGroup')]",
+                                    "resourcename": "[parameters('SentinelWSName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SentinelSubID')]",
+                                    "timerange": "Set in query",
+                                    "visType": "Html Table"
+                                }
+                            }
+                        },
+                        "Post_a_message_as_the_Flow_bot_to_a_channel": {
+                            "runAfter": {
+                                "Send_an_email_to_the_SOC_Team": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "messageBody": "Tables with Data Ingestion Anomalies\n@{base64ToString(body('Ingestion_Anomaly_Query')?['body'])}\n\nVirtual Machines without Heartbeat\n@{base64ToString(body('Heartbeat_Query')?['body'])}\n",
+                                    "recipient": {
+                                        "channelId": "19:34df5ad3b1844c50ac781ebcdcf8c3ce@thread.tacv2"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/flowbot/actions/notification/recipienttypes/channel",
+                                "queries": {
+                                    "groupId": "100fb594-a54a-42b2-b4c2-2ffaaae3940a"
+                                }
+                            }
+                        },
+                        "Send_an_email_to_the_SOC_Team": {
+                            "runAfter": {
+                                "Heartbeat_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p><span style=\"font-size: 14px\"><strong>Tables with Data Ingestion Anomalies<br>\n</strong></span><br>\n@{base64ToString(body('Ingestion_Anomaly_Query')?['body'])}<br>\n<br>\n<span style=\"color: rgb(147,101,184)\"><strong>Virtual Machines without Heartbeat</strong></span><span style=\"color: rgb(26,188,156)\"><strong><br>\n<br>\n</strong></span><span style=\"color: rgb(26,188,156)\"><strong>@{base64ToString(body('Heartbeat_Query')?['body'])}</strong></span><span style=\"color: rgb(26,188,156)\"><strong></strong></span><br>\n</p>",
+                                    "Importance": "High",
+                                    "Subject": "Data Ingestion & Heartbeat Anomaly Incident Summary",
+                                    "To": "MailList"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                    "value": {
+                                    "azuremonitorlogs": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                                        "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                                    },
+                                    "azuresentinel": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                                        "connectionName": "[variables('sentinelConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                    },
+                                    "office365": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                        "connectionName": "[variables('o365ConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                                    },
+                                    "teams": {
+                                        "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                        "connectionName": "[variables('TeamsConnectionName')]",
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                                    
+                        }
+                    }
+                }
+               }
+            }
+        }
+    ]
+}
