@@ -463,7 +463,7 @@ def check_file_read_permissions(file_path, workspace_id):
     if e is not None:
         print_warning("Unable to verify file permissions for path:" + file_path)
         return False
-    octal_permissions = o.strip("\'\n")
+    octal_permissions = o.decode('UTF-8').strip("\'\n")
     other_permissions = octal_permissions[-1]
     if int(other_permissions) < file_read_permissions_octal_representation:
         # prompt the user to change the file permissions to default file permissions in consts
