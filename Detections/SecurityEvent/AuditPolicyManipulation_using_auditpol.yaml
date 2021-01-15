@@ -1,0 +1,44 @@
+id: 66276b14-32c5-4226-88e3-080dacc31ce1
+name: Audit policy manipulation using auditpol utility
+description: |
+   This detects attempt to manipulate audit policies using auditpol command
+   Refer to auditpol syntax: https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/auditpol  
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  let timeframe = 5d;
+  let AccountAllowList = dynamic(['SYSTEM']);
+  let SubCategoryList = dynamic(["Logoff", "Account Lockout", "User Account Management", "Authorization Policy Change"]); // Add any Category in the list to be allowed or disallowed
+  let tokens = dynamic(["clear", "remove", "success:disable","failure:disable"]); // 
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  //| where Process =~ "auditpol.exe" 
+  | where CommandLine has_any (tokens)
+  | where AccountType != "Machine" and Account !in (AccountAllowList)
+  | parse CommandLine with * "/subcategory:" subcategorytoken
+  | extend SubCategory = tostring(split(subcategorytoken, "\"")[1]) , Toggle =  tostring(split(subcategorytoken, "\"")[2])
+  | where SubCategory in (SubCategoryList) //use in for inclusion or !in for exclusion
+  | where Toggle !in ("/failure:disable", " /success:enable /failure:disable") // use this filter if required to exclude certain toggles
+  | project TimeGenerated, Computer, Account, SubjectDomainName,  SubjectUserName, Process, ParentProcessName,  CommandLine, SubCategory, Toggle
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

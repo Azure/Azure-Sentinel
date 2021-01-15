@@ -1,0 +1,29 @@
+id: 3dc5dc8b-160b-407e-9925-24a91e3599df
+name: Firewall rule changes using netsh
+description: |
+  This query will show firewall rule changes using netsh utility.
+  Refer to netsh syntax: https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/netsh
+severity: Low
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  let timeframe = 1d;
+  let AccountAllowList = dynamic(['SYSTEM']);
+  let tokens = dynamic(["add", "delete", "set"]); 
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where Process =~ "netsh.exe" 
+  | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
+  | where AccountType != "Machine" and Account !in (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@"(?P<key>\w+)=(?P<value>\S+)", dynamic(["key","value"]), CommandLine)
+  | mv-apply KeyValuePairs on (
+      summarize CommandLineParsed = make_bag(pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+  )
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Computer, Account, SubjectDomainName, SubjectUserName, CommandLine, Process, ParentProcessName, tostring(CommandLineParsed)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
