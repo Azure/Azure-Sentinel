@@ -2,12 +2,15 @@
 id: 473d57e6-f787-435c-a16b-b38b51fa9a4b 
 name: Security Service Registry ACL Modification
 description: |
-    'Identifies attempts to modify registry ACL to evade security solutions. In Solorigate attack, the attackers were found modifying registry permissions so services.exe cannot access the relevant registry keys to start the service.
-     The detection leverages Security Event as well as MDATP data to identify when specific security services related registry permissions are modified. 
-     The detection is not specific to Solorigate but also includes coverage for a few common tools that perform this activity. 
-     Below is also links to some guidance around enabling registry auditing
+    'Identifies attempts to modify registry ACL to evade security solutions. In the Solorigate attack, the attackers were found modifying registry permissions so services.exe cannot access the relevant registry keys to start the service.
+     The detection leverages Security Event as well as MDE data to identify when specific security services registry permissions are modified. 
+     Only some portions of this detection are related to Solorigate, it also includes coverage for some common tools that perform this activity. 
+     Reference on guidance for enabling registry auditing:
+     - https://docs.microsoft.com/windows/security/threat-protection/auditing/advanced-security-auditing-faq
+     - https://docs.microsoft.com/windows/security/threat-protection/auditing/appendix-a-security-monitoring-recommendations-for-many-audit-events
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/audit-registry
-     - https://docs.microsoft.com/previous-versions/windows/it-pro/windows-server-2003/cc757250(v=ws.10)?redirectedfrom=MSDN'
+     - https://docs.microsoft.com/windows/security/threat-protection/auditing/event-4670
+     For the above event to be created the audit policy for the registry must have auditing enabled for Write DAC and/or Write Owner'
 severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -29,13 +32,13 @@ tags:
 query: |
  
   let timeframe = 1d;
-  let servicelist = dynamic(['services\\HealthService', 'Services\\Sense', 'Services\\WinDefend', 'Services\\MsSecFlt', 'Services\\DiagTrack', 'Services\\SgrmBroker', 'Services\\SgrmAgent', 'Services\\AATPSensorUpdater' , 'Services\\AATPSensor', 'Services\\mpssvc']);
+  let servicelist = dynamic(['Services\\HealthService', 'Services\\Sense', 'Services\\WinDefend', 'Services\\MsSecFlt', 'Services\\DiagTrack', 'Services\\SgrmBroker', 'Services\\SgrmAgent', 'Services\\AATPSensorUpdater' , 'Services\\AATPSensor', 'Services\\mpssvc']);
   let filename = dynamic(["subinacl.exe",'SetACL.exe']);
   (union isfuzzy=true
   (
   SecurityEvent
   | where TimeGenerated >= ago(timeframe)
-  | where EventID == 4670       // For this event to be created the audit policy in registry must have auditing enabled for “Write DAC" and/or "Write Owner”
+  | where EventID == 4670
   | parse EventData with * 'OldSd">' OldSd "<" *
   | parse EventData with * 'NewSd">' NewSd "<" *
   | where ObjectName has 'Registry' and ObjectName has_any (servicelist)
