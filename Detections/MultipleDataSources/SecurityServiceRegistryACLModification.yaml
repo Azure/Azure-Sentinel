@@ -1,0 +1,72 @@
+
+id: 473d57e6-f787-435c-a16b-b38b51fa9a4b 
+name: Security Service Registry ACL Modification
+description: |
+    'Identifies attempts to modify registry ACL to evade security solutions. In Solorigate attack, the attackers were found modifying registry permissions so services.exe cannot access the relevant registry keys to start the service.
+     The detection leverages Security Event as well as MDATP data to identify when specific security services related registry permissions are modified. 
+     The detection is not specific to Solorigate but also includes coverage for a few common tools that perform this activity. 
+     Below is also links to some guidance around enabling registry auditing
+     - https://docs.microsoft.com/windows/security/threat-protection/auditing/audit-registry
+     - https://docs.microsoft.com/previous-versions/windows/it-pro/windows-server-2003/cc757250(v=ws.10)?redirectedfrom=MSDN'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent 
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+tags: 
+  - Solorigate
+query: |
+ 
+  let timeframe = 1d;
+  let servicelist = dynamic(['services\\HealthService', 'Services\\Sense', 'Services\\WinDefend', 'Services\\MsSecFlt', 'Services\\DiagTrack', 'Services\\SgrmBroker', 'Services\\SgrmAgent', 'Services\\AATPSensorUpdater' , 'Services\\AATPSensor', 'Services\\mpssvc']);
+  let filename = dynamic(["subinacl.exe",'SetACL.exe']);
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4670       // For this event to be created the audit policy in registry must have auditing enabled for “Write DAC" and/or "Write Owner”
+  | parse EventData with * 'OldSd">' OldSd "<" *
+  | parse EventData with * 'NewSd">' NewSd "<" *
+  | where ObjectName has 'Registry' and ObjectName has_any (servicelist)
+  | project TimeGenerated, Computer, Account,  ProcessName, ProcessId, ObjectName, EventData, Activity, HandleId, SubjectLogonId, OldSd, NewSd
+  ),
+  (
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688
+  | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
+  | where ProcessName in~ (filename) 
+  | where CommandLine has_any (servicelist)
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where InitiatingProcessFileName in~ (filename) 
+  | where InitiatingProcessCommandLine has_any(servicelist)
+  | extend Account = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName), Computer = DeviceName
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName = InitiatingProcessFileName, ProcessNameFullPath = FolderPath, Activity = ActionType, CommandLine = InitiatingProcessCommandLine, Type, InitiatingProcessParentFileName
+  )
+  )
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+ 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
