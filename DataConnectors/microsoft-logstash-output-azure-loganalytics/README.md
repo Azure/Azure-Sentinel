@@ -17,6 +17,8 @@ Azure Sentinel provides Logstash output plugin to Log analytics workspace.
 Install the microsoft-logstash-output-azure-loganalytics, use [Logstash Working with plugins](<https://www.elastic.co/guide/en/logstash/current/working-with-plugins.html>) document. 
 For offline setup follow [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
+Required logstash version: between 7.0 and 7.9
+
 ## Configuration
 
 in your Logstash configuration file, add the Azure Sentinel output plugin to the configuration with following values: 
