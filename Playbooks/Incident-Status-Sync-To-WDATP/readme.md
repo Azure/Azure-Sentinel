@@ -27,13 +27,13 @@ In following lines we can see an example of how to do this:
 
 The bottom line when exploring whether it could be possible technically to sync an incident status between sentinel and MDATP is to find a common matching criteria between the two entities. let's look at following incident in Azure sentinel for instance:
 
- ![Picture0](./Graphics/1.GIF)
+ ![Picture1](./Graphics/1.GIF)
 
 If you click on the incident and then from the right pane click on "Alerts" you will be taken to the page that shows the query result as shown in following screens:
 
-![Picture0](./Graphics/2.GIF)
+![Picture2](./Graphics/2.GIF)
 
-![Picture0](./Graphics/3.GIF)
+![Picture3](./Graphics/3.GIF)
 
 what we would be interested to see is in particular the VendorOriginID attribute
 
@@ -45,7 +45,7 @@ following is an example of a sample playbook for demonstration:
 
 This is how the logic app (Playbook) looks like:
 
-![Picture0](./Graphics/4.GIF)
+![Picture4](./Graphics/4.GIF)
 
 
 looking at the steps:
@@ -59,7 +59,7 @@ This step simply implies when the playbook will be triggered
 
 In this step we will need to fill it up with dynamic attributes
 
-![Picture0](./Graphics/5.GIF)
+![Picture5](./Graphics/5.GIF)
 
 
 
@@ -67,7 +67,7 @@ In this step we will need to fill it up with dynamic attributes
 
 In this step we set the incident status to "Closed" in Sentinel
 
-![Picture0](./Graphics/6.GIF)
+![Picture6](./Graphics/6.GIF)
 
 
 **Step#4:** Condition:
@@ -76,22 +76,22 @@ Now it's time to set the condition and actions required to finish the task.
 
 the condition i used here is to set dynamic content attribute to: "Incident Alert product names"
 
-![Picture0](./Graphics/7.GIF)
+![Picture7](./Graphics/7.GIF)
 
 if condition is met then next step would be to set the corresponding alert status in MDATP to "Resolved"
 
 Here we will come to use the actual matching attribute called "provider alert ID" which is exactly same as VendorOriginID mentioned above
 
-![Picture0](./Graphics/8.GIF)
+![Picture8](./Graphics/8.GIF)
 
 
 Note also here that we retrieved attribute "provider Alert ID" and used the MDATP connector to pass it to. So it's exactly like sending a query to MDATP with the specific alert id ed637431102114129586_160070831 in order to set it to "resovled"
 
 **Step#5:** testing the playbook in action:
 
-![Picture0](./Graphics/9.GIF)
+![Picture9](./Graphics/9.GIF)
 
-![Picture0](./Graphics/10.GIF)
+![Picture10](./Graphics/10.GIF)
 
 As you see above it was able to pull the alert ID ed637431102114129586_160070831 that is equal to the VendorOriginID in order to query for it in MDATP and close the alert.
 
