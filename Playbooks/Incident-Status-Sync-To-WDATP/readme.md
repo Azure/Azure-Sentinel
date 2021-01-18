@@ -1,5 +1,5 @@
 
-This playbook will disable the user in Azure Active Directoy and add a comment to the incident
+This playbook will sync incident status in Azure sentinel to the corresponding incident in MDATP
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUser%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
