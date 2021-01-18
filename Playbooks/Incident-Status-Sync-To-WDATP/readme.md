@@ -37,6 +37,8 @@ In this step we will need to fill it up with dynamic attributes
 Step#3: Update incident
 
 In this step we set the incident status to "Closed" in Sentinel
+
+
 Step#4: Condition:
 
 Now it's time to set the condition and actions required to finish the task.
