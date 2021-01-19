@@ -32,7 +32,10 @@ in your Logstash configuration file, add the Azure Sentinel output plugin to the
 - plugin_flash_interval – Optional filed, define the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - Max_items – Optional field, 2000 by default. this parameter will control the maximum batch size. This value will be changed if the user didn’t specify “amount_resizing = false” in the configuration. 
 
-Note: View the GitHub to learn more about the sent message’s configuration, performance settings and mechanism 
+Note: View the GitHub to learn more about the sent message’s configuration, performance settings and mechanism
+
+Security notice: We recommend not to implicitly state the workspace_id and workspace_key in your Logstash configuration for security reasons.
+                 It is best to store this sensitive information in a Logstash KeyStore as described here- https://www.elastic.co/guide/en/elasticsearch/reference/current/get-started-logstash-user.html
 
 ## Tests
 
