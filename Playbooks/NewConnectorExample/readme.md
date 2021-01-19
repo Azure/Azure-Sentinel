@@ -114,4 +114,4 @@ Once deployment is complete, you will need to authorize each connection. For eac
 <a name="references">
 
 ## Learn more
-*  [Relevat API docs](url)
+*  [Relevant API docs](url)
