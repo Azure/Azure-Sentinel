@@ -1,12 +1,10 @@
 import { LogoValidationError } from "../validationError";
 
 export function isValidLogoImageSVGContent(LogoImagesContent: string) {
-  if (isLogoSVGHasStyleTag(LogoImagesContent)) {
-      throw new LogoValidationError(`Ensure raw file of logo does not have any style formats`);
+  if (isLogoSVGHasillegalAttribute(LogoImagesContent)) {
+      throw new LogoValidationError(`Ensure raw file of logo does not have any style or ClS formats`);
   }
-  if (isLogoSVGHasCLSTag(LogoImagesContent)) {
-    throw new LogoValidationError(`Ensure raw file of logo does not have any CLS formats`);
-    }
+  
   if (isLogoSVGHasxmlnsxlink(LogoImagesContent)) {
     throw new LogoValidationError(`Ensure raw file of logo does not have any xmlns:xlink`);
   }
@@ -27,13 +25,18 @@ export function isValidLogoImageSVGContent(LogoImagesContent: string) {
   }
 };
 
-function isLogoSVGHasStyleTag(LogoImagesContent: string) {
-    return  LogoImagesContent.includes("style=");
+function isLogoSVGHasillegalAttribute(LogoImagesContent: string) {
+ let illegalAttribute = ["style=", "cls="]
+ var result=false;
+ illegalAttribute.forEach(illegalAttribute=>{
+   if(LogoImagesContent.includes(illegalAttribute))
+   {
+          result=true
+   }
+ })
+    return result;
 }
 
-function isLogoSVGHasCLSTag(LogoImagesContent: string) {
-  return  LogoImagesContent.includes("cls=");
-}
 
 function isLogoSVGHasxmlnsxlink(LogoImagesContent: string) {
     return  LogoImagesContent.includes("xmlns:xlink");
