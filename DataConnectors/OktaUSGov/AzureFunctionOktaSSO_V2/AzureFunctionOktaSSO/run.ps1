@@ -145,19 +145,19 @@ do {
             -method $method `
             -contentType $contentType `
             -resource $resource
-        #$LAuri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+        
 		if ([string]::IsNullOrEmpty($logAnalyticsUri))
 		{
-			$LAuri "https://" + $customerId + ".ods.opinsights.azure.com"
+			$logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
 		}
-		$LAuri = $LAuri + $resource + "?api-version=2016-04-01"
+		$logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
             "x-ms-date" = $rfc1123date;
             "time-generated-field" = $TimeStampField
         }
-        $result = Invoke-WebRequest -Uri $LAuri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
+        $result = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
         #update State table for next time we execute function
         #store details in function storage table to retrieve next time function runs 
         $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
