@@ -176,7 +176,6 @@ Function Ingest-Core-Fields-Single-Table {
 }
 
 
-
 Function Ingest-AWS-ResourceType-Multi-Tables {
 	Param(
 	$eventSources,
@@ -242,96 +241,105 @@ foreach ($snsRecord in $LambdaInput.Records)
 			$downloadedFile = Read-S3Object -BucketName $s3BucketName -Key $s3BucketKey -File "/tmp/$filename"			
 			Write-Host "Object $s3BucketKey is $($downloadedFile.Size) bytes; Extension is $($downloadedFile.Extension)"
 			
-			if ($downloadedFile.Extension -eq '.gz' ) {
+			IF ($downloadedFile.Extension -eq '.gz' ) {
 				$infile = "/tmp/$filename"				
 				$outfile = "/tmp/" + $filename -replace ($downloadedFile.Extension, '')					
 				Expand-GZipFile $infile.Trim() $outfile.Trim()
 				$null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
 				$filename = $filename -replace ($downloadedFile.Extension, '')
 				$filename = $filename.Trim()
-			}
+			
     
-			$logEvents = Get-Content -Raw -LiteralPath ("/tmp/$filename" ) 
-			$logEvents = $LogEvents.Substring(0, ($LogEvents.length) - 1)
-			$LogEvents = $LogEvents -Replace ('{"Records":', '')
-			$loglength = $logEvents.Length    
-			$logevents = Convertfrom-json $LogEvents -AsHashTable
-			$groupevents = @{}
-			$coreEvents = @()
-			$eventSources = @()
-			Foreach ($log in $logevents) {
-				$Logdetails = @{}
-				$Logdetails1 = @{}
-				$b = ((($log.eventSource).split('.'))[0]) -replace ('-', '')
-				IF ($b -eq 'ec2') {
+				$logEvents = Get-Content -Raw -LiteralPath ("/tmp/$filename" ) 
+				$logEvents = $LogEvents.Substring(0, ($LogEvents.length) - 1)
+				$LogEvents = $LogEvents -Replace ('{"Records":', '')
+				$loglength = $logEvents.Length    
+				$logevents = Convertfrom-json $LogEvents -AsHashTable
+				$groupevents = @{}
+				$coreEvents = @()
+				$eventSources = @()
+				Foreach ($log in $logevents) {
+					$Logdetails = @{}
+					$Logdetails1 = @{}
+					$b = ((($log.eventSource).split('.'))[0]) -replace ('-', '')
+					IF ($b -eq 'ec2') {
+						foreach ($col in $eventobjectlist) {
+							$logdetails1 += @{$col = $log.$col }
+						}
+						$ec2Header = $b + '_Header'
+						IF ($null -eq $groupevents[$ec2Header]) {
+							Add-Member -inputobject $groupevents -Name $b -MemberType NoteProperty -value @() -Force
+							$groupevents[$ec2Header] = @()
+							$eventSources += $ec2Header
+						}
+						$groupevents[$ec2Header] += $Logdetails1
+						$Ec2Request = $b + '_Request'
+						IF ($null -eq $groupevents[$Ec2Request]) {
+							Add-Member -inputobject $groupevents -Name $Ec2Request -MemberType NoteProperty -value @() -Force
+							$groupevents[$Ec2Request] = @()
+							$eventSources += $Ec2Request
+						}
+						$ec2Events = @{} 
+						$ec2Events += @{'eventID' = $log.eventID }
+						$ec2Events += @{'awsRegion' = $log.awsRegion }
+						$ec2Events += @{'requestID' = $log.requestID }
+						$ec2Events += @{'eventTime' = $log.eventTime }
+						$ec2Events += @{'requestParameters' = $log.requestParameters }
+						$groupevents[$Ec2Request] += $ec2Events
+						$Ec2Response = $b + '_Response'
+						IF ($null -eq $groupevents[$Ec2Response]) {
+							Add-Member -inputobject $groupevents -Name $Ec2Response -MemberType NoteProperty -value @() -Force
+							$groupevents[$Ec2Response] = @()
+							$eventSources += $Ec2Response
+						}
+						$ec2Events = @{} 
+						$ec2Events += @{'eventID' = $log.eventID }
+						$ec2Events += @{'awsRegion' = $log.awsRegion }
+						$ec2Events += @{'requestID' = $log.requestID }
+						$ec2Events += @{'eventTime' = $log.eventTime }
+						$ec2Events += @{'responseElements' = $log.responseElements }
+						$groupevents[$Ec2Response] += $ec2Events
+					}
+					Else {
+						IF ($null -eq $groupevents[$b]) {
+							Add-Member -inputobject $groupevents -Name $b -MemberType NoteProperty -value @() -Force
+							$groupevents[$b] = @()
+							$eventSources += $b
+						}
+						$groupevents[$b] += $log
+					}
 					foreach ($col in $eventobjectlist) {
-						$logdetails1 += @{$col = $log.$col }
+						$logdetails += @{$col = $log.$col }
 					}
-					$ec2Header = $b + '_Header'
-					IF ($null -eq $groupevents[$ec2Header]) {
-						Add-Member -inputobject $groupevents -Name $b -MemberType NoteProperty -value @() -Force
-						$groupevents[$ec2Header] = @()
-						$eventSources += $ec2Header
-					}
-					$groupevents[$ec2Header] += $Logdetails1
-					$Ec2Request = $b + '_Request'
-					IF ($null -eq $groupevents[$Ec2Request]) {
-						Add-Member -inputobject $groupevents -Name $Ec2Request -MemberType NoteProperty -value @() -Force
-						$groupevents[$Ec2Request] = @()
-						$eventSources += $Ec2Request
-					}
-					$ec2Events = @{} 
-					$ec2Events += @{'eventID' = $log.eventID }
-					$ec2Events += @{'awsRegion' = $log.awsRegion }
-					$ec2Events += @{'requestID' = $log.requestID }
-					$ec2Events += @{'eventTime' = $log.eventTime }
-					$ec2Events += @{'requestParameters' = $log.requestParameters }
-					$groupevents[$Ec2Request] += $ec2Events
-					$Ec2Response = $b + '_Response'
-					IF ($null -eq $groupevents[$Ec2Response]) {
-						Add-Member -inputobject $groupevents -Name $Ec2Response -MemberType NoteProperty -value @() -Force
-						$groupevents[$Ec2Response] = @()
-						$eventSources += $Ec2Response
-					}
-					$ec2Events = @{} 
-					$ec2Events += @{'eventID' = $log.eventID }
-					$ec2Events += @{'awsRegion' = $log.awsRegion }
-					$ec2Events += @{'requestID' = $log.requestID }
-					$ec2Events += @{'eventTime' = $log.eventTime }
-					$ec2Events += @{'responseElements' = $log.responseElements }
-					$groupevents[$Ec2Response] += $ec2Events
+					$coreEvents += $Logdetails
+				
 				}
-				Else {
-					IF ($null -eq $groupevents[$b]) {
-						Add-Member -inputobject $groupevents -Name $b -MemberType NoteProperty -value @() -Force
-						$groupevents[$b] = @()
-						$eventSources += $b
-					}
-					$groupevents[$b] += $log
-				}
-				foreach ($col in $eventobjectlist) {
-					$logdetails += @{$col = $log.$col }
-				}
-				$coreEvents += $Logdetails
-			
-			}
 
-			IF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "true") {
+				IF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "true") {
+					Ingest-Core-Fields-Single-Table -CoreEvents $coreEvents
+					Ingest-AWS-ResourceType-Multi-Tables -EventSources $eventSources -GroupEvents $groupevents
+				}
+				ELSEIF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "false"){
+					Ingest-Core-Fields-Single-Table -CoreEvents $coreEvents
+				}
+				ELSEIF ($IsCoreFieldsAllTable -eq "false" -and $IsSplitAWSResourceTypes -eq "true"){
+					Ingest-AWS-ResourceType-Multi-Tables -EventSources $eventSources -GroupEvents $groupevents
+				}
+				ELSE {
+					Write-Host "Make sure you have correct values supplied in Environment Variables for CoreFieldsAllTable and SplitAWSResourceTypeTables"
+				}
+				
+				$null = Remove-Variable -Name groupevents
+				$null = Remove-Variable -Name LogEvents
+			}
+			ELSEIF ($downloadedFile.Extension -eq '.json'){
+				$coreEvents = Get-Content -Raw -LiteralPath ("/tmp/$filename") | ConvertFrom-Json
 				Ingest-Core-Fields-Single-Table -CoreEvents $coreEvents
-				Ingest-AWS-ResourceType-Multi-Tables -EventSources $eventSources -GroupEvents $groupevents
 			}
-			ELSEIF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "false"){
+			ELSEIF ($downloadedFile.Extension -eq '.csv'){
+				$coreEvents = import-csv "/tmp/$filename"
 				Ingest-Core-Fields-Single-Table -CoreEvents $coreEvents
 			}
-			ELSEIF ($IsCoreFieldsAllTable -eq "false" -and $IsSplitAWSResourceTypes -eq "true"){
-				Ingest-AWS-ResourceType-Multi-Tables -EventSources $eventSources -GroupEvents $groupevents
-			}
-			ELSE {
-				Write-Host "Make sure you have correct values supplied in Environment Variables for CoreFieldsAllTable and SplitAWSResourceTypeTables"
-			}
-			
-			$null = Remove-Variable -Name groupevents
-			$null = Remove-Variable -Name LogEvents					
 		}
 	}
 }
