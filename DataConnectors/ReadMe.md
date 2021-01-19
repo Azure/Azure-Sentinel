@@ -207,6 +207,7 @@ Once the data connector is in public preview for at least a month, send an email
 *	The data connector has at least sample queries and workbooks to visualize and use the data effectively in Azure Sentinel. 
 *	The data connector has at least 10 unique customers  
 *	No major unresolved customer reported incidents with the data connector in a month after release
+*   Support for government cloud (.us in addition to .com).
 
 ## Evolve the data experience 
 ### Workbooks 
