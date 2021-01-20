@@ -3,7 +3,7 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 import { isFromTemplateIdNotSentinelUserWorkbook } from "./utils/workbookCheckers/fromTemplateIdChecker";
-import { WorkbookTemplate } from "./utils/WorkbookTemplate";
+import { WorkbookTemplate } from "./utils/workbookTemplate";
 
 export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCode> {
   let workbookTemplate: WorkbookTemplate = JSON.parse(fs.readFileSync(filePath, "utf8"));
