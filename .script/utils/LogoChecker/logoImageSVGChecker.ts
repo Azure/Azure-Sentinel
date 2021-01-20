@@ -1,19 +1,10 @@
 import { LogoValidationError } from "../validationError";
-
+let errorMessage="";
 export function isValidLogoImageSVGContent(LogoImagesContent: string) {
   if (isLogoSVGHasillegalAttribute(LogoImagesContent)) {
-      throw new LogoValidationError(`Ensure raw file of logo does not have any style or ClS formats`);
+      throw new LogoValidationError(errorMessage);
   }
   
-  if (isLogoSVGHasxmlnsxlink(LogoImagesContent)) {
-    throw new LogoValidationError(`Ensure raw file of logo does not have any xmlns:xlink`);
-  }
-  if (isLogoSVGHasdataname(LogoImagesContent)) {
-    throw new LogoValidationError(`Ensure raw file of logo does not have any data-name`);
-  }
-  if (isLogoSVGHasxlinkhref(LogoImagesContent)) {
-    throw new LogoValidationError(`Ensure raw file of logo does not have any xlink:href`);
-  }
   if (isLogoSVGHasTitleTag(LogoImagesContent)) {
     throw new LogoValidationError(`Ensure raw file of logo does not have title tag`);
   }
@@ -26,28 +17,16 @@ export function isValidLogoImageSVGContent(LogoImagesContent: string) {
 };
 
 function isLogoSVGHasillegalAttribute(LogoImagesContent: string) {
- let illegalAttribute = ["style=", "cls="]
+ let illegalAttribute = ["style=", "cls=","xmlns:xlink", "data-name","xlink:href"]
  var result=false;
  illegalAttribute.forEach(illegalAttribute=>{
    if(LogoImagesContent.includes(illegalAttribute))
    {
           result=true
+          errorMessage= "Ensure raw file of logo does not have" +" "+ illegalAttribute
    }
  })
     return result;
-}
-
-
-function isLogoSVGHasxmlnsxlink(LogoImagesContent: string) {
-    return  LogoImagesContent.includes("xmlns:xlink");
-}
-
-function isLogoSVGHasdataname(LogoImagesContent: string) {
-    return  LogoImagesContent.includes("data-name");
-}
-
-function isLogoSVGHasxlinkhref(LogoImagesContent: string) {
-    return  LogoImagesContent.includes("xlink:href");
 }
 
 function isLogoSVGHasTitleTag(LogoImagesContent: string) {
