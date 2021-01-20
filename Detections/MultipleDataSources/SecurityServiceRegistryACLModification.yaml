@@ -11,8 +11,7 @@ description: |
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/audit-registry
      - https://docs.microsoft.com/windows/security/threat-protection/auditing/event-4670
      - https://github.com/OTRF/Set-AuditRule 
-     - https://docs.microsoft.com/en-us/dotnet/api/system.security.accesscontrol.registryrights?view=dotnet-plat-ext-5.0
-     For the above event to be created the audit policy for the registry must have auditing enabled for Write DAC and/or Write Owner'
+     - https://docs.microsoft.com/dotnet/api/system.security.accesscontrol.registryrights?view=dotnet-plat-ext-5.0'
 severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -39,20 +38,17 @@ query: |
   let FullAccess = dynamic(['A;CI;KA;;;SY', 'A;ID;KA;;;SY', 'A;CIID;KA;;;SY']);
   let ReadAccess = dynamic(['A;CI;KR;;;SY', 'A;ID;KR;;;SY', 'A;CIID;KR;;;SY']);
   let DenyAccess = dynamic(['D;CI;KR;;;SY', 'D;ID;KR;;;SY', 'D;CIID;KR;;;SY']);
-  let timeframe = 2d;
+  let timeframe = 1d;
   (union isfuzzy=true
   (
   SecurityEvent
   | where TimeGenerated >= ago(timeframe)
-  | where EventID == 4670
+  | where EventID == 4670                //For the event to be created the audit policy for the registry must have auditing enabled for Write DAC and/or Write Owner
   | where ObjectType == 'Key'
   | where ObjectName has_any (servicelist)
   | parse EventData with * 'OldSd">' OldSd "<" *
   | parse EventData with * 'NewSd">' NewSd "<" *
-  | extend Reason =
-  iff ((OldSd has ';;;SY' and NewSd !has ';;;SY'), 'System Account is removed',
-  iff ((OldSd has_any (FullAccess) and NewSd has_any (ReadAccess)) , 'System permission has been changed to read from full access',
-  iff ((OldSd has_any (FullAccess) and NewSd has_any (DenyAccess)), 'System account has been given denied permission', 'None')))
+  | extend Reason = case( (OldSd has ';;;SY' and NewSd !has ';;;SY'), 'System Account is removed', (OldSd has_any (FullAccess) and NewSd has_any (ReadAccess)) , 'System permission has been changed to read from full access', (OldSd has_any (FullAccess) and NewSd has_any (DenyAccess)), 'System account has been given denied permission', 'None')
   | project TimeGenerated, Computer, Account,  ProcessName, ProcessId, ObjectName, EventData, Activity, HandleId, SubjectLogonId, OldSd, NewSd , Reason
   ),
   (
