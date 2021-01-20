@@ -20,44 +20,12 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionTemplates_HaveValidTemplateStructure(string detectionsYamlFileName)
         {
-            Action<ScheduledTemplateInternalModel> validateConnectorSchema = (ScheduledTemplateInternalModel templateObject) => {
-                var validationContext = new ValidationContext(templateObject);
-                Validator.ValidateObject(templateObject, validationContext, true);
-            };
-
-            ValidateDetectionTemplate(detectionsYamlFileName, validateConnectorSchema);
-        }
-
-        [Theory]
-        [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionTemplates_HaveValidConnectorsIds(string detectionsYamlFileName)
-        {
-            Action<ScheduledTemplateInternalModel> validateConnectorsIds = (ScheduledTemplateInternalModel templateObject) => {
-                List<string> connectorIds = templateObject.RequiredDataConnectors
-                    .Where(requiredDataConnector => requiredDataConnector.ConnectorId != null)
-                    .Select(requiredDataConnector => requiredDataConnector.ConnectorId).ToList();
-
-                connectorIds.ForEach(connectorId => {
-                    if (!TemplatesSchemaValidationsReader.ValidConnectorIds.Contains(connectorId))
-                    {
-                        throw new FormatException($"Not valid connectorId: {connectorId}. If a new connector is used and already configured in the Portal, please add it's Id to the list in 'ValidConnectorIds.json' file.");
-                    }
-                });
-            };
-
-            ValidateDetectionTemplate(detectionsYamlFileName, validateConnectorsIds);
-        }
-
-
-        private void ValidateDetectionTemplate(string detectionsYamlFileName, Action<ScheduledTemplateInternalModel> testAction)
-        {
-            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
-            var yaml = File.ReadAllText(detectionsYamlFile);
+            var yaml = GetYamlFileAsString(detectionsYamlFileName);
 
             //we ignore known issues (in progress)
-            foreach (var templateToSkip in TemplatesSchemaValidationsReader.WhiteListTemplateIds)
+            foreach (var templateToSkip in TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds)
             {
-                if (yaml.Contains(templateToSkip) || detectionsYamlFile.Contains(templateToSkip))
+                if (yaml.Contains(templateToSkip))
                 {
                     return;
                 }
@@ -68,10 +36,42 @@ namespace Kqlvalidations.Tests
             var exception = Record.Exception(() =>
             {
                 var templateObject = jObj.ToObject<ScheduledTemplateInternalModel>();
-                testAction(templateObject);
+                var validationContext = new ValidationContext(templateObject);
+                Validator.ValidateObject(templateObject, validationContext, true);
             });
 
             exception.Should().BeNull();
+        }
+
+        [Theory]
+        [ClassData(typeof(DetectionsYamlFilesTestData))]
+        public void Validate_DetectionTemplates_HaveValidConnectorsIds(string detectionsYamlFileName)
+        {
+            var yaml = GetYamlFileAsString(detectionsYamlFileName);
+            var deserializer = new DeserializerBuilder().Build();
+            Dictionary<object, object> res = deserializer.Deserialize<dynamic>(yaml);
+            string id = (string)res["id"];
+
+            if (TemplatesSchemaValidationsReader.ValidConnectorIds.Contains(id) || !res.ContainsKey("requiredDataConnectors"))
+            {
+                return;
+            }
+
+            List<dynamic> requiredDataConnectors = (List<dynamic>)res["requiredDataConnectors"];
+            List<string> connectorIds = requiredDataConnectors
+                .Select(requiredDataConnectors => (string)requiredDataConnectors["connectorId"])
+                .ToList();
+
+            var intersection =  TemplatesSchemaValidationsReader.ValidConnectorIds.Intersect(connectorIds);
+            connectorIds.RemoveAll(connectorId => intersection.Contains(connectorId));
+            var isValid = connectorIds.Count() == 0;
+            Assert.True(isValid, isValid ? string.Empty : $"Template Id:'{id}' doesn't have valid connectorIds:'{string.Join(",", connectorIds)}'. If a new connector is used and already configured in the Portal, please add it's Id to the list in 'ValidConnectorIds.json' file.");
+        }
+
+        private string GetYamlFileAsString(string detectionsYamlFileName)
+        {
+            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            return File.ReadAllText(detectionsYamlFile);
         }
 
         public static string ConvertYamlToJson(string yaml)
