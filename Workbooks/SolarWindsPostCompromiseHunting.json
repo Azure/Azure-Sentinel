@@ -432,7 +432,7 @@
               "size": 0,
               "title": "Applications or Service Principals with new Key Credentials Added.",
               "timeContext": {
-                "durationMs": 0
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "exportedParameters": [
@@ -477,7 +477,7 @@
               "size": 0,
               "title": "All Audit Activity by {inti_user}",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "queryType": 0,
@@ -506,7 +506,7 @@
               "title": "ServicePrincipals Added to Groups.",
               "noDataMessage": "No Service Principals Added to Groups in Timeframe",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "exportedParameters": [
@@ -534,7 +534,7 @@
               "size": 0,
               "title": "Audit Activity for {target_id}",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "queryType": 0,
@@ -555,7 +555,7 @@
               "size": 0,
               "title": "Audit Activity involving {group}",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "queryType": 0,
@@ -583,7 +583,7 @@
               "size": 0,
               "title": "Suspicious Azure AD PowerShell Activity",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "queryType": 0,
@@ -606,7 +606,7 @@
               "size": 0,
               "title": "Applications or Service Principals Granted Mail Read Access.",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 0
               },
               "timeContextFromParameter": "timeframe",
               "exportedParameters": [
@@ -639,7 +639,7 @@
               "size": 0,
               "title": "All Activity for {app_name}",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "queryType": 0,
@@ -660,7 +660,7 @@
               "size": 0,
               "title": "All Audit Activity by {user}",
               "timeContext": {
-                "durationMs": 259200000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "timeframe",
               "queryType": 0,
@@ -714,53 +714,6 @@
               "comparison": "isNotEqualTo"
             },
             "name": "query - 8"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "let AllowedUserList = dynamic([\"Microsoft Cloud App Security\",\"ADConnectSyncAccount1\",\"SyncAccount2\", \"spo_service@support.onmicrosoft.com\"]);\r\n  AuditLogs\r\n  | where OperationName has 'StsRefreshTokenValidFrom'\r\n  | where TargetResources[0].modifiedProperties != '[]'\r\n  | where TargetResources[0].modifiedProperties !has 'DirectorySync'\r\n  | extend TargetResourcesModProps = TargetResources[0].modifiedProperties\r\n  | mv-expand TargetResourcesModProps\r\n  | where tostring(TargetResourcesModProps.displayName) =~ 'StsRefreshTokensValidFrom'\r\n  | extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))\r\n  | where InitiatingUserOrApp !in (AllowedUserList)\r\n  | extend targetUserOrApp = TargetResources[0].userPrincipalName\r\n  | extend eventName = tostring(TargetResourcesModProps.displayName)\r\n  | extend oldStsRefreshValidFrom = todatetime(parse_json(tostring(TargetResourcesModProps.oldValue))[0])\r\n  | extend newStsRefreshValidFrom = todatetime(parse_json(tostring(TargetResourcesModProps.newValue))[0])\r\n  | extend tokenMinutesAdded = datetime_diff('minute',newStsRefreshValidFrom,oldStsRefreshValidFrom)\r\n  | extend tokenMinutesRemaining = datetime_diff('minute',TimeGenerated,newStsRefreshValidFrom)\r\n  | extend InitiatingIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))\r\n  | project-reorder TimeGenerated, OperationName, tokenMinutesAdded, InitiatingUserOrApp, InitiatingIpAddress\r\n  | project-away TenantId, SourceSystem, OperationVersion, Category, ResultType, ResultSignature, ResultDescription, DurationMs, Resource, ResourceGroup, Identity, Level, Location, ResultReason, Type",
-              "size": 0,
-              "title": "Interactive STS Refresh Token Modifications",
-              "timeContext": {
-                "durationMs": 0
-              },
-              "timeContextFromParameter": "timeframe",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "gridSettings": {
-                "sortBy": [
-                  {
-                    "itemKey": "tokenMinutesAdded",
-                    "sortOrder": 2
-                  }
-                ]
-              },
-              "sortBy": [
-                {
-                  "itemKey": "tokenMinutesAdded",
-                  "sortOrder": 2
-                }
-              ]
-            },
-            "customWidth": "70",
-            "name": "query - 20",
-            "styleSettings": {
-              "padding": "3"
-            }
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "This query shows Active Directory Security Token Service (STS) refresh token modifications by Service Principals and Applications other than DirectorySync. Refresh tokens are used to validate identification and obtain access tokens.\r\nThis event is not necessarily an indication of malicious activity but can also be generated when legitimate administrators manually expire token validation or keep longer refresh tokens for better login experience with less prompts.\r\nAlso an allowlist has been included to filter known accounts which can be customized after careful review of past historical activity.\r\nAnalyze the results for unusual operations performed by administrators to extend a refresh token of a compromised account in order to extend the time they can use it without the need to re-authenticate (and thus potentially lose access).\r\n\r\n- For in-depth documentation of AAD Security Tokens, see https://docs.microsoft.com/azure/active-directory/develop/security-tokens.\r\n- For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.'\r\n  For valid use cases of altering token lifetime values, refer https://docs.microsoft.com/azure/active-directory/develop/access-tokens#token-timeouts\r\n- More information about risky use-cases ,refer https://docs.microsoft.com/azure/active-directory/develop/active-directory-configurable-token-lifetimes#token-lifetimes-with-public-client-refresh-tokens",
-              "style": "info"
-            },
-            "customWidth": "30",
-            "name": "text - 21",
-            "styleSettings": {
-              "margin": "0",
-              "padding": "0"
-            }
           }
         ]
       },
@@ -1421,7 +1374,6 @@
     }
   ],
   "fallbackResourceIds": [
-    ""
   ],
   "fromTemplateId": "sentinel-SolorWindsWorkbook",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
