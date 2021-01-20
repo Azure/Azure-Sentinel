@@ -1,7 +1,7 @@
 id: e10e1d2f-265d-4d90-9037-7f3a6ed8a91e
-name: Potential Microsoft Defender services tampering
+name: Potential Microsoft security services tampering
 description: |
-  'Identifies potential service tampering related to Microsoft Defender services.'
+  'Identifies potential tampering related to Microsoft security related products and services.'
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
@@ -27,6 +27,9 @@ query: |
   let regparams2 = dynamic(['ForceDefenderPassiveMode', 'DisableAntiSpyware']);
   let regparams3 = dynamic(['sense', 'windefend']);
   let regparams4 = dynamic(['demand', 'disabled']);
+  let regparams5 = dynamic(['reg add "HKLM\\SYSTEM\\CurrentControlSet\\services\\HealthService"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Sense"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\WinDefend"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\MsSecFlt"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DiagTrack"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SgrmBroker"', 'reg add "HKLMSYSTEM\\CurrentControlSet\\Services\\SgrmAgent"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AATPSensorUpdater"' , 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AATPSensor"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\mpssvc"']);
+  let regparams6 = dynamic(['/d 4','/d "4"','/d 0x00000004']);
+  let regparams7 = dynamic(['/d 1','/d "1"','/d 0x00000001']);
   let timeframe = 1d;
   (union isfuzzy=true
   (
@@ -38,7 +41,8 @@ query: |
   | where (CommandLine has_any (action) and CommandLine has_any (service1)) 
   or (CommandLine has_any (params1) and CommandLine has 'Set-MpPreference' and CommandLine has '$true')
   or (CommandLine has_any (params2) and CommandLine has "/IM") 
-  or (CommandLine has_any (regparams1) and CommandLine has_any (regparams2) and CommandLine has '/d 1') 
+  or (CreatedProcessCommandLine has_any (regparams5) and CreatedProcessCommandLine has 'Start' and CreatedProcessCommandLine has_any (regparams6))
+  or (CommandLine has_any (regparams1) and CommandLine has_any (regparams2) and CommandLine has_any (regparams7)) 
   or (CommandLine has "start" and CommandLine has "config" and CommandLine has_any (regparams3) and CommandLine has_any (regparams4))
   | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
   ),
@@ -56,7 +60,8 @@ query: |
   | where (InitiatingProcessCommandLine has_any(action) and InitiatingProcessCommandLine has_any (service2) and InitiatingProcessParentFileName != 'cscript.exe')
   or (InitiatingProcessCommandLine has_any (params1) and InitiatingProcessCommandLine has 'Set-MpPreference' and InitiatingProcessCommandLine has '$true') 
   or (InitiatingProcessCommandLine has_any (params2) and InitiatingProcessCommandLine has "/IM") 
-  or (InitiatingProcessCommandLine has_any (regparams1) and InitiatingProcessCommandLine has_any (regparams2) and InitiatingProcessCommandLine has '/d 1') 
+  or ( InitiatingProcessCommandLine has_any (regparams5) and  InitiatingProcessCommandLine has 'Start' and  InitiatingProcessCommandLine has_any (regparams6))
+  or (InitiatingProcessCommandLine has_any (regparams1) and InitiatingProcessCommandLine has_any (regparams2) and InitiatingProcessCommandLine has_any (regparams7)) 
   or (InitiatingProcessCommandLine has_any("start") and InitiatingProcessCommandLine has "config" and InitiatingProcessCommandLine has_any (regparams3) and InitiatingProcessCommandLine has_any (regparams4))
   | extend Account = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName), Computer = DeviceName
   | project TimeGenerated, Computer, Account, AccountDomain, ProcessName = InitiatingProcessFileName, ProcessNameFullPath = FolderPath, Activity = ActionType, CommandLine = InitiatingProcessCommandLine, Type, InitiatingProcessParentFileName
