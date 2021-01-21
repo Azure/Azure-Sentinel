@@ -52,7 +52,7 @@ namespace Kqlvalidations.Tests
             Dictionary<object, object> res = deserializer.Deserialize<dynamic>(yaml);
             string id = (string)res["id"];
 
-            if (TemplatesSchemaValidationsReader.ValidConnectorIds.Contains(id) || !res.ContainsKey("requiredDataConnectors"))
+            if (TemplatesSchemaValidationsReader.WhiteListConnectorIdsTestsTemplateIds.Contains(id) || !res.ContainsKey("requiredDataConnectors"))
             {
                 return;
             }
