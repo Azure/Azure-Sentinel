@@ -6,9 +6,9 @@ namespace Kqlvalidations.Tests
 {
     public static class TemplatesSchemaValidationsReader
     {
-        private const string WhiteListStructureTestsTemplateIdsFileName = "SkipValidationsTemplates.json";
-        private const string WhiteListConnectorIdsTestsTemplateIdsFileName = "SkipValidationsTemplates.json";
-        private const string ValidConnectorIdsFileName = "ValidConnectorsIds.json";
+        private const string WhiteListStructureTestsTemplateIdsFileName = "SkipStrcutreValidationsTemplates.json";
+        private const string WhiteListConnectorIdsTestsTemplateIdsFileName = "SkipConnectorIdsValidationsTemplates.json";
+        private const string ValidConnectorIdsFileName = "ValidConnectorIds.json";
 
         static TemplatesSchemaValidationsReader()
         {
