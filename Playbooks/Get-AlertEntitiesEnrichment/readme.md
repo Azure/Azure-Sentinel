@@ -13,7 +13,7 @@ This playbook allows you to enrich your alerts entities using solutions like:
 
 - Complete explanation and demonstration of this playbook in [this video](https://youtu.be/YZr-New3yCI).
 - [Registering a service principal in Azure AD](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal)
-- [Microsoft Graph permissions reference](https://docs.microsoft.com/en-us/graph/permissions-reference)
+- [Microsoft Graph permissions reference](https://docs.microsoft.com/graph/permissions-reference)
 - [Create an MCAS API token](https://docs.microsoft.com/cloud-app-security/api-tokens)
 - [Defender Advanced Hunting API](https://docs.microsoft.com/windows/security/threat-protection/microsoft-defender-atp/run-advanced-query-api)
 
@@ -241,18 +241,27 @@ You can use the **Deploy.ps1** script, after updating the required parameters in
 
 **UserEnrichment:**
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
-**Get-AlertEntitiesEnrichment:**
+**IPsEnrichment:**
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FIPsEnrichment.template.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FIPsEnrichment.template.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
+**Get-AlertEntitiesEnrichment (requires UserEnrichment to be deployed first):**
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
