@@ -1,7 +1,7 @@
 import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ExitCode } from "../../utils/exitCode";
-//import { WorkbookTemplatesValidationError } from "../../utils/validationError";
+import { WorkbookTemplatesValidationError } from "../../utils/validationError";
 import { IsValidWorkbookTemplate } from "../../workbooksTemplateValidator";
 
 chai.use(chaiAsPromised);
@@ -16,7 +16,7 @@ describe("Workbooks template validator", () => {
   });
 
   async function checkInvalid(filePath: string, expectedError: string): Promise<Chai.PromisedAssertion> {
-    await expect(IsValidWorkbookTemplate(filePath)).eventually.rejectedWith(Error).and.have.property("name", expectedError);
+    await expect(IsValidWorkbookTemplate(filePath)).eventually.rejectedWith(WorkbookTemplatesValidationError).and.have.property("name", expectedError);
   }
 
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
