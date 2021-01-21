@@ -2,10 +2,11 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 
-export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
-  if(filePath){
+export async function foo(filePath: string): Promise<ExitCode> {
+  if(filePath.length > 0){
     return ExitCode.SUCCESS;
   }
+  
   return ExitCode.SUCCESS;
 } 
 
@@ -14,7 +15,7 @@ let filePathFolderPrefixes = ["Workbooks"];
 let fileKinds = ["Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    return IsValidWorkbookMetadata(filePath);
+    return foo(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
     console.log(`WorkbooksMetadata Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
