@@ -3,6 +3,9 @@ import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 
 export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
+  if(filePath){
+    return ExitCode.SUCCESS;
+  }
   return ExitCode.SUCCESS;
 } 
 
