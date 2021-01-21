@@ -1,11 +1,18 @@
+import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
+import { isValidSchema } from "./utils/jsonSchemaChecker";
 import * as logger from "./utils/logger";
+import { isValidPreviewImageFileNames } from "./utils/workbookCheckers/previewImageChecker";
+import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker";
 
-export async function foo(filePath: string): Promise<ExitCode> {
-  if(filePath.length > 0){
-    return ExitCode.SUCCESS;
-  }
+export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
+  let workbooksMetadata = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/workbooksMetadataSchema.json", "utf8"));
+
+  isValidSchema(workbooksMetadata, schema);
+  isUniqueKeys(workbooksMetadata);
+  isValidPreviewImageFileNames(workbooksMetadata);
   
   return ExitCode.SUCCESS;
 } 
@@ -15,7 +22,7 @@ let filePathFolderPrefixes = ["Workbooks"];
 let fileKinds = ["Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    return foo(filePath);
+    return IsValidWorkbookMetadata(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
     console.log(`WorkbooksMetadata Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
