@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -30,10 +33,9 @@ query: |
     | summarize make_list(tld);
     ThreatIntelligenceIndicator
     | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-    | where isnotempty(DomainName)
     | where Active == true
     // Picking up only IOC's that contain the entities we want
-    | where ExternalIndicatorId startswith 'domain'
+    | where isnotempty(DomainName)
     | join (
          DnsEvents
         | where TimeGenerated > ago(dt_lookBack)
@@ -49,3 +51,16 @@ query: |
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Computer, ClientIP, Name, QueryType
     | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = ClientIP, URLCustomEntity = Url
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity

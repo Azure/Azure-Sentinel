@@ -16,7 +16,6 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-
   let LearningPeriod = 7d; 
   let BinTime = 1h; 
   let RunTime = 1h; 
@@ -27,17 +26,21 @@ query: |
   let EndLearningTime = StartTime + LearningPeriod; 
   let GitHubFailedSSOLogins = (SigninLogs 
   | where AppDisplayName == "GitHub.com" 
-  | where ResultType == 50056); 
+  | where ResultType != 0); 
   GitHubFailedSSOLogins 
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
-  | summarize FailedLoginsCountInBinTime = count() by User = Identity, bin(TimeGenerated, BinTime) 
-  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User 
-  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold) 
+  | summarize FailedLoginsCountInBinTime = count() by  UserPrincipalName, bin(TimeGenerated, BinTime) 
+  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName
+  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)  
   | join kind=innerunique ( 
     GitHubFailedSSOLogins 
     | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
-    | summarize FailedLoginsCountInRunTime = count() by User = Identity 
-  ) on User 
+    | summarize FailedLoginsCountInRunTime = count() by User = Identity, UserPrincipalName, bin(TimeGenerated, BinTime)
+  ) on UserPrincipalName 
   | where FailedLoginsCountInRunTime > LearningThreshold
-  //| extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
-  
+  | extend AccountCustomEntity = UserPrincipalName , timestamp = TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

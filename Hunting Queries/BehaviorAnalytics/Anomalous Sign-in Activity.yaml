@@ -1,10 +1,11 @@
 id: bb3bb9da-9598-4d1f-af78-7cc2fd413b0b
 name: Anomalous Sign-in Activity
-description: 'Successful Sign-in with one or more of the following indications:
- - performed by new or recently dormant accounts
- - performed by an account from a resource for the first time (while none of their peers did)
- - performed by an account to aa app for the first time (while none of their peers did)
- - performed by a user with Risk indicaiton from AAD'
+description: |
+    'Adversaries may steal the credentials of a specific user or service account using Credential Access techniques or capture credentials earlier in their reconnaissance process through social engineering for means of gaining Persistence. Umbreon, for example, creates valid users to provide access to the system.
+    The query below generates an output of successful Sign-in with one or more of the following indications:
+    - performed by new or recently dormant accounts
+    - where one or more features of the activitiy deviates from the user, his peers or the tenant profile
+    - performed by a user with Risk indicaiton from AAD'
 requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
@@ -18,12 +19,10 @@ query: |
 
  BehaviorAnalytics
  | where ActionType == "Sign-in"
- | where UsersInsights.IsNewAccount == True or UsersInsights.IsDormantAccount == True
- or ActivityInsights.FirstTimeUserAccessedResource == True and ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True
- or ActivityInsights.FirstTimeUserUsedClientApp == True and ActivityInsights.ClientAppUncommonlyUsedAmongPeers == True
+ | where UsersInsights.IsNewAccount == True or UsersInsights.IsDormantAccount == True or ActivityInsights has "True"
  | join (
  SigninLogs | where Status.errorCode == 0 or Status.errorCode == 0 and RiskDetail != "none"
  ) on $left.SourceRecordId == $right._ItemId
- | extend UserPrincipalName = iff(UserPrincipalName contains "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserPrincipalName),
- UserName = iff(UserName contains "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName)
+ | extend UserPrincipalName = iff(UserPrincipalName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserPrincipalName),
+ UserName = iff(UserName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName)
  | project TimeGenerated, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,["Evidence"]=ActivityInsights, ResourceDisplayName,AppDisplayName,SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights
