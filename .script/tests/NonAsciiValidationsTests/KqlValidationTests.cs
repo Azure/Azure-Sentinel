@@ -19,7 +19,7 @@ namespace Kqlvalidations.Tests
             var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
             var yaml = File.ReadAllText(detectionsYamlFile);
             var nonAsciiCharMatch = Regex.Match(yaml, @"[^\u0000-\u007F]+");
-            Assert.False(nonAsciiCharMatch.Success, $"include the non ascii char:{nonAsciiCharMatch.Value} at:{nonAsciiCharMatch.Index}");
+            Assert.False(nonAsciiCharMatch.Success, $"include the non ascii char:{nonAsciiCharMatch.Value} string index:{nonAsciiCharMatch.Index}");
         }
     }
 
