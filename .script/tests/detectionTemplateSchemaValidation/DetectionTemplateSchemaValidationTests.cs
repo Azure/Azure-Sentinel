@@ -18,7 +18,7 @@ namespace Kqlvalidations.Tests
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionTemplates_HaveValidTemplateStructure(string detectionsYamlFileName)
+        public void Validate_DetectionTemplates_HasValidTemplateStructure(string detectionsYamlFileName)
         {
             var yaml = GetYamlFileAsString(detectionsYamlFileName);
 
@@ -45,14 +45,14 @@ namespace Kqlvalidations.Tests
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionTemplates_HaveValidConnectorsIds(string detectionsYamlFileName)
+        public void Validate_DetectionTemplates_HasValidConnectorIds(string detectionsYamlFileName)
         {
             var yaml = GetYamlFileAsString(detectionsYamlFileName);
             var deserializer = new DeserializerBuilder().Build();
             Dictionary<object, object> res = deserializer.Deserialize<dynamic>(yaml);
             string id = (string)res["id"];
 
-            if (TemplatesSchemaValidationsReader.ValidConnectorIds.Contains(id) || !res.ContainsKey("requiredDataConnectors"))
+            if (TemplatesSchemaValidationsReader.ValidConnectorIds.Contains(id) /*|| !res.ContainsKey("requiredDataConnectors")*/)
             {
                 return;
             }
