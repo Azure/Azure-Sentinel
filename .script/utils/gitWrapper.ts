@@ -9,6 +9,7 @@ export async function GetPRDetails() {
   if (typeof pullRequestDetails == "undefined"){
     console.log("Getting PR details");
     const config = cli.defaultConfig();
+    console.log(config)
     pullRequestDetails = await devOps.createPullRequestProperties(config);
   }
   return pullRequestDetails;
