@@ -13,7 +13,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
   if(isPotentialConnectorJson(jsonFile))
   {
-    let connectorCategory = getConnectorCategory(jsonFile.dataTypes, filePath);
+    let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
     let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/"+ connectorCategory +"_ConnectorSchema.json", "utf8"));
     isValidSchema(jsonFile, schema);
     isValidId(jsonFile.id);
@@ -36,7 +36,7 @@ function isPotentialConnectorJson(jsonFile: any) {
   return false;
 }
 
-function getConnectorCategory(dataTypes : any, filePath: string)
+function getConnectorCategory(dataTypes : any, instructionSteps:[])
 {
   if (dataTypes[0].name.includes("CommonSecurityLog"))
   {
@@ -48,17 +48,11 @@ function getConnectorCategory(dataTypes : any, filePath: string)
   }
   else if(dataTypes[0].name.endsWith("_CL"))
   {
-    let fileDirectory:string = filePath.substr(0, filePath.lastIndexOf('/'));
     let isAzureFunction:boolean = false;
-
-    // reads all the file names in the directory to verify the existence of zip folder
-    fs.readdirSync(fileDirectory).forEach(file => {
-      if(file.includes(".zip"))
-      {
-        isAzureFunction = true;
-      }
-    });
-    
+    if(JSON.stringify(instructionSteps).includes("[Deploy To Azure]"))
+    {
+      isAzureFunction = true;
+    }    
     return isAzureFunction ? ConnectorCategory.AzureFunction: ConnectorCategory.RestAPI;
   }
 
