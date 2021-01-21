@@ -18,6 +18,7 @@ export async function GetPRDetails() {
 export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const pr = await GetPRDetails();
 
+  console.log("passed PR Details")
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
