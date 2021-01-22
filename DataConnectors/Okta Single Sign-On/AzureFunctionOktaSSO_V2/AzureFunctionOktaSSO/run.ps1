@@ -149,7 +149,7 @@ do {
 		{
 			$logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
 		}
-       $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
+        $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
