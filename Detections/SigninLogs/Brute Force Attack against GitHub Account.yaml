@@ -26,16 +26,16 @@ query: |
   let EndLearningTime = StartTime + LearningPeriod; 
   let GitHubFailedSSOLogins = (SigninLogs 
   | where AppDisplayName == "GitHub.com" 
-  | where ResultType == 50056); 
+  | where ResultType != 0); 
   GitHubFailedSSOLogins 
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
   | summarize FailedLoginsCountInBinTime = count() by  UserPrincipalName, bin(TimeGenerated, BinTime) 
-  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName, tostring(set_IPAddress)
+  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName
   | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)  
   | join kind=innerunique ( 
     GitHubFailedSSOLogins 
     | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
-    | summarize FailedLoginsCountInRunTime = count() by User = Identity 
+    | summarize FailedLoginsCountInRunTime = count() by User = Identity, UserPrincipalName, bin(TimeGenerated, BinTime)
   ) on UserPrincipalName 
   | where FailedLoginsCountInRunTime > LearningThreshold
   | extend AccountCustomEntity = UserPrincipalName , timestamp = TimeGenerated

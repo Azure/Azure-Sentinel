@@ -128,15 +128,15 @@ Total tests: 171
  Total time: 25.7973 Seconds
 ```
 
-### Detection structure validation tests
-Similarly to KQL Validation, there is an automatic validation the structure of a detection.
-The structure includes the detection's frequency and period, the detection's trigger type and threshold, etc.
+### Detection schema validation tests
+Similarly to KQL Validation, there is an automatic validation of the schema of a detection.
+The schema vlidation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids ([valid connectors Ids list](https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateStructureValidation/ValidConnectorIds.json)), etc.
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
-### Run Detection Structure Validation Locally
+### Run Detection Schema Validation Locally
 In order to run the kql validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateStructureValidation\`
+* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
 * Execute `dotnet test`
 
 
