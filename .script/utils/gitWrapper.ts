@@ -2,6 +2,10 @@ import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
+import gitP, { SimpleGit } from 'simple-git/promise';
+
+const workingDir:string = process.cwd();
+const git: SimpleGit = gitP(workingDir);
 
 let pullRequestDetails: PullRequestProperties | undefined;
 
@@ -45,5 +49,9 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   let filePathFolderPreffixesLogValue = typeof filePathFolderPreffixes === "undefined" ? null : filePathFolderPreffixes.join(",");
   console.log(`${filterChangedFiles.length} files changed in current PR after filter. File Type Filter: ${fileTypeSuffixesLogValue}, File path Filter: ${filePathFolderPreffixesLogValue}, File Kind Filter: ${fileKindsLogValue}`);
 
+
+  git.clean("f");
+  git.checkoutLocalBranch("roabadie_test_branch");
+  git.deleteLocalBranch("source-b6791c5f-e0a5-49b1-9175-d7fd3e341cb8");
   return filterChangedFiles;
 }
