@@ -1,17 +1,16 @@
 import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ExitCode } from "../../utils/exitCode";
-//import { WorkbookTemplatesValidationError } from "../../utils/validationError";
 import { IsValidWorkbookTemplate } from "../../workbooksTemplateValidator";
 
 chai.use(chaiAsPromised);
 
 describe("Workbooks template validator", () => {
-  it("Should pass when workbook template is valid", async () => {
+  it(`Should pass when workbook template is valid`, async () => {
     await checkValid(".script/tests/workbooksValidatorTest/testFiles/workbooksTemplateFiles/validWorkbooksTemplate.json");
   });
 
-  it("Should throw an exception when workbook template \"fromTemplateId\" value is \"sentinel-UserWorkbook\"", async () => {
+  it(`Should throw an exception when workbook template "fromTemplateId" value is "sentinel-UserWorkbook"`, async () => {
     await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/workbooksTemplateFiles/invalidValueForFromTemplateId.json", "WorkbookTemplatesValidationError");
   });
 
