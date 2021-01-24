@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Kqlvalidations.Tests
+namespace NonAsciiValidations.Tests
 {
     public abstract class TheoryData : IEnumerable<object[]>
     {

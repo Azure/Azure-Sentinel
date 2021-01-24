@@ -7,9 +7,9 @@ using System.Text;
 
 namespace NonAsciiValidations.Tests
 {
-    public class DetectionsYamlFilesTestData : FilesTestData
+    public class HuntingQueriesYamlFilesTestData : FilesTestData
     {
-        protected override string FolderName => "Detections";
+        protected override string FolderName => "Hunting Queries";
         protected override string FileExtension => "*.yaml";
     }
 }
