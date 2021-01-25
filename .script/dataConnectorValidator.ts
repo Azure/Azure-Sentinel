@@ -5,7 +5,6 @@ import { isValidSchema } from "./utils/jsonSchemaChecker";
 import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
 import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
 import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
-import { isValidFileName } from "./utils/dataConnectorCheckers/fileNameChecker";
 import * as logger from "./utils/logger";
 import { ConnectorCategory } from "./utils/dataConnector";
 
@@ -18,7 +17,9 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
     isValidSchema(jsonFile, schema);
     isValidId(jsonFile.id);
     isValidDataType(jsonFile.dataTypes);
-    isValidFileName(filePath);
+
+     /* Disabling temporarily till we get confirmation from PM*/
+    // isValidFileName(filePath
     isValidPermissions(jsonFile.permissions, connectorCategory);
   }
   else{
