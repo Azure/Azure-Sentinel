@@ -60,7 +60,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   return "";
 }
 
-let fileTypeSuffixes = ["*.json"];
+let fileTypeSuffixes = ["json"];
 let filePathFolderPrefixes = ["DataConnectors"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
