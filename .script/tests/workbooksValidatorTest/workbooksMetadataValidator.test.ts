@@ -39,7 +39,7 @@ describe("workbooksValidator", () => {
   });
 
   async function checkInvalid(filePath: string, expectedError: string): Promise<Chai.PromisedAssertion> {
-    expect(IsValidWorkbookMetadata(filePath)).eventually.rejectedWith(Error).and.have.property("name", expectedError);
+    await expect(IsValidWorkbookMetadata(filePath)).eventually.rejectedWith(Error).and.have.property("name", expectedError);
   }
 
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
