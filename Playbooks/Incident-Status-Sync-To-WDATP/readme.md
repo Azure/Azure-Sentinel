@@ -1,5 +1,5 @@
 
-## This playbook will sync incident status in Azure sentinel to the corresponding incident in MDATP
+## This playbook could be used to sync incident status in Azure sentinel to the corresponding incident in MDATP
 
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUser%2Fazuredeploy.json" target="_blank">
@@ -15,17 +15,18 @@
 
 **Description**
 
-A question that always get flagged when working on Azure sentinel specially in organizations where implementation of E5 is adopted at full scale that is:
+This playbook is only applicable in following scenario:
+- MDATP connector is enabled in Azure sentinel
+- An analytic rule is configred to log incidenets in sentinel based on received information from MDATP
 
-When closing an incident in Azure sentinel will incident status get closed in let's say MDATP portal as well ?
+In the mentioned scenario when an incident status changes for example when an incident get closed or re-opened, the incident status doesn't get propagated and reflected in MDATP.
 
-The short answer is NO it simply won't! and this answer is applicable only to the very moment this article was written as Microsoft is bringing a lot of new features every second!
+This playbook represents an example of how to keep incident status in sync between sentinel and MDATP.
 
-Likely there is an easy way to do this and it's also meeting best practices by utilizing the playbooks in Azure sentinel itself.
 
-In following lines we can see an example of how to do this:
+The goal is to find a common matching criteria between the two entities. 
 
-The bottom line when exploring whether it could be possible technically to sync an incident status between sentinel and MDATP is to find a common matching criteria between the two entities. let's look at following incident in Azure sentinel for instance:
+If we look at shown example of one incident in sentinel
 
  ![Picture1](./Graphics/1.gif)
 
@@ -35,29 +36,26 @@ If you click on the incident and then from the right pane click on "Alerts" you 
 
 ![Picture3](./Graphics/3.gif)
 
-what we would be interested to see is in particular the VendorOriginID attribute
+The VendorOriginID is the attribute which represents the Alert ID as it is stored in MDATP originally at the source.
 
-which represents the Alert ID as it is stored in MDATP originally (from the source)
+So this is the matching attribute that could be used to create the playbook with.
 
-So apparently this is the matching attribute that we can use to build up the playbook.
+Following is an example of a sample playbook for demonstration:
 
-following is an example of a sample playbook for demonstration:
-
-This is how the logic app (Playbook) looks like:
+This picture shows how the playbook looks like after being created.
 
 ![Picture4](./Graphics/4.gif)
 
 
-looking at the steps:
-
+Following is the main steps:
 
 **Step#1**: When a response to an Azure Sentinel alert is triggered:
 
-This step simply implies when the playbook will be triggered
+This step is default trigger that has to be used when the playbook will be triggered
 
 **Step#2:** Alert - Get incident
 
-In this step we will need to fill it up with dynamic attributes
+In this step the fields can be filled up with dynamic attributes as shown in the picture
 
 ![Picture5](./Graphics/5.gif)
 
@@ -72,20 +70,20 @@ In this step we set the incident status to "Closed" in Sentinel
 
 **Step#4:** Condition:
 
-Now it's time to set the condition and actions required to finish the task.
+Now it's time to set the condition and actions required..
 
-the condition i used here is to set dynamic content attribute to: "Incident Alert product names"
+The condition used here is to set dynamic content attribute to: "Incident Alert product names"
 
 ![Picture7](./Graphics/7.gif)
 
-if condition is met then next step would be to set the corresponding alert status in MDATP to "Resolved"
+If condition is met then next step would be to set the corresponding alert status in MDATP to "Resolved"
 
-Here we will come to use the actual matching attribute called "provider alert ID" which is exactly same as VendorOriginID mentioned above
+The actual matching attribute "provider alert ID" that is exactly same as VendorOriginID mentioned above will be used:
 
 ![Picture8](./Graphics/8.gif)
 
 
-Note also here that we retrieved attribute "provider Alert ID" and used the MDATP connector to pass it to. So it's exactly like sending a query to MDATP with the specific alert id ed637431102114129586_160070831 in order to set it to "resovled"
+Note: attribute "provider Alert ID" was retreived and the MDATP connector was used in background to pass it to. Same result could be obtained when sending a query to MDATP with the specific alert id ed637431102114129586_160070831 in order to set it to "resovled".
 
 **Step#5:** testing the playbook in action:
 
@@ -93,8 +91,5 @@ Note also here that we retrieved attribute "provider Alert ID" and used the MDAT
 
 ![Picture10](./Graphics/10.gif)
 
-As you see above it was able to pull the alert ID ed637431102114129586_160070831 that is equal to the VendorOriginID in order to query for it in MDATP and close the alert.
+As shown above it was able to pull the alert ID ed637431102114129586_160070831 that is equal to the VendorOriginID in order to query for it in MDATP and close the alert.
 
-As mentioned already this playbook represents just an example and I do believe that more is coming on the way by Microsoft to make it even easier ..
-
-hope it helps.
