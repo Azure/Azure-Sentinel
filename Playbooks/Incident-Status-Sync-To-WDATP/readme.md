@@ -15,11 +15,11 @@
 
 **Description**
 
-This playbook is only applicable in following scenario:
+This playbook is applicable in following scenario:
 - MDATP connector is enabled in Azure sentinel
 - An analytic rule is configred to log incidenets in sentinel based on received information from MDATP
 
-In the mentioned scenario when an incident status changes for example when an incident get closed or re-opened, the incident status doesn't get propagated and reflected in MDATP.
+In this scenario when an incident status changes for example when an incident gets closed or re-opened, the incident status doesn't get propagated and reflected in MDATP.
 
 This playbook represents an example of how to keep incident status in sync between sentinel and MDATP.
 
@@ -30,17 +30,15 @@ If we look at shown example of one incident in sentinel
 
  ![Picture1](./Graphics/1.gif)
 
-If you click on the incident and then from the right pane click on "Alerts" you will be taken to the page that shows the query result as shown in following screens:
+Clicking on the incident and then from the right pane clicking on "Alerts" it opens the following page with the query result as shown in following screens:
 
 ![Picture2](./Graphics/2.gif)
 
 ![Picture3](./Graphics/3.gif)
 
-The VendorOriginID is the attribute which represents the Alert ID as it is stored in MDATP originally at the source.
+The VendorOriginID is the attribute that represents the Alert ID as it is stored in MDATP originally at the source.
 
-So this is the matching attribute that could be used to create the playbook with.
-
-Following is an example of a sample playbook for demonstration:
+So this is the matching attribute will be used to create the playbook with.
 
 This picture shows how the playbook looks like after being created.
 
