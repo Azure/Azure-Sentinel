@@ -4,9 +4,21 @@ DataTypes:
 Provider: Sentinel
 Type: KQL
 EntitiesFilter: {}
-BaseQuery: "ThreatIntelligenceIndicator | where isnotempty( Url ) or isnotempty( DomainName )| extend match = Url matches regex @'^\\w{2,6}://' | extend Url = iff(match, Url, strcat('Unknown://', Url))| extend parsedURL=parse_url(Url) | evaluate bag_unpack(parsedURL) | where parse_url('{{url}}')['Host'] == coalesce(tostring(parse_url(Url)['Host']),DomainName, Url) | parse Description with * 'iType: ' MaliciousType'; State:' State'; Org: 'Org'; Source: 'Source_"
+BaseQuery: | 
+  
+  let UrlThreatIntel=(URL_Url:string){
+  ThreatIntelligenceIndicator 
+  | where isnotempty(Url) or isnotempty(DomainName)
+  | extend match = Url matches regex @'^\w{2,6}://' 
+  | extend Url = iff(match, Url, strcat('Unknown://', Url))
+  | extend parsedURL=parse_url(Url) 
+  | evaluate bag_unpack(parsedURL) 
+  | where parse_url(URL_Url)['Host'] == coalesce(tostring(parse_url(Url)['Host']),DomainName, Url) 
+  };
+  UrlThreatIntel('{{URL_Url}}')
 RequiredInputFieldsSets:
 - - URL_Url
+
 Insights:
   Id: ece6fad7-591e-4aa2-9050-6780cab2ccd2
   DisplayName: Threat Intelligence for URL
@@ -27,18 +39,17 @@ Insights:
       SupportDeepLink: true
     QueriesDefinitions:
     - Filter: ''
-      Summarize: " top-nested 5 of ThreatType with others='Other Types' by Count=count()"
-      Project: project Title = ThreatType, Total=Count
+      Summarize: "top-nested 5 of ThreatType with others='Other Types' by Count=count()"
+      Project: "project Title = ThreatType, Total=Count"
       LinkColumnsDefinitions:
       - ProjectedName: Total
         Query: "{{BaseQuery}}"
-    - Filter: reduce by Path with threshold=0.3 | project ['Path patterns']=Pattern,
-        Count
+    - Filter: "reduce by Path with threshold=0.3 | project ['Path patterns']=Pattern, Count"
       Summarize: summarize Count= count()
-      Project: project Title='Folder patterns', Total=Count
+      Project:" project Title='Folder patterns', Total=Count"
       LinkColumnsDefinitions:
       - ProjectedName: Total
-        Query: "{{BaseQuery}} | {{RowSummarize}}'"
+        Query: "{{BaseQuery}} | {{RowSummarize}}"
   AdditionalQuery:
     Text: View all for Url domain
     Query: as TIs
