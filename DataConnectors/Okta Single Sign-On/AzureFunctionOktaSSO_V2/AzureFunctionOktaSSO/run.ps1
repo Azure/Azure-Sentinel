@@ -64,8 +64,8 @@ $TimeStampField = "published"
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
 if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+).ods.opinsights.azure.([\w\.]+)')
 {
-	Write-Host "OKTASSO: Invalid Log Analytics Uri"
-	return $logAnalyticsUri
+    Write-Host "OKTASSO: Invalid Log Analytics Uri"
+    return $logAnalyticsUri
 }
 
 # Retrieve Timestamp from last records received from Okta 
@@ -153,10 +153,10 @@ do {
             -contentType $contentType `
             -resource $resource
 		
-		if ([string]::IsNullOrEmpty($logAnalyticsUri))
-		{
-			$logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-		}
+	if ([string]::IsNullOrEmpty($logAnalyticsUri))
+	{
+	    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+	}
         $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $LAheaders = @{
             "Authorization" = $signature;
