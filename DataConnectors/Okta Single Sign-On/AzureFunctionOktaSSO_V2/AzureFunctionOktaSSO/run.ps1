@@ -62,10 +62,9 @@ $TimeStampField = "published"
 
 # Returning if the Log Analytics Uri is in incorrect format.
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+).ods.opinsights.azure.([\w\.]+)')
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
 {
-    Write-Host "OKTASSO: Invalid Log Analytics Uri"
-    return $logAnalyticsUri
+    Write-Error -Message "OKTASSO: Invalid Log Analytics Uri." -ErrorAction Stop
 }
 
 # Retrieve Timestamp from last records received from Okta 
