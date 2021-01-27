@@ -1,4 +1,6 @@
 
+Author: Mahmoud Elsayed
+
 ## This playbook could be used to sync incident status in Azure sentinel to the corresponding incident in MDATP
 
 
