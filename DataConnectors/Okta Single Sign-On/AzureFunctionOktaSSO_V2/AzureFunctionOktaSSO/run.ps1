@@ -60,6 +60,13 @@ $sharedKey =  $env:workspaceKey
 $LogType = "Okta"
 $TimeStampField = "published"
 
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+).ods.opinsights.azure.([\w\.]+)')
+{
+	Write-Host "OKTASSO: Invalid Log Analytics Uri"
+	return $logAnalyticsUri
+}
 
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
@@ -145,6 +152,7 @@ do {
             -method $method `
             -contentType $contentType `
             -resource $resource
+		
 		if ([string]::IsNullOrEmpty($logAnalyticsUri))
 		{
 			$logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
