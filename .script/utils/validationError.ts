@@ -15,3 +15,11 @@ export class LogoValidationError extends Error implements ValidationError {
     super(message);
   }
 }
+
+export class WorkbookTemplatesValidationError extends Error implements ValidationError {
+  public name = "WorkbookTemplatesValidationError";
+
+  constructor(message?: string) {
+    super(message);
+  }
+}
