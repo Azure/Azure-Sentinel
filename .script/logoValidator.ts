@@ -15,6 +15,7 @@ export async function IsValidLogo(FileName: string): Promise<ExitCode> {
     return ExitCode.SUCCESS;
   }
  
+let fileTypeSuffixes;
 let filePathFolderPrefixes = ["Logos"];
 let fileKinds = ["Added","Modified"];
 let CheckOptions = {
@@ -28,4 +29,4 @@ let CheckOptions = {
     logger.logError("An error occurred, please open an issue");
   },
 };
-runCheckOverChangedFiles(CheckOptions, fileKinds, filePathFolderPrefixes);
+runCheckOverChangedFiles(CheckOptions, fileKinds,fileTypeSuffixes,  filePathFolderPrefixes);
