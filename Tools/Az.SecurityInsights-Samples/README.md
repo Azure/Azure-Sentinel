@@ -6,7 +6,7 @@ Download from <a href="https://www.powershellgallery.com/packages/Az.SecurityIns
 
 The samples are divided into the following sections:
 
-* Alert Rules
+* [Alert Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Az.SecurityInsights-Samples/Alert%20Rules)
 * Alert Rules Actions (coming soon)
 * Data Connectors (coming soon)
 * Incidents (coming soon)
