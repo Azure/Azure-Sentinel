@@ -7,6 +7,7 @@
 
 > Note: ML Behavior Analytics rules are during this preview not supported, but will be supported upon GA.
 
+[Export Analytics Rules Sample](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Az.SecurityInsights-Samples/Alert%20Rules/Export%20Analytics%20Rules)
 
 
 
