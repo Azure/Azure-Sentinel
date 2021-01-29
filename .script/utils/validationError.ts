@@ -9,6 +9,13 @@ export class WorkbookValidationError extends Error implements ValidationError {
   }
 }
 
+export class LogoValidationError extends Error implements ValidationError {
+  public name = "LogoValidationError";
+  constructor(message?: string) {
+    super(message);
+  }
+}
+
 export class DataConnectorValidationError extends Error implements ValidationError {
   public name = "DataConnectorValidationError";
   constructor(message?: string) {
@@ -18,6 +25,7 @@ export class DataConnectorValidationError extends Error implements ValidationErr
 
 export class WorkbookTemplatesValidationError extends Error implements ValidationError {
   public name = "WorkbookTemplatesValidationError";
+
   constructor(message?: string) {
     super(message);
   }
