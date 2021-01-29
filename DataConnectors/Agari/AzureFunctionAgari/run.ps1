@@ -41,6 +41,8 @@ $bplastLog = $env:BPlastLogTime
 $apdlastLog = $env:APDlastLogTime
 $aprlastLog = $env:APRlastLogTime
 
+
+
 # Function to build the Authorization signature for the Log Analytics Data Connector API
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
 {
