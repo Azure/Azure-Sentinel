@@ -1,7 +1,7 @@
 // Title:           Broadcom Symantec Endpoint Protection (SEP)
 // Author:          Microsoft
 // Version:         1.0
-// Last Updated:    12/01/2020
+// Last Updated:    12/15/2020
 // Comment:         Inital Release
 //  
 // DESCRIPTION:
@@ -21,49 +21,62 @@
 // LOG SAMPLES:
 // This parser assumes the raw log are formatted as follows:
 //
-// <54>Nov 12 00:37:31 SAMPLE0007 SymantecServer: Site: Site_RMG_BBP,Server Name: SAMPLE0008,Domain Name: Default,The management server received the client log successfully,TESTHOST18,sampleuser99,sample.abccompany.com
+// Site: Site_TEST_SITE,Server Name: SAMPLE0008,Domain Name: Default,The management server received the client log successfully,TESTHOST18,sampleuser99,sample.abccompany.com
 // 
-// <50>Nov 12 09:48:17 SAMPLE0007 SymantecServer: sam196136,10.221.252.252,Blocked,[AC15-1.1] Prevent registration of new Browser Helper Objects - Registry Value=0x1 - Caller MD5=747c6064888f11f5431b34a422780650,Registry Write,Begin: 2020-11-12 09:22:22,End Time: 2020-11-12 09:22:22,Rule: Prevent registration of new Browser Helper Objects | [AC15-1.1] Prevent registration of new Browser Helper Objects,16464,C:/Windows/SysWOW64/msiexec.exe,0,No Module Name,/REGISTRY/MACHINE/SOFTWARE/Microsoft/Windows/CurrentVersion/Explorer/Browser Helper Objects/{F4971EE7-DAA0-4053-9964-665D8EE6A077}/NoExplorer,User Name: SYSTEM,Domain Name: SMPL,Action Type: ,File size (bytes): 0,Device ID: 
+// sam196136,10.221.252.252,Blocked,[AC15-1.1] Prevent registration of new Browser Helper Objects - Registry Value=0x1 - Caller MD5=747c6064888f11f5431b34a422780650,Registry Write,Begin: 2020-11-12 09:22:22,End Time: 2020-11-12 09:22:22,Rule: Prevent registration of new Browser Helper Objects | [AC15-1.1] Prevent registration of new Browser Helper Objects,16464,C:/Windows/SysWOW64/msiexec.exe,0,No Module Name,/REGISTRY/MACHINE/SOFTWARE/Microsoft/Windows/CurrentVersion/Explorer/Browser Helper Objects/{F4971EE7-DAA0-4053-9964-665D8EE6A077}/NoExplorer,User Name: SYSTEM,Domain Name: SMPL,Action Type: ,File size (bytes): 0,Device ID: 
 //
-// <51>Nov 11 19:43:36 SAMPLE0007 SymantecServer: sam733904,Local Host IP: 192.168.1.113,Local Port: 80,Local Host MAC: CCF9E4A91226,Remote Host IP: 192.168.1.1,Remote Host Name: ,Remote Port: 33424,Remote Host MAC: 2C3AFDA79E71,TCP,Inbound,Begin: 2020-11-11 19:25:21,End Time: 2020-11-11 19:25:28,Occurrences: 4,Application: C:/WINDOWS/system32/NTOSKRNL.EXE,Rule: Block Unapproved Incoming Ports,Location: Default,User Name: sampleuser4,Domain Name: SMPL,Action: Blocked,SHA-256: 5379732000000000000000000000000000000000000000000000000000000000,MD-5: 53797320000000000000000000000000
+// sam733904,Local Host IP: 192.168.1.113,Local Port: 80,Local Host MAC: CCF9E4A91226,Remote Host IP: 192.168.1.1,Remote Host Name: ,Remote Port: 33424,Remote Host MAC: 2C3AFDA79E71,TCP,Inbound,Begin: 2020-11-11 19:25:21,End Time: 2020-11-11 19:25:28,Occurrences: 4,Application: C:/WINDOWS/system32/NTOSKRNL.EXE,Rule: Block Unapproved Incoming Ports,Location: Default,User Name: sampleuser4,Domain Name: SMPL,Action: Blocked,SHA-256: 5379732000000000000000000000000000000000000000000000000000000000,MD-5: 53797320000000000000000000000000
 //
 //
 let LogHeader = Syslog
 | where Computer in ("server1", "server2") // server1 and server2 are examples, replace this list with your SEP device names
-| extend ServerName = extract(@"SymantecServer:\s([\w\-\_]+)?(,|\Site:)",1,SyslogMessage)
+| extend ServerName = extract(@"^([\w\-\_]+)?(,|\Site:)",1,SyslogMessage)
 // Agent System Log Header
-| extend AgentSystemLogsParser = extract_all(@"SymantecServer:\s([^,]+)\,Category:\s([\d]+)\,([^,]+)\,Event\sDescription:\s([^,]+)(\,Event time:\s([^,]+)\,Group Name:\s([^,]+)$?)?",dynamic([1,2,3,4,6,7]), SyslogMessage)
+| extend AgentSystemLogsParser = extract_all(@'^([^,]+)\,Category:\s([\d]+)\,([^,]+)\,\"?Event\sDescription:\s([^,]+\"?)(\,Event time:\s([^,]+)\,Group Name:\s([^,]+)$?)?',dynamic([1,2,3,4,6,7]), SyslogMessage)
 | mv-expand AgentSystemLogsParser
 | extend LogType = iif(isnotempty(AgentSystemLogsParser),"Agent System Logs","")
 // Agent Activity Log Header
-| extend AgentActivityLogsParser = extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)\,([^,]+)\,([^,]+)\,([^,]+)\,([^,]+)",dynamic([1,2,3,4,5,6,7]), SyslogMessage)
+| extend AgentActivityLogsParser = extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?",dynamic([1,2,3,4,5,6,7]), SyslogMessage)
 | mv-expand AgentActivityLogsParser
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentActivityLogsParser),"Agent Activity Logs", LogType)
 // Agent Behavior Log Header
-| extend AgentBehaviorLogsParser = extract_all(@"SymantecServer:\s([^,]+)\,([\d\.]+)\,([^,]+)\,([^,]+)\,([^,]+)\,Begin:\s([^,]+)\,End Time:\s([^,]+)\,Rule:\s([^,]+)\,(\d+)\,([^,]+)\,([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11]),SyslogMessage)
+| extend AgentBehaviorLogsParser = extract_all(@"^([^,]+)\,([^,]+)\,([^,]+)\,([^,]+)\,([^,]+)\,Begin:\s([^,]+)\,End Time:\s([^,]+)\,Rule:\s([^,]+)\,(\d+)\,([^,]+)\,([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11]),SyslogMessage)
 | mv-expand AgentBehaviorLogsParser
 | extend AgentBehaviorLogsSubstring = tostring(AgentBehaviorLogsParser[10])
 | extend AgentBehaviorLogsParser2 = extract_all(@"([^,]+)\,([^,]+)\,([^,]+)\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action Type:\s([^,]+)?\,File size \(bytes\):\s(\d+)?\,Device ID:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8]),AgentBehaviorLogsSubstring)
 | mv-expand AgentBehaviorLogsParser2
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentBehaviorLogsParser) and isnotempty(AgentBehaviorLogsParser2),"Agent Behavior Logs",LogType)
 // Agent Traffic Log Header
-| extend AgentTrafficLogsParser = extract_all(@"SymantecServer:\s([^,]+)\,Local Host IP:\s([^,]+)?\,Local Port:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Port:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),SyslogMessage)
+| extend AgentTrafficLogsParser = extract_all(@"^([^,]+)\,Local Host IP:\s([^,]+)?\,Local Port:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Port:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),SyslogMessage)
 | mv-expand AgentTrafficLogsParser
 | extend AgentTrafficLogsSubstring  = tostring(AgentTrafficLogsParser[12])
 | extend AgentTrafficLogsParser2 = extract_all(@"Occurrences:\s([^,]+)?\,Application:\s([^,]+)?\,Rule:\s([^,]+)?\,Location:\s([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action:\s([^,]+)?\,SHA-256:\s([^,]+)?\,MD-5:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8,9,10,11,12]),AgentTrafficLogsSubstring)
 | mv-expand AgentTrafficLogsParser2
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentTrafficLogsParser) and isnotempty(AgentTrafficLogsParser2),"Agent Traffic Logs",LogType)
 // Agent Security Log Header
-| extend AgentSecurityLogsParser = extract_all(@"SymantecServer:\s([^,]+)\,\W?Event Description:\s([^,]+)\W?\,Local Host IP:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,Intrusion ID:\s([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),SyslogMessage)
+| extend AgentSecurityLogsParser = extract_all(@'^([^,]+)\,(Event Description:\s([^,]+)?|\"Event Description:\s([^"]+)?\")\,Local Host IP:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,(Intrusion ID:\s)?([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)',dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),SyslogMessage)
 | mv-expand AgentSecurityLogsParser
-| extend  AgentSecurityLogsSubstring  = tostring(AgentSecurityLogsParser[12])
+| extend  AgentSecurityLogsSubstring = tostring(AgentSecurityLogsParser[15])
 | extend AgentSecurityLogsParser2 = extract_all(@"Occurrences:\s([^,]+)?\,Application:\s([^,]+)?\,Location:\s([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Local Port:\s([^,]+)?\,Remote Port:\s([^,]+)?\,CIDS Signature ID:\s([^,]+)?\,CIDS Signature string:\s([^,]+)?\,CIDS Signature SubID:\s([^,]+)?\,Intrusion URL:\s([^,]+)?\,Intrusion Payload URL:\s([^,]+)?\,SHA-256:\s([^,]+)?\,MD-5:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),AgentSecurityLogsSubstring)
 | mv-expand AgentSecurityLogsParser2
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentSecurityLogsParser) and isnotempty(AgentSecurityLogsParser2),"Agent Security Logs",LogType)
 // Agent Packet Log Header
 | extend AgentPacketLogsParser = extract_all(@"Local Host IP:\s([^,]+)?\,Local Port:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Port:\s([^,]+)?\,([^,]+)?\,Application:\s([^,]+)?\,Action:\s([^,]+)?\,",dynamic([1,2,3,4,5,6,7]), SyslogMessage)
 | mv-expand AgentPacketLogsParser
-| extend LogType = iif(isempty(LogType) and isnotempty(AgentPacketLogsParser),"Agent Packet Logs",LogType);
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentPacketLogsParser),"Agent Packet Logs",LogType)
+// Agent Risk Log Header
+| extend AgentRiskLogsParser = extract_all(@'^([^,]+)\,IP Address:\s([^,]+)?\,Computer name:\s([^,]+)?\,Source:\s([^,]+)?\,Risk name:\s([^,]+)?\,Occurrences:\s([^,]+)?\,(File path:\s([^,]+)?|File path:\s\"([^"]+)\"?\")\,Description:\s([^,]+)?\,Actual action:\s([^,]+)?\,Requested action:\s([^,]+)?\,Secondary action:\s([^,]+)?\,Event time:\s([^,]+)?\,Event Insert Time:\s([^,]+)?\,([\s\S]+)',dynamic([1,2,3,4,5,6,8,9,10,11,12,13,14,15,16]), SyslogMessage)
+| mv-expand AgentRiskLogsParser
+| extend AgentRiskLogsSubstring  = tostring(AgentRiskLogsParser[14])
+| extend AgentRiskLogsParser2 = extract_all(@"^End Time:\s([^,]+)?\,Last update time:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Group Name:\s([^,]+)?\,Server Name:\s([^,]+)?\,User Name:\s([^,]+)?\,Source Computer Name:\s([^,]+)?\,Source Computer IP:\s([^,]+)?\,Disposition:\s([^,]+)?\,Download site:\s([^,]+)?\,Web domain:\s([^,]+)?\,Downloaded by:\s([^,]+)?\,Prevalence:\s([^,]+)?\,Confidence:\s([^,]+)?\,URL Tracking Status:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),AgentRiskLogsSubstring)
+| mv-expand AgentRiskLogsParser2
+| extend AgentRiskLogsSubstring2  = tostring(AgentRiskLogsParser2[15])
+| extend AgentRiskLogsParser3 = extract_all(@"^First Seen:\s([^,]+)?\,Sensitivity:\s([^,]+)?\,Permitted application reason:\s([^,]+)?\,Application hash:\s([^,]+)?\,Hash type:\s([^,]+)?\,Company name:\s([^,]+)?\,Application name:\s([^,]+)?\,Application version:\s([^,]+)?\,Application type:\s([^,]+)?\,File size \(bytes\):\s([^,]+)?\,Category set:\s([^,]+)?\,Category type:\s([^,]+)?\,Location:\s([^,]+)?\,Intensive Protection Level:\s([^,]+)?\,Certificate issuer:\s([^,]+)?\,([\s\S]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),AgentRiskLogsSubstring2)
+| mv-expand AgentRiskLogsParser3
+| extend AgentRiskLogsSubstring3  = tostring(AgentRiskLogsParser3[15])
+| extend AgentRiskLogsParser4 = extract_all(@"^Certificate signer:\s([^,]+)?\,Certificate thumbprint:\s([^,]+)?\,Signing timestamp:\s([^,]+)?\,Certificate serial number:\s([^,]+)?(\,|$)",dynamic([1,2,3,4]),AgentRiskLogsSubstring3)
+| mv-expand AgentRiskLogsParser4
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentRiskLogsParser) and isnotempty(AgentRiskLogsParser2) and isnotempty(AgentRiskLogsParser3),"Agent Risk Logs",LogType);
 // Agent System Log Parser
 let AgentSystemLogs = LogHeader
 | where LogType == "Agent System Logs"
@@ -110,10 +123,10 @@ let AgentTrafficLogs = LogHeader
          LocalPortNumber = toint(AgentTrafficLogsParser[2]),
          LocalHostMacAddr = tostring(AgentTrafficLogsParser[3]),
          RemoteHostIpAddr = tostring(AgentTrafficLogsParser[4]),
-         RemoteHostName = todatetime(AgentTrafficLogsParser[5]),
+         RemoteHostName = tostring(AgentTrafficLogsParser[5]),
          RemotePortNumber = toint(AgentTrafficLogsParser[6]),
          RemoteHostMacAddr = tostring(AgentTrafficLogsParser[7]),
-         NetworkProtocol = toint(AgentTrafficLogsParser[8]),
+         NetworkProtocol = tostring(AgentTrafficLogsParser[8]),
          TrafficDirection = tostring(AgentTrafficLogsParser[9]),
          EventStartTime = todatetime(AgentTrafficLogsParser[10]),
          EventEndTime = todatetime(AgentTrafficLogsParser[11]),
@@ -130,18 +143,17 @@ let AgentTrafficLogs = LogHeader
 // Agent Security Logs 
 let AgentSecurityLogs = LogHeader
 | where LogType == "Agent Security Logs"
-| extend EventDescription = tostring(AgentSecurityLogsParser[1]),
-         LocalHostIpAddr = tostring(AgentSecurityLogsParser[2]),
-         LocalHostMacAddr = tostring(AgentSecurityLogsParser[3]),
-         RemoteHostName = todatetime(AgentSecurityLogsParser[4]),
-         RemoteHostIpAddr = tostring(AgentSecurityLogsParser[5]),
-         RemoteHostMacAddr = tostring(AgentSecurityLogsParser[6]),
-         TrafficDirection = tostring(AgentSecurityLogsParser[7]),
-         NetworkProtocol = toint(AgentSecurityLogsParser[8]),
-         IntrusionId = tostring(AgentSecurityLogsParser[9]),
-         EventStartTime = todatetime(AgentSecurityLogsParser[10]),
-         EventEndTime = todatetime(AgentSecurityLogsParser[11]),
-         AgentSecurityLogsSubstring  = tostring(AgentSecurityLogsParser[12])
+| extend EventDescription = iif(isempty(tostring(AgentSecurityLogsParser[2])),tostring(AgentSecurityLogsParser[3]),tostring(AgentSecurityLogsParser[2])),
+         LocalHostIpAddr = tostring(AgentSecurityLogsParser[4]),
+         LocalHostMacAddr = tostring(AgentSecurityLogsParser[5]),
+         RemoteHostName = tostring(AgentSecurityLogsParser[6]),
+         RemoteHostIpAddr = tostring(AgentSecurityLogsParser[7]),
+         RemoteHostMacAddr = tostring(AgentSecurityLogsParser[8]),
+         TrafficDirection = tostring(AgentSecurityLogsParser[9]),
+         NetworkProtocol = tostring(AgentSecurityLogsParser[10]),
+         IntrusionId = tostring(AgentSecurityLogsParser[11]),
+         EventStartTime = todatetime(AgentSecurityLogsParser[13]),
+         EventEndTime = todatetime(AgentSecurityLogsParser[14])
 | extend Occurrences = toint(AgentSecurityLogsParser2[0]),
          ApplicationName = tostring(AgentSecurityLogsParser2[1]),
          Location = tostring(AgentSecurityLogsParser2[2]),
@@ -165,8 +177,63 @@ let AgentPacketLogs = LogHeader
          RemotePortNumber = toint(AgentPacketLogsParser[4]),
          Application = tostring(AgentPacketLogsParser[5]),
          Action = tostring(AgentPacketLogsParser[6]);
+// Agent Risk Logs
+let AgentRiskLogs = LogHeader
+| where LogType == "Agent Risk Logs"
+| extend Action = tostring(AgentRiskLogsParser[0]),
+         SrcIpAddr = tostring(AgentRiskLogsParser[1]),
+         SrcHostName = tostring(AgentRiskLogsParser[2]),
+         Source = tostring(AgentRiskLogsParser[3]),
+         RiskName = tostring(AgentRiskLogsParser[4]),
+         Occurrences = toint(AgentRiskLogsParser[5]),
+         FilePath = iif(isempty(tostring(AgentRiskLogsParser[6])),tostring(AgentRiskLogsParser[7]),tostring(AgentRiskLogsParser[6])),
+         EventDescription = tostring(AgentRiskLogsParser[8]),
+         ActualAction = tostring(AgentRiskLogsParser[9]),
+         RequestedAction = tostring(AgentRiskLogsParser[10]),
+         SecondaryAction = tostring(AgentRiskLogsParser[11]),
+         EventStartTime = todatetime(AgentRiskLogsParser[12]),
+         EventInsertTime = todatetime(AgentRiskLogsParser[13]),
+         EventEndTime = todatetime(AgentRiskLogsParser[14])
+| extend EventEndTime = todatetime(AgentRiskLogsParser2[0]),
+         LastUpdateTime = todatetime(AgentRiskLogsParser2[1]),
+         DomainName = tostring(AgentRiskLogsParser2[2]),
+         GroupName = tostring(AgentRiskLogsParser2[3]),
+         ServerName = tostring(AgentRiskLogsParser2[4]),
+         UserName = tostring(AgentRiskLogsParser2[5]),
+         SrcComputerName = tostring(AgentRiskLogsParser2[6]),
+         SrcComputerIpAddr = tostring(AgentRiskLogsParser2[7]),
+         Disposition = tostring(AgentRiskLogsParser2[8]),
+         DownloadSite = tostring(AgentRiskLogsParser2[9]),
+         WebDomain = tostring(AgentRiskLogsParser2[10]),
+         DownloadedBy = tostring(AgentRiskLogsParser2[11]),
+         Prevalence = tostring(AgentRiskLogsParser2[12]),
+         Confidence = tostring(AgentRiskLogsParser2[13]),
+         UrlTrackingStatus = tostring(AgentRiskLogsParser2[14])
+| extend FirstSeen = tostring(AgentRiskLogsParser3[0]),
+         Sensitivity = tostring(AgentRiskLogsParser3[1]),
+         PermittedApplicationReason = tostring(AgentRiskLogsParser3[2]),
+         ApplicationHash = tostring(AgentRiskLogsParser3[3]),
+         HashType = tostring(AgentRiskLogsParser3[4]),
+         CompanyName = tostring(AgentRiskLogsParser3[5]),
+         ApplicationName = tostring(AgentRiskLogsParser3[6]),
+         ApplicationVersion = tostring(AgentRiskLogsParser3[7]),
+         ApplicationType = tostring(AgentRiskLogsParser3[8]),
+         FileSize = toint(AgentRiskLogsParser3[9]),
+         CategorySet = tostring(AgentRiskLogsParser3[10]),
+         CategoryType = tostring(AgentRiskLogsParser3[11]),
+         Location = tostring(AgentRiskLogsParser3[12]),
+         IntensiveProtectionLevel = tostring(AgentRiskLogsParser3[13]),
+         CertificateIssuer = tostring(AgentRiskLogsParser3[14])
+| extend CertificateSigner = tostring(AgentRiskLogsParser4[0]),
+         CertificateThumbprint = tostring(AgentRiskLogsParser4[1]),
+         SigningTimestamp = tostring(AgentRiskLogsParser4[2]),
+         CertificateSerialNumber = tostring(AgentRiskLogsParser4[3]);
 // All Other Logs - Captures all other logs not specifically identified
 let AllOtherLogs = LogHeader
-| where LogType !in ("Agent System Logs","Agent Activity Logs","Agent Behavior Logs", "Agent Traffic Logs","Agent Security Logs", "Agent Packet Logs");
-union AgentActivityLogs, AgentBehaviorLogs, AgentSystemLogs, AgentTrafficLogs, AgentSecurityLogs, AgentPacketLogs, AllOtherLogs
-| project-away AgentBehaviorLogsParser, AgentBehaviorLogsParser2, AgentTrafficLogsParser, AgentTrafficLogsParser2, AgentTrafficLogsSubstring, AgentActivityLogsParser, AgentBehaviorLogsSubstring, AgentSecurityLogsParser, AgentSecurityLogsSubstring, AgentSecurityLogsParser2, AgentSystemLogsParser, AgentPacketLogsParser
+| where LogType !in ("Agent System Logs","Agent Activity Logs","Agent Behavior Logs", "Agent Traffic Logs","Agent Security Logs", "Agent Packet Logs", "Agent Risk Logs")
+| extend LogType = iif(isempty(LogType),"Other",LogType),
+         SiteName = extract(@"Site Name:\s([^,]\,)",1,SyslogMessage),
+         ServerName = extract(@"Server Name:\s([^,]\,)",1,SyslogMessage),
+         EventDescription = extract(@"Event Description:\s([^,]+)(\,|$)",1,SyslogMessage);
+union AgentActivityLogs, AgentBehaviorLogs, AgentSystemLogs, AgentTrafficLogs, AgentSecurityLogs, AgentPacketLogs, AgentRiskLogs, AllOtherLogs
+| project-away AgentBehaviorLogsParser, AgentBehaviorLogsParser2, AgentTrafficLogsParser, AgentTrafficLogsParser2, AgentTrafficLogsSubstring, AgentActivityLogsParser, AgentBehaviorLogsSubstring, AgentSecurityLogsParser, AgentSecurityLogsSubstring, AgentSecurityLogsParser2, AgentSystemLogsParser, AgentPacketLogsParser, AgentRiskLogsParser, AgentRiskLogsParser2, AgentRiskLogsParser3, AgentRiskLogsParser4, AgentRiskLogsSubstring, AgentRiskLogsSubstring2, AgentRiskLogsSubstring3

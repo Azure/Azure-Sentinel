@@ -15,3 +15,10 @@ export class DataConnectorValidationError extends Error implements ValidationErr
     super(message);
   }
 }
+
+export class WorkbookTemplatesValidationError extends Error implements ValidationError {
+  public name = "WorkbookTemplatesValidationError";
+  constructor(message?: string) {
+    super(message);
+  }
+}
