@@ -56,7 +56,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                     // Check for invalid identifier
                     if (!validIdentifiers.Contains(fieldMapping.Identifier))
                     {
-                        return new ValidationResult($"Invalid identifier '{fieldMapping.Identifier}' for type '{entityType}' encountered. Valid identifiers are: [{string.Join(", ", validIdentifiers)}]");
+                        return new ValidationResult($"Invalid identifier '{fieldMapping.Identifier}' for entity type '{entityType}' encountered. Valid identifiers are: [{string.Join(", ", validIdentifiers)}]");
                     }
 
                     // Check for duplicate identifier
