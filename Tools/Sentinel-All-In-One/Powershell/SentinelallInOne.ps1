@@ -1,31 +1,21 @@
 param(
     [Parameter(Mandatory=$true)]$ResourceGroup,
-    [Parameter(Mandatory=$true)]$Workspace,
+    [Parameter(Mandatory=$true)]$Workspace,    
     [Parameter(Mandatory=$true)]$Location
 )
 
+
 function CheckModules($module) {
-    if($module -eq "AzSentinel"){
-        $moduleVer = @{ModuleName="AzSentinel";ModuleVersion="0.6.13"}
-        $service = Get-Module $moduleVer
-    }
-    else{
-        $service = Get-Module -ListAvailable -Name $module
-    }
-    
-    if (-Not $service) {
-        if($module -eq "AzSentinel"){
-            Install-Module -Name $module -MinimumVersion 0.6.13 -Scope CurrentUser -Force
-        }
-        else {
-            Install-Module -Name $module -Scope CurrentUser -Force    
-        }
-    }  
+    $service = Get-Module -ListAvailable -Name $module
+    if (-Not $service) {        
+        Write-Host "Module does not exist"
+        Install-Module -Name $module -Scope CurrentUser -Force
+    }    
 }
 
 CheckModules("Az.Resources")
 CheckModules("Az.OperationalInsights")
-CheckModules("AzSentinel")
+CheckModules("Az.SecurityInsights")
 
 Write-Host "`r`nIf not logged in to Azure already, you will now be asked to log in to your Azure environment. `nFor this script to work correctly, you need to provide credentials of a Global Admin or Security Admin for your organization. `nThis will allow the script to enable all required connectors.`r`n" -BackgroundColor Magenta
 
@@ -40,7 +30,7 @@ if(!$context){
 
 $SubscriptionId = $context.Subscription.Id
 
-$ConnectorsFile = ".\connectors.json"
+$ConnectorsFile = "$PSScriptRoot\connectors.json"
 #Create Resource Group
 Get-AzResourceGroup -Name $ResourceGroup -ErrorVariable notPresent -ErrorAction SilentlyContinue
 
@@ -76,7 +66,7 @@ else {
     Set-AzSentinel -WorkspaceName $Workspace -Confirm:$false
 }
 
-$msTemplates = Get-AzSentinelAlertRuleTemplates -workspace $Workspace -Kind MicrosoftSecurityIncidentCreation
+$msTemplates = Get-AzSentinelAlertRuleTemplate -WorkspaceName $Workspace -ResourceGroupName $ResourceGroup | where Kind -EQ MicrosoftSecurityIncidentCreation
 
 #Resource URL to authentincate against
 $Resource = "https://management.azure.com/"
@@ -192,7 +182,7 @@ function EnableMSAnalyticsRule($msProduct){
     try {
         foreach ($rule in $msTemplates){
             if ($rule.productFilter -eq $msProduct) {
-                New-AzSentinelAlertRule -WorkspaceName $Workspace -Kind MicrosoftSecurityIncidentCreation -DisplayName $rule.displayName -Description $rule.description -Enabled $true -ProductFilter $msProduct -DisplayNamesFilter ""  |Out-Null     
+                New-AzSentinelAlertRule -ResourceGroupName $ResourceGroup -WorkspaceName $Workspace -DisplayName $rule.displayName -MicrosoftSecurityIncidentCreation -Description $rule.description -ProductFilter $msProduct                
                 Write-Host "Done!" -ForegroundColor Green
             }
         }
