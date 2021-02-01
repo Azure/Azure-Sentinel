@@ -1,4 +1,5 @@
 # Sample Data Ingest Tool
+Author: Chi Nguyen
 
 ## Description
 This repository contains a tool in C# console application that allows users to post sample data of custom format to their Azure Log Analytics Custom logs. The sample data is found in Custom folder under Sample Data directory. The posted data can then be accessed via their Azure Log Analytics Custom logs or Azure Sentinel Custom Log table.
@@ -20,7 +21,7 @@ To configure the tool, the following assembly is required to post sample data to
 4. Obtain **WorkSpaceId** and **PrimaryKey** following these steps. Copy this workspace Id and PrimaryKey as you will need them later to run the application.
    1. In the Azure portal, search for and select **Log Analytics workspaces**
    1. In your list of Log Analytics workspaces, select the workspace you intend on configuring the agent to report to.
-   1. Select **Agents management**.
+   1. Select **Agents management**.  Copy the `Workspace ID`, and the `Primary Key`.  They are set as the `workspaceId` and `sharedKey`.
 
 5. To enable Azure Sentinel, you need **contributor** permissions to the subscription in which the Azure Sentinel workspace resides. Learn more to [onboard Azure Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard#enable-azure-sentinel-).
 
@@ -37,9 +38,9 @@ Follow these steps to register a new application:
 
 3. Enter an application name, and choose **Register** (keep the default values for the other fields).
 
-4. Next you'll see the overview page for your app. Copy and save the **Application Id (clientId)** field. You will need it later to complete the configuration process. If the app is not registered under the domain listed above, you will also need to copy and save the **Directory ID (tenantId)**.
+4. Next you'll see the overview page for your app. Copy and save the **Application Id (clientId)** field. You will need it later to complete the configuration process as the `clientId`. If the app is not registered under the domain listed above, you will also need to copy and save the **Directory ID (tenantId)**.
 
-5. Under **Certificates & secrets**, choose **New client secret** and add a quick description. A new secret will be displayed in the **Value** column. Copy this password. You will need it later to complete the configuration process and it will not be shown again.
+5. Under **Certificates & secrets**, choose **New client secret** and add a quick description. A new secret will be displayed in the **Value** column. Copy this password. You will need it later to complete the configuration process (clientSecret) and it will not be shown again.
 
 6. Link Log Analytics workspace to your registered application by following these steps:
    1. Navigate to your Azure portal, and select or search for **Log Analytics**.
@@ -60,11 +61,11 @@ Click **Restore NuGet Packages**.
 
 4) Open **config.txt** file, enter the following credentials using the information you've saved from the [Prerequisites](#Prerequisites) and App Registration section.
 
-        "workspaceId": "enter_your_workspaceId_or_customerId_here",
-        "sharedKey": "enter_your_workspace_primary_key_here",
-        "clientId": "enter_your_clientId_here",
-        "clientSecret": "enter_your_client_secret_here",
-        "domain": "enter_your_app_domain_or_tenantId_here";
+        "workspaceId": "enter string, from Log Analytics workspace > Agents Management > Workspace ID",
+        "sharedKey": "enter string, from Log Analytics workspace > Agents Management > Primary key",
+        "clientId": "enter string, from App > Overview > Essentials > Application (client) ID",
+        "clientSecret": "enter string, from App > Overview >  Certificates & secrets > Secret Value",
+        "domain": "enter string, from Azure AD";
 
 5) Once changes are complete, save the file.
 Now you can run the application. Please note that the "Main" function in the Program.cs class is the entry point for the application.
