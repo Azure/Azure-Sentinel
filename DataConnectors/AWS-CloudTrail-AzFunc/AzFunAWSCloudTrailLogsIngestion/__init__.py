@@ -161,10 +161,7 @@ def main(mytimer: func.TimerRequest) -> None:
             for resource_type_event in resource_type_events_collection:
                 sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_' + resource_type, queue_size=10000, bulks_number=10)
                 with sentinel:
-                    sentinel.send(resource_type_event)                
-            
-
-        logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} '.format(round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events))
+                    sentinel.send(resource_type_event)       
         
     elif (isCoreFieldsAllTable == "true" and isSplitAWSResourceTypes == "false"):
         file_events = 0
@@ -175,10 +172,8 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel.send(event)
             file_events += 1
             failed_sent_events_number += sentinel.failed_sent_events_number
-            successfull_sent_events_number += sentinel.successfull_sent_events_number           
-
-        logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} '.format(round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events))    
-
+            successfull_sent_events_number += sentinel.successfull_sent_events_number
+            
     elif (isCoreFieldsAllTable == "false" and isSplitAWSResourceTypes == "true"):
         file_events = 0
         t0 = time.time()
@@ -190,10 +185,7 @@ def main(mytimer: func.TimerRequest) -> None:
                     sentinel.send(resource_type_event)
                 file_events += 1
                 failed_sent_events_number += sentinel.failed_sent_events_number
-                successfull_sent_events_number += sentinel.successfull_sent_events_number                
-
-        logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} '.format(round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events))
-        
+                successfull_sent_events_number += sentinel.successfull_sent_events_number                      
         
     if failed_sent_events_number:
         logging.error('{} events have not been sent'.format(failed_sent_events_number))
@@ -201,7 +193,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Program finished. {} events have been sent. {} events have not been sent'.format(successfull_sent_events_number, failed_sent_events_number))
 
     if successfull_sent_events_number == 0 and failed_sent_events_number == 0:
-        logging.info('No Security Hub events')
+        logging.info('No CloudTrail Events')
 
 
 class S3Client:
