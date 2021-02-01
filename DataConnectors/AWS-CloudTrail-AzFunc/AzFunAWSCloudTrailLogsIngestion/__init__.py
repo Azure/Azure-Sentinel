@@ -26,13 +26,14 @@ aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 aws_s3_bucket = os.environ.get('S3Bucket')
 aws_region_name = os.environ.get('AWSRegionName')
 sentinel_log_type = os.environ.get('LogAnalyticsCustomLogName')
+fresh_event_timestamp = os.environ.get('FreshEventTimeStamp')
 
 # Boolean Values
 isCoreFieldsAllTable = os.environ.get('CoreFieldsAllTable')
 isSplitAWSResourceTypes = os.environ.get('SplitAWSResourceTypes')
 
 # TODO: Read Collection schedule from environment variable as CRON expression; This is also Azure Function Trigger Schedule
-collection_schedule = 10
+collection_schedule = int(fresh_event_timestamp)
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -148,7 +149,7 @@ def main(mytimer: func.TimerRequest) -> None:
         file_events = 0
         t0 = time.time()    
         for event in coreEvents:
-            sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
+            sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL' , queue_size=10000, bulks_number=10)
             with sentinel:
                 sentinel.send(event)
             file_events += 1 
@@ -169,7 +170,7 @@ def main(mytimer: func.TimerRequest) -> None:
         file_events = 0
         t0 = time.time()
         for event in coreEvents:
-            sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
+            sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL', queue_size=10000, bulks_number=10)
             with sentinel:
                 sentinel.send(event)
             file_events += 1
@@ -278,7 +279,7 @@ class S3Client:
             raise Exception
 
     def get_files_list(self, ts_from, ts_to):
-        files = []
+        files = []        
         aws_acct_id = self._get_aws_account_id()
         ct_folder = 'AWSLogs/'+ aws_acct_id +'/CloudTrail'
         folders = [ct_folder]
@@ -324,6 +325,8 @@ class S3Client:
                 extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode()
             elif '.json.gz' in key.lower():
                 extracted_file = gzip.GzipFile(fileobj=file_obj)
+            elif '.json' in key.lower():
+                extracted_file = file_obj
             return extracted_file
 
         except Exception as err:
