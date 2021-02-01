@@ -81,26 +81,12 @@ This will give the Managed Identity the ability to retrieve both the Graph API s
 
 ## Next steps
 
-This Logic App accepts an HTTP POST request with a single `emailAddress` parameter ie.
+This Logic App can be triggered in response to an Azure Sentinel alert. It will grab all the Account Entities associated with the Alert, retrieve their mail attribute from Azure AD using Graph API, it will check each account against the DeHashed API, if passwords have been found, it will update the Azure AD Banned Password list and will also add a comment to the Azure Sentinel Incident.
 
-`{
-"emailAddress": "steve.jobs@apple.com"
-}`
+1. Launch Playbook in response to an Azure Sentinel Alert with an associated Azure AD Entity.
+2. Wait for the Playbook to complete and check the Incident comments.
 
-You can call this Logic App from another Logic App passing it an e-mail address from various sources (ie. Azure Sentinel Users' associated with Incidents, All Users in Azure AD sourced using Graph API, etc). You could also call this from a PowerApp which could be integrated into Microsoft Teams!
-
-To quickly test the Logic App, you can utilize [Postman](https://www.postman.com/downloads/).
-
-1. Download and Install Postman
-2. Open the Logic App and copy the URL in the first step called `When a HTTP request is received`.
-![Postman1](./media/postman1.png)
-3. Open Postman and paste the URL in
-4. Add a Header to include `Key: Content-Type   Value: application/json`
-5. Add a Body to include a sample e-mail address ie.
-`{
-"emailAddress": "steve.jobs@apple.com"
-}`
-6. Hit Send and wait for the response.
 ![Postman2](./media/postman2.png)
+
 7. Review the updates to the Azure AD Banned Password List
    ![BannedPasswords](./media/bannedpasswords.png)
