@@ -39,11 +39,11 @@ describe("workbooksValidator", () => {
   });
 
   it("should throw an exception when empty data connectors dependency is in the wrong format", async () => {
-    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/emptyDataConnectorsDependenciesWithInvalidFormat.json", "WorkbookValidationError");
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/emptyDataConnectorsDependenciesWithInvalidFormat.json", "SchemaError");
   });
 
   it("should throw an exception when empty data types dependency is in the wrong format", async () => {
-    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/emptyDataTypesDependenciesWithInvalidFormat.json", "WorkbookValidationError");
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/emptyDataTypesDependenciesWithInvalidFormat.json", "SchemaError");
   });
 
   it("should throw an exception when logo image file does not exist", async () => {
