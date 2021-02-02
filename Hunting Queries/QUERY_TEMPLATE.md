@@ -35,7 +35,7 @@
 				InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
 				processEvents;
 				};
-				// Daily summary of cscript activity – extracting script name and parameters from commandline:
+				// Daily summary of cscript activity - extracting script name and parameters from commandline:
 				ProcessCreationEvents | where FileName =~ "cscript.exe"
 				| project removeSwitches = replace(@"/+[a-zA-Z0-9:]+", "", ProcessCommandLine) // remove commandline switches
 				| project CommandLine = trim(@"[a-zA-Z0-9\\:""]*cscript(.exe)?("")?(\s)+", removeSwitches) // remove the leading cscript.exe process name 
