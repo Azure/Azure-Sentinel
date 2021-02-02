@@ -2,7 +2,7 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
-import { isFromTemplateIdNotSentinelUserWorkbook } from "./utils/workbookCheckers/fromTemplateIdChecker";
+import { isFromTemplateIdNotSentinelUserWorkbook } from "./utils/workbookCheckers/workbookTemplateCheckers/fromTemplateIdChecker";
 import { WorkbookTemplate } from "./utils/workbookTemplate";
 
 export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCode> {
