@@ -1,7 +1,6 @@
 param(
     [Parameter(Mandatory=$true)]$ResourceGroup,
-    [Parameter(Mandatory=$true)]$Workspace,
-    [Parameter(Mandatory=$true)]$ConnectorsFile,
+    [Parameter(Mandatory=$true)]$Workspace,    
     [Parameter(Mandatory=$true)]$Location
 )
 
@@ -34,17 +33,22 @@ function DeleteDataConnector ($dataConnector, $dataConUri) {
 
 CheckModules("Az.Resources")
 CheckModules("Az.OperationalInsights")
-CheckModules("AzSentinel")
+CheckModules("Az.SecurityInsights")
 
 Write-Host "`r`nYou will now be asked to log in to your Azure environment. `nFor this script to work correctly, you need to provide credentials of a Global Admin or Security Admin for your organization. `nThis will allow the script to enable all required connectors.`r`n" -BackgroundColor Magenta
 
 Read-Host -Prompt "Press enter to continue or CTRL+C to quit the script" 
 
-Connect-AzAccount
-
 $context = Get-AzContext
 
+if(!$context){
+    Connect-AzAccount
+    $context = Get-AzContext
+}
+
 $SubscriptionId = $context.Subscription.Id
+
+$ConnectorsFile = "$PSScriptRoot\connectors.json"
 
 #Check Resource Group Existing or not
 Get-AzResourceGroup -Name $ResourceGroup -ErrorVariable notPresent -ErrorAction SilentlyContinue
