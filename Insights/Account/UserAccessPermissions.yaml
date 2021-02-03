@@ -1,0 +1,63 @@
+SchemaVersion: '1.0'
+DataTypes:
+  - DataType: UserAccessAnalytics
+Provider: Sentinel
+Type: KQL
+EntitiesFilter: {}
+BaseQuery: |
+  let GetUserSubscriptionRbac = (v_Account_AadUserId:string) { 
+    let blastRadTime = now();
+    let userAccess = UserAccessAnalytics|where SourceEntityId == v_Account_AadUserId; 
+    let userSubAccess = userAccess
+    | where TargetEntityType == 'AzureSubscription'
+    | project SourceEntityName, UserId = SourceEntityId, TimeGenerated , SubscriptionName = TargetEntityName, Subscription = TargetEntityId, Role = AccessLevel, GroupId = '',GroupName= '', ServicePrincipalId = '', AccessType 
+    | summarize arg_max(TimeGenerated, *) by Subscription, Role;
+    let userGroupAccess = userAccess
+    | where TargetEntityType == 'Group'
+    | project SourceEntityName, UserId = SourceEntityId, GroupId = TargetEntityId, TimeGenerated, AccessType, GroupName = TargetEntityName 
+    | summarize arg_max(TimeGenerated, *) by GroupId;
+    let userGroupSubAccess = userGroupAccess 
+    | join kind = inner UserAccessAnalytics on $left.GroupId == $right.SourceEntityId 
+    | where TargetEntityType == 'AzureSubscription' and TimeGenerated <= blastRadTime 
+    | project SourceEntityName, UserId, GroupId, ServicePrincipalId = '', TimeGenerated, SubscriptionName = TargetEntityName, Subscription = TargetEntityId, Role = AccessLevel, GroupName 
+    | summarize arg_max(TimeGenerated, *) by GroupId, Subscription, Role;
+    let userSPAccess = userAccess| where TargetEntityType == 'ServicePrincipal' 
+    | project SourceEntityName, UserId = SourceEntityId, ServicePrincipalId = TargetEntityId, TimeGenerated 
+    | summarize arg_max(TimeGenerated, *) by ServicePrincipalId;
+    let userSPSubAccess = userSPAccess 
+    | join kind = inner UserAccessAnalytics on $left.ServicePrincipalId == $right.SourceEntityId 
+    | where TargetEntityType == 'AzureSubscription' and TimeGenerated <= blastRadTime | project SourceEntityName, UserId, GroupId = '', ServicePrincipalId, TimeGenerated, SubscriptionName = TargetEntityName, Subscription = TargetEntityId, Role = AccessLevel, AccessType
+    | summarize arg_max(TimeGenerated, *) by ServicePrincipalId, Subscription, Role; 
+    userGroupSubAccess 
+    | union kind=outer userSubAccess, userSPSubAccess 
+    | extend Role = iff(Role == '_UNKNOWN_RBAC_ROLE_', 'Other', Role) }; 
+  GetUserSubscriptionRbac('{{Account_ObjectId}}')
+RequiredInputFieldsSets:
+  - - Account_AadUserId
+Insights:
+  Id: 4fb17f29-89df-4f3b-ad80-222ab7a1efad
+  DisplayName: User Access Permissions to Azure Subscriptions
+  Description: "### Description\n___\n This query provides the direct or transitive access to Azure resources - Azure subscriptions that she either can access directly, via groups or service principals."
+  DefaultTimeRange:
+    BeforeRange: 14d
+    AfterRange: 0d
+  ReferenceTimeRange:
+    BeforeRange: 0d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: Role
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Number Of Subscriptions
+      OutputType: Number
+      SupportDeepLink: false
+    QueriesDefinitions:
+    - Filter: "where true"
+      Summarize: "summarize ['Number of Subscriptions']=count() by Role | sort by ['Number of Subscriptions'] desc"
+      Project: "project ['Number of Subscriptions'], Role"
+      LinkColumnsDefinitions:
+      - {}
+  AdditionalQuery:
+    Text: 'View detailed information '
+    Query: "project Role, SubscriptionName, ['SubscriptionId']=Subscription, AccessType, ['Via Group']=GroupName, GroupId"
