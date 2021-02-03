@@ -138,7 +138,7 @@ To confirm successful registration, navigate to your automation account then sel
 <em> If you get the error indicating that the PowerShell file is not digitally signed, then you will need to execute the command below:
 
 Set-ExecutionPolicy RemoteSigned
-You may still have to unblock the file in case chnaging the execution policy alone does not work. The command to do this is from a PowerShell prompt is: 
+You may still have to unblock the file in case changing the execution policy alone does not work. The command to do this is from a PowerShell prompt is: 
 Unblock-File -Path .\New-OmPremiseHybridWorker.ps1
 
 More details here: Set-ExecutionPolicy (Microsoft.PowerShell.Security) [https://docs.microsoft.com/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.1] 
@@ -173,8 +173,8 @@ Below is the structure of the orchestration Logic App that triggers the runbook 
 ![structre](../Block-OnPremADUser/images/hlstructre.png)
 
 
-## Detailed structre of the Playbook:
-## Extract enitty details (to capture user ID) following trigger execuiton
+## Detailed structure of the Playbook:
+## Extract entity details (to capture user ID) following trigger execution
 
 ![10-trigger](../Block-OnPremADUser/images/10-trigger.png)
 
@@ -189,14 +189,14 @@ Parse the JSON output from the Entities-Get Actions step above in order to extra
 
 
 ## Create Hybrid Automation Job 
-![Createjob](../Block-OnPremADUser/images/createjob.png)
+![Createjob](../Block-OnPremADUser/images/Createjob.png)
 
-The string function below is contained in the 'Runbook Parameter SamAccountName' above is needed to extract the SAMAccount from the UPN of the user as the On-Prem AD can only act on the User ID when specified in this format:
+The string function below is contained in the 'Runbook Parameter SamAccountName' above and is needed to extract the SAMAccount from the UPN of the user as the On-Prem AD can only act on the User ID when specified in this format:
 
     substring(body('Parse_JSON')?['Name'], 0, sub(length(body('Parse_JSON')?['Name']),indexOf(body('Parse_JSON')?['Name'],'@')))
 
 
-To simulate the block orchestration from Azure Sentinel, you may use the below sample query to create an Analytics rule that will detect a failed log on due to a wrong password entered on Azure AD portal
+To simulate the block orchestration from Azure Sentinel, you may use the below sample query to create an Analytics rule that will detect a failed log on due to a wrong password entered on Azure AD portal. You can then simulate failed log on attempts with the account you wish to test with.
 
     SigninLogs
     | where Location == "KE" and Identity contains "[mytestaccount]" and ResultType =="50126"
@@ -208,14 +208,14 @@ To simulate the block orchestration from Azure Sentinel, you may use the below s
 Troubleshooting guide for Hybrid Runbook Workers can be found here : [https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker]
 
 
-<em>Special thanks to @Hazem El Shabini for his valuable collaboration in building the Playbook & @Yaniv Shasha for suggestions to enhance the solution.</em>
+<em>Special thanks to [Hazem Elshabini](https://github.com/helshabini) for his valuable collaboration in building the Playbook & [Yaniv Shasha](https://github.com/Yaniv-Shasha) for suggestions to enhance the solution.</em>
 
 
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUSer%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUser%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2Block-OnPremADUSer%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUser%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
