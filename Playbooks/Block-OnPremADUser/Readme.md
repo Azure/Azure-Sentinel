@@ -138,7 +138,7 @@ To confirm successful registration, navigate to your automation account then sel
 <em> If you get the error indicating that the PowerShell file is not digitally signed, then you will need to execute the command below:
 
 Set-ExecutionPolicy RemoteSigned
-You may still have to unblock the file in case chnaging the execution policy alone does not work. The command to do this is from a PowerShell prompt is: 
+You may still have to unblock the file in case changing the execution policy alone does not work. The command to do this is from a PowerShell prompt is: 
 Unblock-File -Path .\New-OmPremiseHybridWorker.ps1
 
 More details here: Set-ExecutionPolicy (Microsoft.PowerShell.Security) [https://docs.microsoft.com/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.1] 
