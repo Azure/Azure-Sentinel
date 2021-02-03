@@ -2,7 +2,7 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
-import { doesContainResourceInfo } from "./utils/workbookCheckers/workbookTemplateCheckers/containResourceInfoChecker";
+import { doesNotContainResourceInfo } from "./utils/workbookCheckers/workbookTemplateCheckers/containResourceInfoChecker";
 import { isFromTemplateIdNotSentinelUserWorkbook } from "./utils/workbookCheckers/workbookTemplateCheckers/fromTemplateIdChecker";
 import { WorkbookTemplate } from "./utils/workbookTemplate";
 
@@ -18,7 +18,7 @@ export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCod
   }
   
   isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);
-  doesContainResourceInfo(workbookTemplateString);
+  doesNotContainResourceInfo(workbookTemplateString); // Pass the json file as string so we can perform a regex search on the content
   
   return ExitCode.SUCCESS;
 } 
