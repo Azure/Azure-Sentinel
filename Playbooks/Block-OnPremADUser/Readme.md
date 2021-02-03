@@ -189,7 +189,7 @@ Parse the JSON output from the Entities-Get Actions step above in order to extra
 
 
 ## Create Hybrid Automation Job 
-![Createjob](../Block-OnPremADUser/images/createjob.png)
+![Createjob](../Block-OnPremADUser/images/Createjob.png)
 
 The string function below is contained in the 'Runbook Parameter SamAccountName' above is needed to extract the SAMAccount from the UPN of the user as the On-Prem AD can only act on the User ID when specified in this format:
 
@@ -208,14 +208,14 @@ To simulate the block orchestration from Azure Sentinel, you may use the below s
 Troubleshooting guide for Hybrid Runbook Workers can be found here : [https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker]
 
 
-<em>Special thanks to @Hazem El Shabini for his valuable collaboration in building the Playbook & @Yaniv Shasha for suggestions to enhance the solution.</em>
+<em>Special thanks to [Hazem Elshabini](https://github.com/helshabini) for his valuable collaboration in building the Playbook & [Yaniv Shasha](https://github.com/Yaniv-Shasha) for suggestions to enhance the solution.</em>
 
 
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUser%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2Block-OnPremADUser%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUser%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
