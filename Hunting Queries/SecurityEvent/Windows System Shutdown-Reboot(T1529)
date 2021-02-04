@@ -11,16 +11,23 @@ tactics:
   - Impact
 relevantTechniques:
   - T1529
+
 query: |
 let timeframe = 1d;
 Event
-| where TimeGenerated >= ago(timeframe)
 //This query uses sysmon data depending on table name used this may need updataing
 | where Source == "Microsoft-Windows-Sysmon"
-| where (EventID == 1) 
+| extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+| extend EventData = parse_xml(EventData).DataItem.EventData.Data
+| mv-expand bagexpansion=array EventData
+| evaluate bag_unpack(EventData)
+| extend Key=tostring(['@Name']), Value=['#text']
+| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+| extend RuleName = column_ifexists("RuleName", ""), TechniqueId = column_ifexists("TechniqueId", ""),  TechniqueName = column_ifexists("TechniqueName", "")
+| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+| where EventID == 1
 | where Image contains "shutdown.exe" 
 | where CommandLine has_any ("/r /t" , "/s /t")
 | project UtcTime,User,Image, CommandLine
-| sort by UtcTime desc 
-| extend  User, Image, Command
+| extend  User, Image, CommandLine
 
