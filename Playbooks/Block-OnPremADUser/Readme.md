@@ -199,7 +199,7 @@ The string function below is contained in the 'Runbook Parameter SamAccountName'
 To simulate the block orchestration from Azure Sentinel, you may use the below sample query to create an Analytics rule that will detect a failed log on due to a wrong password entered on Azure AD portal. You can then simulate failed log on attempts with the account you wish to test with.
 
     SigninLogs
-    | where Location == "KE" and Identity contains "[mytestaccount]" and ResultType =="50126"
+    | where Location == "KE" and Identity contains "mytestaccount" and ResultType =="50126"
     | extend AccountCustomEntity = AlternateSignInName
 
 
