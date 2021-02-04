@@ -1,7 +1,7 @@
 import { WorkbookTemplatesValidationError } from "../../validationError";
 
 const guidRegex: string = "[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
-const resourceRegex: string = `subscriptions\/${guidRegex}`;
+const resourceRegex: string = `subscriptions\/${guidRegex}\/`;
 
 // This function checks if the template json file contains any information of a resource (for example: /subscriptions/{GUID}}/resourcegroups/my_resource_group/.....). If it does contain then an exception is thrown.
 export function doesNotContainResourceInfo(workbookTemplate: string) {
