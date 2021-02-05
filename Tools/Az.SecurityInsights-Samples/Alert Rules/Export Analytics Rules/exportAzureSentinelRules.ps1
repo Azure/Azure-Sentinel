@@ -22,28 +22,8 @@ if ($host.Version.Major -lt 5) {
     break
 }
 
-#Check if the Az.Accounts PowerShell module is installed, install if it is not
-$AzModule = Get-InstalledModule -Name Az.Accounts -ErrorAction SilentlyContinue
-if ($AzModule -eq $null) {
-    Write-Warning "Az.Accounts PowerShell module is not found"
-    #check for Admin Privleges
-    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-
-    if (-not ($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
-        #Not an Admin, install to current user
-        Write-Warning -Message "Can not install the Az.Accounts module. You are not running as Administrator"
-        Write-Warning -Message "Installing the Az.Accounts module to current user Scope"
-        Install-Module Az.Accounts -Scope CurrentUser -Force
-    }
-    Else {
-        #Admin, install to all users
-        Write-Warning -Message "Installing Az.Accounts module to all users"
-        Install-Module -Name Az.Accounts -AllowClobber -Force
-        Import-Module -Name Az.Accounts -Force
-    }
-}
-
 #Check if the Az.SecurityInsights module is installed, if not install it
+#This will auto install the Az.Accounts module if it is not installed
 $AzSecurityInsightsModule = Get-InstalledModule -Name Az.SecurityInsights -ErrorAction SilentlyContinue
 if ($AzSecurityInsightsModule -eq $null) {
     Write-Warning "The Az.SecurityInsights PowerShell module is not found"
@@ -103,7 +83,7 @@ try {
 }
 catch {
     Write-Warning "Either your Azure connection is invalid or your Azure Sentinel settings are incorrect"
-    Write-Warning $_.Exception.Message -ForegroundColor Red
+    Write-Warning $_.Exception.Message
     break
 }
 
@@ -115,7 +95,7 @@ try {
 }
 catch {
     Write-Warning "Either your Azure connection is invalid or your Azure Sentinel settings are incorrect"
-    Write-Warning $_.Exception.Message -ForegroundColor Red
+    Write-Warning $_.Exception.Message
     break
 }
 
