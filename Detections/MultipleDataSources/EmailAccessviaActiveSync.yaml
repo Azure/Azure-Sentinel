@@ -3,6 +3,8 @@ name: Email access via active sync
 description: |
    'This query detects attempts to add attacker devices as allowed IDs for active sync using the Set-CASMailbox command.
    This technique was seen in relation to Solorigate attack but the results can indicate potential malicious activity used in different attacks.
+   - Note that this query uses the KQL "has_all" operator, which hasn't yet been documented officially, but will be soon.
+    In short, "has_all" will only match when the referenced field has all strings in the list.
    Refer to Set-CASMailbox syntax: https://docs.microsoft.com/powershell/module/exchange/set-casmailbox?view=exchange-ps'  
 severity: Medium
 requiredDataConnectors:
@@ -29,15 +31,15 @@ query: |
   (
   SecurityEvent
   | where TimeGenerated >= ago(timeframe)
-  | where (CommandLine has "Set-CASMailbox") and (CommandLine has "ActiveSyncAllowedDeviceIDs") and (CommandLine has "add")
-  | project TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
+  | where CommandLine has_all ("Set-CASMailbox", "ActiveSyncAllowedDeviceIDs", "add")
+  | project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
   (
   DeviceProcessEvents
   | where TimeGenerated >= ago(timeframe)
-  | where (InitiatingProcessCommandLine has "Set-CASMailbox") and (InitiatingProcessCommandLine has "ActiveSyncAllowedDeviceIDs") and (InitiatingProcessCommandLine has "add")
-  | project TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine
+  | where InitiatingProcessCommandLine has_all ("Set-CASMailbox", "ActiveSyncAllowedDeviceIDs", "add")
+  | project Type, TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine
   | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName
   ),
   (
@@ -51,8 +53,8 @@ query: |
   | extend Key=tostring(['@Name']), Value=['#text']
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
   | where TimeGenerated >= ago(timeframe)
-  | where (CommandLine has "Set-CASMailbox") and (CommandLine has "ActiveSyncAllowedDeviceIDs") and (CommandLine has "add")
-  | project TimeGenerated, Computer, User, Process, ParentImage, CommandLine
+  | where CommandLine has_all ("Set-CASMailbox", "ActiveSyncAllowedDeviceIDs", "add")
+  | project Type, TimeGenerated, Computer, User, Process, ParentImage, CommandLine
   | extend timestamp = TimeGenerated, AccountCustomEntity = User, HostCustomEntity = Computer
   )
   )
