@@ -70,7 +70,7 @@ try {
 }
 catch {
     Write-Warning "Either your Azure connection is invalid or your Azure Sentinel settings are incorrect"
-    Write-Warning $_.Exception.Message -ForegroundColor Red
+    Write-Warning $_.Exception.Message
     break
 }
 
