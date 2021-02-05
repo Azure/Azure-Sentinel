@@ -7,7 +7,7 @@ description: |
   - The process name in each data source is commented out as an adversary could rename it. It is advisable to keep process name commented but 
     if the results show unrelated false positives, users may want to uncomment it.
   - Note also that the queries use the KQL "has_all" operator, which hasn't yet been documented officially, but will be soon.
-    In general, "has_all" will look for all string matches in the provided list of values. 
+    In short, "has_all" will only match when the referenced field has all strings in the list.
   Refer to netsh syntax: https://docs.microsoft.com/windows-server/administration/windows-commands/netsh
   Refer to our M365 blog for details on use during the Solorigate attack:
   https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/
@@ -26,14 +26,17 @@ relevantTechniques:
 tags:
   - Solorigate
 query: |
-  let StartTime = 7d; // historical time frame
-  let EndTime = 1d; // previous day/chosen time to compare against
+  // historical time frame
+  let StartTime = 7d; 
+  // previous day/chosen time to compare against
+  let EndTime = 1d; 
   let AccountAllowList = dynamic(['SYSTEM']);
   let tokens = dynamic(["add", "delete", "set"]); 
   (union isfuzzy=true
   (
   SecurityEvent
   | where TimeGenerated >= ago(EndTime)
+  // remove comment below to adjust for noise
   // | where Process =~ "netsh.exe"
   | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
   | where AccountType !~ "Machine" and Account !in~ (AccountAllowList)
@@ -45,6 +48,7 @@ query: |
   | join kind=leftanti (
   SecurityEvent
   | where TimeGenerated between (ago(StartTime) .. ago(EndTime))
+  // remove comment below to adjust for noise
   // | where Process =~ "netsh.exe"
   | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
   | where AccountType !~ "Machine" and Account !in~ (AccountAllowList)
@@ -54,12 +58,13 @@ query: |
    )
   | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
   ) on RuleName, Program
-  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Computer, Account, SubjectDomainName, SubjectUserName, RuleName, Program, CommandLineParsed = tostring(CommandLineParsed), Process, ParentProcessName
-  | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Type, Computer, Account, SubjectDomainName, SubjectUserName, RuleName, Program, CommandLineParsed = tostring(CommandLineParsed), Process, ParentProcessName
+  | extend Type, Timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
   (
   DeviceProcessEvents
   | where TimeGenerated >= ago(EndTime)
+  // remove comment below to adjust for noise
   // | where InitiatingProcessFileName =~ "netsh.exe" 
   | where InitiatingProcessCommandLine has_all ("advfirewall", "firewall") and InitiatingProcessCommandLine has_any (tokens)
   | where AccountName !in~ (AccountAllowList)
@@ -71,6 +76,7 @@ query: |
   | join kind=leftanti (
   DeviceProcessEvents
   | where TimeGenerated between (ago(StartTime) .. ago(EndTime))
+  // remove comment below to adjust for noise
   // | where InitiatingProcessFileName =~ "netsh.exe" 
   | where InitiatingProcessCommandLine has_all ("advfirewall", "firewall") and InitiatingProcessCommandLine has_any (tokens)
   | where AccountName !in~ (AccountAllowList)
@@ -80,8 +86,8 @@ query: |
   )
   | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
   ) on RuleName, Program
-  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, RuleName, Program,  CommandLineParsed = tostring(CommandLineParsed), InitiatingProcessFileName, InitiatingProcessParentFileName
-  | extend timestamp = StartTime, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Type, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, RuleName, Program,  CommandLineParsed = tostring(CommandLineParsed), InitiatingProcessFileName, InitiatingProcessParentFileName
+  | extend Type, Timestamp = StartTime, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
   ),
   (
   Event
@@ -93,6 +99,7 @@ query: |
   | evaluate bag_unpack(EventData)
   | extend Key=tostring(['@Name']), Value=['#text']
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  // remove comment below to adjust for noise
   // | where OriginalFileName =~ "netsh.exe"
   | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
   | where User !in~ (AccountAllowList)
@@ -111,6 +118,7 @@ query: |
   | evaluate bag_unpack(EventData)
   | extend Key=tostring(['@Name']), Value=['#text']
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  // remove comment below to adjust for noise
   // | where OriginalFileName =~ "netsh.exe"
   | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
   | where User !in~ (AccountAllowList)
@@ -120,7 +128,16 @@ query: |
   )
   | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
   ) on RuleName, Program
-  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Computer, User, Process, RuleName, Program, CommandLineParsed = tostring(CommandLineParsed), ParentImage
-  | extend timestamp = StartTime, AccountCustomEntity = User, HostCustomEntity = Computer
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Type, Computer, User, Process, RuleName, Program, CommandLineParsed = tostring(CommandLineParsed), ParentImage
+  | extend Type, Timestamp = StartTime, AccountCustomEntity = User, HostCustomEntity = Computer
   )
   )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity  
