@@ -41,6 +41,31 @@ $bplastLog = $env:BPlastLogTime
 $apdlastLog = $env:APDlastLogTime
 $aprlastLog = $env:APRlastLogTime
 
+# Set boolean values based on environment variables
+if ($bpEnabled -Match "True"){
+    $bpEnabled = $true
+} else {
+    $bpEnabled = $false 
+}
+
+if ($apdEnabled -Match  "True"){
+    $apdEnabled = $true
+} else {
+    $apdEnabled = $false 
+}
+
+if ($aprEnabled -Match  "True"){
+    $aprEnabled = $true
+} else {
+    $aprEnabled = $false
+}
+
+if ($sgEnabled -Match "True"){
+    $sgEnabled = $true
+} else {
+    $sgEnabled = $false
+}
+
 # Function to build the Authorization signature for the Log Analytics Data Connector API
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
 {
