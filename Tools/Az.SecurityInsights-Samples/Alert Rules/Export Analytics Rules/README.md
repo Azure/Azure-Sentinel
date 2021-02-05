@@ -16,7 +16,6 @@ Author: Tiander Turpijn - Microsoft
 The following Azure PowerShell modules are required and will be installed if missing:
 * Az.Accounts
 * Az.SecurityInsights
-* Azure Sentinel Reader permissions
 <br/><br/>
 
 #### Script Parameters
