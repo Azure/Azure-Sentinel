@@ -2,19 +2,23 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
+import { doesNotContainResourceInfo } from "./utils/workbookCheckers/workbookTemplateCheckers/containResourceInfoChecker";
 import { isFromTemplateIdNotSentinelUserWorkbook } from "./utils/workbookCheckers/workbookTemplateCheckers/fromTemplateIdChecker";
 import { WorkbookTemplate } from "./utils/workbookTemplate";
 
+const workbooksMetadataFilePath: string = "Workbooks/WorkbooksMetadata.json";
+
 export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCode> {
-  let workbookTemplate: WorkbookTemplate = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  let workbooksMetadataFilePath: string = "Workbooks/WorkbooksMetadata.json";
+  const workbookTemplateString: string = fs.readFileSync(filePath, "utf8");
+  const parsedWorkbookTemplate: WorkbookTemplate = JSON.parse(workbookTemplateString);
   
   // WorkbooksMetadata.json file is not a workbook template file but is still under the same folder of the templates. Therefore we want to exclude it from this test.
   if(filePath === workbooksMetadataFilePath){
     return ExitCode.SUCCESS;
   }
   
-  isFromTemplateIdNotSentinelUserWorkbook(workbookTemplate);
+  isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);
+  doesNotContainResourceInfo(workbookTemplateString); // Pass the json file as string so we can perform a regex search on the content
   
   return ExitCode.SUCCESS;
 } 
