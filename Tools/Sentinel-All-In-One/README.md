@@ -23,13 +23,13 @@ The following table summarizes permissions, licenses and permissions needed and 
 | Data Connector                                 | License         |  Permissions                    | Cost      |
 | ---------------------------------------------- | --------------- |---------------------------------|-----------|
 | Azure Activity                                 | None            | Subscription Reader             | Free      |
-| Azure Security Center                          | ASC Standard    | Security Reader                 | Free      |
+| Azure Defender	                             | ASC Standard    | Security Reader                 | Free      |
 | Azure Active Directory                         | Any AAD license | Global Admin or Security Admin  | Billed    |
 | Azure Active Directory Identity Protection     | AAD Premium 2   | Global Admin or Security Admin  | Free      |
 | Office 365                                     | None            | Global Admin or Security Admin  | Free      |
 | Microsoft Cloud App Security                   | MCAS            | Global Admin or Security Admin  | Free      |
-| Azure Advanced Threat Protection               | AATP            | Global Admin or Security Admin  | Free      |
-| Microsoft Defender Advanced Threat Protection  | MDATP           | Global Admin or Security Admin  | Free      |
+| Microsoft Defender for Identity                | AATP            | Global Admin or Security Admin  | Free      |
+| Microsoft Defender for Endpoint                | MDATP           | Global Admin or Security Admin  | Free      |
 | Threat Intelligence Platforms                  | None            | Global Admin or Security Admin  | Billed    |
 | Security Events                                | None            | None                            | Billed    |
 | Linux Syslog                                   | None            | None                            | Billed    |
@@ -45,12 +45,12 @@ The template performs the following tasks:
 - Installs Azure Sentinel on top of the workspace (if not installed yet)
 - Enables selected Data Connectors from tihs list: 
     + Azure Activity
-    + Azure Security Center
+    + Azure Defender
     + Azure Active Directory Identity Protection
     + Office 365 (Sharepoint, Exchange and Teams)
     + Microsoft Cloud App Security
-    + Azure Advanced Threat Protection
-    + Microsoft Defender Advanced Threat Protection
+    + Microsoft Defender for Identity
+    + Microsoft Defender for Endpoint
     + Security Events
     + Linux Syslog
     + DNS (Preview)
@@ -77,13 +77,13 @@ The Powershell script inside the Powershell folder (*SentinelallInOne.ps1*) take
 - Installs Azure Sentinel on top of the workspace (if not installed yet)
 - Enables the following Data Connectors: 
     + Azure Activity
-    + Azure Security Center
+    + Azure Defender
     + Azure Active Directory
     + Azure Active Directory Identity Protection
     + Office 365 (Sharepoint, Exchange and Teams)
     + Microsoft Cloud App Security
-    + Azure Advanced Threat Protection
-    + Microsoft Defender Advanced Threat Protection
+    + Microsoft Defender for Identity
+    + Microsoft Defender for Endpoint
     + Threat Intelligence Platforms
 - Enables Analytics Rules for enabled Microsoft 1st party products 
 
@@ -102,13 +102,13 @@ The following table summarizes permissions, licenses needed and cost to enable e
 | Data Connector                                 | License         |  Permissions                   | Cost      |
 | ---------------------------------------------- | --------------- |--------------------------------|-----------|
 | Azure Activity                                 | None            |Reader                          | Free      |
-| Azure Security Center                          | ASC Standard    |Security Reader                 | Free      |
+| Azure Defender                                 | ASC Standard    |Security Reader                 | Free      |
 | Azure Active Directory                         | Any AAD license |Global Admin or Security Admin  | Billed    |
 | Azure Active Directory Identity Protection     | AAD Premium 2   |Global Admin or Security Admin  | Free      |
 | Office 365                                     | None            |Global Admin or Security Admin  | Free      |
 | Microsoft Cloud App Security                   | MCAS            |Global Admin or Security Admin  | Free      |
-| Azure Advanced Threat Protection               | AATP            |Global Admin or Security Admin  | Free      |
-| Microsoft Defender Advanced Threat Protection  | MDATP           |Global Admin or Security Admin  | Free      |
+| Microsoft Defender for Identity                | AATP            |Global Admin or Security Admin  | Free      |
+| Microsoft Defender for Endpoint			     | MDATP           |Global Admin or Security Admin  | Free      |
 | Threat Intelligence Platforms                  | None            |Global Admin or Security Admin  | Billed    |
 
 #### Usage
