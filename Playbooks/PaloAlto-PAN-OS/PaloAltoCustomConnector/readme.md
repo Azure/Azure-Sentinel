@@ -2,7 +2,7 @@
 
 This custom connector connects to PAN-OS service end point and performs defined automated actions on the PAN-OS firewall
 
-![PAN-OS](./PAN-OS_CustomConnector.png)<br>
+  <img src="./PAN-OS_CustomConnector.png" alt="drawing" width="20%"/>
 
 ### Authentication methods this connector supports
 
