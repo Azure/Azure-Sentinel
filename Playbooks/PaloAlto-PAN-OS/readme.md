@@ -10,6 +10,7 @@
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post Deployment Steps](#postdeployment)
+1. [Known issues and limitations](#knownissues)
 
 
 
@@ -21,6 +22,7 @@ PAN‑OS is the software that runs all Palo Alto Networks next-generation firewa
 
 **PAN-OS custom connector** includes [various actions](./PaloAltoCustomConnector#actions-supported-by-palo-alto-custom-connector) which allow you to create your own playbooks from scratch. In addition to the connector, there are 3 OOTB **playbooks templates** which leverage it so you can start automating Blocking of IPs an URLs with minimum configurations and effort. The OOTB scenarios are leveraging **address objects groups**, which are pre-configured to be refferenced to Security Policy rules. The playbooks will add IPs and URLs as address objects to these groups, so the policies will apply on them.
 
+<a name="deployall">
 
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:
@@ -32,12 +34,11 @@ You can choose to deploy the whole package connector + all three playbook templa
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2Fazuredeploy.json)
 
 
-# PAN-OS connector documentation 
 
 <a name="authentication">
 
 ## Authentication
-Authentication methods this connector supports- [API Key authentication](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
+This connector supports [API Key authentication](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation).
 
 <a name="prerequisites">
 
@@ -79,3 +80,18 @@ Once deployment is complete, you will need to authorize each connection.
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
+
+
+<a name="knownissues">
+
+## Known issues and limitations
+
+### **name** is required twice
+In some of the connector actions, user is required to enter the name of the object twice. Both fields should be identical, due to custom connector limitation. Relevant for the following actions:
+* Create a security policy rule
+* Update a security policy rule
+* Create an address object
+* Update an address object
+* Create an address object group
+* Update an address object group
+* Update URL filtering security profile
