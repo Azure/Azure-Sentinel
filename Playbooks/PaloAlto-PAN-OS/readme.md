@@ -1,17 +1,16 @@
   # PAN-OS Logic Apps connector and playbook templates
 
-  ![PAN-OS](./PaloAltoCustomConnector/PAN-OS_CustomConnector.png)<br>
-
+  <img src="./PaloAltoCustomConnector/PAN-OS_CustomConnector.png" alt="drawing" width="20%"/>
 
 ## Table of Contents
 
 1. [Overview](#overview)
 1. [Deploy Custom Connector + 3 Playbook templates](#deployall)
-1. [Authentication](#importantnotes)
+1. [Authentication](#authentication)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post Deployment Steps](#postdeployment)
-1. [References](#references)
+
 
 
 <a name="overview">
@@ -27,7 +26,7 @@ This package includes:
 
 You can choose to deploy the whole package : connector + all three playbook templates, or each one seperately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2Fazuredeploylinkedtemplate.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://login.microsoftonline.us/organizations/oauth2/v2.0/authorize?client_id=c836cbdb-7a5b-44cc-a54f-564b4b486fc6&response_type=code%20id_token&scope=https%3A%2F%2Fmanagement.core.usgovcloudapi.net%2F%2Fuser_impersonation%20openid%20email%20profile&state=OpenIdConnect.AuthenticationProperties%3DaURMJdv8OOjkos8hJrPp2UR3SiCuzPqKSCojZXlvmudMu2wCQivYUBL-PUpm2VklFejdDnBr9Us32MzfuH8tith-XldC_OIlCqCjwB950H9ELHA76IfBBh19cTzh9-nsHhkQkk8wQDSE6bot7rUuEQB8IDVJgDMCfv1HYuUg9brFyPen2T4DF7f3SxN7Wwxfj87B5iDMqyoU1AHKentIKfwHsDQCVmhbtWdvSgPbWWABKGY-a7b1vkmjWNmo8x5v&response_mode=form_post&nonce=637443070124899368.YjM5MDcwYzMtODJkZC00MzRmLTgxNDctMjhhZjY0MWRmNjcxZGRiOWNmMmItMDAyNS00MTIxLWE4MDUtMjdiOTE4MWJhMjg0&redirect_uri=https%3A%2F%2Fportal.azure.us%2Fsignin%2Findex%2F&site_id=501430&msafed=0&client-request-id=5cc07576-a6f1-4a94-b26f-830ed1c4ad77&x-client-SKU=ID_NET45&x-client-ver=5.3.0.0)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fdev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBPaloAlto-PAN-OS&path=%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://login.microsoftonline.us/organizations/oauth2/v2.0/authorize?client_id=c836cbdb-7a5b-44cc-a54f-564b4b486fc6&response_type=code%20id_token&scope=https%3A%2F%2Fmanagement.core.usgovcloudapi.net%2F%2Fuser_impersonation%20openid%20email%20profile&state=OpenIdConnect.AuthenticationProperties%3DaURMJdv8OOjkos8hJrPp2UR3SiCuzPqKSCojZXlvmudMu2wCQivYUBL-PUpm2VklFejdDnBr9Us32MzfuH8tith-XldC_OIlCqCjwB950H9ELHA76IfBBh19cTzh9-nsHhkQkk8wQDSE6bot7rUuEQB8IDVJgDMCfv1HYuUg9brFyPen2T4DF7f3SxN7Wwxfj87B5iDMqyoU1AHKentIKfwHsDQCVmhbtWdvSgPbWWABKGY-a7b1vkmjWNmo8x5v&response_mode=form_post&nonce=637443070124899368.YjM5MDcwYzMtODJkZC00MzRmLTgxNDctMjhhZjY0MWRmNjcxZGRiOWNmMmItMDAyNS00MTIxLWE4MDUtMjdiOTE4MWJhMjg0&redirect_uri=https%3A%2F%2Fportal.azure.us%2Fsignin%2Findex%2F&site_id=501430&msafed=0&client-request-id=5cc07576-a6f1-4a94-b26f-830ed1c4ad77&x-client-SKU=ID_NET45&x-client-ver=5.3.0.0)
 
 
 # PAN-OS connector documentation 
@@ -72,19 +71,3 @@ Once deployment is complete, you will need to authorize each connection.
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
-
-
-<a name="references">
-
-##  Reference to the playbook templates and the connector
-
- Connector
-* [PaloAltoCustomConnector](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBPaloAlto-PAN-OS&path=%2FPaloAltoCustomConnector%2Fazuredeploy.json)
-
-Playbooks
-* [PaloAlto-PAN-OS-GetURLCategoryInfo : Playbook to add URL category deatils to incident](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBPaloAlto-PAN-OS&path=%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo)
-* [PaloAlto-PAN-OS-BlockIP : Playbook to Block IP if it is malicious IP ](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBPaloAlto-PAN-OS&path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)
-* [PaloAlto-PAN-OS-BlockURL : Playbook to Block URL if it is malicious URL](https://dev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?version=GBPaloAlto-PAN-OS&path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)
-
-
-

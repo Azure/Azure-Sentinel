@@ -20,7 +20,7 @@ This custom connector connects to PAN-OS service end point and performs defined 
 | **List security rules** | Retrieves a list of all security rules within a specified location in the firewall|
 | **Create a security policy rule** | Creates a new security policy rule in the firewall|
 | **Reference an address object in a security policy rule** | References the address object in the security rule as a source or a destination member |
-| **List URL filtering category information** | Retrieves a list of all URL filtering category information within a specified location in the firewall|
+| **List custom url categories** | Retrieves a list of all URL filtering category information within a specified location in the firewall|
 | **List address objects** | Retrieves a list of all address objects within a specified location in the firewall|
 | **Create an address object** |Creates an address object depending on type : IP address or URL address|
 | **Edit an address object** |Edits an address object depending on type : IP address or URL address|

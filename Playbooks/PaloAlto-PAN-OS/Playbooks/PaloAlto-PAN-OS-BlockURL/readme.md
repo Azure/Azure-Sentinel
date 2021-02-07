@@ -15,7 +15,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 **This is the adaptive card SOC will receive when playbook is triggered for each risky URL for taking actions like block/unblock/ignore ::**<br><br>
 ![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
 
-**This is the consolidate adaptive card about the actions taken on IP and on the incident configuration **<br><br>
+**This is the consolidate adaptive card about the summary of actions taken on URL and the incident configuration ::**<br><br>
 ![Consolidated Adaptive Card example](./SummarizedAdaptiveCard.PNG)<br>
 
 ### Prerequisites 
