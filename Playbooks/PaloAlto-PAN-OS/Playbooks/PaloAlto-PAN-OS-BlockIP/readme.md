@@ -2,7 +2,7 @@
 
  ## Summary
 
-This playbook allows blocking/unblocking IPs in PaloAlto, using **IP Groups**. This allows to make changes on predefined address group, which is attached to predefined security policy rule.
+This playbook allows blocking/unblocking IPs in PaloAlto, using **Address Object Groups**. This allows to make changes on predefined address group, which is attached to predefined security policy rule.
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions:
 
@@ -13,10 +13,10 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 ![PaloAlto-PAN-OS-BlockIP](./designerScreenshot.PNG)<br>
 
-**This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore ::**<br><br>
+**This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore:**<br><br>
 ![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
 
-**This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration ::**<br><br>
+**This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration:**<br><br>
 ![Consolidated Adaptive Card example](./SummarizedAdaptiveCard.PNG)<br>
 
 ### Prerequisites 
@@ -28,14 +28,17 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json&version=GBPaloAlto-PAN-OS) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json&version=GBPaloAlto-PAN-OS) 
+
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json)
+
 
 2. Fill in the required parameters:
-    * Playbook Name : Enter the playbook name here (e.g. PaloAlto-PAN-OS-BlockIP)
-    * Teams GroupId : Enter the Teams channel id to send the adaptive card
-    * Teams ChannelId : Enter the Teams Group id to send the adaptive card
+    * Playbook Name: Enter the playbook name here (e.g. PaloAlto-PAN-OS-BlockIP)
+    * Teams GroupId: Enter the Teams channel id to send the adaptive card
+    * Teams ChannelId: Enter the Teams Group id to send the adaptive card
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
-    * Predefined address group name : Enter the predefined address group name here to Block IP / Unblock IP
+    * Predefined address group name: Enter the predefined address group name here to Block IP / Unblock IP
     
 
 ### Post-Deployment instructions 
@@ -104,21 +107,21 @@ This assign list of address group members
 #### Compose configured address group
 This composes predefined address group
 
-###Filter array IP from list of security rules
+### Filter array IP from list of security rules
 Filter array list of security rules in which IP is a member
 
-###Select security policy rules
+### Select security policy rules
 Select security policy rules to display in the adaptive card
 
-###Condition to check if the IP is a member of security policy rules
+### Condition to check if the IP is a member of security policy rules
  
-a)If IP is a member of security policy rules
+a) If IP is a member of security policy rules
 
  i) set dynamic policy text based on security policies to display in the adaptive card
 
  ii) set variable security policy rules to display in the adaptive card
 
-b)If IP is not a member of any security policy rules
+b) If IP is not a member of any security policy rules
 
  i) set dynamic policy text based on security policies to display in the adaptive card
 

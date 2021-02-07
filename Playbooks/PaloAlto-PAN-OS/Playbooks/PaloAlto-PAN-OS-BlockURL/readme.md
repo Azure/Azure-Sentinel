@@ -2,12 +2,12 @@
 
  ## Summary
 
-This playbook allows blocking/unblocking URLs in PaloAlto, using **predefined address group**. This allows to make changes on predefined address group, which is attached to sentinal security policy rule. 
+This playbook allows blocking/unblocking URLs in PaloAlto, using **predefined address group**. This allows to make changes on predefined address group, which is attached to security policy rule. 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions:
 
-1. An adaptive card is sent to the SOC channel providing Incident information, URL address, list of existing security policy rules in which URL is a member of and provides an option to Block/Unblock URL Address to predefined address group or Ignore.
+1. An adaptive card is sent to the SOC channel providing Incident information, URL address, list of existing security policy rules in which URL is a member of and provides an option to Block/Unblock URL Address by adding/removing it to/from the predefined address group.
 
-2. The SOC can act on risky URL based on the information provided in the adaptive card.
+2. The SOC can act on risky URL based on the information provided in the adaptive card, or ignore.
 
 
 ![PaloAlto-PAN-OS-BlockURL](./designerScreenshot.PNG)<br>
@@ -28,14 +28,17 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json&version=GBPaloAlto-PAN-OS) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json&version=GBPaloAlto-PAN-OS) 
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)
+
+
 
 2. Fill in the required parameters:
-    * Playbook Name : Enter the playbook name here (e.g. PaloAlto-PAN-OS-BlockURL)
-    * Teams GroupId : Enter the Teams channel id to send the adaptive card
-    * Teams ChannelId : Enter the Teams Group id to send the adaptive card
+    * Playbook Name: Enter the playbook name here (e.g. PaloAlto-PAN-OS-BlockURL)
+    * Teams GroupId: Enter the Teams channel id to send the adaptive card
+    * Teams ChannelId: Enter the Teams Group id to send the adaptive card
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
-    * Predefined address group name : Enter the predefined address group name here to Block URL /Unblock URL
+    * Predefined address group name: Enter the predefined address group name here to Block URL /Unblock URL
     
 
 ### Post-Deployment instructions 
@@ -103,13 +106,13 @@ This assign list of address group members
 #### Compose configured address group
 This composes predefined address group
 
-###Filter array URL from list of security rules
+### Filter array URL from list of security rules
 Filter array list of security rules in which URL is a member
 
-###Select security policy rules
+### Select security policy rules
 Select security policy rules to display in the adaptive card
 
-###Condition to check if the URL is a member of security policy rules
+### Condition to check if the URL is a member of security policy rules
  
 
 a)If URL is a member of security policy rules
