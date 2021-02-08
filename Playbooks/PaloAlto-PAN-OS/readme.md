@@ -63,7 +63,8 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 |**PaloAlto-PAN-OS-BlockURL Playbook Name**|  Enter name for the response playbook which blocks URLs (e.g. PaloAlto-PAN-OS-BlockURL)|
 |**Teams GroupId**| Enter the Teams channel id to send the adaptive card in both response playbooks<br>|
 | **Teams ChannelId**| Enter the Teams Group id to send the adaptive card in both response playbooks <br>[Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)<br>|
-|**Predefined address group name**|Enter the pre-defined address group name which blocks IPs or URLs||
+|**Predefined address group name for block IP:** | Enter the pre-defined address group name which blocks IP|
+|**Predefined address group name for block URL:** | Enter the pre-defined address group name which blocks URL|
 <br><br>
 
 <a name="postdeployment">
@@ -95,3 +96,6 @@ In some of the connector actions, user is required to enter the name of the obje
 * Create an address object group
 * Update an address object group
 * Update URL filtering security profile
+
+### Update an address group object requires adding existing members
+The action **update an address object group** is overriding the existing group. This means that the **member** field should include the existing members in addition to the new ones the playbook is adding.

@@ -19,16 +19,15 @@ This custom connector connects to PAN-OS service end point and performs defined 
 | --------- | -------------- |
 | **List security rules** | Retrieves a list of all security rules within a specified location in the firewall|
 | **Create a security policy rule** | Creates a new security policy rule in the firewall|
-| **Reference an address object in a security policy rule** | References the address object in the security rule as a source or a destination member |
 | **List custom url categories** | Retrieves a list of all URL filtering category information within a specified location in the firewall|
 | **List address objects** | Retrieves a list of all address objects within a specified location in the firewall|
 | **Create an address object** |Creates an address object depending on type : IP address or URL address|
-| **Edit an address object** |Edits an address object depending on type : IP address or URL address|
+| **Updates an address object** |updates an address object depending on type : IP address or URL address|
 | **List address groups** | Retrieves a list of all address object groups within a specified location in the firewall|
-| **Create an address object group** | Creates an address object group in the firewall |
-| **Edit an address object group** | Edits an address object group in the firewall (add/remove)  |
-| **List URL filtering security profiles** | Retrieves a list of all URL filtering security profiles in the firewall (add/remove)  |
-| **Edit URL filtering security profiles** | Edits URL filtering security profiles in the firewall (add/remove)  |
+| **Create an address object group** | Creates a new address object group in the firewall|
+| **Updates an address object group** | Adds/Removes an address object group in the firewall (add/remove objects to the exiting group)  |
+| **List URL filtering security profiles** | Retrieves a list of all URL filtering security profiles in the firewall|
+| **Update URL filtering security profiles** | Updates URL filtering security profiles in the firewall (add/remove objects to the exiting security profile) |<br><br>
 ### Deployment instructions 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameters:
