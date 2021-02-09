@@ -39,16 +39,26 @@ query: |
   | parse ExtendedProperties with * 'UserAgent",      "Value": "' UserAgent1 '"' *
   | where isnotempty(UserAgent1) or isnotempty(UserAgent2)
   | extend UserAgent = iff( RecordType == 'AzureActiveDirectoryStsLogon', UserAgent1, UserAgent2)
+  | project TimeGenerated, AADTarget, Actor, ActorContextId, ClientIP, UserAgent, ExtendedProperties, OfficeId, OperationName = Operation, UserPrincipalName = UserId, ResultStatus
   ),
   (AzureDiagnostics
   | where TimeGenerated >= ago(endtime)
   | where ResourceType =~ "APPLICATIONGATEWAYS" 
   | where OperationName =~ "ApplicationGatewayAccess" 
   | extend ClientIP = columnifexists("clientIP_s", "None"), UserAgent = columnifexists("userAgent_s", "None")
+  | where UserAgent != '-'
+  | project TimeGenerated, ClientIP, clientPort_d, UserAgent, _ResourceId, requestUri_s, httpMethod_s, host_s, requestQuery_s, httpStatus_d, receivedBytes_d, sentBytes_d, originalHost_s
   ),
   (SigninLogs
   | where TimeGenerated >= ago(endtime)
-  | extend ClientIP = IPAddress )
+  | where isnotempty(UserAgent)
+  | project TimeGenerated, ClientIP = IPAddress, UserAgent, OperationName, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, UserPrincipalName, ResultStatus = Status, UserDisplayName, OriginalRequestId
+  ),
+  (AADNonInteractiveUserSignInLogs 
+  | where TimeGenerated >= ago(endtime)
+  | where isnotempty(UserAgent)
+  | project TimeGenerated,  ClientIP = IPAddress, UserAgent, OperationName, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, UserPrincipalName, ResultStatus = Status, UserDisplayName, OriginalRequestId, AuthenticationRequirement
+  )
   )
   // Likely artefact of hardcoding
   | where UserAgent startswith "User" or UserAgent startswith "\""
