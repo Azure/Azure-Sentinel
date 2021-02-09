@@ -9,6 +9,7 @@ import csv
 import os
 import sys
 import tempfile
+import re
 import azure.functions as func
 
 
