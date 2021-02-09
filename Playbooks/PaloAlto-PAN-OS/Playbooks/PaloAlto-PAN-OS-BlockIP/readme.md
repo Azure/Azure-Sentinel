@@ -11,7 +11,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 2. The SOC can take action on risky IP based on the information provided in the adaptive card.
 
 
-![PaloAlto-PAN-OS-BlockIP](./designercreenshot.PNG)<br>
+![PaloAlto-PAN-OS-BlockIP](./designerscreenshot.PNG)<br>
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore:**<br><br>
 ![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
