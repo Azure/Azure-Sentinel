@@ -5,7 +5,7 @@
  2. Updates all the collected information in incident
 
 
-![PaloAlto-PAN-OS-GetURLCategoryInfo](./designerScreenshot.PNG)<br>
+![PaloAlto-PAN-OS-GetURLCategoryInfo](./designerscreenshot.PNG)<br>
 ### Prerequisites 
 1. PAN-OS Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
