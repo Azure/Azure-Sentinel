@@ -1,11 +1,10 @@
 <#  
     Title:          GitHub Repo Logs Data Connector
     Language:       PowerShell
-    Version:        1.1
+    Version:        1.2
     Author:         Nicholas Dicola, Sreedhar Ande
-    Last Modified:  12/11/2020
-    Comment:        Inital Release
-
+    Last Modified:  02/08/2021
+    
     DESCRIPTION
     This Function App calls the GitHub REST API (https://api.github.com/) to pull the GitHub
     Audit, Repo and Vulnerability logs. The response from the GitHub API is recieved in JSON format. This function will build the signature and authorization header 
@@ -38,8 +37,19 @@ $personalAccessToken = $env:PersonalAccessToken
 $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
 $storageAccountContainer = "github-repo-logs"
-$AuditLogTable = "GitHub_CL"
-$RepoLogTable = "GitHubRepoLogs_CL"
+
+$AuditLogTable = $env:GitHubAuditLogsTableName
+if ([string]::IsNullOrEmpty($AuditLogTable))
+{
+	$AuditLogTable = "GitHub_CL"
+}
+
+$RepoLogTable = $env:GitHubRepoLogsTableName
+if ([string]::IsNullOrEmpty($RepoLogTable))
+{
+	$RepoLogTable = "GitHubRepoLogs_CL"
+}
+
 #The AzureTenant variable is used to specify other cloud environments like Azure Gov(.us) etc.,
 $AzureTenant = $env:AZURE_TENANT
 
@@ -150,11 +160,11 @@ function Write-OMSLogfile {
     $logdata | Add-Member -MemberType NoteProperty -Name "DateTime" -Value $dateTime
 
     #Build the JSON file
-    $logMessage = ConvertTo-Json $logdata -Depth 20
+    $logMessage = ($logdata | ConvertTo-Json -Depth 20)
     Write-Verbose -Message $logMessage
 
     #Submit the data
-    $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body ([System.Text.Encoding]::UTF8.GetBytes($logMessage)) -Type $type
+    $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body $logMessage -Type $type
     Write-Verbose -Message "Post Statement Return Code $returnCode"
     return $returnCode
 }
@@ -250,7 +260,7 @@ foreach($org in $githubOrgs){
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
             #write to log A to be added later           
-            SendToLogA -gitHubData ($results.data.organization.auditLog.edges |  Convertto-json -depth 20) -customLogName $AuditLogTable
+            SendToLogA -gitHubData ($results.data.organization.auditLog.edges) -customLogName $AuditLogTable
         }
         $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
         $lastRunContext.lastContext = $results.data.organization.auditLog.pageInfo.endCursor
@@ -315,67 +325,81 @@ foreach($org in $githubOrgs){
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/referrers"
             $referrerLogs = $null
             $referrerLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $referrerLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
-            #Send to log A;
-            SendToLogA -gitHubData $referrerLogs -customLogName $RepoLogTable
+            if ($referrerLogs.Length -gt 0){
+                $referrerLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
+                #Send to log A;
+                SendToLogA -gitHubData $referrerLogs -customLogName $RepoLogTable
+            }
             
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
             $pathLogs = $null
             $pathLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $pathLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
-            #Send to log A;
-            SendToLogA -gitHubData $pathLogs -customLogName $RepoLogTable
+            if ($pathLogs.Length -gt 0){
+                $pathLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
+                #Send to log A;
+                SendToLogA -gitHubData $pathLogs -customLogName $RepoLogTable
+            }
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
             $viewLogs = $null
             $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $viewLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
-            #Send to log A
-            SendToLogA -gitHubData $viewLogs -customLogName $RepoLogTable            
+            if ($viewLogs.Length -gt 0){
+                $viewLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
+                #Send to log A
+                SendToLogA -gitHubData $viewLogs -customLogName $RepoLogTable
+            }
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
             $cloneLogs = $null
             $cloneLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $cloneLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
-            #Send to log A
-            SendToLogA -gitHubData $cloneLogs -customLogName $RepoLogTable            
+            if ($cloneLogs.Length -gt 0){
+                $cloneLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
+                #Send to log A
+                SendToLogA -gitHubData $cloneLogs -customLogName $RepoLogTable
+            }        
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
             $commitLogs = $null
             $commitLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $commitLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
-            #Send to log A
-            SendToLogA -gitHubData $commitLogs -customLogName $RepoLogTable
+            if ($commitLogs.Length -gt 0){
+                $commitLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
+                #Send to log A
+                SendToLogA -gitHubData $commitLogs -customLogName $RepoLogTable
+            }
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
             $collaboratorLogs = $null
             $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $collaboratorLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
-            #Send to log A
-            SendToLogA -gitHubData $collaboratorLogs -customLogName $RepoLogTable            
+            if ($collaboratorLogs.Length -gt 0){
+                $collaboratorLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
+                #Send to log A
+                SendToLogA -gitHubData $collaboratorLogs -customLogName $RepoLogTable
+            }        
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
             $forkLogs = $null
             $forkLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $forkLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
-            #Send to log A
-            SendToLogA -gitHubData $forkLogs -customLogName $RepoLogTable            
-        }
+            if ($forkLogs.Length -gt 0){
+                $forkLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
+                #Send to log A
+                SendToLogA -gitHubData $forkLogs -customLogName $RepoLogTable
+            }          
+        }		 
         else {
             Write-Host "$repoName is empty"
             Write-Verbose "$repoName is empty"
