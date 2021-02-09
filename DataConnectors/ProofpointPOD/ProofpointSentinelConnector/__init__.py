@@ -12,6 +12,8 @@ import requests
 import azure.functions as func
 import logging
 import certifi
+import sys
+import re
 
 
 customer_id = os.environ['WorkspaceID'] 
