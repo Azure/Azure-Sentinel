@@ -65,6 +65,7 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 | **Teams ChannelId**| Enter the Teams Group id to send the adaptive card in both response playbooks <br>[Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)<br>|
 |**Predefined address group name for block IP:** | Enter the pre-defined address group name which blocks IP|
 |**Predefined address group name for block URL:** | Enter the pre-defined address group name which blocks URL|
+
 <br><br>
 
 <a name="postdeployment">
