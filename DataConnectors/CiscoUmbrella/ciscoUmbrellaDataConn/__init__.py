@@ -16,6 +16,7 @@ from threading import Thread
 from io import StringIO
 
 import azure.functions as func
+import re
 
 
 TIME_INTERVAL_MINUTES = 10
@@ -30,6 +31,13 @@ sentinel_log_type = 'Cisco_Umbrella'
 aws_s3_bucket = os.environ.get('S3Bucket')
 aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
+
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)"
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    logging.error("Cisco_Umbrella: Invalid Log Analytics Uri.")
+    sys.exit()
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -476,8 +484,9 @@ class AzureSentinelConnector:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
-
+        if(not (logAnalyticsUri and not logAnalyticsUri.isspace())):        
+            logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
+        logAnalyticsUri = logAnalyticsUri + resource + '?api-version=2016-04-01'
         headers = {
             'content-type': content_type,
             'Authorization': signature,
@@ -485,7 +494,7 @@ class AzureSentinelConnector:
             'x-ms-date': rfc1123date
         }
 
-        response = requests.post(uri, data=body, headers=headers)
+        response = requests.post(logAnalyticsUri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
             logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
