@@ -13,6 +13,8 @@ import azure.functions as func
 import logging
 import os
 import time
+import sys
+import re
 
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
