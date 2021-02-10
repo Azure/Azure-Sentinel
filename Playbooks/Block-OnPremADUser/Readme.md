@@ -3,14 +3,39 @@
 ![01-appoverview](../Block-OnPremADUser/images/01-overview.png)
 
 
-Many organizations have an on premises Active Directory infrastructure that is synced to Azure cloud. However, given that the on-prem component is the authoritative source of truth, any changes, such as disabling a user in the cloud (Azure AD), are overridden by the setting defined in the on-prem AD in the next scheduled sync. This presents challenges when you want to orchestrate a user setting change from Azure that needs to persist even after the sync happens. To address the problem, this solution leverages Azure Automation Accounts and Hybrid Worker features across Windows & Azure. Automation Accounts are used to perform cloud-based automation across Azure and non-Azure environments. For non-Azure environments such as an On-Premises Active Directory, an Automation Hybrid Worker is required in addition to the Automation Account to be able to issue commands to the On-Premises Active Directory from Azure. Hybrid Workers can be used in Linux and Windows environments and can also be used with the same OS types running in AWS or GCP so long as those machines have a Log Analytics agent installed.
+Many organizations have an on premises Active Directory infrastructure that is synced to Azure AD in the cloud. However, given that the on-prem component is the authoritative source of truth, any changes, such as disabling a user in the cloud (Azure AD), are overridden by the setting defined in the on-prem AD in the next scheduled sync. This presents challenges when you want to orchestrate a user setting change from Azure that needs to persist even after the sync happens. To address the problem, this solution leverages Azure Automation Accounts and Hybrid Worker features across Windows & Azure. Automation Accounts are used to perform cloud-based automation across Azure and non-Azure environments. For non-Azure environments such as an On-Premises Active Directory, an Automation Hybrid Worker is required in addition to the Automation Account to be able to issue commands to the On-Premises Active Directory from Azure. Hybrid Workers can be used in Linux and Windows environments in both Azure, AWS and GCP as well so long as those machines have the Log Analytics agent installed.
 
+
+## Solution Overview
+A typical use-case for this solution would flow as below:
+i. Existing Azure Sentinel Analytics rule generates an incident requiring a user to be blocked from further domain access.
+ii.	The incident has the playbook attached to kick off the actions needed to block user access both on cloud and on Azure AD
+iii. The playbook includes the "create hybrid automation job" action which executes a PowerShell script against the on-prem DC to block the user.
+iv.	User blocked in iii. Above remains blocked even after subsequent Azure AD connect syncs with Azure cloud. 
 
 ## Deployment Steps
-
 <em> Before you begin review the pre-requisites of deploying a Hybrid Runbook Worker here: [ https://docs.microsoft.com/azure/automation/automation-windows-hrw-install ] </em>
 
-Create an Automation Account and link it with the Log Analytics Workspace
+## High-level summary
+i. Create Automation Account
+
+ii. Deploy the Automation Hybrid Worker solution from the Azure Market place
+
+iii. Create a Hybrid Worker Group
+
+iv. Create a new PowerShell Runbook
+
+v. Register the Hybrid Worker with Azure
+
+vi.Test the Runbook
+
+vii.Deploy/build the Playbook
+
+viii. Attach the Playbook to the relevant Analytics rule in Azure Sentinel
+
+
+
+Create an Automation Account
 
 
 i.	Create an Automation Account from the Azure Portal
