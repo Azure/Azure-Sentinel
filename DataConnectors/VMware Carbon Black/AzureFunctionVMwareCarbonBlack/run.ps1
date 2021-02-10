@@ -59,6 +59,11 @@ function CarbonBlackAPI()
             Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
         }
     }
+    else
+    {
+     Write-Host "AuditLogsResult API status failed , Please check."
+    }
+
     if ($eventsResult.success -eq $true)
     {
         $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
@@ -71,6 +76,10 @@ function CarbonBlackAPI()
             Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
         }
       }
+    else
+    {
+     Write-Host "EventsResult API status failed , Please check."
+    }
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
     {   
@@ -92,7 +101,11 @@ function CarbonBlackAPI()
                     Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
             }
                  
-        }      
+        }
+        else
+        {
+             Write-Host "Notifications API status failed , Please check."
+        }
     }    
 }
 
@@ -129,6 +142,8 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "time-generated-field" = $TimeStampField;
     };
     $response = Invoke-WebRequest -Body $body -Uri $uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
+    Write-Host "Response from Post-LogAnalyticsData"
+    Write-Host $response.Content
     return $response.StatusCode
 }
 
