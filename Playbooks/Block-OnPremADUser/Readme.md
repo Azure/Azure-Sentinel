@@ -32,7 +32,7 @@ From the same Automation Account menu, create a Hybrid Worker Group
 
 ![05-credentials](../Block-OnPremADUser/images/05-credentials.png)
 
-It is highly recommended that the permissions of the account used above be restricted to the minimum required to disable user accounts using the Delegation userAccountControl bit mask. More details can be found here: [https://docs.microsoft.com/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties]
+It is highly recommended that the permissions of the account used above be restricted to the minimum required to disable user accounts using the Delegation userAccountControl bit mask. More details can be found [here](https://docs.microsoft.com/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties)
 
 
 To create a new PowerShell Runbook navigate to you Automation Account and select the Runbooks blade. 
@@ -113,7 +113,7 @@ From the same PowerShell command prompt type: Install-Script -Name New-OnPremise
 This command will open a log on screen to Azure Portal to register the Hybrid Worker in Azure 
 
 
-The command will use parameters specified above to register your HybridWorker Group in your Azure Subscription. You can learn more about the process of deploying Hybrid Workers here: [https://docs.microsoft.com/azure/automation/automation-windows-hrw-install] 
+The command will use parameters specified above to register your HybridWorker Group in your Azure Subscription. You can learn more about the process of deploying Hybrid Workers [here](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install) 
 
 The command will open a log on screen in Azure Portal to register the Hybrid Worker in Azure
 
@@ -140,7 +140,7 @@ It is also recommended that you use TLS versions more recent than 1.0 and 1.1. F
 
 
 
-You can learn more about the process of deploying Hybrid Workers here: [https://docs.microsoft.com/azure/automation/automation-windows-hrw-install]
+[You can learn more about the process of deploying Hybrid Workers here](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install)
 
 On successful registration you should see an output similar to the below:
 
@@ -195,9 +195,8 @@ To simulate the block orchestration from Azure Sentinel, you may use the below s
 
 
 
-Troubleshooting guide for Hybrid Runbook Workers can be found here : [https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker]
+[Troubleshooting guide for Hybrid Runbook Workers can be found here](https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker)
 
-More information about Azure Arc : [https://docs.microsoft.com/azure/azure-arc/overview#:~:text=%20Key%20features%20of%20Azure%20Arc%20include:%20,as%20code%20management%20to%20deploy%20applications...%20More]
 
 
 <em>Special thanks to [Hazem Elshabini](https://github.com/helshabini) for his valuable collaboration in building the Playbook & [Yaniv Shasha](https://github.com/Yaniv-Shasha) for suggestions to enhance the solution.</em>
