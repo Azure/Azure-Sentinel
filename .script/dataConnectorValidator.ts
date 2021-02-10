@@ -1,12 +1,13 @@
 import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
+import { ConnectorCategory } from "./utils/dataConnector";
+import { isValidRequirementBanner } from "./utils/dataConnectorCheckers/additionalBannerRequirementCheckers";
+import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
+import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
+import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
 import { ExitCode } from "./utils/exitCode";
 import { isValidSchema } from "./utils/jsonSchemaChecker";
-import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
-import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
-import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
 import * as logger from "./utils/logger";
-import { ConnectorCategory } from "./utils/dataConnector";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
   let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -20,6 +21,11 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
      /* Disabling temporarily till we get confirmation from PM*/
     // isValidFileName(filePath
+    console.log(jsonFile.additionalRequirementBanner)
+    if(jsonFile.additionalRequirementBanner!="")
+    {
+    isValidRequirementBanner(jsonFile.additionalBannerRequirementCheckers)
+    }
     isValidPermissions(jsonFile.permissions, connectorCategory);
   }
   else{
