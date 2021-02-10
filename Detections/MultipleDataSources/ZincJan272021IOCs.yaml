@@ -51,13 +51,15 @@ query: |
   | where isnotempty(FileHash)
   | where FileHash in~ (SHA256Hash) or DNSName in~ (DomainNames)
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
+  | project Type, TimeGenerated, Computer, Account, IPAddress, FileHash, DNSName
   ),
   (DnsEvents 
   | where TimeGenerated >= ago(timeframe) 
   | extend DNSName = Name
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
-  | extend IPAddress = ClientIP
+  | extend DataType = "DnsEvents", IPAddress = ClientIP
+  | project Type, TimeGenerated, Computer, IPAddress, DNSName
   ),
   (VMConnection 
   | where TimeGenerated >= ago(timeframe) 
@@ -65,6 +67,7 @@ query: |
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
   | extend IPAddress = RemoteIp
+  | project Type, TimeGenerated, Computer, IPAddress, DNSName 
   ),
   (Event
   //This query uses sysmon data depending on table name used this may need updataing
@@ -76,33 +79,39 @@ query: |
   | where isnotempty(Hashes)
   | parse Hashes with * 'SHA256=' SHA256 ',' * 
   | where SHA256 in~ (SHA256Hash) 
-  | extend Account = UserName
+  | extend Type = strcat(Type, ": ", Source), Account = UserName, FileHash = Hashes
+  | project Type, TimeGenerated, Computer, Account, FileHash
   ),
   (DeviceFileEvents 
   | where TimeGenerated >= ago(timeframe) 
   | where SHA256 in~ (SHA256Hash)
-  | extend Account = RequestAccountName, Computer = DeviceName, IPAddress = RequestSourceIP
+  | extend Account = RequestAccountName, Computer = DeviceName, IPAddress = RequestSourceIP, CommandLine = InitiatingProcessCommandLine, FileHash = SHA256
+  | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
   ),
   (DeviceNetworkEvents 
   | where TimeGenerated >= ago(timeframe)  
   | where RemoteUrl in~ (DomainNames)
   | extend Computer = DeviceName, IPAddress = LocalIP, Account = InitiatingProcessAccountName
+  | project Type, TimeGenerated, Computer, Account, IPAddress, RemoteUrl
   ),
   (SecurityAlert
   | where TimeGenerated >= ago(timeframe)
   | where Entities has_any (SigNames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName) 
+  | project Type, TimeGenerated, Computer
   ),
   (DeviceProcessEvents 
   | where TimeGenerated >= ago(timeframe) 
   | where FileName =~ "powershell.exe" or FileName =~ "rundll32.exe"
   | where (ProcessCommandLine has "is64bitoperatingsystem" and ProcessCommandLine has "Debug\\Browse") or (ProcessCommandLine has_any (tokens))
-  | extend Computer = DeviceName, Account = AccountName
+  | extend Computer = DeviceName, Account = AccountName, CommandLine = ProcessCommandLine
+  | project Type, TimeGenerated, Computer, Account, CommandLine, FileName
   ),
   (SecurityEvent
   | where TimeGenerated >= ago(timeframe) 
   | where ProcessName has_any ("powershell.exe", "rundll32.exe")
   | where (CommandLine has "is64bitoperatingsystem" and CommandLine has "Debug\\Browse") or (CommandLine has_any (tokens))
+  | project Type, TimeGenerated, Computer, Account, ProcessName, CommandLine 
   )
   )
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress
