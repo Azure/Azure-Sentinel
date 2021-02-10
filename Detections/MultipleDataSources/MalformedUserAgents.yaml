@@ -14,6 +14,12 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+   - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -39,7 +45,7 @@ query: |
   | parse ExtendedProperties with * 'UserAgent",      "Value": "' UserAgent1 '"' *
   | where isnotempty(UserAgent1) or isnotempty(UserAgent2)
   | extend UserAgent = iff( RecordType == 'AzureActiveDirectoryStsLogon', UserAgent1, UserAgent2)
-  | project TimeGenerated, AADTarget, Actor, ActorContextId, ClientIP, UserAgent, ExtendedProperties, OfficeId, OperationName = Operation, UserPrincipalName = UserId, ResultStatus
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation
   ),
   (AzureDiagnostics
   | where TimeGenerated >= ago(endtime)
@@ -47,17 +53,29 @@ query: |
   | where OperationName =~ "ApplicationGatewayAccess" 
   | extend ClientIP = columnifexists("clientIP_s", "None"), UserAgent = columnifexists("userAgent_s", "None")
   | where UserAgent != '-'
-  | project TimeGenerated, ClientIP, clientPort_d, UserAgent, _ResourceId, requestUri_s, httpMethod_s, host_s, requestQuery_s, httpStatus_d, receivedBytes_d, sentBytes_d, originalHost_s
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP,  requestUri_s, httpMethod_s, host_s, requestQuery_s, Type
+  ),
+  (
+  W3CIISLog
+  | where TimeGenerated >= ago(endtime)
+  | where isnotempty(csUserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem
+  ),
+  (
+  AWSCloudTrail
+  | where TimeGenerated >= ago(endtime)
+  | where isnotempty(UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName
   ),
   (SigninLogs
   | where TimeGenerated >= ago(endtime)
   | where isnotempty(UserAgent)
-  | project TimeGenerated, ClientIP = IPAddress, UserAgent, OperationName, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, UserPrincipalName, ResultStatus = Status, UserDisplayName, OriginalRequestId
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed
   ),
   (AADNonInteractiveUserSignInLogs 
   | where TimeGenerated >= ago(endtime)
   | where isnotempty(UserAgent)
-  | project TimeGenerated,  ClientIP = IPAddress, UserAgent, OperationName, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, UserPrincipalName, ResultStatus = Status, UserDisplayName, OriginalRequestId, AuthenticationRequirement
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed
   )
   )
   // Likely artefact of hardcoding
@@ -70,9 +88,7 @@ query: |
   or UserAgent matches regex @"MSIE\s?;"
   // Incorrect spacing around MSIE version
   or UserAgent matches regex  @"MSIE(?:\d|.{1,5}?\d\s;)"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationNames = makeset(OperationName), UserAgentCount = dcount(UserAgent), 
-  UserAgentList = makeset(UserAgent), RecordTypes = makeset(RecordType) by UserId, ClientIP
-  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+  | extend timestamp = StartTime, IPCustomEntity = SourceIP, AccountCustomEntity = Account
 
 entityMappings:
   - entityType: Account
