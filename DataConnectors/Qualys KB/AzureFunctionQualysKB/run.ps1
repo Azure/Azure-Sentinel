@@ -24,7 +24,7 @@ $logAnalyticsUri = $env:logAnalyticsUri
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
 if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
 {
-    Write-Error -Message "OKTASSO: Invalid Log Analytics Uri." -ErrorAction Stop
+    Write-Error -Message "Qualys KB: Invalid Log Analytics Uri." -ErrorAction Stop
 }
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
