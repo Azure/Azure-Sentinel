@@ -57,7 +57,7 @@ $logAnalyticsUri = $env:logAnalyticsUri
 # Define the Log Analytics Workspace ID and Key and Custom Table Name
 $customerId = $env:workspaceId
 $sharedKey =  $env:workspaceKey
-$LogType = "Okta_Dev"
+$LogType = "Okta"
 $TimeStampField = "published"
 
 # Returning if the Log Analytics Uri is in incorrect format.
