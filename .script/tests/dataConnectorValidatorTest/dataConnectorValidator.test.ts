@@ -1,7 +1,7 @@
 import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
-import { ExitCode } from "../../utils/exitCode";
 import { IsValidDataConnectorSchema } from "../../dataConnectorValidator";
+import { ExitCode } from "../../utils/exitCode";
 
 chai.use(chaiAsPromised);
 
@@ -66,11 +66,25 @@ describe("dataConnectorValidator", () => {
   it("should pass when Azure Function data connector have valid set of permissions", async () => {
     await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/Agari/validAzureFunctionConnectorPermissions.json");
   });
-
+  it("should pass when there no space in file name", async () => {
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/noSpaceInFileName.json");
+  });
+  it("should pass when requirement banner text is appropriate and containn parser link", async () => {
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/containKustoFunctionAndParserLink.json");
+  });
   it("should throw an exception when Azure Function data connector have Invalid set of permissions", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/Agari/invalidAzureFunctionConnectorPermissions.json","DataConnectorValidationError");
   });
-
+  it("should throw an exception when there is space in fil name", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceIn DataConnector FileName.json","DataConnectorValidationError");
+  });
+  it("should throw an exception when additional banner text does not have parser link", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingParserLink.json","DataConnectorValidationError");
+  });
+  it("should throw an exception when additional banner text is not appropriate", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingKustoFunction.json","DataConnectorValidationError");
+  });
+  
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidDataConnectorSchema(filePath);
     expect(result).to.equal(ExitCode.SUCCESS);
