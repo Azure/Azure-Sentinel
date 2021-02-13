@@ -1,10 +1,11 @@
 id: 558f15dd-3171-4b11-bf24-31c0610a20e0
 name: User made Owner of multiple teams
 description: |
-  'This hunting query identifies users who have been made Owner of multiple Teams.
-  This query requires you to have Teams data collected from the O365 Management Activity API
-  and the Teams parser function enabled.
-  More details: https://techcommunity.microsoft.com/t5/azure-sentinel/protecting-your-teams-with-azure-sentinel/ba-p/1265761'
+  'This hunting query identifies users who have been made Owner of multiple Teams.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
@@ -15,8 +16,9 @@ query: |
   let max_owner_count = 3;
   // Change this value to adjust how larger timeframe the query is run over.
   let time_window = 1d;
-  let high_owner_count = (TeamsData
-  | where CreationTime > ago(time_window)
+  let high_owner_count = (OfficeActivity
+  | where TimeGenerated > ago(time_window)
+  | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberRoleChanged"
   | extend Member = tostring(parse_json(Members)[0].UPN) 
   | extend NewRole = toint(parse_json(Members)[0].Role) 
@@ -24,13 +26,17 @@ query: |
   | summarize dcount(TeamName) by Member
   | where dcount_TeamName > max_owner_count
   | project Member);
-  TeamsData
-  | where CreationTime > ago(time_window)
+  OfficeActivity
+  | where TimeGenerated > ago(time_window)
+  | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberRoleChanged"
   | extend Member = tostring(parse_json(Members)[0].UPN) 
   | extend NewRole = toint(parse_json(Members)[0].Role) 
   | where NewRole == 2
   | where Member in (high_owner_count)
-  | extend TeamGuid = tostring(Details.TeamGuid)
-  // Uncomment the following line to map query entities is you plan to use this as a detection query
-  //| extend timestamp = CreationTime, AccountCustomEntity = Member
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Member
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
