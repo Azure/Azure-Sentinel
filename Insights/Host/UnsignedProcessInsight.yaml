@@ -1,0 +1,82 @@
+SchemaVersion: 1
+DataTypes:
+  - DataType: DeviceEvents
+Type: KQL
+Provider: Sentinel
+EntitiesFilter:
+  Host_OsFamily:
+    - Windows
+RequiredInputFieldsSets:
+  - - Host_HostName
+    - Host_NTDomain
+  - - Host_HostName
+    - Host_DnsDomain
+BaseQuery: |-
+  let NonMSSignedBlocked= (v_Host_HostName:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+    let p_FullDeviceName = iff(isnotempty(v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_NTDomain) );
+    DeviceEvents
+    | where ActionType in ("ExploitGuardNonMicrosoftSignedBlocked", "ExploitGuardNonMicrosoftSignedAudited") 
+        and FileName !hassuffix '.ni.dll'
+    | where DeviceName =~ p_FullDeviceName
+    | project TimeGenerated
+      , FileName
+      ,InitiatingProcessFileName
+      , InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountSid
+      , DeviceName ,  ActionType
+  };
+  NonMSSignedBlocked('{{v_Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
+
+Insights:
+  Id: 93e510d0-676c-4a22-ad3e-1fc0b36d5b90
+  DisplayName: Processes unsigned by Microsoft detected
+  Description: |-
+    Exploit protection detected the launch of a process from an image file that
+    is not signed by Microsoft 
+  DefaultTimeRange:
+    BeforeRange: 14d
+    AfterRange: 7d
+  TableQuery:
+    ColumnsDefinitions:
+      - Header: Action
+        OutputType: String
+        SupportDeepLink: true
+      - Header: Accounts
+        OutputType: int
+        SupportDeepLink: false
+      - Header: Files
+        OutputType: int
+        SupportDeepLink: false
+    QueriesDefinitions:
+      - Filter: where ActionType == 'ExploitGuardNonMicrosoftSignedBlocked'
+        Summarize: |-
+          summarize Accounts=dcount(InitiatingProcessAccountSid), Files =
+          dcount(FileName) by ActionType
+        Project: "project Action = 'Blocked', Accounts, Files"
+        LinkColumnsDefinitions:
+          - ProjectedName: Action
+            Query: '{{BaseQuery}} | {{RowFilter}}'
+      - Filter: where ActionType == 'ExploitGuardNonMicrosoftSignedAudited'
+        Summarize: |-
+          summarize Accounts=dcount(InitiatingProcessAccountSid), Files = dcount(FileName) by ActionType
+        Project: "project Action = 'Audited', Accounts, Files"
+        LinkColumnsDefinitions:
+          - ProjectedName: Action
+            Query: '{{BaseQuery}} | {{RowFilter}}'
+  ChartQuery:
+    Title: Unsigned process executions over time
+    DataSets:
+      - Query: |-
+          summarize ProcessCount = count() by Time = bin(TimeGenerated, 1h) 
+          | extend Legend = 'Unsigned Processes'
+        XColumnName: Time
+        YColumnName: ProcessCount
+        LegendColumnName: Legend
+    Type: TimeChart
+  AdditionalQuery:
+    Text: See all
+    Query: |- 
+      project TimeGenerated
+      , FileName
+      ,InitiatingProcessFileName
+      , InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountSid
+      , DeviceName ,  ActionType
