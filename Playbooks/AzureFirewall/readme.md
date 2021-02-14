@@ -89,26 +89,16 @@ To use your own application with the Azure Sentinel connector, perform the follo
 1. Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameteres:
 
-#### a. For custom connector :
-
-* Custom Connector name : Enter the Custom connector name (ex:AzureFirewallConnector)
-
-* Service Endpoint : Enter the firewall service endpoint https://management.azure.com/
-    
-#### b. For AzureFirewall-BlockIP-addNewRule playbook :
-
-* BlockIP add new rule : Enter the playbook name here (Ex:AzureFirewall-BlockIP-addNewRule playbook)
-    
-#### c. For BlockIP add to IPGroup :
-
-* BlockIP add to IPGroup : Enter the playbook name here (Ex:AzureFirewall-BlockIP-addToIPGroup)
-
-#### d. For Add IP to TI allow list :
-
-* Add IP to TI allow list : Enter the playbook name here (Ex:AzureFirewall-AddIPtoTIAllowList)
-
-#### e. SOC Email : Enter the SOC email to send the adaptive card here (ex:username@domain.com)
-
+| Parameters | Description |
+|----------------|--------------|
+|**Custom Connector name**| Enter the Custom connector name (e.g. AzureFirewallConnector)|
+|**AzureFirewall-BlockIP-addNewRule Playbook Name**|  Enter the playbook name here (e.g. AzureFirewall-BlockIP-addNewRule)|
+|**AzureFirewall-BlockIP-addToIPGroup Playbook Name** | Enter the playbook name here (e.g. AzureFirewall-BlockIP-addToIPGroup)| 
+|**AzureFirewall-AddIPtoTIAllowList Playbook Name** |Enter the playbook name here (e.g. AzureFirewall-AddIPtoTIAllowList)|
+|**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
+|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)|
+|**ClientId** | Enter the Client Id of the Service Principal which the custom connector will authenticate with|
+|**ClientSecret** | Enter the Client secret of the Service Principal which the custom connector will authenticate with|
 <a name="postdeployment">
 
 ### Post-Deployment instructions 
@@ -120,16 +110,6 @@ Once deployment is complete, you will need to authorize each connection.
  4. Sign in
  5. Click Save
  6. Repeat steps for other connection such as Teams connection and Virus Total (For authorizing the Virus Total API connection, the API Key needs to be provided)
- 7. Authorize the Azure Firewall custom connector by following the below mentioned steps
-
-     a. Navigate to playbook
-
-     b. Click Edit
-
-     c. Find the action with the name "Lists all Azure Firewalls in a resource group " , "Gets the specified Firewall Policy", "Creates or updates the specified Firewall Policy" in the workflow.
-     
-     d. Click Change connection
-        a. Enter Connection name, ClientId, SecretKey and TenantId captured from AAD.
 
 #### b. Configurations in Azure Sentinel
 1. Find Azure Sentinel Analytics rules that create alerts and incidents which includes IP entities.

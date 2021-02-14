@@ -20,6 +20,7 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 
 1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
+1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.
 1. This playbook will query IP Groups that exist in the resource group of Azure Sentinel workspace. Make sure to create IP Groups and attach them to Azure Firewall rules prior to running the playbook. You can change the source of the IP groups in the playbook itself after deployment.
 1. **Permissions required for this playbook** 
 This playbook **Gets** and **Updates** IP groups. The registered application/Service Principal that is authenticated to the connector needs to have the following RBAC Roles:
@@ -43,7 +44,11 @@ This playbook **Gets** and **Updates** IP groups. The registered application/Ser
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (ex:AzureFirewall-BlockIP-addToIPGroup)
-    * SOC Email : Enter the SOC alias (ex: username@domain.com)
+    * Teams GroupId : Enter the Teams channel id to send the adaptive card
+    * Teams ChannelId : Enter the Teams Group id to send the adaptive card
+    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
+    * ClientId : Enter the ClientId of the application
+    * ClientSecret : Enter the Client secret of the application
 
 ### Post-Deployment instructions 
 #### a. Authorize connections
