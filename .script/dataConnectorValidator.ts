@@ -7,8 +7,15 @@ import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
 import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
 import * as logger from "./utils/logger";
 import { ConnectorCategory } from "./utils/dataConnector";
+import { DataConnectorValidationError } from "./utils/validationError";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
+
+  if(filePath.includes('Templates'))
+  {
+    throw new DataConnectorValidationError(`Skipping Files under Templates folder : ${filePath}`);
+  }
+  
   let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
   if(isPotentialConnectorJson(jsonFile))
   {
@@ -18,15 +25,15 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
     isValidId(jsonFile.id);
     isValidDataType(jsonFile.dataTypes);
 
-     /* Disabling temporarily till we get confirmation from PM*/
+    /* Disabling temporarily till we get confirmation from PM*/
     // isValidFileName(filePath
     isValidPermissions(jsonFile.permissions, connectorCategory);
   }
   else{
     console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
-  }
-
-    return ExitCode.SUCCESS;
+  } 
+    
+  return ExitCode.SUCCESS;
   }
 
 function isPotentialConnectorJson(jsonFile: any) {
