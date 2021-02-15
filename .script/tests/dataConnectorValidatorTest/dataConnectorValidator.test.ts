@@ -29,7 +29,7 @@ describe("dataConnectorValidator", () => {
 
     // Skipping json files if exists in Template folder.
     it("should skip .json file if exist under Templates folder", async () => {
-      await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/Templates/Connector_REST_API_template.json","DataConnectorValidationError");
+      await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/Templates/Connector_REST_API_template.json");
     });
 
   it("should throw an exception when dataConnectorSchema.json is missing a required property", async () => {
