@@ -13,9 +13,7 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [
-          "value::all"
-        ],
+        "crossComponentResources": [],
         "parameters": [
           {
             "id": "9a199167-2dde-49dd-8f01-23e9d1fa8151",
@@ -55,12 +53,13 @@
             "name": "Subscription",
             "type": 6,
             "isRequired": true,
-            "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{InternalSub}', true, false)",
+            "query": "Resources\r\n| summarize Count = count() by subscriptionId\r\n| order by Count desc\r\n| extend Rank = row_number()\r\n| project value = subscriptionId, label = subscriptionId, selected = Rank == 1",
             "crossComponentResources": [
               "value::selected"
             ],
             "typeSettings": {
-              "additionalResourceOptions": []
+              "additionalResourceOptions": [],
+              "showDefault": false
             },
             "timeContext": {
               "durationMs": 0
@@ -233,13 +232,29 @@
             "timeContextFromParameter": "TimeRange",
             "queryType": 0,
             "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "baa92cd2-7ade-41c3-a07c-a11f5ce3e0e6",
+            "version": "KqlParameterItem/1.0",
+            "name": "Help",
+            "label": "Show Help",
+            "type": 10,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": []
+            },
+            "jsonData": "[{ \"value\": \"Yes\", \"label\": \"Yes\"},\r\n {\"value\": \"No\", \"label\": \"No\", \"selected\":true }]",
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange"
           }
         ],
-        "style": "pills",
-        "queryType": 1,
+        "style": "above",
+        "queryType": 0,
         "resourceType": "microsoft.resourcegraph/resources"
       },
-      "customWidth": "65",
+      "customWidth": "100",
       "name": "parameters - 6"
     },
     {
@@ -470,93 +485,132 @@
       "name": "By status"
     },
     {
-      "type": 3,
+      "type": 12,
       "content": {
-        "version": "KqlItem/1.0",
-        "query": "SecurityIncident\n| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\n| summarize 50th_Percentile=percentile(TimeToTriage, 50) \n",
-        "size": 1,
-        "title": "Mean time to triage",
-        "timeContext": {
-          "durationMs": 94608000000,
-          "endTime": "2023-06-01T16:58:00.000Z"
-        },
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "crossComponentResources": [
-          "{Workspace}"
-        ],
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "formatter": 1
-          },
-          "leftContent": {
-            "columnMatch": "50th_Percentile",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "auto"
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Time to triage, is the time between the incident creation and its first update.",
+              "style": "info"
             },
-            "numberFormat": {
-              "unit": 26,
-              "options": {
-                "style": "decimal",
-                "useGrouping": false,
-                "maximumFractionDigits": 3
-              }
-            }
-          },
-          "showBorder": false,
-          "size": "auto"
-        }
-      },
-      "customWidth": "17",
-      "name": "MTTT"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "SecurityIncident\n| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| summarize arg_max(TimeGenerated,*) by IncidentNumber \n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\n| summarize 50th_Percentile=percentile(TimeToClosure, 50)",
-        "size": 1,
-        "title": "Mean time to closure ",
-        "timeContext": {
-          "durationMs": 94608000000,
-          "endTime": "2023-06-01T16:33:00.000Z"
-        },
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "crossComponentResources": [
-          "{Workspace}"
-        ],
-        "visualization": "tiles",
-        "sortBy": [],
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "Classification",
-            "formatter": 1,
-            "formatOptions": {}
-          },
-          "leftContent": {
-            "columnMatch": "50th_Percentile",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "auto"
+            "customWidth": "50",
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
             },
-            "numberFormat": {
-              "unit": 26,
-              "options": {
-                "style": "decimal",
-                "useGrouping": false,
-                "maximumFractionDigits": 3
-              }
-            }
+            "name": "Help1"
           },
-          "showBorder": false,
-          "size": "auto"
-        }
+          {
+            "type": 1,
+            "content": {
+              "json": "Time to closure, is the time between the incident creation and its last closure.",
+              "style": "info"
+            },
+            "customWidth": "50",
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "Help1 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityIncident\n| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\n| summarize 50th_Percentile=percentile(TimeToTriage, 50) \n",
+              "size": 1,
+              "title": "Mean time to triage",
+              "timeContext": {
+                "durationMs": 94608000000,
+                "endTime": "2023-06-01T16:58:00.000Z"
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "50th_Percentile",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 26,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": false,
+                      "maximumFractionDigits": 3
+                    }
+                  }
+                },
+                "showBorder": false,
+                "size": "auto"
+              }
+            },
+            "customWidth": "50",
+            "name": "MTTT"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityIncident\n| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| summarize arg_max(TimeGenerated,*) by IncidentNumber \n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\n| summarize 50th_Percentile=percentile(TimeToClosure, 50)",
+              "size": 1,
+              "title": "Mean time to closure ",
+              "timeContext": {
+                "durationMs": 94608000000,
+                "endTime": "2023-06-01T16:33:00.000Z"
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "tiles",
+              "sortBy": [],
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Classification",
+                  "formatter": 1,
+                  "formatOptions": {}
+                },
+                "leftContent": {
+                  "columnMatch": "50th_Percentile",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 26,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": false,
+                      "maximumFractionDigits": 3
+                    }
+                  }
+                },
+                "showBorder": false,
+                "size": "auto"
+              }
+            },
+            "customWidth": "50",
+            "name": "MTTM"
+          }
+        ]
       },
-      "customWidth": "17",
-      "name": "MTTM"
+      "customWidth": "34",
+      "name": "Mean times"
     },
     {
       "type": 12,
@@ -850,9 +904,23 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Time to triage\r\nThe time between the incident creation and first modification by percentiles"
+                    "json": "## Time to triage (percentiles)"
                   },
                   "name": "text - 2 - Copy - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "Time to triage, is the time between the incident creation and its first update.",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help2"
                 },
                 {
                   "type": 3,
@@ -899,9 +967,23 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Time to closure\r\nThe time between the incident creation and closure by percentiles\r\n\r\n"
+                    "json": "## Time to closure (percentiles)\r\n"
                   },
                   "name": "text - 2 - Copy - Copy - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "Time to closure, is the time between the incident creation and its last closure.",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help3"
                 },
                 {
                   "type": 3,
@@ -966,9 +1048,23 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Mean time to closure per owner\r\nThe mean time between the incident creation and first modification by owner\r\n\r\n"
+                    "json": "## Mean time to closure per owner\r\n"
                   },
                   "name": "text - 2 - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "The mean time between the incident creation and last closure by owner",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help3 - Copy"
                 },
                 {
                   "type": 3,
@@ -1032,9 +1128,23 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Mean time to triage per owner\r\nThe mean time between the incident creation and first modification by owner\r\n\r\n"
+                    "json": "## Mean time to triage per owner\r\n"
                   },
                   "name": "text - 2 - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "The mean time between the incident creation and first modification by owner",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help3 - Copy - Copy"
                 },
                 {
                   "type": 3,
@@ -1082,7 +1192,7 @@
                 }
               ]
             },
-            "name": "Incident status over time - Copy",
+            "name": "Incident status triage",
             "styleSettings": {
               "margin": "0",
               "padding": "0"
@@ -1097,9 +1207,23 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Actions per user\r\nThe number of actions taken on incidents per incident modifier"
+                    "json": "## Actions per user"
                   },
                   "name": "text - 2 - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "The number of actions taken on incidents per incident modifier",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help3 - Copy - Copy - Copy"
                 },
                 {
                   "type": 3,
@@ -1157,18 +1281,32 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Recent incident closing classification"
+                    "json": "## Recent activities"
                   },
                   "name": "text - 2 - Copy - Copy - Copy - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "Most recent activities taken on incidents",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help3 - Copy - Copy - Copy - Copy"
                 },
                 {
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "SecurityIncident\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| where Status == 'Closed'\n| order by LastModifiedTime \n| project LastModifiedTime,IncidentNumber, Title, Classification, ClassificationReason,ClassificationComment, Product, IncidentUrl, ModifiedBy,Status, Severity\n| take 250\n\n\n",
+                    "query": "SecurityIncident\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| order by LastModifiedTime \n| project LastModifiedTime,IncidentNumber, Title, Product, IncidentUrl, ModifiedBy,Status, Severity\n| take 250\n\n\n",
                     "size": 1,
                     "timeContext": {
-                      "durationMs": 604800000
+                      "durationMs": 86400000
                     },
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1198,17 +1336,6 @@
                         },
                         {
                           "columnId": "Title"
-                        },
-                        {
-                          "columnId": "Classification"
-                        },
-                        {
-                          "columnId": "ClassificationReason",
-                          "label": "Classification Reason"
-                        },
-                        {
-                          "columnId": "ClassificationComment",
-                          "label": "Classification Comment"
                         },
                         {
                           "columnId": "Product"
@@ -1266,18 +1393,32 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Recent activities"
+                    "json": "## Recent incident closing classification"
                   },
                   "name": "text - 2 - Copy - Copy - Copy - Copy"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "Recent closing classifications and comments of incidents",
+                    "style": "info"
+                  },
+                  "customWidth": "100",
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "Help3 - Copy - Copy - Copy - Copy - Copy"
                 },
                 {
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "SecurityIncident\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| order by LastModifiedTime \n| project LastModifiedTime,IncidentNumber, Title, Product, IncidentUrl, ModifiedBy,Status, Severity\n| take 250\n\n\n",
+                    "query": "SecurityIncident\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| where Status == 'Closed'\n| order by LastModifiedTime \n| project LastModifiedTime,IncidentNumber, Title, Classification, ClassificationReason,ClassificationComment, Product, IncidentUrl, ModifiedBy,Status, Severity\n| take 250\n\n\n",
                     "size": 1,
                     "timeContext": {
-                      "durationMs": 86400000
+                      "durationMs": 604800000
                     },
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1307,6 +1448,17 @@
                         },
                         {
                           "columnId": "Title"
+                        },
+                        {
+                          "columnId": "Classification"
+                        },
+                        {
+                          "columnId": "ClassificationReason",
+                          "label": "Classification Reason"
+                        },
+                        {
+                          "columnId": "ClassificationComment",
+                          "label": "Classification Comment"
                         },
                         {
                           "columnId": "Product"
