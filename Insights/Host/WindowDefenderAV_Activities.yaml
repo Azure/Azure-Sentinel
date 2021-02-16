@@ -1,0 +1,34 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: DeviceEvents
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+
+BaseQuery: |
+  let AntivirusEvents=(v_Host_HostName:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let Severity= datatable(ActionType:string, Severity:int)["AntivirusMalwareActionFailed",1,"AntivirusDetection",2,"AntivirusScanFailed",3, "AntivirusError",4, "AntivirusDefinitionsUpdateFailed",5];
+  let p_FullDeviceName = iff(isnotempty(v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_NTDomain));
+  DeviceEvents
+  | where ActionType hasprefix "Antivirus" and ActionType !in( "AntivirusReport", "AntivirusScanCompleted", "AntivirusDefinitionsUpdated","AntivirusEmergencyUpdatesInstalled")
+  | where DeviceName ==p_FullDeviceName
+  | lookup Severity on ActionType};
+  AntivirusEvents('{{Host_HostName}}','{{Host_NTDomain}}','{{Host_DnsDomain}}')
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: 3f7059b2-67ea-4fc1-af34-37f5fc69a630
+     Description: Windows Defender Antivirus activities
+     Title: "Windows Defender Antivirus activities on this host"
+     Content: "Window Defender Antivirus '{{ActionType}}' activity was spotted on Host {{Host_HostName}}"
+     QueryDefinitions:
+       Filter: where ActionType !in( "AntivirusReport", "AntivirusScanCompleted", "AntivirusDefinitionsUpdated","AntivirusEmergencyUpdatesInstalled")
+       SummarizeBy: "ActivityType"
