@@ -1,12 +1,12 @@
 import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
+import { ConnectorCategory } from "./utils/dataConnector";
+import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
+import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
+import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
 import { ExitCode } from "./utils/exitCode";
 import { isValidSchema } from "./utils/jsonSchemaChecker";
-import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
-import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
-import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
 import * as logger from "./utils/logger";
-import { ConnectorCategory } from "./utils/dataConnector";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
   let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -15,12 +15,16 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
     let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
     let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/"+ connectorCategory +"_ConnectorSchema.json", "utf8"));
     isValidSchema(jsonFile, schema);
-    isValidId(jsonFile.id);
-    isValidDataType(jsonFile.dataTypes);
+   var idLineNumber= getAttributeLineNumber(filePath, "id")
+   console.log(idLineNumber)
+    isValidId(jsonFile.id,idLineNumber);
+    var dataTypesLineNumber= getAttributeLineNumber(filePath, "dataTypes")
+    isValidDataType(jsonFile.dataTypes,dataTypesLineNumber);
 
      /* Disabling temporarily till we get confirmation from PM*/
     // isValidFileName(filePath
-    isValidPermissions(jsonFile.permissions, connectorCategory);
+    var permissionsLineNumber= getAttributeLineNumber(filePath, "permissions")
+    isValidPermissions(jsonFile.permissions, connectorCategory, permissionsLineNumber);
   }
   else{
     console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
@@ -36,6 +40,18 @@ function isPotentialConnectorJson(jsonFile: any) {
   }
   return false;
 }
+function getAttributeLineNumber(filePath:string , attributesName:string)
+{
+  let file = fs.readFileSync(filePath).toString();
+  var index = file.indexOf(attributesName); // => 18
+ 
+var substring= file.substring(0, index);
+var count= substring.split('\r\n')
+console.log(count.length);
+return count.length
+
+}
+
 
 function getConnectorCategory(dataTypes : any, instructionSteps:[])
 {

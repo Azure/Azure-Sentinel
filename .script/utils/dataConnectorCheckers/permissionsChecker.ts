@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { RequiredConnectorPermissions, ConnectorCategory } from "../dataConnector";
+import { ConnectorCategory, RequiredConnectorPermissions } from "../dataConnector";
 import { DataConnectorValidationError } from "../validationError";
 
 const CEFRestAPIPermissions = {
@@ -73,7 +73,7 @@ const AzureFunctionPermissions = {
     ]
 };
 
-export function isValidPermissions(permissions: RequiredConnectorPermissions, connectorCategory: any) {   
+export function isValidPermissions(permissions: RequiredConnectorPermissions, connectorCategory: any, lineNumber: number) {   
     
     switch(connectorCategory)
     {
@@ -81,19 +81,19 @@ export function isValidPermissions(permissions: RequiredConnectorPermissions, co
         case ConnectorCategory.RestAPI:
             if(!_.isEqual(permissions.resourceProvider, CEFRestAPIPermissions.resourceProvider))
             {
-                throw new DataConnectorValidationError("Provided permissions does not match with "+ connectorCategory +" Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_"+ connectorCategory +"_template.json ");
+                throw new DataConnectorValidationError("Provided permissions does not match with "+ connectorCategory +" Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_"+ connectorCategory +"_template.json, error at line number "+ lineNumber);
             }
             break;
         case ConnectorCategory.SysLog:
             if(!_.isEqual(permissions.resourceProvider, SysLogPermissions.resourceProvider))
             {
-                throw new DataConnectorValidationError("Provided permissions does not match with Syslog Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json ");
+                throw new DataConnectorValidationError("Provided permissions does not match with Syslog Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json , error at line number "+ lineNumber);
             }
             break;
             case ConnectorCategory.AzureFunction:
             if(!(_.isEqual(permissions.resourceProvider, AzureFunctionPermissions.resourceProvider) && isValidCustomPermission(permissions)))
             {
-                throw new DataConnectorValidationError("Provided permissions does not match with Azure Function Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json");
+                throw new DataConnectorValidationError("Provided permissions does not match with Azure Function Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json,  error at line number "+ lineNumber);
             }
             break;
         default:
