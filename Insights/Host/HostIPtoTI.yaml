@@ -155,41 +155,43 @@ BaseQuery: |
   VMConnection
   | where SourceIp in (IpList)
   | where SourceIp != DestinationIp
-  | extend HostIPAddress = iff(Direction =~ "outbound", SourceIp, DestinationIp)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = DestinationIp
+  | where Direction =~ "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by HostIPAddress = SourceIp, Type, RemoteIPAddress = DestinationIp, Direction
   ),
   (
   VMConnection
   | where DestinationIp in (IpList)
   | where SourceIp != DestinationIp
-  | extend HostIPAddress = iff(Direction =~ "inbound", SourceIp, DestinationIp)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = SourceIp
+  | where Direction =~ "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by HostIPAddress = DestinationIp, Type, RemoteIPAddress = SourceIp, Direction
   ),
   (
   WireData
   | where LocalIP in (IpList)
   | where LocalIP != RemoteIP
-  | extend HostIPAddress = iff(Direction =~ "outbound", LocalIP, RemoteIP)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = RemoteIP, Direction
+  | where Direction =~ "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by HostIPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
   ),
   (
   WireData
   | where RemoteIP in (IpList)
   | where LocalIP != RemoteIP
-  | extend HostIPAddress = iff(Direction =~ "inbound", LocalIP, RemoteIP)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound"), InboundCount = countif(Direction =~ "inbound") by HostIPAddress, Type, DestinationIPAddress = LocalIP, Direction
+  | where Direction =~ "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by HostIPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
   ),
   (
   DeviceNetworkEvents
   | where LocalIP in (IpList)
   | where LocalIP != RemoteIP
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess"), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by HostIPAddress = LocalIP, Type, DestinationIPAddress = RemoteIP
+  | extend Direction = "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess") by HostIPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
   ),
   (
   DeviceNetworkEvents
   | where RemoteIP in (IpList)
   | where LocalIP != RemoteIP
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess"), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by HostIPAddress = RemoteIP, Type, DestinationIPAddress = LocalIP
+  | extend Direction = "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by HostIPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
   ),
   (
   AzureNetworkAnalytics_CL
@@ -199,7 +201,8 @@ BaseQuery: |
   | mv-expand SrcPublicIPs_s
   | extend SrcPublicIPs_s = tostring(split(SrcPublicIPs_s, '|')[0])
   | where DestIP_s != SrcPublicIPs_s
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by HostIPAddress = DestIP_s, Type, DestinationIPAddress = SrcPublicIPs_s
+  | extend Direction = "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by HostIPAddress = DestIP_s, Type, RemoteIPAddress = SrcPublicIPs_s, Direction
   ),
   (
   AzureNetworkAnalytics_CL
@@ -209,29 +212,30 @@ BaseQuery: |
   | mv-expand DestPublicIPs_s
   | extend DestPublicIPs_s = tostring(split(DestPublicIPs_s, '|')[0])
   | where SrcIP_s != DestPublicIPs_s
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by HostIPAddress = SrcIP_s, Type, DestinationIPAddress = DestPublicIPs_s
+  | extend Direction = "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by HostIPAddress = SrcIP_s, Type, RemoteIPAddress = DestPublicIPs_s, Direction
   ),
   (
   CommonSecurityLog
   | where SourceIP in (IpList)
   | where SourceIP != DestinationIP
   | where not(DeviceAction has_any ('deny', 'denied', 'rst', 'blocked', 'teardown'))
-  | extend CommunicationDirection = iff(CommunicationDirection !~ 'outbound' or CommunicationDirection !~ 'inbound', 'NotAvailable', CommunicationDirection)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(CommunicationDirection =~ 'Inbound'), OutboundCount = countif(CommunicationDirection =~ 'Outbound'), UnknownDirection = countif(CommunicationDirection =~ 'NotAvailable') by HostIPAddress = SourceIP, Type, DestinationIPAddress = DestinationIP
+  | extend Direction = iff(CommunicationDirection !~ 'outbound' or CommunicationDirection !~ 'inbound', 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ 'Inbound'), OutboundCount = countif(Direction =~ 'Outbound'), UnknownDirection = countif(Direction =~ 'NotAvailable') by HostIPAddress = SourceIP, Type, RemoteIPAddress = DestinationIP, Direction
   ),
   (
   CommonSecurityLog
   | where DestinationIP in (IpList)
   | where SourceIP != DestinationIP
   | where not(DeviceAction has_any ('deny', 'denied', 'rst', 'blocked', 'teardown'))
-  | extend CommunicationDirection = iff(CommunicationDirection !~ 'outbound' or CommunicationDirection !~ 'inbound', 'NotAvailable', CommunicationDirection)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(CommunicationDirection =~ 'Inbound'), OutboundCount = countif(CommunicationDirection =~ 'Outbound'), UnknownDirection = countif(CommunicationDirection =~ 'NotAvailable') by HostIPAddress = DestinationIP, Type, DestinationIPAddress = SourceIP
+  | extend Direction = iff(CommunicationDirection !~ 'outbound' or CommunicationDirection !~ 'inbound', 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ 'Inbound'), OutboundCount = countif(Direction =~ 'Outbound'), UnknownDirection = countif(Direction =~ 'NotAvailable') by HostIPAddress = DestinationIP, Type, RemoteIPAddress = SourceIP, Direction
   )
   );
   IpStats | join kind=leftouter Host_Account on HostIPAddress | project-away HostIPAddress1
-  | join kind=leftouter (ThreatIntelligenceIndicator
+  | join kind=inner (ThreatIntelligenceIndicator
   | where Active = true and isnotempty(NetworkIP)
-  | summarize by ThreatIntelMatch = Description, ThreatType, NetworkIP) on $left.DestinationIPAddress == $right.NetworkIP
+  | summarize by ThreatIntelMatch = Description, ThreatType, NetworkIP) on $left.RemoteIPAddress == $right.NetworkIP
   };
   GetIPResolutionWithHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 
