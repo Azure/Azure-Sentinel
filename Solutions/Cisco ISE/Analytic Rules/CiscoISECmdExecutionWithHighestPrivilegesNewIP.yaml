@@ -1,0 +1,44 @@
+id: 1fa0da3e-ec99-484f-aadb-93f59764e158
+name: CiscoISE -  Command executed with the highest privileges from new IP
+description: |
+  'Detects command execution with PrivilegeLevel - 15 from new source.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CiscoISE
+    dataTypes:
+      - Syslog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+  - PrivilegeEscalation
+  - DefenseEvasion
+  - Execution
+query: |
+  let lbperiod = 60d;
+  let lbtime = 15m;
+  let knownAdminIpList =
+  CiscoISEEvent
+  | where TimeGenerated between (ago(lbperiod) .. ago(lbtime))
+  | where PrivilegeLevel == '15'
+  | summarize makelist(SrcIpAddr)
+  ;
+  CiscoISEEvent
+  | where TimeGenerated > ago(lbtime)
+  | where PrivilegeLevel == '15'
+  | where SrcIpAddr !in (knownAdminIpList)
+  | project TimeGenerated, SrcIpAddr, DstIpAddr, DstUserName, CmdSet
+  | extend AccountCustomEntity = DstUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
