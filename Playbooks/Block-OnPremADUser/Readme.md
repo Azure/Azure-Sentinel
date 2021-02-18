@@ -3,7 +3,7 @@
 ![01-appoverview](../Block-OnPremADUser/images/01-overview.png)
 
 
-Many organizations have an on premises Active Directory infrastructure that is synced to Azure cloud. However, given that the on-prem component is the authoritative source of truth, any changes, such as disabling a user in the cloud (Azure AD), are overridden by the setting defined in the on-prem AD in the next scheduled sync. This presents challenges when you want to orchestrate a user setting change from Azure that needs to persist even after the sync happens. To address the problem, this solution leverages Azure Automation Accounts and Hybrid Worker features across Windows & Azure. Automation Accounts are used to perform cloud-based automation across Azure and non-Azure environments. For non-Azure environments such as an On-Premises Active Directory, an Automation Hybrid Worker is required in addition to the Automation Account to be able to issue commands to the On-Premises Active Directory from Azure.
+Many organizations have an on premises Active Directory infrastructure that is synced to Azure cloud. However, given that the on-prem component is the authoritative source of truth, any changes, such as disabling a user in the cloud (Azure AD), are overridden by the setting defined in the on-prem AD in the next scheduled sync. This presents challenges when you want to orchestrate a user setting change from Azure that needs to persist even after the sync happens. To address the problem, this solution leverages Azure Automation Accounts and Hybrid Worker features across Windows & Azure. Automation Accounts are used to perform cloud-based automation across Azure and non-Azure environments. For non-Azure environments such as an On-Premises Active Directory, an Automation Hybrid Worker is required in addition to the Automation Account to be able to issue commands to the On-Premises Active Directory from Azure. Hybrid Workers can be used in Linux and Windows environments and can also be used with the same OS types running in AWS or GCP so long as those machines have a Log Analytics agent installed.
 
 
 ## Deployment Steps
@@ -23,15 +23,6 @@ ii.	Deploy the Automation Hybrid Worker solution from the Azure Market place
 
 ![03-marketplace](../Block-OnPremADUser/images/03-marketplace.png)
 
-### Link a Log Analytics Workspace to your Automation Account
-Link the Log Analytics workspace to an automation account using the “Change Tracking” menu item on the list. If the Log Analytics workspace is in either East US or East US2 then you need to use the region mapping in the following link to select the location of your automation account: [https://docs.microsoft.com/azure/automation/how-to/region-mappings]
-
-![02-linkla](../Block-OnPremADUser/images/02-linkLA.png)
-
-
-
-![04-linkautola](../Block-OnPremADUser/images/04-linkautotola.png)
-
 From the same Automation Account menu, create a Hybrid Worker Group
 
 ![06-HybridWorker](../Block-OnPremADUser/images/06-Hybridworkergroup.png)
@@ -41,7 +32,7 @@ From the same Automation Account menu, create a Hybrid Worker Group
 
 ![05-credentials](../Block-OnPremADUser/images/05-credentials.png)
 
-It is highly recommended that the permissions of the account used above be restricted to the minimum required to disable user accounts using the Delegation userAccountControl bit mask. More details can be found here: [https://docs.microsoft.com/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties]
+It is highly recommended that the permissions of the account used above be restricted to the minimum required to disable user accounts using the Delegation userAccountControl bit mask. More details can be found [here](https://docs.microsoft.com/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties)
 
 
 To create a new PowerShell Runbook navigate to you Automation Account and select the Runbooks blade. 
@@ -92,8 +83,7 @@ The script takes in a SAMAccountName parameter which it uses to find the appropr
 
 
 
-
-Create a test user in Active Direcroty then perform the steps in the on-prem machine to install the Hybrid Worker feature 
+Create a test user in Active Directory then perform the steps in the on-prem machine to install the Hybrid Worker feature 
 
 Deploy the below script from this URL: PowerShell Gallery | New-OnPremiseHybridWorker 1.7 . Depending on the PowerShell module currently installed on your machine you may need manually download the file. If you do so, you will need to rename the extension to a .zip file first then extract to the directory where you’ll execute the script from.
 
@@ -123,7 +113,7 @@ From the same PowerShell command prompt type: Install-Script -Name New-OnPremise
 This command will open a log on screen to Azure Portal to register the Hybrid Worker in Azure 
 
 
-The command will use parameters specified above to register your HybridWorker Group in your Azure Subscription. You can learn more about the process of deploying Hybrid Workers here: [https://docs.microsoft.com/azure/automation/automation-windows-hrw-install] 
+The command will use parameters specified above to register your HybridWorker Group in your Azure Subscription. You can learn more about the process of deploying Hybrid Workers [here](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install) 
 
 The command will open a log on screen in Azure Portal to register the Hybrid Worker in Azure
 
@@ -150,7 +140,7 @@ It is also recommended that you use TLS versions more recent than 1.0 and 1.1. F
 
 
 
-You can learn more about the process of deploying Hybrid Workers here: [https://docs.microsoft.com/azure/automation/automation-windows-hrw-install]
+[You can learn more about the process of deploying Hybrid Workers here](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install)
 
 On successful registration you should see an output similar to the below:
 
@@ -205,7 +195,8 @@ To simulate the block orchestration from Azure Sentinel, you may use the below s
 
 
 
-Troubleshooting guide for Hybrid Runbook Workers can be found here : [https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker]
+[Troubleshooting guide for Hybrid Runbook Workers can be found here](https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker)
+
 
 
 <em>Special thanks to [Hazem Elshabini](https://github.com/helshabini) for his valuable collaboration in building the Playbook & [Yaniv Shasha](https://github.com/Yaniv-Shasha) for suggestions to enhance the solution.</em>
