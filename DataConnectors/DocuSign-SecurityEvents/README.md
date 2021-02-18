@@ -61,7 +61,7 @@ It’s only one-time step to collect consent
 
 ## Configuration Steps to Deploy Function App
 1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
-   <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fandedevsecops%2FDocuSign-SecurityEvents%2Fmain%2Fazuredeploy_docusign.json" target="_blank">
+   <a href="https://aka.ms/sentinel-docusignconnector-azuredeploy" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 	</a>
   
