@@ -151,7 +151,7 @@ It’s only one-time step to collect consent
 
    ```
 
-6. You can edit/update LA Table Name for DocuSign SecurityEvents
+7. You can edit/update LA Table Name for DocuSign SecurityEvents
    ```
    a.	Go to your Resource Group --> Click on Function App `<<FunctionAppName>><<uniqueid>>`
    b.	Click on Function App "Configuration" under Settings 
@@ -160,7 +160,7 @@ It’s only one-time step to collect consent
 
    ```
 
-7. You can edit/update LA Table Name for DocuSign Users
+8. You can edit/update LA Table Name for DocuSign Users
    ```
    a.	Go to your Resource Group --> Click on Function App `<<FunctionAppName>><<uniqueid>>`
    b.	Click on Function App "Configuration" under Settings 
