@@ -49,9 +49,17 @@ query: |
       | where TimeGenerated > ago(2d)
       | extend DateHour = bin(TimeGenerated, 1h)
       | where OfficeWorkload=~ "Exchange" and Operation =~ "MailItemsAccessed" and ResultStatus =~ "Succeeded"
-  ) on $left.TimeGenerated == $right.DateHour
+      | summarize HourlyCount=count(), TimeGeneratedMax = arg_max(TimeGenerated, *), IPAdressList = make_set(Client_IPAddress), SourceIPMax= arg_max(Client_IPAddress, *), ClientInfoStringList= make_set(ClientInfoString) by MailboxOwnerUPN, Logon_Type, TenantId, UserType, TimeGenerated = bin(TimeGenerated, 1h) 
+      | where HourlyCount > 25 // Only considering operations with more than 25 hourly count to reduce False Positivies
+      | order by HourlyCount desc 
+  ) on TimeGenerated
+  | extend PercentofTotal = round(HourlyCount/Total, 2) * 100 
+  | where PercentofTotal > percentthreshold // Filter Users with count of less than 5 percent of TotalEvents per Hour to remove FPs/ users with very low count of MailItemsAccessed events
+  | order by PercentofTotal desc 
+  | project-reorder TimeGeneratedMax, Type, OfficeWorkload, Operation, UserId,SourceIPMax ,IPAdressList, ClientInfoStringList, HourlyCount, PercentofTotal, Total, baseline, score, anomalies
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId
 entityMappings:
-  - entityType: IP
+  - entityType: Account
     fieldMappings:
-      - identifier: Address
-        columnName: IPCustomEntity
+      - identifier: FullName
+        columnName: AccountCustomEntity
