@@ -5,6 +5,9 @@ DocuSign-SecurityEvents Data connector ingests
 	1. Security Events for your DocuSign account into Azure Log Analytics Workspace using DocuSign Monitor REST API  
 	2. DocuSign Account Users into Azure Log Analytics Workspace using DocuSign Users REST API  
 
+Technical Blog
+https://techcommunity.microsoft.com/t5/azure-sentinel/protecting-your-docusign-agreements-with-azure-sentinel/ba-p/2085502
+
 **Note**  
 Above API's resumes getting records from the spot where the previous call left off to avoid duplication of records in DocuSignSecurityEvents_CL and DocuSignUsers_CL Log Analytics Workspace custom tables
 
