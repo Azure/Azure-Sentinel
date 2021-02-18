@@ -141,6 +141,15 @@ It’s only one-time step to collect consent
    d.	By default its "True", you can set it "False" if you dont want DocuSign Users information into your LA Workspace
    
    ```
+   
+6. To interact with DocuSign UserInfo API, Update the Environment Variable "DocuSignUserInfoBaseURI" with baseuri
+   ```
+   a.	Go to your Resource Group --> Click on Function App `<<FunctionAppName>><<uniqueid>>`
+   b.	Click on Function App "Configuration" under Settings 
+   c.	Click on "DocuSignUserInfoBaseURI" under "Application Settings"
+   d.	By Default its "https://demo.docusign.net" targeting Demo envionment          `
+
+   ```
 
 6. You can edit/update LA Table Name for DocuSign SecurityEvents
    ```
