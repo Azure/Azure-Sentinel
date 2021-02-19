@@ -1,0 +1,44 @@
+id: 3b9a44d7-c651-45ed-816c-eae583a6f2f1
+name: ADO Build Variable Modified by New User.
+description: |
+  'Variables can be configured and used at any stage of the build process in Azure DevOps to inject values. An attacker with the required permissions could modify or add to these variables to conduct malicious activity such as changing paths or remote endpoints called during the build. As variables are often changed by users just detecting these changes would have a high false positive rate. This detection looks for modifications to variable groups where that user has not been observed modifying them before.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1578
+query: |
+  let lookback = 14d;
+  let timeframe = 1d;
+  let historical_data =
+  AzureDevOpsAuditing
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where OperationName =~ "Library.VariableGroupModified"
+  | extend variables = Data.Variables
+  | extend VariableGroupId = tostring(Data.VariableGroupId)
+  | extend UserKey = strcat(VariableGroupId, "-", ActorUserId)
+  | project UserKey;
+  AzureDevOpsAuditing
+  | where TimeGenerated > ago(timeframe)
+  | where OperationName =~ "Library.VariableGroupModified"
+  | extend VariableGroupName = tostring(Data.VariableGroupName)
+  | extend VariableGroupId = tostring(Data.VariableGroupId)
+  | extend UserKey = strcat(VariableGroupId, "-", ActorUserId)
+  | where UserKey !in (historical_data)
+  | project-away UserKey
+  | project-reorder TimeGenerated, VariableGroupName, ActorUPN, IpAddress, UserAgent
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

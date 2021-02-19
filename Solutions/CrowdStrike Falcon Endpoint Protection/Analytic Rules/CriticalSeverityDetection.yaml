@@ -1,0 +1,40 @@
+id: f7d298b2-726c-42a5-bbac-0d7f9950f527
+name: Critical Severity Detection
+description: |
+  'Creates an incident when a CrowdStrike Falcon sensor detection is triggered with a Critical Severity'
+severity: High
+requiredDataConnectors:
+  - connectorId: CrowdStrikeFalconEndpointProtection
+    dataTypes: 
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+relevantTechniques:
+query: |
+  let timeframe = 1h;
+  CrowdStrikeFalconEventStream
+  | where TimeGenerated > ago(timeframe)
+  | where EventType == "DetectionSummaryEvent"
+  | where Severity == "Critical"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by DstHostName, SrcIpAddr, DstUserName, Activity, Technique, FileName, FilePath, FileHash, Message
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = DstUserName, HostCustomEntity = DstHostName, IPCustomEntity = SrcIpAddr, FileHashCustomEntity = FileHash
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: FullName
+        columnName: FileHashCustomEntity

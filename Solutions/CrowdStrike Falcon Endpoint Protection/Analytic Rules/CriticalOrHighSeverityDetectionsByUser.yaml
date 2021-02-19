@@ -1,0 +1,48 @@
+id: 4465ebde-b381-45f7-ad08-7d818070a11c
+name: Critical or High Severity Detections by User
+description: |
+  'Creates an incident when a large number of Critical/High severity CrowdStrike Falcon sensor detections is triggered by a single user'
+severity: High
+requiredDataConnectors:
+  - connectorId: CrowdStrikeFalconEndpointProtection
+    dataTypes: 
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+relevantTechniques:
+query: |
+  let timeframe = 1h;
+  let threshold = 15; // update threshold value based on organization's preference
+  let NoteableEvents = CrowdStrikeFalconEventStream
+  | where TimeGenerated > ago(timeframe)
+  | where EventType == "DetectionSummaryEvent"
+  | where Severity in ("Critical", "High")
+  | summarize Total = count() by DstUserName
+  | where Total > threshold;
+  CrowdStrikeFalconEventStream
+  | where TimeGenerated > ago(timeframe)
+  | where EventType == "DetectionSummaryEvent"
+  | where Severity in ("Critical", "High")
+  | join kind=inner (NoteableEvents) on DstUserName
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by DstHostName, SrcIpAddr, DstUserName, FileName, FileHash, Message
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = DstUserName, HostCustomEntity = DstHostName, IPCustomEntity = SrcIpAddr, FileHashCustomEntity = FileHash
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: FullName
+        columnName: FileHashCustomEntity

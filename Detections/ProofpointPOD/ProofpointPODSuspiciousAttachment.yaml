@@ -1,0 +1,32 @@
+id: f6a51e2c-2d6a-4f92-a090-cfb002ca611f
+name: ProofpointPOD - Suspicious attachment
+description: |
+  'Detects when email contains suspicious attachment (file type).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_message_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: |
+  let lbtime = 10m;
+  let disallowed_ext = dynamic(['ps1', 'exe', 'vbs', 'js', 'scr']);
+  ProofpointPOD
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'message'
+  | where NetworkDirection == 'inbound'
+  | where FilterDisposition !in ('reject', 'discard')
+  | extend attachedExt = todynamic(MsgParts)[0]['detectedExt']
+  | where attachedExt in (disallowed_ext)
+  | project SrcUserUpn, DstUserUpn
+  | extend AccountCustomEntity = DstUserUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
