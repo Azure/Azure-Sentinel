@@ -1,0 +1,33 @@
+id: 75024e1c-26e7-4e73-821d-95e5decdd8db
+name: OracleDBAudit - Unusual user activity on multiple tables 
+description: |
+  'Detects when user queries many tables in short period of time.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+query: |
+  let lbtime = 3m;
+  let tbl_threshold = 10;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime)
+  | where isnotempty(DstUserName)
+  | where DbAction =~ 'SELECT'
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where tolower(TableName) != 'SELECT'
+  | summarize tbl_count = count(TableName) by DstUserName
+  | where tbl_count > tbl_threshold
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

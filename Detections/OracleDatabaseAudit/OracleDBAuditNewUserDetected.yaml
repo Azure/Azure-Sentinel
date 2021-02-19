@@ -1,0 +1,36 @@
+id: cca7b348-e904-4a7a-8f26-d22d4d477119
+name: OracleDBAudit - New user account
+description: |
+  'Detects when an action was made by new user.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+query: |
+  let lbtime_60d = 60d;
+  let lbtime_24h = 24h;
+  let known_users = OracleDatabaseAuditEvent
+  | where TimeGenerated between (ago(lbtime_60d) .. ago(lbtime_24h))
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime_24h)
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | where DstUserName !in (known_users)
+  | project DstUserName
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

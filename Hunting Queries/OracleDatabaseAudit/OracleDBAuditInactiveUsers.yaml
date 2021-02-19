@@ -1,0 +1,30 @@
+id: 2c7bbbe1-17cb-44ec-be63-fbb37b609403
+name: OracleDBAudit - Inactive Users
+description: |
+  'Query for searching user accounts which last activity was more than 60 days ago.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+query: |
+  let lbtime_60d = 60d;
+  let lbtime_1d = 1d;
+  let known_users_gt_60d = OracleDatabaseAuditEvent
+  | where TimeGenerated < ago(lbtime_60d)
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  let known_users_ls_60d = OracleDatabaseAuditEvent
+  | where TimeGenerated between (ago(lbtime_60d) .. ago(lbtime_1d))
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime_1d)
+  | where isnotempty(DstUserName)
+  | where DbAction =~ 'CONNECT'
+  | where DstUserName in (known_users_gt_60d)
+  | where DstUserName !in (known_users_ls_60d)
+  | project DstUserName
