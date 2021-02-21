@@ -1,0 +1,57 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: DeviceEvents
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+
+BaseQuery: |
+  let AntivirusEvents=(v_Host_HostName:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let Severity= datatable(ActionType:string, Severity:int)["AntivirusMalwareActionFailed",1,"AntivirusDetection",2,"AntivirusScanFailed",3, "AntivirusError",4, "AntivirusDefinitionsUpdateFailed",5];
+  let p_FullDeviceName = iff(isnotempty(v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_NTDomain));
+  DeviceEvents
+  | where ActionType hasprefix "Antivirus" and ActionType !in( "AntivirusReport", "AntivirusScanCompleted", "AntivirusDefinitionsUpdated","AntivirusEmergencyUpdatesInstalled")
+  | where DeviceName ==p_FullDeviceName
+  | lookup Severity on ActionType};
+  AntivirusEvents('{{Host_HostName}}','{{Host_NTDomain}}','{{Host_DnsDomain}}')
+
+Insights:
+ Id: 9d2d45fa-2b47-465c-99e5-da2d53e2e252
+ DisplayName: Windows Defender Antivirus events
+ Description: |
+   Locates significant Antivirus events
+ DefaultTimeRange: 
+  BeforeRange: 7d
+  AfterRange: 7d
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Antivirus Action"
+    OutputType: String
+  - Header: "Count"
+    OutputType: Int
+
+  QueriesDefinitions:
+
+  # TrulyRareProcess
+  - Filter:    "where 1==1"
+    Summarize: "summarize Count=count() by ActionType, Severity | sort by Severity asc nulls last"
+    Project:   "project ['Antivirus Action']=ActionType, Count"
+  
+ ChartQuery: 
+  Title: "Antivirus Activities"
+  DataSets: 
+   - Query: "where ActionType in ('AntivirusMalwareActionFailed', 'AntivirusDetection','AntivirusScanFailed') | summarize Count=count() by ActionType"
+     XColumnName: ActionType
+     YColumnName: Num Cases
+     LegendColumnName: ActionType
+  Type: ColumnChart
+ AdditionalQuery: 
+  Text: "See Antivirus activities"
+  Query: "as Activities"
