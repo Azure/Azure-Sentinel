@@ -1,0 +1,39 @@
+id: 8c8de3fa-6425-4623-9cd9-45de1dd0569a
+name: Cisco Umbrella - Rare User Agent Detected
+description: |
+  'Rule helps to detect a rare user-agents indicating web browsing activity by an unusual process other than a web browser.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandandControl
+query: |
+  let lookBack = 14d;
+  let timeframe = 1d;
+  let user_agents_list = Cisco_Umbrella
+  | where EventType == "proxylogs"
+  | where TimeGenerated > ago(lookBack) and TimeGenerated < ago(timeframe)
+  | summarize count() by HttpUserAgentOriginal
+  | summarize make_list(HttpUserAgentOriginal);
+  Cisco_Umbrella
+  | where EventType == "proxylogs"
+  | where TimeGenerated > ago(timeframe)
+  | where HttpUserAgentOriginal !in (user_agents_list)
+  | extend Message = "Rare User Agent"
+  | project Message, SrcIpAddr, DstIpAddr, UrlOriginal, TimeGenerated, HttpUserAgentOriginal
+  | extend IpCustomEntity = SrcIpAddr, UrlCustomEntity = UrlOriginal
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: UrlCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

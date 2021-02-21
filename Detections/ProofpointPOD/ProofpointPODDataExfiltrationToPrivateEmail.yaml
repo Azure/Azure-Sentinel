@@ -1,0 +1,35 @@
+id: aedc5b33-2d7c-42cb-a692-f25ef637cbb1
+name: ProofpointPOD - Possible data exfiltration to private email
+description: |
+  'Detects when sender sent email to the non-corporate domain and recipient's username is the same as sender's username.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_message_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: |
+  let lbtime = 10m;
+  ProofpointPOD
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'message'
+  | where NetworkDirection == 'outbound'
+  | where array_length(todynamic(DstUserUpn)) == 1
+  | extend sender = extract(@'\A(.*?)@', 1, SrcUserUpn)
+  | extend sender_domain = extract(@'@(.*)$', 1, SrcUserUpn)
+  | extend recipient = extract(@'\A(.*?)@', 1, tostring(todynamic(DstUserUpn)[0]))
+  | extend recipient_domain = extract(@'@(.*)$', 1, tostring(todynamic(DstUserUpn)[0]))
+  | where sender =~ recipient
+  | where sender_domain != recipient_domain
+  | project SrcUserUpn, DstUserUpn
+  | extend AccountCustomEntity = SrcUserUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
