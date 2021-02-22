@@ -1,8 +1,8 @@
 id: 2c55fe7a-b06f-4029-a5b9-c54a2320d7b8
 name: Process execution frequency anomaly
 description: |
-  'Identifies anomalous spike in frequency of executions of sensitive processes which are often leveraged as attack vectors. 
-  The query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns. 
+  'Identifies anomalous spike in frequency of executions of sensitive processes which are often leveraged as attack vectors.
+  The query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns.
   Sudden increases in execution frequency of sensitive processes should be further investigated for malicious activity.
   Tune the values from 1.5 to 3 in series_decompose_anomalies for further outliers or based on custom threshold values for score.'
 severity: Medium
@@ -25,32 +25,33 @@ query: |
   let timeframe = 1h;
   let TotalEventsThreshold = 5;
   let ExeList = dynamic(["powershell.exe","cmd.exe","wmic.exe","psexec.exe","cacls.exe","rundll.exe"]);
-  let TimeSeriesData = 
+  let TimeSeriesData =
   SecurityEvent
   | where EventID == 4688 | extend Process = tolower(Process)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | where Process in (ExeList)
   | project TimeGenerated, Computer, AccountType, Account, Process
   | make-series Total=count() on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by Process;
-  let TimeSeriesAlerts = TimeSeriesData
+  let TimeSeriesAlerts = materialize(TimeSeriesData
   | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 1.5, -1, 'linefit')
   | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
   | where anomalies > 0
   | project Process, TimeGenerated, Total, baseline, anomalies, score
-  | where Total > TotalEventsThreshold;
-  let AnomalyHours = TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated;  
+  | where Total > TotalEventsThreshold);
+  let AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);
   TimeSeriesAlerts
   | where TimeGenerated > ago(2d)
   | join (
   SecurityEvent
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
-  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours 
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
   | where EventID == 4688 | extend Process = tolower(Process)
   | summarize CommandlineCount = count() by bin(TimeGenerated, 1h), Process, CommandLine, Computer, Account
-  ) on Process, TimeGenerated 
-  | project AnomalyHour = TimeGenerated, Computer, Account, Process, CommandLine, CommandlineCount, Total, baseline, anomalies, score 
+  ) on Process, TimeGenerated
+  | project AnomalyHour = TimeGenerated, Computer, Account, Process, CommandLine, CommandlineCount, Total, baseline, anomalies, score
   | extend timestamp = AnomalyHour, AccountCustomEntity = Account, HostCustomEntity = Computer
+  
 entityMappings:
   - entityType: Account
     fieldMappings:

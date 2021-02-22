@@ -17,6 +17,8 @@ Azure Sentinel provides Logstash output plugin to Log analytics workspace.
 Install the microsoft-logstash-output-azure-loganalytics, use [Logstash Working with plugins](<https://www.elastic.co/guide/en/logstash/current/working-with-plugins.html>) document. 
 For offline setup follow [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
+Required Logstash version: between 7.0 and 7.9
+
 ## Configuration
 
 in your Logstash configuration file, add the Azure Sentinel output plugin to the configuration with following values: 
@@ -30,7 +32,10 @@ in your Logstash configuration file, add the Azure Sentinel output plugin to the
 - plugin_flash_interval – Optional filed, define the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - Max_items – Optional field, 2000 by default. this parameter will control the maximum batch size. This value will be changed if the user didn’t specify “amount_resizing = false” in the configuration. 
 
-Note: View the GitHub to learn more about the sent message’s configuration, performance settings and mechanism 
+Note: View the GitHub to learn more about the sent message’s configuration, performance settings and mechanism
+
+Security notice: We recommend not to implicitly state the workspace_id and workspace_key in your Logstash configuration for security reasons.
+                 It is best to store this sensitive information in a Logstash KeyStore as described here- https://www.elastic.co/guide/en/elasticsearch/reference/current/get-started-logstash-user.html
 
 ## Tests
 

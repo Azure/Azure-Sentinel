@@ -3,6 +3,7 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import { isValidSchema } from "./utils/jsonSchemaChecker";
 import * as logger from "./utils/logger";
+import { doDefinedLogoImageFilesExist, doDefinedPreviewImageFilesExist } from "./utils/workbookCheckers/imageExistChecker";
 import { isValidPreviewImageFileNames } from "./utils/workbookCheckers/previewImageChecker";
 import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker";
 
@@ -13,6 +14,8 @@ export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCod
   isValidSchema(workbooksMetadata, schema);
   isUniqueKeys(workbooksMetadata);
   isValidPreviewImageFileNames(workbooksMetadata);
+  doDefinedLogoImageFilesExist(workbooksMetadata);
+  doDefinedPreviewImageFilesExist(workbooksMetadata);
   
   return ExitCode.SUCCESS;
 } 
