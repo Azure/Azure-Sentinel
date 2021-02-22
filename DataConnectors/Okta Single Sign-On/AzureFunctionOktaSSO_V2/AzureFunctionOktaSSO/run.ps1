@@ -146,7 +146,15 @@ do {
         $resource = "/api/logs"
         $rfc1123date = [DateTime]::UtcNow.ToString("r")
         
-        $body = ([System.Text.Encoding]::UTF8.GetBytes("$($json)"))
+	if(!$json)
+	{
+	$body = ([System.Text.Encoding]::UTF8.GetBytes("$($json)"))
+	}
+	else
+	{
+        $body = ([System.Text.Encoding]::UTF8.GetBytes($json))
+	}
+	
         $contentLength = $body.Length
         $signature = new-BuildSignature `
             -customerId $customerId `
