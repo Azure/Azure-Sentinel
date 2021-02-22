@@ -331,7 +331,7 @@ try {
 			# Get the endCursor value from the response. This lets you resume
 			# getting records from the spot where this call left off
 			#Response from Invoke-RestMethod        
-			$currentRunEndCursorValue = $monitorApiResponse.endCursor            
+			$currentRunEndCursorValue = $monitorApiResponse.endCursor			
 			Write-Output "currentRunEndCursorValue :$currentRunEndCursorValue"
 			Write-Output "Last run cursorValue : $lastRunEndCursorValue"
 				
@@ -339,7 +339,7 @@ try {
 			{
 				# If the endCursor from the response is the same as the one that you already have,
 				# it means that you have reached the end of the records
-				if ($currentRunEndCursorValue.Substring(0, $currentRunEndCursorValue.LastIndexOf('_')) -eq $lastRunEndCursorValue.Substring(0, $lastRunEndCursorValue.LastIndexOf('_')))
+				if ($currentRunEndCursorValue -eq $lastRunEndCursorValue)
 				{
 					Write-Output 'Current run endCursor & last run endCursor values are the same. This indicates that you have reached the end of your available records.'
 					$complete=$true
@@ -351,11 +351,13 @@ try {
 				$lastRunEndCursorValue=$currentRunEndCursorValue  
 				$securityEvents = $monitorApiResponse.data
 				$securityEventsCount = $monitorApiResponse.data.length
-				$postReturnCode = SendToLogA -EventsData $securityEvents -EventsTable $LATableDSMAPI
-				$securityEventsCount = $monitorApiResponse.data.length
-				if($postReturnCode -eq 200)
-				{
-					Write-Output ("$securityEventsCount - DocuSign Security Events have been ingested into Azure Log Analytics Workspace Table --> $LATableDSMAPI")
+				if ($securityEventsCount -gt 0) {
+					$postReturnCode = SendToLogA -EventsData $securityEvents -EventsTable $LATableDSMAPI
+					$securityEventsCount = $monitorApiResponse.data.length
+					if($postReturnCode -eq 200)
+					{
+						Write-Output ("$securityEventsCount - DocuSign Security Events have been ingested into Azure Log Analytics Workspace Table --> $LATableDSMAPI")
+					}
 				}
 				Remove-Item $monitorApiResponse
 				Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "part1" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=$lastRunEndCursorValue} -UpdateExisting                           
