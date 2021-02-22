@@ -1,14 +1,14 @@
-id: 93a25f10-593d-4c57-a752-a8a75f031425
-name: Dynamics 365 - User Bulk Retrieval Outside Normal Activity
+id: 05eca115-c4b5-48e4-ba6e-07db57695be2
+name: Mass Export of Dynamics 365 Records to Excel
 description: |
-  'This query detects users retrieving significantly more records from Dynamics 365 than they have in the past 2 weeks. This could indicate potentially unauthorized access to data within Dynamics 365.'
+  'The query detects user exporting a large amount of records from Dynamics 365 to Excel, significantly more records exported than any other recent activity by that user.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Dynamics365
     dataTypes:
       - Dynamics365Activity
 queryFrequency: 1d
-queryPeriod: 14d
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -16,12 +16,11 @@ tactics:
 relevantTechniques:
   - T1530
 query: |
-  let baseline_time = 14d;
+  let baseline_time = 7d;
   let detection_time = 1d;
   Dynamics365Activity
   | where TimeGenerated between(ago(baseline_time)..ago(detection_time-1d))
-  | extend Message = split(OriginalObjectId, ' ')[0]
-  | where Message =~ "RetrieveMultiple"
+  | where OriginalObjectId contains 'ExportToExcel'
   | extend numQueryCount = todouble(QueryResults)
   | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
   | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))
@@ -29,8 +28,7 @@ query: |
   | extend HistoricalBaseline = sum_QueryCount
   | join (Dynamics365Activity
   | where TimeGenerated > ago(detection_time)
-  | extend Message = split(OriginalObjectId, ' ')[0]
-  | where Message =~ "RetrieveMultiple"
+  | where OriginalObjectId contains 'ExportToExcel'
   | extend numQueryCount = todouble(QueryResults)
   | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
   | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))
@@ -40,14 +38,13 @@ query: |
   | project UserId, HistoricalBaseline, CurrentExportRate
   | join kind=inner(Dynamics365Activity
   | where TimeGenerated > ago(detection_time)
-  | extend Message = split(OriginalObjectId, ' ')[0]
-  | where Message =~ "RetrieveMultiple"
+  | where OriginalObjectId contains 'ExportToExcel'
   | extend numQueryCount = todouble(QueryResults)
   | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
   | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))) on UserId
-  | project TimeGenerated, UserId, QueryCount, UserAgent, Message, ClientIP, HistoricalBaseline, CurrentExportRate, CorrelationId, CrmOrganizationUniqueName, Query
-  | summarize QuerySizes = make_set(QueryCount), MostRecentQuery = max(TimeGenerated), IPs = make_set(ClientIP), UserAgents = make_set(UserAgent), make_set(Query) by UserId, CrmOrganizationUniqueName, HistoricalBaseline, CurrentExportRate
-  | extend AccountCustomEntity = UserId
+  | project TimeGenerated, UserId, QueryCount, UserAgent, OriginalObjectId, ClientIP, HistoricalBaseline, CurrentExportRate, CorrelationId, CrmOrganizationUniqueName
+  | summarize QuerySizes = make_set(QueryCount), MostRecentQuery = max(TimeGenerated), IPs = make_set(ClientIP), UserAgents = make_set(UserAgent) by UserId, CrmOrganizationUniqueName, HistoricalBaseline, CurrentExportRate
+  | extend timestamp = MostRecentQuery, AccountCustomEntity = UserId
 entityMappings:
   - entityType: Account
     fieldMappings:
