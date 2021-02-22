@@ -299,21 +299,15 @@ try {
 	if($null -eq $StorageTable.Name){  
 		New-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext
 		$docuSignTimeStampTbl = (Get-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext.Context).cloudTable    
-		Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "part1" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=""} -UpdateExisting
-		Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "part2" -RowKey "endUserPosition" -property @{"endUserPositionValue"=""} -UpdateExisting
+		Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=""} -UpdateExisting		
 	}
 	Else {
 		$docuSignTimeStampTbl = (Get-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext.Context).cloudTable
 	}
 	# retrieve the last execution values
-	$lastExeEndCursor = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey "part1" -RowKey "lastRunEndCursor" -ErrorAction Ignore
-	$lastExeEndPos = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey "part2" -RowKey "endUserPosition" -ErrorAction Ignore
+	$lastExeEndCursor = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -ErrorAction Ignore	
 	$lastRunEndCursorValue = $lastExeEndCursor.lastCursorValue
-	$startUserValue = [int]$lastExeEndPos.endUserPositionValue
-	if ($startUserValue -gt 0){
-		$startUserValue = $startUserValue + 1
-	}
-
+	
 	$complete=$false    
 	$iterations=0
 	DO{
@@ -360,7 +354,7 @@ try {
 					}
 				}
 				Remove-Item $monitorApiResponse
-				Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "part1" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=$lastRunEndCursorValue} -UpdateExisting                           
+				Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=$lastRunEndCursorValue} -UpdateExisting                           
 				Start-Sleep -Second 5
 			}        
 		}
@@ -383,24 +377,33 @@ try {
 		try{
 			$docuSignUsersAPI = $null
 			$userApiResponse = $null
-			$docuSignUsersAPI = "$DocuSignUserInfoBaseURI/restapi/v2.1/accounts/$DocuSignAccountAPIID/users?additional_info=true&start_position=$startUserValue"
+			$docuSignUsersAPI = "$DocuSignUserInfoBaseURI/restapi/v2.1/accounts/$DocuSignAccountAPIID/users?additional_info=true"
 			Write-Output "Calling DocuSign Users API"
-			$userApiResponse = Invoke-RestMethod -Uri $docuSignUsersAPI -Method 'GET' -Headers $docuSignAPIHeaders
-
-			$userEndPosition = $userApiResponse.endPosition
+			$userApiResponse = Invoke-RestMethod -Uri $docuSignUsersAPI -Method 'GET' -Headers $docuSignAPIHeaders			
 			$docuSignUsers = $userApiResponse.users
-            $totalUsers = $userApiResponse.totalSetSize  
-			Write-Output "Total DocuSign Users $totalUsers"
 			
-			Write-Output "Updating endPosition for users value $startUserValue to the new value of $userEndPosition"
-			$startUserValue=$userEndPosition                
-			$postReturnCode = SendToLogA -EventsData $docuSignUsers -EventsTable $LATableDSUsers
-			if($postReturnCode -eq 200)
-			{
-				Write-Host ("$totalUsers users have been ingested into Azure Log Analytics Workspace Table $LATableDSUsers")
-			}
-			Remove-Item $userApiResponse
-			Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "part2" -RowKey "endUserPosition" -property @{"endUserPositionValue"=$startUserValue.ToString()} -UpdateExisting			
+			$usersList = @()
+            foreach($dsUser in $docuSignUsers)
+            {
+                $isUserExisting = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey $dsUser.userId.ToString() -ErrorAction Ignore
+                if ($null -eq $isUserExisting) {
+                    Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey $dsUser.userId.ToString() -RowKey $dsUser.userName.ToString() -UpdateExisting
+                    $usersList += $dsUser
+                }
+            }	
+            $totalUsers = $usersList.Length  
+			if($totalUsers -gt 0) {      
+                $postReturnCode = SendToLogA -EventsData $usersList -EventsTable $LATable_DSUsers
+                
+                if($postReturnCode -eq 200)
+                {
+                    Write-Output ("$totalUsers users have been ingested into Azure Log Analytics Workspace Table {$LATable_DSUsers}")
+                }
+            }
+            else {
+                Write-Output ("No New Users")
+            }
+			Remove-Item $userApiResponse			
 		}
 		catch {
 			$int = 0
