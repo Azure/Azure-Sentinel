@@ -147,7 +147,7 @@ def clean_up(path=output_file_path):
 
 def main():
     print_notice("Note this script should be run in elevated privileges")
-    print("Beginning to collect server data")
+    print("Beginning to collect server data- This may take a few minutes")
     clean_up()
     for command in basic_command_dict.keys():
         command_object = run_command(command)
