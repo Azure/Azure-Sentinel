@@ -27,7 +27,7 @@ logAnalyticsUri = os.environ['logAnalyticsUri']
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
 
-pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)"
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Google Workspace Reports: Invalid Log Analytics Uri.")
