@@ -373,7 +373,6 @@ try {
 	
 	#users Export
 	if ($DocuSignUsersIngestion.ToLower() -eq "true"){		
-		Write-Host "Ingesting DocuSign Users information to $LATableDSUsers"
 		try{
 			$docuSignUsersAPI = $null
 			$userApiResponse = $null
@@ -382,22 +381,24 @@ try {
 			$userApiResponse = Invoke-RestMethod -Uri $docuSignUsersAPI -Method 'GET' -Headers $docuSignAPIHeaders			
 			$docuSignUsers = $userApiResponse.users
 			
-			$usersList = @()
+			$accountUsers = @()	
             foreach($dsUser in $docuSignUsers)
             {
                 $isUserExisting = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey $dsUser.userId.ToString() -ErrorAction Ignore
                 if ($null -eq $isUserExisting) {
                     Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey $dsUser.userId.ToString() -RowKey $dsUser.userName.ToString() -UpdateExisting
-                    $usersList += $dsUser
+                    $accountUsers += $dsUser					
                 }
             }	
-            $totalUsers = $usersList.Length  
-			if($totalUsers -gt 0) {      
-                $postReturnCode = SendToLogA -EventsData $usersList -EventsTable $LATable_DSUsers
+            $totalUsers = $accountUsers.Count
+			Write-Output "New Users Count : $totalUsers"
+			if($totalUsers -gt 0) {
+				Write-Output "Ingesting DocuSign Users information to $LATableDSUsers"
+                $postReturnCode = SendToLogA -EventsData $accountUsers -EventsTable $LATableDSUsers
                 
                 if($postReturnCode -eq 200)
                 {
-                    Write-Output ("$totalUsers users have been ingested into Azure Log Analytics Workspace Table {$LATable_DSUsers}")
+                    Write-Output ("$totalUsers users have been ingested into Azure Log Analytics Workspace Table $LATableDSUsers")
                 }
             }
             else {
