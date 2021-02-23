@@ -20,11 +20,16 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 
 $logAnalyticsUri = $env:logAnalyticsUri
 
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+}
+
 # Returning if the Log Analytics Uri is in incorrect format.
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
 if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
 {
-    Write-Error -Message "Qualys KB: Invalid Log Analytics Uri." -ErrorAction Stop
+    throw "Qualys KB: Invalid Log Analytics Uri."
 }
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
@@ -259,11 +264,6 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     $rfc1123date = [DateTime]::UtcNow.ToString("r");
     $contentLength = $body.Length;
     $signature = Build-Signature -customerId $customerId -sharedKey $sharedKey -date $rfc1123date -contentLength $contentLength -method $method -contentType $contentType -resource $resource;
-
-    if ([string]::IsNullOrEmpty($logAnalyticsUri))
-    {
-        $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-    }
     $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
     $headers = @{
