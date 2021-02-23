@@ -49,6 +49,7 @@ function CarbonBlackAPI()
 
     if ($auditLogsResult.success -eq $true)
     {
+        Write-Host "Audit log results: $auditLogsResult"
         $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
         {
@@ -59,8 +60,14 @@ function CarbonBlackAPI()
             Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
         }
     }
+    else
+    {
+        Write-Host "AuditLogsResult API status failed , Please check API."
+    }
+
     if ($eventsResult.success -eq $true)
     {
+        Write-Host "Events log results: $eventsResult"
         $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
         {
@@ -70,6 +77,10 @@ function CarbonBlackAPI()
         {
             Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
         }
+      }
+      else
+      {
+          Write-Host "EventsResult API status failed , Please check. eventsResult: $eventsResult"
       }
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
@@ -81,7 +92,8 @@ function CarbonBlackAPI()
         $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
         $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
         if ($notifications.success -eq $true)
-        {                
+        {
+            Write-Host "Notifications results: $notifications"
             $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5       
             if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
             {
@@ -92,6 +104,10 @@ function CarbonBlackAPI()
                     Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
             }
                  
+        }
+        else
+        {
+            Write-Host "Notifications API status failed , Please check."
         }      
     }    
 }
