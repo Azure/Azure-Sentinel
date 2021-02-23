@@ -38,14 +38,13 @@ customer_id = os.environ['workspaceId']
 shared_key = os.envviron['workspaceKey']
 log_type = os.envviron['tableName']
 logAnalyticsUri = os.environ['logAnalyticsUri']
-if (not str(logAnalyticsUri)): 
-    logAnalyticsUri = "https://" + customer_id + ".ods.opinsights.azure.com"
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
 
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
-    logging.error("Invalid Log Analytics Uri.")
-    sys.exit()
+    raise Exception("Invalid Log Analytics Uri.")
     
 /* Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
