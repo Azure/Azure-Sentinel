@@ -24,11 +24,13 @@ time_delay_minutes = 60
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ['logAnalyticsUri']
 
-pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)"
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
-    logging.error("ProofpointPOD: Invalid Log Analytics Uri.")
-    sys.exit()
+    raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -122,9 +124,9 @@ class Proofpoint_api:
         content_length = len(body)
         signature = self.build_signature(rfc1123date, content_length, method, content_type,
                                     resource)
-        if(not (logAnalyticsUri and not logAnalyticsUri.isspace())):
-            logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
+        
         logAnalyticsUri = logAnalyticsUri + resource + '?api-version=2016-04-01'
+
         headers = {
             'content-type': content_type,
             'Authorization': signature,
