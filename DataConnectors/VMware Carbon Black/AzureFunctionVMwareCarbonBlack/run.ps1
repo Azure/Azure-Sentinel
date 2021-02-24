@@ -23,7 +23,7 @@ $logAnalyticsUri = $env:logAnalyticsUri
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
 if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
 {
-    Write-Error -Message "VMware Carbon Black: Invalid Log Analytics Uri." -ErrorAction Stop
+    throw "VMware Carbon Black: Invalid Log Analytics Uri."
 }
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
