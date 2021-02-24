@@ -1,0 +1,44 @@
+Id: 18B7E4E3-5B57-4924-B3CD-7E9A5A143521
+DisplayName: "Account's peers with a recent alert"
+Description: "Locates the Account's peers with a recent alert" 
+InputEntityType: Account
+InputFields:
+  - Name
+  - UPNSuffix
+OutputEntityTypes:
+  - Account
+QueryPeriodBefore: 7d
+QueryPeriodAfter: 0d
+DataSources:
+  - UserPeerAnalytics
+  - SecurityAlert
+Tactics:
+  - LateralMovement
+query: |
+
+  let GetUserPeersWithAlerts = (v_Account_Name:string, v_Account_UPNSuffix:string, v_Account_AadUserId:string) { 
+    let Account_UPN = strcat(v_Account_Name, '@',v_Account_UPNSuffix);
+    let Peers= UserPeerAnalytics  
+        | where UserPrincipalName =~ Account_UPN or UserId =~ v_Account_AadUserId
+        | where TimeGenerated == toscalar (UserPeerAnalytics | summarize max(TimeGenerated))
+        | project PeerUserPrincipalName, PeerUserId, Rank
+        | extend PeerUserPrincipalName=tolower(PeerUserPrincipalName)
+        | parse PeerUserPrincipalName with Account_Name '@' Account_UPNSuffix;
+    let PeerNames= Peers | summarize make_set_if(Account_Name, isnotempty(Account_Name));
+    let PeerIds  = Peers | summarize make_set_if(PeerUserId  , isnotempty(PeerUserId));
+    let PeersWithSecAlert=SecurityAlert
+        | where Entities has "account"
+        | where Entities has_any (PeerNames) or Entities has_any (PeerIds)
+        | mvexpand todynamic(Entities) 
+        | where tostring(Entities ["Type"]) =="account" 
+        | where tostring(Entities ["Name"]) has_any (PeerNames) or tostring(Entities ["AadUserId"]) has_any (PeerIds)
+        | summarize Account_Aux_AlertCount = count() 
+            by Account_Name=tolower(tostring(Entities["Name"]))
+             , Account_UPNSuffix=tolower(tostring(Entities["UPNSuffix"]));
+    PeersWithSecAlert 
+    | join kind=innerunique
+    Peers 
+        on Account_Name, Account_UPNSuffix
+    | project Account_Name, Account_UPNSuffix, Account_Aux_AlertCount
+    };
+    GetUserPeersWithAlerts("{{Account_Name}}","{{Account_UPNSuffix}}", "{{Account_AadUserId}}")

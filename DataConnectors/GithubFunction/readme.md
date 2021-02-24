@@ -118,11 +118,29 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 	```
 	**Note: Make sure the value in "TMPDIR" doesnt have "\\" at the end.**
 
-10.	**For Azure Gov customers only**, You will see additional environment variable "Azure Tenant" under "Configuration" --> "Application Settings" and its default value is ".us"
+10. **[Previous Version (prior to 2/9/2021) deployed users only ]**. If you want to ingest GitHub Audit & Repo logs into New custom logs, follow the steps  
+	```
+	a.	Go to `githublogs<<uniqueid>>`
+	b.	Click on "Configuration" under Settings
+	c.	Click on "New Application Setting"
+	d.	Name --> GitHubAuditLogsTableName.
+	e.  Value --> <<Your preferred table name for GitHub Audit Logs, for example GitHubAuditLogs>>
+	f.  Click on "Ok"
+	g.  Click on "New Application Setting"
+	h.  Name --> GitHubRepoLogsTableName.
+	i.  Value --> <<Your preferred table name for GitHub Repo Logs, for example GitHubRepoLogs>>
+	j.  Click on "Ok"
+	```
+	**Note**
+	If you don't create these new environment variable, then it will be ingested to default  
+	Audit Logs --> GitHub_CL  
+	Repo Logs --> GitHubRepoLogs_CL  
+	
+11.	**For Azure Gov customers only**, You will see additional environment variable "Azure Tenant" under "Configuration" --> "Application Settings" and its default value is ".us"
 	Currently this Function App supports "Azure Gov(.US)" tenants
 	Ex: https://portal.azure.us
 	
-Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHubFunction] to make the logs useful
+Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/GitHub] to make the logs useful
 
 ## Deploy the Function App template
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGithubFunction%2Fazurecomdeploy_dotcomtenants.json" target="_blank">
