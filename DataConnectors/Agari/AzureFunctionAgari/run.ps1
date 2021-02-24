@@ -11,11 +11,16 @@ if ($Timer.IsPastDue) {
 
 $logAnalyticsUri = $env:logAnalyticsUri
 
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+}
+
 # Returning if the Log Analytics Uri is in incorrect format.
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
 if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
 {
-    Write-Error -Message "Agari: Invalid Log Analytics Uri." -ErrorAction Stop
+    throw "Agari: Invalid Log Analytics Uri."
 }
 
 # Write an information log with the current time.
@@ -113,10 +118,6 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -contentType $contentType `
         -resource $resource
 
-	if ([string]::IsNullOrEmpty($logAnalyticsUri))
-	{
-	    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-	}
         $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
     $headers = @{
