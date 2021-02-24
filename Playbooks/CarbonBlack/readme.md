@@ -1,6 +1,6 @@
-  # CarbonBlack Logic Apps connector and playbook templates
+  # Carbon Black Logic Apps connector and playbook templates
 
-  ![CarbonBlack](../CarbonBlackConnector/CarbonBlack.png)<br>
+  <img src="./CarbonBlackConnector/CarbonBlack.PNG" alt="drawing" width="20%"/><br>
 
 
 ## Table of Contents
@@ -25,7 +25,7 @@ The Carbon Black Cloud is a cloud-native endpoint protection platform (EPP) that
 
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:
-* Custom connector for CarbonBlack.
+* Logic Apps custom connector for Carbon Black
 * Three playbook templates leverage CarbonBlack custom connector.
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from it's specific folder.
@@ -46,7 +46,11 @@ This connector supports API Key authentication. When creating the connection for
 
 ### Prerequisites for using and deploying Custom Connector
 1. CarbonBlack clound end point should be known. (e.g.  https://{CarbonblackBaseURL})
-2. Generate an API key. [Refer this link on how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+2. Generate an API key ([learn how](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)), and grant it the following access levels:
+    * 1
+    * 2
+    * 3
+
 
 <a name="deployment">
 

@@ -1,8 +1,8 @@
 # CarbonBlack Logic Apps Custom connector
 
-This custom connector connects to CarbonBlack cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
+<img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
 
-  <img src="./CarbonBlack/CarbonBlackConnector/CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+This custom connector connects to CarbonBlack cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
 
 ### Authentication methods this connector supports
 
@@ -29,15 +29,8 @@ This custom connector connects to CarbonBlack cloud end point and performs diffe
 ### Deployment instructions 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameters:
-    * Custom Connector Name : Enter the Custom connector name (e.g. CarbonBlackCloudConnector)
-    * Service Endpoint : Enter the CarbonBlack cloud end point (e.g. https://{CarbonblackBaseURL})
+    * Custom Connector Name: Enter the Custom connector name (e.g. CarbonBlackCloudConnector)
+    * Service Endpoint: Enter the CarbonBlack cloud end point (e.g. https://{CarbonblackBaseURL})
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FCarbonBlack%2FCarbonBlackConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FCarbonBlack%2FCarbonBlackConnector%2Fazuredeploy.json)
-
-## Connector Usage Examples
-* Playbook to quarantine device or Update policy according to SOC action.
-* Playbook to encrich the incident with devices information.
-* Playbook to quarantine the device automatically.
-
-
 
