@@ -33,11 +33,13 @@ aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)"
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
-    logging.error("Cisco_Umbrella: Invalid Log Analytics Uri.")
-    sys.exit()
+    raise Exception("Cisco_Umbrella: Invalid Log Analytics Uri.")
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -484,9 +486,8 @@ class AzureSentinelConnector:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        if(not (logAnalyticsUri and not logAnalyticsUri.isspace())):        
-            logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
         logAnalyticsUri = logAnalyticsUri + resource + '?api-version=2016-04-01'
+
         headers = {
             'content-type': content_type,
             'Authorization': signature,
