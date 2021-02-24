@@ -25,7 +25,7 @@ event_types = ["maillog","message"]
 logAnalyticsUri = os.environ['logAnalyticsUri']
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
-    logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
