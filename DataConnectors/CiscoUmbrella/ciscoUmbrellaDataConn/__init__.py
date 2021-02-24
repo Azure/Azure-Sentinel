@@ -34,7 +34,7 @@ aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
-    logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
+    logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
