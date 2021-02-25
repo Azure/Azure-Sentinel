@@ -24,9 +24,9 @@ $logAnalyticsUri = $env:logAnalyticsUri
 
 # Returning if the Log Analytics Uri is in incorrect format.
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
 {
-    Write-Error -Message "Qualys VM: Invalid Log Analytics Uri." -ErrorAction Stop
+    throw "Qualys VM: Invalid Log Analytics Uri."
 }
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than was originally scheduled
@@ -144,10 +144,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             -method $method `
             -contentType $contentType `
             -resource $resource
-        if ([string]::IsNullOrEmpty($logAnalyticsUri))
-        {
-            $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-        }
+        
         $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $headers = @{
             "Authorization" = $signature;
