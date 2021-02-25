@@ -45,7 +45,7 @@ $aprlastLog = $env:APRlastLogTime
 
 if ([string]::IsNullOrEmpty($logAnalyticsUri))
 {
-    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
 }
 
 # Returning if the Log Analytics Uri is in incorrect format.
