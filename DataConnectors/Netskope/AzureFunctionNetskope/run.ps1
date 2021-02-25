@@ -24,18 +24,6 @@ if ($Timer.IsPastDue) {
 
 $logAnalyticsUri = $env:logAnalyticsUri
 
-if ([string]::IsNullOrEmpty($logAnalyticsUri))
-{
-    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-}
-
-# Returning if the Log Analytics Uri is in incorrect format.
-# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
-{
-    throw "Netskope: Invalid Log Analytics Uri."
-}
-
 # Function to contruct the Netskope Uri for alerts, event types, and to accomodate for pagination
 function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     if("$logtype" -eq "alert") {
@@ -118,6 +106,18 @@ function Netskope () {
 
     $cwd = (Get-Location).Drive.Root
     $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
+
+    if ([string]::IsNullOrEmpty($logAnalyticsUri))
+    {
+        $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+    }
+    
+    # Returning if the Log Analytics Uri is in incorrect format.
+    # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+    if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+    {
+        throw "Netskope: Invalid Log Analytics Uri."
+    }
             
     foreach($logtype in $apitypes){
 
