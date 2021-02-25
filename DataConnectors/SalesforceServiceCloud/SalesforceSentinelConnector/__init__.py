@@ -36,7 +36,6 @@ match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Salesforce Service Cloud: Invalid Log Analytics Uri.")
 
-
 def _get_token():
     params = {
         "grant_type": "password",
