@@ -58,7 +58,7 @@ if ([string]::IsNullOrEmpty($logAnalyticsUri))
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
 if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
 {
-    throw  "Proofpoint TAP: Invalid Log Analytics Uri."
+    throw "Proofpoint TAP: Invalid Log Analytics Uri."
 }
 
 # Function to build the Authorization signature for the Log Analytics Data Connector API
