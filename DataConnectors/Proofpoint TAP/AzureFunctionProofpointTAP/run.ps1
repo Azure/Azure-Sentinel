@@ -19,12 +19,6 @@ param($Timer)
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
 
-# Returning if the Log Analytics Uri is in incorrect format.
-# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
-{
-    Write-Error -Message "Proofpoint TAP: Invalid Log Analytics Uri." -ErrorAction Stop
-}
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
@@ -54,6 +48,18 @@ $response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
 $TimeStampField = "DateValue"
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    Write-Error -Message "Proofpoint TAP: Invalid Log Analytics Uri." -ErrorAction Stop
+}
 
 # Function to build the Authorization signature for the Log Analytics Data Connector API
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
@@ -93,10 +99,6 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -contentType $contentType `
         -resource $resource
     
-    if ([string]::IsNullOrEmpty($logAnalyticsUri))
-    {
-        $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-    }
     $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
     $headers = @{
         "Authorization" = $signature;
