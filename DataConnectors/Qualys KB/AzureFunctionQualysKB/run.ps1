@@ -27,7 +27,7 @@ if ([string]::IsNullOrEmpty($logAnalyticsUri))
 
 # Returning if the Log Analytics Uri is in incorrect format.
 # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([\w\.]+)')
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
 {
     throw "Qualys KB: Invalid Log Analytics Uri."
 }
