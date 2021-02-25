@@ -39,10 +39,10 @@ def post_data(customer_id, shared_key, body, log_type):
         logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
     pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-    match = re.match(pattern,str(logAnalyticsUri))	match = re.match(pattern,str(logAnalyticsUri))
+    match = re.match(pattern,str(logAnalyticsUri))
     
-    if(not match):	if(not match):
-        exit_error("ESET Enterprise Inspector: Invalid Log Analytics Uri.")	    raise Exception("ESET Enterprise Inspector: Invalid Log Analytics Uri.")
+    if(not match):
+        raise Exception("ESET Enterprise Inspector: Invalid Log Analytics Uri.")
     
     logAnalyticsUri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     
