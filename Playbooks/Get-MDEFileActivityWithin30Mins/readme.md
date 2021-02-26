@@ -10,7 +10,7 @@ This Playbook queries Microsoft Defender for Endpoint telemetry data via the Mic
 - User Name - this is used to pre-populate the username used in the various Azure connections <br />
 
 An Azure AD App registration with required API permissions and secret will needed to provide the following parameters
-https://docs.microsoft.com/en-us/microsoft-365/security/mtp/api-advanced-hunting?view=o365-worldwide<br />
+https://docs.microsoft.com/microsoft-365/security/mtp/api-advanced-hunting?view=o365-worldwide<br />
 
 - Tenant ID<br />
 - Client ID<br />
