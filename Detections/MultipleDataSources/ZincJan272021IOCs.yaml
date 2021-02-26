@@ -28,6 +28,9 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -67,7 +70,7 @@ query: |
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
   | extend IPAddress = RemoteIp
-  | project Type, TimeGenerated, Computer, IPAddress, DNSName 
+  | project Type, TimeGenerated, Computer, IPAddress, DNSName
   ),
   (Event
   //This query uses sysmon data depending on table name used this may need updataing
@@ -112,6 +115,23 @@ query: |
   | where ProcessName has_any ("powershell.exe", "rundll32.exe")
   | where (CommandLine has "is64bitoperatingsystem" and CommandLine has "Debug\\Browse") or (CommandLine has_any (tokens))
   | project Type, TimeGenerated, Computer, Account, ProcessName, CommandLine 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   )
   )
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress

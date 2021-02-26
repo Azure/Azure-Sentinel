@@ -37,6 +37,9 @@ requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
       - AWSCloudTrail
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -105,6 +108,26 @@ query:  |
   | where isnotempty(SourceIpAddress)
   | where SourceIpAddress in (IPList)
   | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = SourceHost
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallNetworkRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = SourceHost
   )
   )
 entityMappings:
