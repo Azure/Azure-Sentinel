@@ -1,0 +1,37 @@
+id: e147e4dc-849c-49e9-9e8b-db4581951ff4
+name: New Dynamics 365 Admin Activity
+description: |
+  'Detects users conducting administrative activity in Dynamics 365 where they have not had admin rights before.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let baseline_time = 14d;
+  let detection_time = 1h;
+  Dynamics365Activity
+  | where TimeGenerated between(ago(baseline_time)..ago(detection_time))
+  | where UserType =~ 'admin'
+  | extend Message = tostring(split(OriginalObjectId, ' ')[0])
+  | summarize by UserId
+  | join kind=rightanti
+  (Dynamics365Activity
+  | where TimeGenerated > ago(detection_time)
+  | where UserType =~ 'admin')
+  on UserId
+  | summarize Actions = make_set(Message), MostRecentAction = max(TimeGenerated), IPs=make_set(ClientIP), UserAgents = make_set(UserAgent) by UserId
+  | extend timestamp = MostRecentAction, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
