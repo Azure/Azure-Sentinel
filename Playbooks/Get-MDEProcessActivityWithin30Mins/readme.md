@@ -5,7 +5,7 @@
 author: Dennis Pike
 
 ## Overview
-This Playbook queries Microsoft Defender for Endpoint telemetry data via the Microsoft 365 Defender Advanced Hunting API for all Process Events (Read, Write, Modify, Delete) that occur within 30 minutes of the incident and adds a comment to the incident specifying the number of Process Events and KQL query that will list all of the events.
+This Playbook queries Microsoft Defender for Endpoint telemetry data via the Microsoft 365 Defender Advanced Hunting API for all Process Events that occur within 30 minutes of the incident and adds a comment to the incident specifying the number of Process Events and KQL query that will list all of the events.
 
 ## Required Paramaters
 - Region<br />
@@ -19,7 +19,7 @@ https://docs.microsoft.com/microsoft-365/security/mtp/api-advanced-hunting?view=
 - Client ID<br />
 - Secret<br />
 
-The File Events are stored in a Log Analytics Workspace (preferable the one you have Sentinel enabled on) so you will need the Workspace ID and Workspace Key which can be found under Sentinel > Settings > Workspace Settings > Agents Management
+The Process Events are stored in a Log Analytics Workspace (preferable the one you have Sentinel enabled on) so you will need the Workspace ID and Workspace Key which can be found under Sentinel > Settings > Workspace Settings > Agents Management
 
 - Workspace ID<br />
 - Workspace Key<br />
