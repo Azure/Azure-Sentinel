@@ -2,6 +2,8 @@
 {
     public enum AttackTactic
     {
+        Reconnaissance,
+        ResourceDevelopment,
         InitialAccess,
         Execution,
         Persistence,
@@ -13,7 +15,6 @@
         Collection,
         Exfiltration,
         CommandAndControl,
-        Impact,
-        PreAttack
+        Impact
     }
 }
