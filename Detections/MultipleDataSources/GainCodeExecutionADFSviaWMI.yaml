@@ -40,45 +40,49 @@ query: |
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
   | extend process = split(Image, '\\', -1)[-1]
   | where process =~ "Microsoft.IdentityServer.ServiceHost.exe"
-  | summarize by Computer);
+  | distinct Computer
+  | union (
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe+lookback)
+  | where EventID == 4688 and SubjectLogonId != "0x3e4"
+  | where ProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
+  | distinct Computer
+  )
+  | distinct Computer);
   (union isfuzzy=true
   (
   SecurityEvent
   | where TimeGenerated > ago(timeframe)
-  | where EventID == 4624 and LogonType == 3 and Account !endswith "$" 
-  | join kind=inner 
-  ( SecurityEvent
-  | where TimeGenerated > ago(timeframe)
-  | where EventID == 4688 and SubjectLogonId != "0x3e4"
-  | where ParentProcessName has "wmiprvse.exe"
-  ) on TargetAccount
-  | where CommandLine has_any ("Invoke-WMIMethod", "wmic", "rundll32.exe")
-  // Look for potentially malicious ADFS activity
-  | where EventID == 4662
-  | where ObjectServer == 'DS'
-  | where OperationType == 'Object Access'
-  // The below line is commented out because it is unique to the domain. See the description for details.
-  // | where ObjectName contains '<GUID of ADFS Policy Store DKM Group object'
-  | where ObjectType contains '5cb41ed0-0e4c-11d0-a286-00aa003049e2' 
-  | where Properties contains '8d3bca50-1d7e-11d0-a081-00aa006c33ed' 
-  | project TimeGenerated, TargetAccount, CommandLine, Computer, Account
+  | where Computer in~ (ADFS_Servers)
+  | where ParentProcessName has 'wmiprvse.exe'
+  // Looking for rundll32.exe is based on intel from the blog linked in the description
+  // This can be commented out or altered to filter out known internal uses
+  | where CommandLine has_any ('rundll32') 
+  | project TimeGenerated, TargetAccount, CommandLine, Computer, Account, TargetLogonId
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  // Search for recent logons to identify lateral movement
+  | join kind= inner
+  (SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where Account !endswith "$"
+  | where EventID == 4624 and LogonType == 3
+  | project TargetLogonId
+  ) on TargetLogonId
   ),
   (
   Event
   | where TimeGenerated > ago(timeframe)
   | where Source == "Microsoft-Windows-Sysmon"
-  | where Computer in~ (ADFS_Servers)
-  | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
   | extend EventData = parse_xml(EventData).DataItem.EventData.Data
   | mv-expand bagexpansion=array EventData
   | evaluate bag_unpack(EventData)
   | extend Key=tostring(['@Name']), Value=['#text']
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | where Computer in~ (ADFS_Servers)
   // Check for WMI Events
   | where EventID in (19, 20, 21)
-  | project-reorder TimeGenerated, EventType, RenderedDescription, Image, Computer, UserName
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = UserName 
+  | project TimeGenerated, EventType, Image, Computer, UserName
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = UserName
   )
   )
 entityMappings:
