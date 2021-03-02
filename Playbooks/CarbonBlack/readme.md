@@ -26,7 +26,10 @@ The Carbon Black Cloud is a cloud-native endpoint protection platform (EPP) that
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:
 * Logic Apps custom connector for Carbon Black
-* Three playbook templates leverage CarbonBlack custom connector.
+* Three playbook templates leverage CarbonBlack custom connector:
+  * [Response from Teams](./Playbooks/CarbonBlack-TakeDeviceActionFromTeams) - allow SOC to take action on suspicious devices arrived in incidents (apply a pre-defined policy or quarantine) and change incident configuration directly from Teams channel. Post information about the incident as a comment to the incident.
+  * [Quarantine device](./Playbooks/CarbonBlack-QuarantineDevice) - move the device arrived in the incident to quarantine (if not already quarantined). Post information about the incident as a comment to the incident.
+  * [Enrichment](./Playbooks/CarbonBlack-DeviceEnrichment) - collect information about the devices and post them as incident comment.
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from it's specific folder.
 
@@ -44,18 +47,12 @@ This connector supports API Key authentication. When creating the connection for
 
 <a name="prerequisites">
 
-### Prerequisites for using and deploying Custom Connector
+### Prerequisites in Carbon Black
 1. CarbonBlack clound end point should be known. (e.g.  https://{CarbonblackBaseURL})
 2. Generate an API key ([learn how](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)), and grant it  **/appservices/** Access level. 
+(For playbooks built from scratch which leverage the process API, /investigate/ Access level is also relevant.)
 
-For playbooks built from scratch which leverage the process API, /investigate/ Access level is also relevant.
-
-| **Actions in the connector** | **API** | **Service Category** | **API Key Access Level(s) Permitted** |
-| --------- | -------------- | ----------------- | ------------------------------------ |
-| Get endpoints info, Quarantine device, Update policy for a device, Dismiss an alert, Add a note to an alert | Alerts API, Devices API | /appservices/ | Custom (must add an access level with appropriate permissions) |
-| Search processes actions | Platform Search API for Processes | /investigate/ | Custom (must add an access level with appropriate permissions) |
-
-
+3. For Response from Teams playbook, a policy needs to be created, so SOC will be able to move a device to it from the Teams adaptive card.
 
 <a name="deployment">
 
@@ -73,7 +70,7 @@ For playbooks built from scratch which leverage the process API, /investigate/ A
 |**CarbonBlack-DeviceEnrichment Playbook Name** |Enter the playbook name here (e.g. CarbonBlack-QuarantineDevice)|
 |**CarbonBlack-QuarantineDevice Playbook Name** | Enter the playbook name here (e.g. CarbonBlack-DeviceEnrichment)| 
 |**OrganizationId** | Enter the OrganizationId|
-|**PolicyId** | Enter the pre-defined PolicyId|
+|**PolicyId** | Enter the pre-defined PolicyId to which Teams adapative card will offer to move device|
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
 |**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)|
 

@@ -8,7 +8,7 @@ This custom connector connects to CarbonBlack cloud end point and performs diffe
 
 *  API Key authentication
 
-### Prerequisites for deploying Custom Connector
+### Prerequisites in Carbon Black
 1. CarbonBlack clound end point should be known. (e.g.  https://{CarbonblackBaseURL})
 2. Generate an API key. [Refer this link on how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) with the relevant Access level:
 
