@@ -1,7 +1,7 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-      "metadata": {
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
     "comments": "This playbook used to quarantine device or assigned policy via CarbonBlack connector.",
     "author": "Dharma Reddy, CarbonBlack"
   },
@@ -239,7 +239,7 @@
               "inputs": {
                 "body": {
                   "incidentArmId": "@triggerBody()?['object']?['id']",
-                  "message": "<p><strong></strong><strong>@{outputs('Compose')}</strong><strong> &nbsp;</strong><span style=\"font-size: 16px\"><strong>CarbonBlack TakeDeviceActionFromTeams Playbook</strong></span><span style=\"font-size: 16px\"><strong><br>\n</strong></span><strong><br>\nCarbonBlack TakeDeviceActionFromTeams playbook was triggered and collected the following information from Carbon Black:<br>\n<br>\n</strong><strong>@{body('Create_HTML_table_-_Carbon_black_device_information')}</strong><strong><br>\n<br>\nSummary of Device's Action taken :</strong><br>\n<br>\n@{variables('ActionSummary')}<br>\n<br>\n</p>"
+                  "message": "<p><strong></strong><strong>@{outputs('Compose')}</strong><strong> &nbsp;</strong><span style=\"font-size: 16px\"><strong>CarbonBlack TakeDeviceActionFromTeams Playbook<br>\n</strong></span><strong><br>\nCarbonBlack TakeDeviceActionFromTeams playbook was triggered and collected the following information from Carbon Black:<br>\n<br>\n</strong><strong>@{body('Create_HTML_table_-_Carbon_black_device_information')}</strong><strong><br>\n<br>\nSummary of Device's Action taken :</strong><br>\n<br>\n@{body('Create_HTML_table')}<br>\n<br>\n</p>"
                 },
                 "host": {
                   "connection": {
@@ -446,6 +446,32 @@
               "type": "If",
               "description": "Condition to check the summary action taken from SOC \"Ignore\" or \"Change Incident Configuration\""
             },
+            "Create_HTML_table": {
+              "runAfter": {
+                "For_each_hosts_information": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Table",
+              "inputs": {
+                "columns": [
+                  {
+                    "header": "DeviceId",
+                    "value": "@item()?['device']"
+                  },
+                  {
+                    "header": "Action",
+                    "value": "@item()?['action']"
+                  },
+                  {
+                    "header": "StatusCode",
+                    "value": "@item()?['statuscode']"
+                  }
+                ],
+                "format": "HTML",
+                "from": "@variables('ActionSummary')"
+              }
+            },
             "Create_HTML_table_-_Carbon_black_device_information": {
               "runAfter": {
                 "Select_action_summary": [
@@ -502,11 +528,37 @@
                   {
                     "header": "Sensorstates",
                     "value": "@join(item()?['sensor_states'],',')"
+                  },
+                  {
+                    "header": "LastreportedTime",
+                    "value": "@item()?['last_reported_time']"
+                  },
+                  {
+                    "header": "SensorVersion",
+                    "value": "@{item()?['sensor_version']}"
                   }
                 ],
                 "format": "HTML",
                 "from": "@variables('CarbonBlackDeviceInfo')"
               }
+            },
+            "DeviceIds": {
+              "runAfter": {
+                "Compose_product_name": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "deviceids",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "description": "Variable to store the device ids information"
             },
             "Devices_action_needed": {
               "runAfter": {
@@ -580,13 +632,25 @@
                           "description": "Prepare adaptive card columns list"
                         },
                         "Append_carbon_black_device_information": {
-                          "runAfter": {},
+                          "runAfter": {
+                            "Append_deviceids_information": [
+                              "Succeeded"
+                            ]
+                          },
                           "type": "AppendToArrayVariable",
                           "inputs": {
                             "name": "CarbonBlackDeviceInfo",
                             "value": "@item()"
                           },
                           "description": "Append each device information returned by carbon black cloud"
+                        },
+                        "Append_deviceids_information": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "deviceids",
+                            "value": "@items('For_each_results')?['id']"
+                          }
                         },
                         "Condition__to_check_the_device_is_Quarantined_and_policy_configured": {
                           "actions": {
@@ -620,21 +684,32 @@
                           },
                           "else": {
                             "actions": {
-                              "Append_device_name": {
-                                "runAfter": {
-                                  "Condition_to_check_the_quarantine_and_assigned_to_predefined_policy": [
-                                    "Succeeded"
-                                  ]
-                                },
-                                "type": "AppendToArrayVariable",
-                                "inputs": {
-                                  "name": "DevicesActionNeeded",
-                                  "value": "@items('For_each_Hosts')?['HostName']"
-                                },
-                                "description": "Append device name which needs SOC action"
-                              },
                               "Condition_to_check_the_quarantine_and_assigned_to_predefined_policy": {
                                 "actions": {
+                                  "Append__device_ids_to_array": {
+                                    "runAfter": {
+                                      "Set_device_actions_Quarantine_and_Update_Policy": [
+                                        "Succeeded"
+                                      ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                      "name": "DevicesActionNeeded",
+                                      "value": "@items('For_each_results')?['id']"
+                                    }
+                                  },
+                                  "Set_action_info": {
+                                    "runAfter": {
+                                      "Append__device_ids_to_array": [
+                                        "Succeeded"
+                                      ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                      "name": "ActionInfo",
+                                      "value": " "
+                                    }
+                                  },
                                   "Set_device_actions_Quarantine_and_Update_Policy": {
                                     "runAfter": {},
                                     "type": "SetVariable",
@@ -663,6 +738,18 @@
                                   "actions": {
                                     "Condition_to_set_the_actions_dynamically": {
                                       "actions": {
+                                        "Append_to_array_device_id": {
+                                          "runAfter": {
+                                            "Set_device_actions_[_Update_Policy,_Ignore_]": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "type": "AppendToArrayVariable",
+                                          "inputs": {
+                                            "name": "DevicesActionNeeded",
+                                            "value": "@items('For_each_results')?['id']"
+                                          }
+                                        },
                                         "Set_action_information_-_The_device_is_in_quarantine": {
                                           "runAfter": {},
                                           "type": "SetVariable",
@@ -726,6 +813,19 @@
                                             "runAfter": {},
                                             "else": {
                                               "actions": {
+                                                "Append_device_name": {
+                                                  "runAfter": {
+                                                    "Set_device_actions_[_Quarantine_,_Ignore_]": [
+                                                      "Succeeded"
+                                                    ]
+                                                  },
+                                                  "type": "AppendToArrayVariable",
+                                                  "inputs": {
+                                                    "name": "DevicesActionNeeded",
+                                                    "value": "@items('For_each_results')?['id']"
+                                                  },
+                                                  "description": "Append device name which needs SOC action"
+                                                },
                                                 "Set_action_information_-_The_device_is_assigned_to_predefined_policy": {
                                                   "runAfter": {},
                                                   "type": "SetVariable",
@@ -891,7 +991,7 @@
                                     },
                                     {
                                       "choices": "@variables('DeviceActions')",
-                                      "id": "@{items('For_each_results')?['name']}",
+                                      "id": "@{items('For_each_results')?['id']}",
                                       "placeholder": "Please choose",
                                       "style": "compact",
                                       "type": "Input.ChoiceSet",
@@ -1070,7 +1170,7 @@
                         "wrap": true
                       },
                       {
-                        "text": "[[[[[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})",
+                        "text": "[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})",
                         "type": "TextBlock",
                         "wrap": true
                       },
@@ -1096,7 +1196,7 @@
                 }
               },
               "runAfter": {
-                "Compose_product_name": [
+                "DeviceIds": [
                   "Succeeded"
                 ]
               },
@@ -1129,13 +1229,31 @@
               "type": "Foreach"
             },
             "For_each_hosts_information": {
-              "foreach": "@variables('Hosts')",
+              "foreach": "@variables('deviceids')",
               "actions": {
                 "Condition_to_check_the_device_that_needs_SOC_action": {
                   "actions": {
                     "Switch": {
                       "runAfter": {},
                       "cases": {
+                        "Case_Ignore": {
+                          "case": "Ignore",
+                          "actions": {
+                            "Append_action_summary_-_Ignore": {
+                              "runAfter": {},
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "ActionSummary",
+                                "value": {
+                                  "action": "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][outputs('SOC_Action')]",
+                                  "device": "@outputs('Device_id')",
+                                  "statuscode": "204"
+                                }
+                              },
+                              "description": "Append action summary - Ignore"
+                            }
+                          }
+                        },
                         "Case_QUARANTINE": {
                           "case": "QUARANTINE",
                           "actions": {
@@ -1146,7 +1264,11 @@
                                   "type": "AppendToArrayVariable",
                                   "inputs": {
                                     "name": "ActionSummary",
-                                    "value": "Device : @{outputs('Device_name')} , Action :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][item()]}"
+                                    "value": {
+                                      "action": "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][outputs('SOC_Action')]",
+                                      "device": "@outputs('Device_id')",
+                                      "statuscode": "@outputs('device_actions_QUARANTINE')['statusCode']"
+                                    }
                                   },
                                   "description": "Append action summary - Quarantine"
                                 }
@@ -1163,7 +1285,11 @@
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
                                       "name": "ActionSummary",
-                                      "value": "Device : @{outputs('Device_name')} , Action not successful. Statuc code :  @{outputs('device_actions_QUARANTINE')['statusCode']}"
+                                      "value": {
+                                        "action": "Not successful",
+                                        "device": "@outputs('Device_id')",
+                                        "statuscode": "@outputs('device_actions_QUARANTINE')['statusCode']"
+                                      }
                                     }
                                   }
                                 }
@@ -1193,7 +1319,7 @@
                                 "body": {
                                   "action_type": "QUARANTINE",
                                   "device_id": [
-                                    "@{body('Filter_each_device_information')?[0]?['id']}"
+                                    "@{outputs('Device_id')}"
                                   ],
                                   "options": {
                                     "toggle": "ON"
@@ -1223,7 +1349,11 @@
                                   "type": "AppendToArrayVariable",
                                   "inputs": {
                                     "name": "ActionSummary",
-                                    "value": "Device : @{outputs('Device_name')} , Action :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][item()]}"
+                                    "value": {
+                                      "action": "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][outputs('SOC_Action')]",
+                                      "device": "@outputs('Device_id')",
+                                      "statuscode": "@outputs('device_actions_UPDATE_POLICY')['statusCode']"
+                                    }
                                   }
                                 }
                               },
@@ -1239,7 +1369,11 @@
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
                                       "name": "ActionSummary",
-                                      "value": "Device : @{outputs('Device_name')} , Action not successful. Statuc code :  @{outputs('device_actions_UPDATE_POLICY')['statusCode']}"
+                                      "value": {
+                                        "action": "Not successful",
+                                        "device": "@outputs('Device_id')",
+                                        "statuscode": "@outputs('device_actions_UPDATE_POLICY')['statusCode']"
+                                      }
                                     }
                                   }
                                 }
@@ -1269,10 +1403,10 @@
                                 "body": {
                                   "action_type": "UPDATE_POLICY",
                                   "device_id": [
-                                    "@{body('Filter_each_device_information')?[0]?['id']}"
+                                    "@{outputs('Device_id')}"
                                   ],
                                   "options": {
-                                    "policy_id": "6525"
+                                    "policy_id": "@{variables('PredefinedPolicy')}"
                                   }
                                 },
                                 "headers": {
@@ -1291,35 +1425,29 @@
                         }
                       },
                       "default": {
-                        "actions": {
-                          "Append_action_summary_-_Ignore": {
-                            "runAfter": {},
-                            "type": "AppendToArrayVariable",
-                            "inputs": {
-                              "name": "ActionSummary",
-                              "value": "Device : @{outputs('Device_name')} , Action :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][item()]}"
-                            },
-                            "description": "Append action summary - Ignore"
-                          }
-                        }
+                        "actions": {}
                       },
-                      "expression": "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][item()]",
+                      "expression": "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data'][outputs('SOC_Action')]",
                       "type": "Switch"
                     }
                   },
                   "runAfter": {
-                    "Filter_the_action_needed_device": [
+                    "SOC_Action": [
                       "Succeeded"
                     ]
                   },
                   "else": {
                     "actions": {
-                      "Append_to_array_variable_7": {
+                      "Append_-_No_action_required": {
                         "runAfter": {},
                         "type": "AppendToArrayVariable",
                         "inputs": {
                           "name": "ActionSummary",
-                          "value": "Device : @{outputs('Device_name')} , Action : No action required"
+                          "value": {
+                            "action": "No action is required",
+                            "device": "@outputs('Device_id')",
+                            "statuscode": "204"
+                          }
                         }
                       }
                     }
@@ -1345,7 +1473,7 @@
                   "type": "If",
                   "description": "Condition to check the device that needs SOC action"
                 },
-                "Device_name": {
+                "Device_id": {
                   "runAfter": {},
                   "type": "Compose",
                   "inputs": "@item()",
@@ -1353,14 +1481,14 @@
                 },
                 "Filter_each_device_information": {
                   "runAfter": {
-                    "Device_name": [
+                    "Device_id": [
                       "Succeeded"
                     ]
                   },
                   "type": "Query",
                   "inputs": {
                     "from": "@variables('CarbonBlackDeviceInfo')",
-                    "where": "@equals(item()?['name'], outputs('Device_name'))"
+                    "where": "@equals(item()?['id'], outputs('Device_id'))"
                   },
                   "description": "Filter device information returned from carbon black cloud"
                 },
@@ -1373,9 +1501,18 @@
                   "type": "Query",
                   "inputs": {
                     "from": "@variables('DevicesActionNeeded')",
-                    "where": "@equals(item(), outputs('Device_name'))"
+                    "where": "@equals(item(), outputs('Device_id'))"
                   },
                   "description": "Filter the action needed device"
+                },
+                "SOC_Action": {
+                  "runAfter": {
+                    "Filter_the_action_needed_device": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@string(outputs('Device_id'))"
                 }
               },
               "runAfter": {
@@ -1526,7 +1663,7 @@
             },
             "Select_action_summary": {
               "runAfter": {
-                "For_each_hosts_information": [
+                "Create_HTML_table": [
                   "Succeeded"
                 ]
               },
@@ -1534,8 +1671,9 @@
               "inputs": {
                 "from": "@variables('ActionSummary')",
                 "select": {
-                  "text": "@item()",
-                  "type": "TextBlock"
+                  "text": "DeviceId : @{item()?['device']}     Action: @{item()?['action']}  StatusCode: @{item()?['statuscode']}",
+                  "type": "TextBlock",
+                  "wrap": "true"
                 }
               }
             },
