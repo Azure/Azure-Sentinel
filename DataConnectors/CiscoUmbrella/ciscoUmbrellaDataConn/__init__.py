@@ -77,28 +77,28 @@ def main(mytimer: func.TimerRequest) -> None:
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 cdfw_files.append(obj)
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in dns_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in proxy_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in ip_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in cdfw_files:
                 cli.process_file(obj, dest=sentinel)
@@ -106,7 +106,7 @@ def main(mytimer: func.TimerRequest) -> None:
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
     else:
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in obj_list:
                 cli.process_file(obj, dest=sentinel)
@@ -419,7 +419,8 @@ class UmbrellaClient:
 
 
 class AzureSentinelConnector:
-    def __init__(self, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+    def __init__(self, log_analitics_uri, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+        self.log_analitics_uri = log_analitics_uri
         self.customer_id = customer_id
         self.shared_key = shared_key
         self.log_type = log_type
@@ -486,7 +487,7 @@ class AzureSentinelConnector:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        logAnalyticsUri = logAnalyticsUri + resource + '?api-version=2016-04-01'
+        uri = self.log_analitics_uri + resource + '?api-version=2016-04-01'
 
         headers = {
             'content-type': content_type,
@@ -495,7 +496,7 @@ class AzureSentinelConnector:
             'x-ms-date': rfc1123date
         }
 
-        response = requests.post(logAnalyticsUri, data=body, headers=headers)
+        response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
             logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
