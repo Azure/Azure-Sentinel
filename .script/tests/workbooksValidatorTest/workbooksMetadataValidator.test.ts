@@ -38,8 +38,24 @@ describe("workbooksValidator", () => {
     await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/missingBlackPreviewImageWorkbooksMetadata.json", "WorkbookValidationError");
   });
 
+  it("should throw an exception when empty data connectors dependency is in the wrong format", async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/emptyDataConnectorsDependenciesWithInvalidFormat.json", "SchemaError");
+  });
+
+  it("should throw an exception when empty data types dependency is in the wrong format", async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/emptyDataTypesDependenciesWithInvalidFormat.json", "SchemaError");
+  });
+
+  it("should throw an exception when logo image file does not exist", async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/logoImageFileDoesNotExist.json", "WorkbookValidationError");
+  });
+
+  it("should throw an exception when preview image file does not exist", async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/previewImageFilesDoNotExist.json", "WorkbookValidationError");
+  });
+
   async function checkInvalid(filePath: string, expectedError: string): Promise<Chai.PromisedAssertion> {
-    expect(IsValidWorkbookMetadata(filePath)).eventually.rejectedWith(Error).and.have.property("name", expectedError);
+    await expect(IsValidWorkbookMetadata(filePath)).eventually.rejectedWith(Error).and.have.property("name", expectedError);
   }
 
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {

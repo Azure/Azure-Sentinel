@@ -1,0 +1,36 @@
+id: 572f3951-5fa3-4e42-9640-fe194d859419
+name: New Office User Agent in Dynamics 365 
+description: |
+  'Detects users accessing Dynamics from a User Agent that has not been seen in any Office 365 workloads in the last 7 days. Has configurable filter for known good user agents such as PowerApps.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let timeframe = 1h;
+  let lookback = 7d;
+  let known_useragents = dynamic([]);
+  Dynamics365Activity
+  | where TimeGenerated > ago(timeframe)
+  | extend Message = tostring(split(OriginalObjectId, ' ')[0])
+  | where Message =~ "UserSignIn"
+  | extend IPAddress = tostring(split(ClientIP, ":")[0])
+  | where isnotempty(UserAgent)
+  // Exclude user agents with a render agent to reduce noise
+  | where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink")
+  | join kind=leftanti(
+  OfficeActivity
+  | where TimeGenerated > ago(lookback)
+  | where UserAgent !in~ (known_useragents))
+  on UserAgent
+  | summarize MostRecentActivity=max(TimeGenerated), IPs=make_set(IPAddress), Users=make_set(UserId), Actions=make_set(OriginalObjectId) by UserAgent
+  | extend timestamp = MostRecentActivity
