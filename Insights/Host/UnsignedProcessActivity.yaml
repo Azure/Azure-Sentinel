@@ -1,0 +1,47 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: DeviceEvents
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+
+BaseQuery: |
+  let NonMSSignedBlocked= (v_Host_HostName:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+    let p_FullDeviceName = iff(isnotempty(v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_NTDomain) );
+    DeviceEvents
+    | where ActionType in ("ExploitGuardNonMicrosoftSignedBlocked", "ExploitGuardNonMicrosoftSignedAudited") 
+        and FileName !hassuffix '.ni.dll'
+    | where DeviceName =~ p_FullDeviceName
+    | project Timestamp
+      , FileName
+      ,InitiatingProcessFileName
+      , InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountSid
+      , DeviceName ,  ActionType
+  };
+  NonMSSignedBlocked('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}')
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: 8d0e9356-be1e-45ac-9403-d0ac3f1605b7
+     Description: "Exploit protection blocked the launch of a process from an image file that is not signed by Microsoft"
+     Title: "Exploit protection blocked the launch of a process from an image file that is not signed by Microsoft"
+     Content: "Launch of unsigned file '{{FileName}}' by process '{{InitiatingProcessFileName}}' initiated by '{{InitiatingProcessAccountName}}' was blocked. "
+     QueryDefinitions:
+       Filter: "where ActionType =~ 'ExploitGuardNonMicrosoftSignedBlocked'"
+       SummarizeBy: "FileName, InitiatingProcessFileName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountSid"
+   - Id: 3ff80327-7c54-449d-95d4-613848f7d60b
+     Description: "Exploit protection detected the launch of a process from an image file that is not signed by Microsoft"
+     Title: "Exploit protection detected the launch of a process from an image file that is not signed by Microsoft"
+     Content: "Launch of unsigned file '{{FileName}}' by process '{{InitiatingProcessFileName}}' initiated by '{{InitiatingProcessAccountName}}' was audited."
+     QueryDefinitions:
+       Filter: " where ActionType =~ 'ExploitGuardNonMicrosoftSignedAudited'"
+       SummarizeBy: "FileName, InitiatingProcessFileName, InitiatingProcessAccounDomain, InitiatingProcessAccountName, InitiatingProcessAccountSid"
+

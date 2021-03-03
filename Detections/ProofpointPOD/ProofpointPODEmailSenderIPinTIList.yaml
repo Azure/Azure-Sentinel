@@ -1,0 +1,40 @@
+id: 78979d32-e63f-4740-b206-cfb300c735e0
+name: ProofpointPOD - Email sender IP in TI list
+description: |
+  'Email sender IP in TI list.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_maillog_CL
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - InitialAccess
+query: |
+  let ioc_lookBack = 30d;
+  let timeframe = 1h;
+  let TI_IP_List =
+  ThreatIntelligenceIndicator
+  | where TimeGenerated > ago(ioc_lookBack)
+  | where isnotempty(NetworkIP)
+  | summarize make_list(NetworkIP);
+  ProofpointPOD 
+  | where TimeGenerated > ago(timeframe)
+  | where isnotempty(SrcIpAddr)
+  | where SrcIpAddr in~ (TI_IP_List)
+  | extend Message = "Email sender IP in TI list"
+  | project Message, SrcUserUpn, DstUserUpn, SrcIpAddr
+  | extend AccountCustomEntity = SrcUserUpn, IpCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

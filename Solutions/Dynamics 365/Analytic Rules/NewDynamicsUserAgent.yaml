@@ -1,0 +1,45 @@
+id: 8ec3a7f9-9f55-4be3-aeb6-9188f91b278e
+name: New Dynamics 365 User Agent
+description: |
+  'Detects users accessing Dynamics from a User Agent that has not been seen the 14 days. Has configurable filter for known good user agents such as PowerApps. Also includes optional section to exclude User Agents to indicate a browser being used.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let lookback = 14d;
+  let timeframe = 1d;
+  let user_accounts = "(([a-zA-Z]{1,})\\.([a-zA-Z]{1,}))@.*";
+  let known_useragents = dynamic([]);
+  Dynamics365Activity
+  | where TimeGenerated between(ago(lookback)..ago(timeframe))
+  | where isnotempty(UserAgent)
+  | summarize by UserAgent, UserId
+  | join kind = rightanti (Dynamics365Activity
+  | where TimeGenerated > ago(timeframe)
+  | where isnotempty(UserAgent)
+  | where UserAgent !in~ (known_useragents)
+  | where UserAgent !hasprefix "azure-logic-apps" and UserAgent !hasprefix "PowerApps"
+  | where UserId matches regex user_accounts)
+  on UserAgent, UserId
+  // Uncomment this section to exclude user agents with a rendering engine, indicating browsers.
+  //| join kind = leftanti(
+  //Dynamics365Activity
+  //| where TimeGenerated between(ago(lookback)..ago(timeframe))
+  //| where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink")) on UserAgent
+  | summarize FirstSeen = min(TimeGenerated), IPs = make_set(ClientIP) by UserAgent, UserId
+  | extend timestamp = FirstSeen, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

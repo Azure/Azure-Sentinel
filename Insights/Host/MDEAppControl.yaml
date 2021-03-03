@@ -1,0 +1,140 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: DeviceEvents
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+
+BaseQuery: |
+  let AppControlEvents=(v_Host_HostName:string, v_Host_NTDomain:string, v_Host_DnsDomain:string){
+  let p_FullDeviceName = iff(isnotempty(v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_DnsDomain), strcat(v_Host_HostName,'.',v_Host_NTDomain));
+  let AppControls=datatable(ActionType:string, Description:string, FriendlyActivityName:string)
+    ["AppControlAppInstallationAudited", "Application control detected the installation of an untrusted app.","Untrusted app installed"
+    ,"AppControlAppInstallationBlocked", "Application control blocked the installation of an untrusted app.",  "Untrusted app installation blocked"
+    ,"AppControlCodeIntegrityDriverRevoked", "Application control found a driver with a revoked certificate.", "Driver with revoked certificate detected"
+    ,"AppControlCodeIntegrityImageRevoked", "Application control found an executable file with a revoked certificate.", "Executable with revoked certificate detected"
+    ,"AppControlExecutableAudited","Application control detected the use of an untrusted executable.","Untrusted executable used"
+    ,"AppControlExecutableBlocked","Application control blocked the use of an untrusted executable.","Untrusted executable blocked"
+    ,"AppControlScriptAudited", "Application control detected the use of an untrusted script.", "Untrusted script detected"
+    ,"AppControlScriptBlocked", "Application control blocked the use of an untrusted script.", "Untrusted script blocked" ];
+  DeviceEvents
+  | where ActionType in (AppControls)  
+  | where DeviceName ==p_FullDeviceName
+  | lookup AppControls on ActionType
+  };
+  AppControlEvents('{{Host_HostName}}','{{Host_NTDomain}}','{{Host_DnsDomain}}')
+# The queries for the insights.
+Insights:
+ Id: c5c56dbd-1d07-4aa9-a5b5-0347c25aa256
+ DisplayName: Microsoft Defender Application Control
+ Description: |
+   Summary of actions taken by the Microsoft Defender Application Control
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Action"
+    OutputType: String
+    SupportDeepLink: True
+  - Header: "Count"
+    OutputType: Number
+    SupportDeepLink: false
+  - Header: "Last Occurence"
+    OutputType: Date
+    SupportDeepLink: False
+
+  QueriesDefinitions:
+  # App installation audited
+  - Filter:    "where ActionType =='AppControlAppInstallationAudited' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # App installation Blocked
+  - Filter:    "where ActionType =='AppControlAppInstallationBlocked' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # App installation audited
+  - Filter:    "where ActionType =='AppControlCodeIntegrityDriverRevoked' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # App installation Blocked
+  - Filter:    "where ActionType =='AppControlCodeIntegrityImageRevoked' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  - Filter:    "where ActionType =='AppControlExecutableAudited' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # App installation Blocked
+  - Filter:    "where ActionType =='AppControlExecutableBlocked' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # App installation audited
+  - Filter:    "where ActionType =='AppControlScriptAudited' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # App installation Blocked
+  - Filter:    "where ActionType =='AppControlScriptBlocked' | project TimeGenerated, ActionType, Description, FriendlyActivityName"
+    Summarize: "summarize Count = count(), ['Last Occurence']=max(TimeGenerated) by ActionType, Description, FriendlyActivityName"
+    Project:   "project Action = FriendlyActivityName, Count, ['Last Occurence']"
+    LinkColumnsDefinitions:
+    - ProjectedName: Action
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Application Control activities"
+  DataSets: 
+   - Query: " summarize Count = count() by FriendlyActivityName"
+     XColumnName: "Event Type"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+  Type: BarChart
+ 
+ AdditionalQuery:
+  Text: "See all Application Control activities"
+  Query: "project-reorder TimeGenerated, DeviceName, ActionType, Description "
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: c91cb743-7c6c-4ccf-b066-13448c9c085c
+     Description: Microsoft Defender Application Control activities
+     Title: "Windows Defender Application Control activities on this host"
+     Content: "{{FriendlyActivityName}} by {{InitiatingProcessAccountUpn}} {{Count}} time(s)"
+     QueryDefinitions:
+       Filter: 
+       SummarizeBy: "DeviceName, ActionType, FriendlyActivityName, InitiatingProcessAccountUpn"
