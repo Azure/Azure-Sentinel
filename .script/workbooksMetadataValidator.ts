@@ -21,7 +21,7 @@ export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCod
 } 
 
 let fileTypeSuffixes = ["WorkbooksMetadata.json"];
-let filePathFolderPrefixes = ["Workbooks"];
+let filePathFolderPrefixes = ["Workbooks","Solutions"];
 let fileKinds = ["Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
