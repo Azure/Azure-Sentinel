@@ -1,0 +1,44 @@
+id: 23005e87-2d3a-482b-b03d-edbebd1ae151
+name: HAFNIUM Suspicious Exchange Request
+description: |
+  'This query looks for suspicious request patterns to Exchange servers that fit a pattern observed by HAFNIUM actors.
+  The same query can be run on HTTPProxy logs from on-premise hosted Exchange servers.
+  Reference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let exchange_servers = (
+  W3CIISLog
+  | where TimeGenerated > ago(14d)
+  | where sSiteName =~ "Exchange Back End"
+  | summarize by Computer);
+  W3CIISLog
+  | where TimeGenerated > ago(1d)
+  | where Computer in (exchange_servers)
+  | where csUriQuery startswith "t="
+  | project-reorder TimeGenerated, Computer, csUriStem, csUriQuery, csUserName, csUserAgent, cIP
+  | extend timestamp = TimeGenerated, AccountCustomEntity = csUserName, HostCustomEntity = Computer, IPCustomEntity = cIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

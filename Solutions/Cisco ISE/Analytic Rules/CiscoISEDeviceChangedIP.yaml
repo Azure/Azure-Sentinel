@@ -1,0 +1,38 @@
+id: 0c509e9b-121e-4951-9f9b-43722e052b4f
+name: CiscoISE - Device changed IP in last 24 hours
+description: |
+  'Detects when device changes IP address in last 24 hours.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CiscoISE
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  let lbtime_48h = 48h;
+  let lbtime_24h = 24h;
+  CiscoISEEvent
+  | where TimeGenerated between (ago(lbtime_48h) .. ago(lbtime_24h))
+  | where notempty(DvcIpAddr) and notempty(DvcHostname)
+  | summarize knownIPs = make_set(DvcIpAddr) by DvcHostname
+  | join (CiscoISEEvent
+        | where TimeGenerated > ago(lbtime_24h)
+        | where notempty(DvcIpAddr) and notempty(DvcHostname)
+        | summarize evts = count() by DvcHostname, DvcIpAddr
+        | project-away evts) on DvcHostname
+  | project-away DvcHostname1
+  | where knownIPs !contains DvcIpAddr
+  | extend HostCustomEntity = DvcHostname
+  | extend IPCustomEntity = DvcIpAddr
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
