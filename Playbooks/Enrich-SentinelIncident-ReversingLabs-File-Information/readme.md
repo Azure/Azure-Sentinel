@@ -1,7 +1,7 @@
 # Enrich-SentinelIncident-ReversingLabs-File-Information
 This playbook utilizes the ReversingLabs Intelligence connector to automatically enrich incident comments section with file information.
 
-Learn more about the integration via the [connector documentation](https://docs.microsoft.com/en-us/connectors/reversinglabsintelligence/).
+Learn more about the integration via the [connector documentation](https://docs.microsoft.com/connectors/reversinglabsintelligence/).
 
 In order to successfully run this playbook you will need a valid ReversingLabs TitaniumCloud subscription with the  XREF(Historic Multi-AV Scan Records), File Reputation and File Hash Analysis Detail APIs enabled. You can obtain your subscription at support@reversinglabs.com.
 
