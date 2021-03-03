@@ -169,6 +169,7 @@ BaseQuery: |
   );
   // Create list for comparison back againsts Network logs to gather statistics for a given IP.
   let IpList = IpInfo | summarize make_set(IPAddress);
+  let Host_Account = IpInfo | extend HostIPAddress = IPAddress | distinct Computer, HostIPAddress;
   let IpStats = (union isfuzzy=true
   (
   VMConnection
@@ -263,7 +264,7 @@ BaseQuery: |
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by HostIPAddress = DestinationIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = SourceIP, Direction, ReceivedBytes = tolong(ReceivedBytes)
   )
   );
-  IpStats
+  IpStats | join kind=leftouter Host_Account on HostIPAddress | project-away HostIPAddress1
   };
   GetIPResolutionWithHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 
@@ -330,7 +331,7 @@ Insights:
     - ProjectedName: Total
       Query: "{{BaseQuery}} | {{RowFilter}}"
   # Inbound and Outbound connection counts
-  - Filter:    "project HostIPAddress, RemoteIPAddress, InboundCount, OutboundCount, UnknownDirection"
+  - Filter:    "project HostIPAddress, RemoteIPAddress, InboundCount, OutboundCount, UnknownDirection, Computer"
     Summarize: "summarize Inbound = sum(InboundCount), Outbound = sum(OutboundCount), Unknown = sum(UnknownDirection), RemIPs = make_set(RemoteIPAddress) by HostIPAddress | extend Total = tolong(Inbound + Outbound + Unknown)"
     Project:   "project Direction = 'All', HostIP = HostIPAddress, RemoteIP = case(array_length(RemIPs) == 1, tostring(RemIPs[0]), array_length(RemIPs) > 1 and array_length(RemIPs) <= 100, strcat(tostring(array_length(RemIPs)),' IPs'), array_length(RemIPs) >= 101, '> 100 IPs' , 'None'), Total"
     LinkColumnsDefinitions:
@@ -345,4 +346,4 @@ Insights:
 
  AdditionalQuery: 
   Text: "See All connections"
-  Query: "summarize min(StartTime), max(EndTime), sum(InboundCount), sum(OutboundCount), sum(ReceivedBytes), sum(SentBytes), sum(UnknownDirection) by HostIPAddress, RemoteIPAddress, Type"
+  Query: "summarize min(StartTime), max(EndTime), sum(InboundCount), sum(OutboundCount), sum(ReceivedBytes), sum(SentBytes), sum(UnknownDirection) by HostIPAddress, RemoteIPAddress, Type, Computer"
