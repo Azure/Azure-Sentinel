@@ -1,0 +1,27 @@
+Id: f87b2afb-068f-4734-88a0-94560309f9c7
+DisplayName: Processes blocked from loading non-Microsoft-signed binaries 
+Description: Exploit protection blocked the launch of a process from an image file that is not signed by Microsoft
+InputEntityType: Process
+InputFields:
+  - ProcessId + Process_ImageFile
+OutputEntityTypes:
+  - File
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+  - DeviceEvents
+Tactics:
+  - Persistence
+  - LateralMovement
+query: |
+  let BlockedUnsignedFile = (v_Process_ProcessId:int, v_Process_ImageFile:string){
+  let p_Process_ImageFile_Name = tostring(parse_json(v_Process_ImageFile)['Name']);
+  DeviceEvents
+  | where ActionType == "ExploitGuardNonMicrosoftSignedBlocked" and FileName !hassuffix ".ni.dll"
+  | where InitiatingProcessId == v_Process_ProcessId and InitiatingProcessFileName =~ p_Process_ImageFile_Name
+  | summarize Count=count() by FileName
+  | top 15 by Count desc
+  | project File_Name=FileName
+  };
+  // change Process values below
+  BlockedUnsignedFile(<v_Process_ProcessId>,'<v_Process_ImageFile>')

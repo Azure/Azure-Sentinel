@@ -20,6 +20,9 @@ requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -30,7 +33,6 @@ relevantTechniques:
   - T1043
 query: |
 
-  let timeframe = 1d;
   let DomainNames = dynamic(["yahoo-verification.org","support-servics.com","verification-live.com","com-mailbox.com","com-myaccuants.com","notification-accountservice.com",
   "accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net","verify-linkedin.net", 
   "yahoo-verification.net","yahoo-verify.net","outlook-verify.net","com-users.net","verifiy-account.net","te1egram.net","account-verifiy.net","myaccount-services.net",
@@ -51,7 +53,6 @@ query: |
   let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
   (union isfuzzy=true
   (CommonSecurityLog 
-  | where TimeGenerated >= ago(timeframe)
   | parse Message with * '(' DNSName ')' * 
   | extend MessageIP = extract(IPRegex, 0, Message)
   | extend RequestURLIP = extract(IPRegex, 0, Message)
@@ -63,22 +64,35 @@ query: |
   IPMatch == "RequestUrl", RequestURLIP,"NoMatch"), Account = SourceUserID, Host = DeviceName
   ),
   (DnsEvents 
-  | where TimeGenerated >= ago(timeframe) 
   | extend DestinationIPAddress = IPAddresses, DNSName = Name, Host = Computer
   | where  DestinationIPAddress in (IPList) or DNSName in~ (DomainNames) 
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host),
   (VMConnection 
-  | where TimeGenerated >= ago(timeframe) 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | where isnotempty(SourceIP) or isnotempty(DestinationIP) or isnotempty(DNSName)
-  | where SourceIP in (IPList) or DestinationIP in (IPList) or DNSName in~ (DomainNames)
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), Host = Computer),
+  | where isnotempty(SourceIp) or isnotempty(DestinationIp) or isnotempty(DNSName)
+  | where SourceIp in (IPList) or DestinationIp in (IPList) or DNSName in~ (DomainNames)
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer),
   (OfficeActivity
-  | where TimeGenerated >= ago(timeframe)
   | extend SourceIPAddress = ClientIP, Account = UserId
   | where  SourceIPAddress in (IPList)
-  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account )
+  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPCustomEntity = ClientIP),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPCustomEntity = SourceHost 
+  )
   )
 entityMappings:
   - entityType: Account
