@@ -12,7 +12,6 @@ import requests
 import azure.functions as func
 import logging
 import certifi
-import sys
 import re
 
 
@@ -22,7 +21,7 @@ cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
 time_delay_minutes = 60
 event_types = ["maillog","message"]
-logAnalyticsUri = os.environ['logAnalyticsUri']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -46,6 +45,7 @@ def main(mytimer: func.TimerRequest) -> None:
 class Proofpoint_api:
     def __init__(self):
         self.cluster_id = cluster_id
+        self.logAnalyticsUri = logAnalyticsUri
         self._token = _token
         self.time_delay_minutes = int(time_delay_minutes)
         self.gen_timeframe(time_delay_minutes=self.time_delay_minutes)
@@ -125,7 +125,7 @@ class Proofpoint_api:
         signature = self.build_signature(rfc1123date, content_length, method, content_type,
                                     resource)
         
-        logAnalyticsUri = logAnalyticsUri + resource + '?api-version=2016-04-01'
+        logAnalyticsUri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
 
         headers = {
             'content-type': content_type,
