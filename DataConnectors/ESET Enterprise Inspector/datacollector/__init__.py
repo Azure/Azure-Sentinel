@@ -10,7 +10,7 @@ import os
 import re
 
 from enterpriseinspector.eifunctions import exit_error
-logAnalyticsUri = os.environ['logAnalyticsUri']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 #####################
 ######Functions######  
@@ -28,6 +28,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 
 # Build and send a request to the POST API
 def post_data(customer_id, shared_key, body, log_type):
+    global logAnalyticsUri
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
