@@ -26,7 +26,7 @@ interval = "hourly"
 hours_interval = 1
 days_interval = 1
 url = "https://login.salesforce.com/services/oauth2/token"
-logAnalyticsUri = os.environ['logAnalyticsUri']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -178,6 +178,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 
 
 def post_data(customer_id, shared_key, body, log_type, chunk_count):
+    global logAnalyticsUri
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
