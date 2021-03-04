@@ -125,7 +125,7 @@ class Proofpoint_api:
         signature = self.build_signature(rfc1123date, content_length, method, content_type,
                                     resource)
         
-        logAnalyticsUri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
+        uri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
 
         headers = {
             'content-type': content_type,
@@ -133,7 +133,7 @@ class Proofpoint_api:
             'Log-Type': 'ProofpointPOD_' + event_type,
             'x-ms-date': rfc1123date
         }    
-        response = requests.post(logAnalyticsUri, data=body, headers=headers)
+        response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
             logging.info("Chunk was processed({} events)".format(chunk_count))
             print("Chunk was processed({} events)".format(chunk_count))
