@@ -144,7 +144,7 @@ Function Ingest-Core-Fields-Single-Table {
 		$TotalRecords = $coreEvents.Count
 		$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
 		$start = 0
-		For ($x = 0; $x -lt $bits; $X++) {
+		For ($x = 0; $x -lt $bits; $x++) {
 			IF ( ($start + $recsetsize) -gt $TotalRecords) {
 				$finish = $totalRecords
 			}
@@ -157,7 +157,7 @@ Function Ingest-Core-Fields-Single-Table {
 			{
 				Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
 			}
-			$start = $Finish + 1
+			$start = $finish + 1
 		}
 		$null = Remove-variable -name body        
 
@@ -194,7 +194,7 @@ Function Ingest-AWS-ResourceType-Multi-Tables {
 			$TotalRecords = $groupEvents[$d].Count
 			$RecSetSize = [math]::Round($TotalRecords / $bits) + 1
 			$start = 0
-			For ($x = 0; $x -lt $bits; $X++) {
+			For ($x = 0; $x -lt $bits; $x++) {
 				IF ( ($start + $recsetsize) -gt $TotalRecords) {
 					$finish = $totalRecords
 				}
@@ -207,7 +207,7 @@ Function Ingest-AWS-ResourceType-Multi-Tables {
 				{
 					Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
 				}
-				$start = $Finish + 1
+				$start = $finish + 1
 			}
 			$null = Remove-variable -name body        
 		}
