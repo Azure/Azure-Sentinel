@@ -15,7 +15,7 @@ requiredDataConnectors:
     dataTypes:
       - SecurityEvent
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -37,11 +37,11 @@ query: |
   | mv-expand bagexpansion=array EventData
   | evaluate bag_unpack(EventData)
   | extend Key=tostring(['@Name']), Value=['#text']
-  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
   | extend process = split(Image, '\\', -1)[-1]
   | where process =~ "Microsoft.IdentityServer.ServiceHost.exe"
   | distinct Computer
-  | union (
+  | union isfuzzy=true (
   SecurityEvent
   | where TimeGenerated > ago(timeframe+lookback)
   | where EventID == 4688 and SubjectLogonId != "0x3e4"
@@ -73,14 +73,13 @@ query: |
   Event
   | where TimeGenerated > ago(timeframe)
   | where Source == "Microsoft-Windows-Sysmon"
+  // Check for WMI Events
+  | where Computer in~ (ADFS_Servers) and EventID in (19, 20, 21)
   | extend EventData = parse_xml(EventData).DataItem.EventData.Data
   | mv-expand bagexpansion=array EventData
   | evaluate bag_unpack(EventData)
   | extend Key=tostring(['@Name']), Value=['#text']
-  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
-  | where Computer in~ (ADFS_Servers)
-  // Check for WMI Events
-  | where EventID in (19, 20, 21)
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
   | project TimeGenerated, EventType, Image, Computer, UserName
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = UserName
   )
