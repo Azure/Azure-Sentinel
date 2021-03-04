@@ -13,7 +13,6 @@ import azure.functions as func
 import logging
 import os
 import time
-import sys
 import re
 
 customer_id = os.environ['WorkspaceID'] 
@@ -22,7 +21,7 @@ pickle_str = os.environ['GooglePickleString']
 pickle_string = base64.b64decode(pickle_str)
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = ["login", "calendar", "drive", "admin", "mobile", "token", "user_accounts"]
-logAnalyticsUri = os.environ['logAnalyticsUri']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -80,6 +79,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
     return authorization
 
 def post_data(customer_id, shared_key, body, log_type):
+    global logAnalyticsUri
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
