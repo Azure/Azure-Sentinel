@@ -40,7 +40,7 @@ api_id = os.environ ['api_key']
 regioncode = os.environ ['regioncode']
 url_base = region[regioncode]
 log_type = 'TrendMicro_XDR'
-logAnalyticsUri = os.environ['logAnalyticsUri']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -111,6 +111,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 # Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
 
 def post_data(customer_id, shared_key, body, log_type, workbencheIds):
+    global logAnalyticsUri
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
