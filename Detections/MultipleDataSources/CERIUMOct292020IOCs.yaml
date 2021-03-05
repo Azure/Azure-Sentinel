@@ -25,30 +25,43 @@ tactics:
   - CommandAndControl
   - CredentialAccess
 query: |
-  let timeframe = 1d;
   let DomainNames = "miniodaum.ml";
   let SHA256Hash = dynamic (["53f5773bbfbfbee660989d135c042c9f6f69024b9a4b65bdc0dfd44771762257", "0897c80df8b80b4c49bf1ccf876f5f782849608b830c3b5cb3ad212dc3e19eff"]);
   (union isfuzzy=true
   (CommonSecurityLog 
-  | where TimeGenerated >= ago(timeframe) 
   | parse Message with * '(' DNSName ')' * 
   | where isnotempty(FileHash)
   | where FileHash in (SHA256Hash) or DNSName =~ DomainNames
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
   ),
   (DnsEvents 
-  | where TimeGenerated >= ago(timeframe) 
   | extend DNSName = Name
   | where isnotempty(DNSName)
   | where DNSName =~ DomainNames
   | extend IPAddress = ClientIP
   ),
   (VMConnection 
-  | where TimeGenerated >= ago(timeframe) 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | where isnotempty(DNSName)
   | where DNSName =~ DomainNames
   | extend IPAddress = RemoteIp
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   )
   )
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress

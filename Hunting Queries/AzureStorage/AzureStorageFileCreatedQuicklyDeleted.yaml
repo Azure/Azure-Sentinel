@@ -1,0 +1,43 @@
+id: 276731f6-ae09-4469-9fa0-c0791a5a0d8d
+name: Azure Storage File Create and Delete
+description: |
+  'This hunting query will try to identify instances where a file us uploaded to file storage and then deleted
+  within a given threshold. By default the query will find instances where a file is uploaded and deleted within
+  5 minutes. This hunting query will help detect automated exfiltration.'
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+  - T1537
+tags:
+  - Ignite2021
+query: |
+
+  let threshold = 5m;
+  let timerange = 7d;
+  let StorageData =
+  union
+  StorageFileLogs,
+  StorageBlobLogs;
+  StorageData
+  | where TimeGenerated > ago(timerange)
+  | where StatusText =~ "Success"
+  | where OperationName =~ "PutBlob" or OperationName =~ "PutRange"
+  | extend Uri = tostring(split(Uri, "?", 0)[0])
+  | join (
+      StorageData
+      | where TimeGenerated > ago(timerange)
+      | where StatusText =~ "Success"
+      | where OperationName =~ "DeleteBlob" or OperationName =~ "DeleteFile"
+      | extend Uri = tostring(split(Uri, "?", 0)[0])
+      | project OperationName, DeletedTime=TimeGenerated, Uri
+  ) on Uri
+  | project TimeGenerated, DeletedTime, Uri, CallerIpAddress, UserAgentHeader, ResponseMd5, StorageAccount=AccountName
+  | extend windowEnd = TimeGenerated+5m 
+  | where DeletedTime between (TimeGenerated .. windowEnd)
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
