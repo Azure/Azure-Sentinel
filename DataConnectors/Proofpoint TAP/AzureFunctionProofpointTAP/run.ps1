@@ -17,6 +17,8 @@
 param($Timer)
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
+$logAnalyticsUri = $env:logAnalyticsUri
+
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
@@ -46,6 +48,18 @@ $response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
 $TimeStampField = "DateValue"
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "Proofpoint TAP: Invalid Log Analytics Uri."
+}
 
 # Function to build the Authorization signature for the Log Analytics Data Connector API
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
@@ -84,8 +98,8 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
-
+    
+    $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
     $headers = @{
         "Authorization" = $signature;
         "Log-Type" = $logType;
@@ -93,7 +107,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "time-generated-field" = $TimeStampField;
     }
 
-    $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     return $response.StatusCode
 
 }
