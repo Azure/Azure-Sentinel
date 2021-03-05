@@ -6,8 +6,6 @@ import datetime
 import hashlib
 import hmac
 import base64
-import os
-import re
 
 from enterpriseinspector.eifunctions import exit_error
 
