@@ -1,4 +1,6 @@
 # AWS Lambda Function to import CloudTrail Logs to Azure Sentinel
+Author: Sreedhar Ande
+
 This Lambda function is designed to ingest AWS CloudTrail Events/S3 Events and send them to Azure Log Analytics workspace using the Log Analytics API.
 
 AWS CloudTrail logs are audit type events from all/any AWS resources in a tenancy. Each AWS resource has a unique set of Request and Response Parameters. Azure Log Analytics has a column per table limit of 500, (plus some system columns) the aggregate of AWS parameter fields will exceed this quickly leading to potential loss of event records
@@ -10,25 +12,30 @@ Code does the following things with the logs it processes.
 	Ex: LogAnalyticsTableName_EC2_Header
 4.	In future if other AWS datatypes exceed 500 columns a similar split may be required for them as well. 
 
-Special thanks to [Chris Abberley](https://github.com/cabberley) for the above logic
+**Credits**  
+This Data connector uses a PowerShell logic authored by [Chris Abberley](https://github.com/cabberley)
 
 **Note**  
 
-To avoid additional billing and duplication:
-1. You can turn off LogAnalyticsTableName_ALL using additional Environment Variable **CoreFieldsAllTable** to **false**
-2. You can turn off LogAnalyticsTableName_AWSREsourceType using additional Environment Variable **SplitAWSResourceTypeTables** to **false**
+To avoid additional billing and duplication: **CloudTrail Logs only**
+1. You can turn off LogAnalyticsTableName_ALL using additional Environment Variable **CoreFieldsAllTable** to **true/false**
+2. You can turn off LogAnalyticsTableName_AWSREsourceType using additional Environment Variable **SplitAWSResourceTypeTables** to **true/false**
 
 **Either CoreFieldsAllTable or SplitAWSResourceTypeTables must be true or both can be true**
 
 
 ## **Function Flow process**
 # **SNS Lambda Trigger:**
-**CloudTrail Logs --> AWS S3 --> AWS SNS Topic --> AWS Lambda --> Azure Log Analytics**
+**CloudTrail/CloudWatch/GuardDuty/SecurityHub Logs --> AWS S3 --> AWS SNS Topic --> AWS Lambda --> Azure Log Analytics**
 ![Picture9](./Graphics/Picture9.png)
 
 # **SQS Lambda Trigger:**
-**CloudTrail Logs --> AWS S3 --> AWS SQS --> AWS Lambda --> Azure Log Analytics**
+**CloudTrail/CloudWatch/GuardDuty/SecurityHub Logs --> AWS S3 --> AWS SQS --> AWS Lambda --> Azure Log Analytics**
 ![Picture9](./Graphics/Picture11.png)
+
+
+**Note**  
+Data parsing is applicable only to CloudTrail Logs. CloudWatch/GuardDuty/SecurityHub Logs will be ingested to **CoreFieldsAllTable**
 
 ## Installation / Setup Guide
 
