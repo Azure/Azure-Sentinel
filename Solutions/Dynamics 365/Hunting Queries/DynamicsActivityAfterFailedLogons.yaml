@@ -1,0 +1,32 @@
+id: 0ea22925-998d-42ea-9ff6-0c32af4ff835
+name: Dynamics 365 Activity After Failed Logons
+description: |
+  'This hunting query looks for users conducting Dynamics 365 activity shortly after a number of failed logons. Use this to look for potential post brute force activity. Adjust the threshold figure based on false positive rate.'
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let threshold = 10;
+  SigninLogs
+  | where ResultType in ("50125", "50140", "70043", "70044")
+  | summarize count() by IPAddress
+  | where count_ >= threshold
+  | join (Dynamics365Activity
+  | extend IPAddress = tostring(split(ClientIP, ":")[0]))
+  on IPAddress
+  | project-rename FailedLogonCount = count_
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
