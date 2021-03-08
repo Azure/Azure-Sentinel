@@ -1,0 +1,55 @@
+id: 7d6d8a8e-b08a-4082-8dbb-d7fd2cbbc35e
+name: HAFNIUM UM Service writing suspicious file
+description: |
+  'This query looks for the Exchange server UM process writing suspicious files that may be indicative of webshells.
+  Reference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
+  union isfuzzy=true
+  (SecurityEvent
+  | where EventID == 4663
+  | where Process has_any ("umworkerprocess.exe", "UMService.exe")
+  | where ObjectName has_any (scriptExtensions)
+  | where AccessMask in ('0x2','0x100', '0x10', '0x4')),
+  (DeviceFileEvents
+  | where ActionType =~ "FileCreated"
+  | where InitiatingProcessFileName has_any ("umworkerprocess.exe", "UMService.exe")
+  | where FileName has_any(scriptExtensions))
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingProcessAccountUpn
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
