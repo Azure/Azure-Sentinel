@@ -123,14 +123,17 @@ BaseQuery: |
   )
   );
   IpStats
+  | join kind=inner (ThreatIntelligenceIndicator | where TimeGenerated < ago(1m)
+  | where Active = true and isnotempty(NetworkIP)
+  | summarize arg_max(TimeGenerated, *) by ThreatIntelMatch = Description, ThreatType, NetworkIP) on $left.RemoteIPAddress == $right.NetworkIP
   };
   GetIPStats('{{IP_Address}}')
 
 Insights:
- Id: b8e2df44-f98f-4c95-bcbe-f8210f3e0f23
- DisplayName: "IP address remote connections"
+ Id: 340e5f6f-d218-4a11-8638-09e1af7847cc
+ DisplayName: "IP address remote connections with TI match"
  Description: |
-  'Provides the remote IP connection count information for outbound and inbound connections to an IP address. Note due to potential performance impact, data is limited to a 7 day max window.'
+  'Provides the threat intelligence related hits for the remote IP address. Note due to potential performance impact, data is limited to a 7 day max window.'
  DefaultTimeRange: 
   BeforeRange: 12h
   AfterRange: 12h
@@ -142,17 +145,17 @@ Insights:
   - Header: "IPAddress"
     OutputType: String
     SupportDeepLink: true
-  - Header: "RemoteIP/Count"
+  - Header: "RemoteIP"
     OutputType: String
     SupportDeepLink: true
-  - Header: "Total"
-    OutputType: Number
-    SupportDeepLink: true
+  - Header: "ThreatType"
+    OutputType: String
+    SupportDeepLink: false
   QueriesDefinitions:
-  # Top inbound counts
-  - Filter:    "where InboundCount > 0"
-    Summarize: "summarize Total = sum(InboundCount) by IPAddress, RemoteIPAddress | top 1 by Total"
-    Project:   "project Direction = 'Top In', IPAddress, RemoteIP = RemoteIPAddress, Total"
+  # Inbound TI Hits
+  - Filter:    "project IPAddress, RemoteIPAddress, InboundCount, ThreatType"
+    Summarize: "summarize Inbound = sum(InboundCount) by IPAddress, RemoteIPAddress, ThreatType | where Inbound > 0"
+    Project:   "project Direction = 'In', IPAddress, RemoteIP = RemoteIPAddress, ThreatType"
     LinkColumnsDefinitions:
     - ProjectedName: Direction
       Query: "{{BaseQuery}} | {{RowFilter}}"
@@ -160,12 +163,12 @@ Insights:
       Query: "{{BaseQuery}} | {{RowFilter}}"
     - ProjectedName: RemoteIP
       Query: "{{BaseQuery}} | {{RowFilter}}"
-    - ProjectedName: Total
+    - ProjectedName: ThreatType
       Query: "{{BaseQuery}} | {{RowFilter}}"
-  # Top outbound counts
-  - Filter:    "where OutboundCount > 0"
-    Summarize: "summarize Total = sum(OutboundCount) by IPAddress, RemoteIPAddress | top 1 by Total"
-    Project:   "project Direction = 'Top Out', IPAddress, RemoteIP = RemoteIPAddress, Total"
+  # Outbound TI Hits
+  - Filter:    "project IPAddress, RemoteIPAddress, OutboundCount, ThreatType"
+    Summarize: "summarize Outbound = sum(OutboundCount) by IPAddress, RemoteIPAddress, ThreatType | where Outbound > 0"
+    Project:   "project Direction = 'Out', IPAddress, RemoteIP = RemoteIPAddress, ThreatType"
     LinkColumnsDefinitions:
     - ProjectedName: Direction
       Query: "{{BaseQuery}} | {{RowFilter}}"
@@ -173,12 +176,12 @@ Insights:
       Query: "{{BaseQuery}} | {{RowFilter}}"
     - ProjectedName: RemoteIP
       Query: "{{BaseQuery}} | {{RowFilter}}"
-    - ProjectedName: Total
+    - ProjectedName: ThreatType
       Query: "{{BaseQuery}} | {{RowFilter}}"
-  # Top unknown direction counts
-  - Filter:    "where UnknownDirection > 0"
-    Summarize: "summarize Total = sum(UnknownDirection) by IPAddress, RemoteIPAddress | top 1 by Total"
-    Project:   "project Direction = 'Top Unknown', IPAddress, RemoteIP = RemoteIPAddress, Total"
+  # Direction Unknown TI Hits
+  - Filter:    "project IPAddress, RemoteIPAddress, UnknownDirection, ThreatType"
+    Summarize: "summarize UnknownCount = sum(UnknownDirection) by IPAddress, RemoteIPAddress, ThreatType | where UnknownCount > 0"
+    Project:   "project Direction = 'Unknown', IPAddress, RemoteIP = RemoteIPAddress, ThreatType"
     LinkColumnsDefinitions:
     - ProjectedName: Direction
       Query: "{{BaseQuery}} | {{RowFilter}}"
@@ -186,22 +189,26 @@ Insights:
       Query: "{{BaseQuery}} | {{RowFilter}}"
     - ProjectedName: RemoteIP
       Query: "{{BaseQuery}} | {{RowFilter}}"
-    - ProjectedName: Total
+    - ProjectedName: ThreatType
       Query: "{{BaseQuery}} | {{RowFilter}}"
-  # Inbound and Outbound connection counts
-  - Filter:    "project IPAddress, RemoteIPAddress, InboundCount, OutboundCount, UnknownDirection"
-    Summarize: "summarize Inbound = sum(InboundCount), Outbound = sum(OutboundCount), Unknown = sum(UnknownDirection), RemIPs = make_set(RemoteIPAddress) by IPAddress | extend Total = tolong(Inbound + Outbound + Unknown)"
-    Project:   "project Direction = 'All', IPAddress, RemoteIP = case(array_length(RemIPs) == 1, tostring(RemIPs[0]), array_length(RemIPs) > 1 and array_length(RemIPs) <= 100, strcat(tostring(array_length(RemIPs)),' IPs'), array_length(RemIPs) >= 101, '> 100 IPs' , 'None'), Total"
-    LinkColumnsDefinitions:
-    - ProjectedName: Direction
-      Query: "{{BaseQuery}} | {{RowFilter}}"
-    - ProjectedName: IPAddress
-      Query: "{{BaseQuery}} | {{RowFilter}}"
-    - ProjectedName: RemoteIP
-      Query: "{{BaseQuery}} | {{RowFilter}}"
-    - ProjectedName: Total
-      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Connection Count to IP in TI"
+  DataSets: 
+   - Query: "summarize Count = max(InboundCount) by Time = bin(StartTime, 1d), RemoteIPAddress = strcat(RemoteIPAddress,' - In') | where isnotempty(Count) and Count > 0"
+     XColumnName: Time
+     YColumnName: Count
+     LegendColumnName: RemoteIPAddress
+   - Query: "summarize Count = max(OutboundCount) by Time = bin(StartTime, 1d), RemoteIPAddress = strcat(RemoteIPAddress,' - Out') | where isnotempty(Count) and Count > 0"
+     XColumnName: Time
+     YColumnName: Count
+     LegendColumnName: RemoteIPAddress
+   - Query: "summarize Count = max(UnknownDirection) by Time = bin(StartTime, 1d), RemoteIPAddress = strcat(RemoteIPAddress,' - UnknownDirection') | where isnotempty(Count) and Count > 0"
+     XColumnName: Time
+     YColumnName: Count
+     LegendColumnName: RemoteIPAddress
+  Type: BarChart
 
  AdditionalQuery: 
   Text: "See All connections"
-  Query: "summarize StartTime = min(StartTime), EndTime = max(EndTime), InboundTotal = sum(InboundCount), OutboundTotal = sum(OutboundCount), ReceivedBytesTotal = sum(ReceivedBytes), SentBytesTotal = sum(SentBytes), UnknownDirectionBytesTotal = sum(UnknownDirection) by IPAddress, RemoteIPAddress, Type"
+  Query: "project StartTime, EndTime, IPAddress, RemoteIPAddress, InboundCount, OutboundCount, ReceivedBytes, SentBytes, UnknownDirection, Type, ThreatType, ThreatIntelMatch"
