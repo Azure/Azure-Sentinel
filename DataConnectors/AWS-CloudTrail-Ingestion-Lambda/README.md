@@ -22,11 +22,13 @@ To avoid additional billing and duplication:
 
 
 ## **Function Flow process**
+# **SNS Lambda Trigger:**
 **CloudTrail Logs --> AWS S3 --> AWS SNS Topic --> AWS Lambda --> Azure Log Analytics**
 ![Picture9](./Graphics/Picture9.png)
 
-**Note**  
-You can ingest any logs from AWS GuardDuty or AWS SecurityHub or AWS CloudWatch to AWS S3 at which point it will enter regular code path: AWS SNS Topic --> AWS Lambda --> Azure Log Analytics
+# **SQS Lambda Trigger:**
+**CloudTrail Logs --> AWS S3 --> AWS SQS --> AWS Lambda --> Azure Log Analytics**
+![Picture9](./Graphics/Picture11.png)
 
 ## Installation / Setup Guide
 
