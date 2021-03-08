@@ -37,7 +37,7 @@ def main(mytimer: func.TimerRequest) -> None:
 customer_id = os.environ['workspaceId'] 
 shared_key = os.envviron['workspaceKey']
 log_type = os.envviron['tableName']
-logAnalyticsUri = os.environ['logAnalyticsUri']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
 
@@ -91,6 +91,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 # Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
 
 def post_data(customer_id, shared_key, body, log_type):
+    global logAnalyticsUri
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
@@ -105,12 +106,15 @@ def post_data(customer_id, shared_key, body, log_type):
         'Log-Type': log_type,
         'x-ms-date': rfc1123date
     }
-
-    response = requests.post(logAnalyticsUri,data=body, headers=headers)
-    if (response.status_code >= 200 and response.status_code <= 299):
-        print 'Accepted'
+    try:
+        response = requests.post(logAnalyticsUri,data=body, headers=headers)
+    except Exception as err:
+        print("Error during sending events to Azure Sentinel: {}".format(err))
     else:
-        print "Response code: {}".format(response.status_code)
+        if (response.status_code >= 200 and response.status_code <= 299):
+            print("Events have been successfully sent to Azure Sentinel")
+        else:
+            print("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
 
 /* Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
