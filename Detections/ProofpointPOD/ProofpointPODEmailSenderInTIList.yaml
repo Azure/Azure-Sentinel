@@ -1,0 +1,36 @@
+id: 35a0792a-1269-431e-ac93-7ae2980d4dde
+name: ProofpointPOD - Email sender in TI list
+description: |
+  'Email sender in TI list.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_maillog_CL
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - InitialAccess
+query: |
+  let ioc_lookBack = 30d;
+  let timeframe = 1h;
+  let TI_email_List =
+  ThreatIntelligenceIndicator
+  | where TimeGenerated > ago(ioc_lookBack)
+  | where isnotempty(EmailSenderAddress)
+  | summarize make_list(EmailSenderAddress);
+  ProofpointPOD 
+  | where TimeGenerated > ago(timeframe)
+  | where isnotempty(SrcUserUpn)
+  | where SrcUserUpn in~ (TI_email_List)
+  | extend Message = "Email sender in TI list"
+  | project Message, SrcUserUpn, DstUserUpn
+  | extend AccountCustomEntity = SrcUserUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
