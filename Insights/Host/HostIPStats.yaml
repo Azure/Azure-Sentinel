@@ -175,7 +175,7 @@ BaseQuery: |
   | where SourceIp in (IpList)
   | where SourceIp != DestinationIp
   | where Direction =~ "outbound"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by HostIPAddress = SourceIp, Type, RemoteIPAddress = DestinationIp, Direction, SentBytes = tolong(BytesSent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by HostIPAddress = SourceIp, Type, RemoteIPAddress = DestinationIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
   ),
   (
   VMConnection
@@ -183,7 +183,7 @@ BaseQuery: |
   | where DestinationIp in (IpList)
   | where SourceIp != DestinationIp
   | where Direction =~ "inbound"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by HostIPAddress = DestinationIp, Type, RemoteIPAddress = SourceIp, Direction, ReceivedBytes = tolong(BytesReceived)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by HostIPAddress = DestinationIp, Type, RemoteIPAddress = SourceIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
   ),
   (
   WireData
@@ -227,7 +227,7 @@ BaseQuery: |
   | extend DestPublicIPs_s = tostring(split(DestPublicIPs_s, '|')[0])
   | where SrcIP_s != DestPublicIPs_s
   | extend Direction = "outbound"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by HostIPAddress = SrcIP_s, Type, RemoteIPAddress = DestPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by HostIPAddress = SrcIP_s, Type, RemoteIPAddress = DestPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d), ReceivedBytes = tolong(InboundBytes_d)
   ),
   (
   AzureNetworkAnalytics_CL
@@ -239,7 +239,7 @@ BaseQuery: |
   | extend SrcPublicIPs_s = tostring(split(SrcPublicIPs_s, '|')[0])
   | where DestIP_s != SrcPublicIPs_s
   | extend Direction = "inbound"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by HostIPAddress = DestIP_s, Type, RemoteIPAddress = SrcPublicIPs_s, Direction, ReceivedBytes = tolong(InboundBytes_d)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by HostIPAddress = DestIP_s, Type, RemoteIPAddress = SrcPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d), ReceivedBytes = tolong(InboundBytes_d)
   ),
   (
   CommonSecurityLog
@@ -249,7 +249,8 @@ BaseQuery: |
   //| where DeviceAction has_any ('allow', 'allowed', 'accept', 'built', 'start', 'connect', '')
   //| where not(DeviceAction has_any ('built','deny', 'denied', 'rst', 'blocked', 'teardown'))
   | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by HostIPAddress = SourceIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = DestinationIP, Direction, SentBytes = tolong(SentBytes)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') 
+  by HostIPAddress = SourceIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = DestinationIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
   ),
   (
   CommonSecurityLog
@@ -259,7 +260,8 @@ BaseQuery: |
   //| where DeviceAction has_any ('allow', 'allowed', 'accept', 'built', 'start', 'connect', '')
   //| where not(DeviceAction has_any ('built','deny', 'denied', 'rst', 'blocked', 'teardown'))
   | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by HostIPAddress = DestinationIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = SourceIP, Direction, ReceivedBytes = tolong(ReceivedBytes)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') 
+  by HostIPAddress = DestinationIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = SourceIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
   )
   );
   IpStats | join kind=leftouter Host_Account on HostIPAddress | project-away HostIPAddress1
