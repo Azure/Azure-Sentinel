@@ -41,12 +41,10 @@ relevantTechniques:
   - T1566
 query: |
 
-  let timeframe = 1d;
   let DomainNames = dynamic(["de-ma.online", "g20saudi.000webhostapp.com", "ksat20.000webhostapp.com"]);
   let EmailAddresses = dynamic(["munichconference1962@gmail.com","munichconference@outlook.de", "munichconference@outlook.com", "t20saudiarabia@gmail.com", "t20saudiarabia@hotmail.com", "t20saudiarabia@outlook.sa"]);
   (union isfuzzy=true
   (CommonSecurityLog 
-  | where TimeGenerated >= ago(timeframe)
   | parse Message with * '(' DNSName ')' * 
   | extend MessageIP = extract(IPRegex, 0, Message)
   | extend RequestURLIP = extract(IPRegex, 0, Message)
@@ -56,18 +54,15 @@ query: |
   | extend timestamp = TimeGenerated , AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName
   ),
   (DnsEvents 
-  | where TimeGenerated >= ago(timeframe) 
   | extend DestinationIPAddress = IPAddresses, DNSName = Name, Host = Computer
   | where DNSName has_any (DomainNames) 
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host),
   (VMConnection 
-  | where TimeGenerated >= ago(timeframe) 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | where isnotempty(DNSName)
   | where DNSName has_any (DomainNames)
   | extend timestamp = TimeGenerated , HostCustomEntity = Computer),
   (SecurityAlert
-  | where TimeGenerated >= ago(timeframe) 
   | where ProviderName =~ 'OATP'
   | extend UPN = case(isnotempty(parse_json(Entities)[0].Upn), parse_json(Entities)[0].Upn, 
                       isnotempty(parse_json(Entities)[1].Upn), parse_json(Entities)[1].Upn,
@@ -82,7 +77,6 @@ query: |
   | where Entities has_any (EmailAddresses)
   | extend timestamp = TimeGenerated, AccountCustomEntity = tostring(UPN)),
   (AzureDiagnostics
-  | where TimeGenerated >= ago(timeframe) 
   | where ResourceType =~ "AZUREFIREWALLS"
   | where msg_s has_any (DomainNames)
   | extend timestamp = TimeGenerated))
