@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Xunit;
 using YamlDotNet.Serialization;
 
@@ -37,8 +38,31 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
+
+            var lines = Regex.Split(queryStr, @"\n\r?");
+
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
-            Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+            var firstErrorLocation = (Line: 0, Col: 0);
+            if (!validationRes.IsValid)
+            {
+                firstErrorLocation =  GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
+            }
+            Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid in Line:{firstErrorLocation.Line} col:{firstErrorLocation.Col} Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+        }
+
+        private (int Line, int Col) GetLocationInQuery(string queryStr, int pos)
+        {
+            var lines = Regex.Split(queryStr, "\n");
+            var curlineIndex = 0;
+            var curPos = 0;
+
+            while (lines.Length > curlineIndex && pos > curPos + lines[curlineIndex].Length + 1)
+            {
+                curPos += lines[curlineIndex].Length + 1;
+                curlineIndex++;
+            }
+            var col = (pos - curPos + 1);
+            return (curlineIndex + 1, col);
         }
     }
 
