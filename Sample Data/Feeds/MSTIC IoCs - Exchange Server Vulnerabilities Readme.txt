@@ -4,8 +4,8 @@ This feed of malware hashes and known malicious file paths observed in related a
 
 This information is being shared as TLP:WHITE. 
 
-https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Feeds/MSTICIoCs-ExchangeServerVulnerabilities-March2021.csv
+https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Feeds/MSTICIoCs-ExchangeServerVulnerabilitiesDisclosedMarch2021.csv
 
-https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Feeds/MSTICIoCs-ExchangeServerVulnerabilities-March2021.json
+https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Feeds/MSTICIoCs-ExchangeServerVulnerabilitiesDisclosedMarch2021.json 
 
 If you have feedback or would like to report issues with this feed, please contact the Microsoft team at msft-exchangesrv-ti@microsoft.com.
