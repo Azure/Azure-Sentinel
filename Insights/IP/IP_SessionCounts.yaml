@@ -1,0 +1,207 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: Heartbeat
+  - DataType: VMConnection
+  - DataType: VMComputer
+  - DataType: ServiceMapComputer_CL
+  - DataType: WireData
+  - DataType: ProtectionStatus
+  - DataType: DeviceNetworkInfo
+  - DataType: DeviceNetworkEvents
+  - DataType: AzureNetworkAnalytics_CL
+  - DataType: DnsEvents
+  - DataType: CommonSecurityLog
+  - DataType: Event
+  - DataType: SecurityEvent
+  - DataType: Syslog
+EntitiesFilter: 
+ Host_OsFamily: []
+RequiredInputFieldsSets: 
+ - - IP_Address
+BaseQuery: |  
+  let GetIPStats = (IP_Address:string){
+  //checking time span to lock to 7 days or less for Entity page usage
+  let start = datetime('{{Start_Time_ISO}}');
+  let end = datetime('{{End_Time_ISO}}');
+  let end_start = datetime_diff('day',end,start);
+  let start_time = iff(end_start > 7, end - 7d, start);
+  let end_time = end;
+  let IpStats = (union isfuzzy=true
+  (
+  VMConnection
+  | where TimeGenerated between (start_time..end_time)
+  | where SourceIp =~ IP_Address
+  | where SourceIp != DestinationIp
+  | where Direction =~ "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by IPAddress = SourceIp, Type, RemoteIPAddress = DestinationIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
+  ),
+  (
+  VMConnection
+  | where TimeGenerated between (start_time..end_time)
+  | where DestinationIp =~ IP_Address
+  | where SourceIp != DestinationIp
+  | where Direction =~ "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by IPAddress = DestinationIp, Type, RemoteIPAddress = SourceIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
+  ),
+  (
+  WireData
+  | where TimeGenerated between (start_time..end_time)
+  | where LocalIP =~ IP_Address
+  | where LocalIP != RemoteIP
+  | where Direction =~ "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by IPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
+  ),
+  (
+  WireData
+  | where TimeGenerated between (start_time..end_time)
+  | where RemoteIP =~ IP_Address
+  | where LocalIP != RemoteIP
+  | where Direction =~ "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by IPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
+  ),
+  (
+  DeviceNetworkEvents
+  | where TimeGenerated between (start_time..end_time)
+  | where LocalIP =~ IP_Address
+  | where LocalIP != RemoteIP
+  | extend Direction = "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess") by IPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
+  ),
+  (
+  DeviceNetworkEvents
+  | where TimeGenerated between (start_time..end_time)
+  | where RemoteIP =~ IP_Address
+  | where LocalIP != RemoteIP
+  | extend Direction = "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by IPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where TimeGenerated between (start_time..end_time)
+  | where SrcIP_s =~ IP_Address
+  | where isnotempty(SrcIP_s) and isnotempty(DestPublicIPs_s)
+  | extend DestPublicIPs_s = split(DestPublicIPs_s, ' ')
+  | mv-expand DestPublicIPs_s
+  | extend DestPublicIPs_s = tostring(split(DestPublicIPs_s, '|')[0])
+  | where SrcIP_s != DestPublicIPs_s
+  | extend Direction = "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by IPAddress = SrcIP_s, Type, RemoteIPAddress = DestPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d), ReceivedBytes = tolong(InboundBytes_d)
+  ),
+  (
+  AzureNetworkAnalytics_CL
+  | where TimeGenerated between (start_time..end_time)
+  | where DestIP_s =~ IP_Address
+  | where isnotempty(DestIP_s) and isnotempty(SrcPublicIPs_s)
+  | extend SrcPublicIPs_s = split(SrcPublicIPs_s, ' ')
+  | mv-expand SrcPublicIPs_s
+  | extend SrcPublicIPs_s = tostring(split(SrcPublicIPs_s, '|')[0])
+  | where DestIP_s != SrcPublicIPs_s
+  | extend Direction = "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by IPAddress = DestIP_s, Type, RemoteIPAddress = SrcPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d), ReceivedBytes = tolong(InboundBytes_d)
+  ),
+  (
+  CommonSecurityLog
+  | where TimeGenerated between (start_time..end_time)
+  | where SourceIP =~ IP_Address
+  | where SourceIP != DestinationIP
+  //| where DeviceAction has_any ('allow', 'allowed', 'accept', 'built', 'start', 'connect', '')
+  //| where not(DeviceAction has_any ('built','deny', 'denied', 'rst', 'blocked', 'teardown'))
+  | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by IPAddress = SourceIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = DestinationIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
+  ),
+  (
+  CommonSecurityLog
+  | where TimeGenerated between (start_time..end_time)
+  | where DestinationIP =~ IP_Address
+  | where SourceIP != DestinationIP
+  //| where DeviceAction has_any ('allow', 'allowed', 'accept', 'built', 'start', 'connect', '')
+  //| where not(DeviceAction has_any ('built','deny', 'denied', 'rst', 'blocked', 'teardown'))
+  | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by IPAddress = DestinationIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = SourceIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
+  )
+  );
+  IpStats
+  };
+  GetIPStats('{{IP_Address}}')
+
+Insights:
+ Id: b8e2df44-f98f-4c95-bcbe-f8210f3e0f23
+ DisplayName: "IP address remote connections"
+ Description: |
+  'Provides the remote IP connection count information for outbound and inbound connections to an IP address. Note due to potential performance impact, data is limited to a 7 day max window.'
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Direction"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: "IPAddress"
+    OutputType: String
+    SupportDeepLink: true
+  - Header: "RemoteIP/Count"
+    OutputType: String
+    SupportDeepLink: true
+  - Header: "Total"
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+  # Top inbound counts
+  - Filter:    "where InboundCount > 0"
+    Summarize: "summarize Total = sum(InboundCount) by IPAddress, RemoteIPAddress | top 1 by Total"
+    Project:   "project Direction = 'Top In', IPAddress, RemoteIP = RemoteIPAddress, Total"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Total
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Top outbound counts
+  - Filter:    "where OutboundCount > 0"
+    Summarize: "summarize Total = sum(OutboundCount) by IPAddress, RemoteIPAddress | top 1 by Total"
+    Project:   "project Direction = 'Top Out', IPAddress, RemoteIP = RemoteIPAddress, Total"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Total
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Top unknown direction counts
+  - Filter:    "where UnknownDirection > 0"
+    Summarize: "summarize Total = sum(UnknownDirection) by IPAddress, RemoteIPAddress | top 1 by Total"
+    Project:   "project Direction = 'Top Unknown', IPAddress, RemoteIP = RemoteIPAddress, Total"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Total
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Inbound and Outbound connection counts
+  - Filter:    "project IPAddress, RemoteIPAddress, InboundCount, OutboundCount, UnknownDirection"
+    Summarize: "summarize Inbound = sum(InboundCount), Outbound = sum(OutboundCount), Unknown = sum(UnknownDirection), RemIPs = make_set(RemoteIPAddress) by IPAddress | extend Total = tolong(Inbound + Outbound + Unknown)"
+    Project:   "project Direction = 'All', IPAddress, RemoteIP = case(array_length(RemIPs) == 1, tostring(RemIPs[0]), array_length(RemIPs) > 1 and array_length(RemIPs) <= 100, strcat(tostring(array_length(RemIPs)),' IPs'), array_length(RemIPs) >= 101, '> 100 IPs' , 'None'), Total"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Total
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ AdditionalQuery: 
+  Text: "See All connections"
+  Query: "summarize StartTime = min(StartTime), EndTime = max(EndTime), InboundTotal = sum(InboundCount), OutboundTotal = sum(OutboundCount), ReceivedBytesTotal = sum(ReceivedBytes), SentBytesTotal = sum(SentBytes), UnknownDirectionBytesTotal = sum(UnknownDirection) by IPAddress, RemoteIPAddress, Type"
