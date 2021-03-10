@@ -41,6 +41,9 @@ function CarbonBlackAPI()
     $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time)).ToString("yyyy-MM-ddTHH:mm:ssZ")
     $now = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+    # Remove if addition slash or space added in hostName
+    $hostName = $hostName.Trim() -replace "[.*/]$",""
+
     $authHeaders = @{
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
@@ -59,6 +62,11 @@ function CarbonBlackAPI()
             Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
         }
     }
+    else
+    {
+        Write-Host "AuditLogsResult API status failed , Please check."
+    }
+
     if ($eventsResult.success -eq $true)
     {
         $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
@@ -70,7 +78,11 @@ function CarbonBlackAPI()
         {
             Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
         }
-      }
+    }
+    else
+    {
+        Write-Host "EventsResult API status failed , Please check."
+    }
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
     {   
@@ -91,8 +103,11 @@ function CarbonBlackAPI()
             {
                     Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
             }
-                 
-        }      
+        }
+        else
+        {
+            Write-Host "Notifications API status failed , Please check."
+        }
     }    
 }
 
