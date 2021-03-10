@@ -1,0 +1,52 @@
+// Title:           Tenable Vulnerability API
+// Author:          Netrix LLC - Rich Lilly
+// Version:         1.0
+// Last Updated:    3/10/2021
+// Comment:         Initial Release
+//  
+// DESCRIPTION:
+// This parser takes raw Tenable logs from the Vulnerability Cloud API and parses the logs into a normalized schema.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    It is recommended to name the Function Alias, as Tenable_Vulns_List
+// 3. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+//
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+//{
+//      "count": 12,
+//      "plugin_family": "Windows",
+//      "plugin_id": 10736,
+//      "plugin_name": "DCE Services Enumeration",
+//      "vulnerability_state": "New",
+//      "accepted_count": 0,
+//      "recasted_count": 0,
+//      "counts_by_severity": [
+//        {
+//          "count": 12,
+//          "value": 0
+//        }
+//      ],
+//      "severity": 0
+//    }
+//
+let Sev = datatable (Severity:int, SeverityType:string)
+    ["4", "Critical",
+     "3", "High",
+     "2", "Medium",
+     "1", "Low",
+     "0", "Info"] ;
+let Vulns = Tenable_Vulns_List_CL
+| extend Severity = toint(severity_s)
+| project TimeGenerated, VulnID=VulnID_s, AssetID=AssetID_g, VulnName=VulnName_s, plugin_family=plugin_family_s, Severity, IP=IP_s, FQDN=fqdn_s, State=State_s;
+Sev
+| join (
+    Vulns
+) on Severity
+| project TimeGenerated, AssetID, VulnID, VulnName, plugin_family, SeverityType
