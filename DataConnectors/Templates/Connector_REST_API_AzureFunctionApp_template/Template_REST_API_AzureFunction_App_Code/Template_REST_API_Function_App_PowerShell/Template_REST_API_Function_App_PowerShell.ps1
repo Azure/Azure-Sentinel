@@ -115,9 +115,20 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "time-generated-field" = $TimeStampField;
     }
 
-    $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
-    return $response.StatusCode
+    try {
+        $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    }
+    catch {
+        Write-Error "Error during sending logs to Azure Sentinel: $_.Exception.Message"
+    }
+    if ($response.StatusCode -eq 200) {
+        Write-Host "Logs have been successfully sent to Azure Sentinel."
+    }
+    else {
+        Write-Host "Error during sending logs to Azure Sentinel. Response code : $response.StatusCode"
+    }
 
+    return $response.StatusCode
 }
 
 <# Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API

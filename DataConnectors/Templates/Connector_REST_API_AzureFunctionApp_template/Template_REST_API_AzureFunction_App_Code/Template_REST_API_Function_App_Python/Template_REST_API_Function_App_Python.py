@@ -109,12 +109,12 @@ def post_data(customer_id, shared_key, body, log_type):
     try:
         response = requests.post(logAnalyticsUri,data=body, headers=headers)
     except Exception as err:
-        print("Error during sending events to Azure Sentinel: {}".format(err))
+        print("Error during sending logs to Azure Sentinel: {}".format(err))
     else:
         if (response.status_code >= 200 and response.status_code <= 299):
-            print("Events have been successfully sent to Azure Sentinel")
+            print("logs have been successfully sent to Azure Sentinel.")
         else:
-            print("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+            print("Error during sending logs to Azure Sentinel. Response code: {}".format(response.status_code))
 
 /* Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
