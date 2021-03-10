@@ -66,11 +66,20 @@ $webclient.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCrede
 ```
 
 ### Create the Lambda Function
-To deploy the PowerShell script, you can create a Package (zip file) to upload to the AWS console or you can use the Publish-AWSPowerShell cmdlet.
-```powershell
-Publish-AWSPowerShellLambda -Name YourLambdaNameHere -ScriptPath <path>/IngestCloudTrailEventsToSentinel.ps1 -Region <region> -IAMRoleArn <arn of role created earlier> -ProfileName <profile>
-```
-You might need –ProfileName if your configuration of .aws/credentials file doesn't contain a default.  See this document for information on setting up your AWS credentials. 
+1.	```Get-AWSPowerShellLambdaTemplate```
+2.	```New-AWSPowerShellLambda -ScriptName IngestCloudTrailEventsToSentinel -Template S3EventToSNS```  
+	OR  
+	```New-AWSPowerShellLambda -ScriptName IngestCloudTrailEventsToSentinel -Template S3EventToSQS```  
+3.	Copy the PowerShell code from https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AWS-CloudTrail-Ingestion-Lambda/SNS-Lambda-Trigge/IngestCloudTrailEventsToSentinel.ps1  
+
+5.	Paste in your code file created from Step #2  
+6.	Go to script file folder  
+7.	```Publish-AWSPowerShellLambda -Name YourLambdaNameHere -ScriptPath <path>/IngestCloudTrailEventsToSentinel.ps1 -Region <region> -IAMRoleArn <arn of role created earlier> -ProfileName <profile>```  
+	
+	Ex: ```Publish-AWSPowerShellLambda -ScriptPath .\IngestCloudTrailEventsToSentinel.ps1 -Name  IngestCloudTrailEventsToSentinel -Region us-east-2```
+
+You might need –ProfileName if your configuration of .aws/credentials file doesn't contain a default.  See this [document](https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) for information on setting up your AWS credentials.
+ 
 
 ### **Option 2**
 1.	Create a new AWS Lambda and select "Author from scratch"
