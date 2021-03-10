@@ -10,7 +10,7 @@ Many organizations have an on-premises Active Directory infrastructure that is s
 
 <em> Before you begin review the pre-requisites of deploying a Hybrid Runbook Worker here: [ https://docs.microsoft.com/azure/automation/automation-windows-hrw-install ] </em>
 
-Create an Automation Account and link it with the Log Analytics Workspace
+Create an Automation Account 
 
 
 i.	Create an Automation Account from the Azure Portal
