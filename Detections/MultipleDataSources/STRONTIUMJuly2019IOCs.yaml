@@ -38,7 +38,19 @@ query: |
   | extend IPAddress = ClientIP, DNSName = Name, Host = Computer),
   (VMConnection 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | extend IPAddress = RemoteIp, Host = Computer)
+  | extend IPAddress = RemoteIp, Host = Computer),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost)
   )
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
