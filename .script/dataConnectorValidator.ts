@@ -72,19 +72,19 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
             return "";
         }
 
-        let fileTypeSuffixes = ["json"];
-        let filePathFolderPrefixes = ["DataConnectors"];
-        let fileKinds = ["Added", "Modified"];
-        let CheckOptions = {
-            onCheckFile: (filePath: string) => {
-                return IsValidDataConnectorSchema(filePath);
-            },
-            onExecError: async (e: any, filePath: string) => {
-                console.log(`Data Connector Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
-            },
-            onFinalFailed: async () => {
-                logger.logError("An error occurred, please open an issue");
-            },
-        };
+let fileTypeSuffixes = ["json"];
+let filePathFolderPrefixes = ["DataConnectors","Solutions"];
+let fileKinds = ["Added", "Modified"];
+let CheckOptions = {
+  onCheckFile: (filePath: string) => {
+    return IsValidDataConnectorSchema(filePath);
+  },
+  onExecError: async (e: any, filePath: string) => {
+    console.log(`Data Connector Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
+  },
+  onFinalFailed: async () => {
+    logger.logError("An error occurred, please open an issue");
+  },
+};
 
         runCheckOverChangedFiles(CheckOptions, fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
