@@ -6,6 +6,7 @@ import logging
 from dateutil.parser import parse as parse_date
 import datetime
 import azure.functions as func
+import re
 
 from .sentinel_connector_async import AzureSentinelMultiConnectorAsync
 from .state_manager import StateManager
@@ -24,6 +25,17 @@ CONTAINER_NAME = os.environ['CONTAINER_NAME']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
+
+
+LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
+
+if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
+    LOG_ANALYTICS_URI = 'https://' + WORKSPACE_ID + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern, str(LOG_ANALYTICS_URI))
+if not match:
+    raise Exception("Invalid Log Analytics Uri.")
 
 
 async def main(mytimer: func.TimerRequest):
@@ -77,7 +89,7 @@ class AzureBlobStorageConnector:
         self.semaphore = asyncio.Semaphore(queue_max_size)
         self.blobs = []
         self.log_type = LOG_TYPE
-        self.sentinel = AzureSentinelMultiConnectorAsync(WORKSPACE_ID, SHARED_KEY, queue_size=10000)
+        self.sentinel = AzureSentinelMultiConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
         self._processed_blobs = []
 
     def _create_container_client(self):

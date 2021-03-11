@@ -10,7 +10,8 @@ from collections import deque
 
 
 class AzureSentinelConnectorAsync:
-    def __init__(self, workspace_id, shared_key, log_type, queue_size=1000, queue_size_bytes=25 * (2**20)):
+    def __init__(self, log_analytics_uri, workspace_id, shared_key, log_type, queue_size=1000, queue_size_bytes=25 * (2**20)):
+        self.log_analytics_uri = log_analytics_uri
         self.workspace_id = workspace_id
         self.shared_key = shared_key
         self.log_type = log_type
@@ -60,7 +61,7 @@ class AzureSentinelConnectorAsync:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(workspace_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        uri = 'https://' + workspace_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+        uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
 
         headers = {
             'content-type': content_type,
@@ -93,7 +94,8 @@ class AzureSentinelConnectorAsync:
 
 
 class AzureSentinelMultiConnectorAsync:
-    def __init__(self, workspace_id, shared_key, queue_size=1000, queue_size_bytes=25 * (2**20)):
+    def __init__(self, log_analytics_uri, workspace_id, shared_key, queue_size=1000, queue_size_bytes=25 * (2**20)):
+        self.log_analytics_uri = log_analytics_uri
         self.workspace_id = workspace_id
         self.shared_key = shared_key
         self.queue_size = queue_size
@@ -102,7 +104,7 @@ class AzureSentinelMultiConnectorAsync:
 
     async def send(self, event, log_type):
         if log_type not in self.connectors:
-            self.connectors[log_type] = AzureSentinelConnectorAsync(self.workspace_id, self.shared_key, log_type, self.queue_size, self.queue_size_bytes)
+            self.connectors[log_type] = AzureSentinelConnectorAsync(self.log_analytics_uri, self.workspace_id, self.shared_key, log_type, self.queue_size, self.queue_size_bytes)
         conn = self.connectors[log_type]
         await conn.send(event)
 
