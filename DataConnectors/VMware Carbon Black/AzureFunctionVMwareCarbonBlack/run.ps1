@@ -57,7 +57,6 @@ function CarbonBlackAPI()
         throw "VMware Carbon Black: Invalid Log Analytics Uri."
     }    
 
-
     $authHeaders = @{
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
