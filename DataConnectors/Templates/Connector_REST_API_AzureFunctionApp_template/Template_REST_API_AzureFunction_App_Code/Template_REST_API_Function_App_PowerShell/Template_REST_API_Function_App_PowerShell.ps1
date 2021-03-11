@@ -120,6 +120,8 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     }
     catch {
         Write-Error "Error during sending logs to Azure Sentinel: $_.Exception.Message"
+        # Exit out of context
+        Exit
     }
     if ($response.StatusCode -eq 200) {
         Write-Host "Logs have been successfully sent to Azure Sentinel."
