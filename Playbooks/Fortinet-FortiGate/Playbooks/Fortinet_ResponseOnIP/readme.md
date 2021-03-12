@@ -24,8 +24,7 @@ This playbook allows the SOC users to automatically response to Azure Sentinel i
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlayBook%2FFortinet_ResponseOnIP%2Fazuredeploy.json&version=GBFortinet) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlayBook%2FFortinet_ResponseOnIP%2Fazuredeploy.json&version=GBFortinet) 
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FFortinet-FortiGate%2FPlaybooks%2FFortinet_ResponseOnIP%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FFortinet-FortiGate%2FPlaybooks%2FFortinet_ResponseOnIP%2Fazuredeploy.json)
 
 2. Fill the required parameters:
     * Playbook Name: Enter the playbook name here (ex:Fortinet_ResponseOnIP)
