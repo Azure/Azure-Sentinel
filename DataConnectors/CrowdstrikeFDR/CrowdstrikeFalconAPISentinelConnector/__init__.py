@@ -136,14 +136,14 @@ def post_data(body,chunk_count):
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    logAnalyticsUri = logAnalyticsUri + resource + "?api-version=2016-04-01"
+    uri = logAnalyticsUri + resource + "?api-version=2016-04-01"
     headers = {
         'content-type': content_type,
         'Authorization': signature,
         'Log-Type': log_type,
         'x-ms-date': rfc1123date
     }
-    response = requests.post(logAnalyticsUri,data=body, headers=headers)
+    response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
         processed_messages_success = processed_messages_success + chunk_count
         logging.info("Chunk with {} events was processed and uploaded to Azure".format(chunk_count))
@@ -169,6 +169,7 @@ def main(mytimer: func.TimerRequest)  -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
     logging.info('Starting program')
+    logging.info(logAnalyticsUri)
     global files_for_handling
     files_for_handling = []
     get_sqs_messages()
