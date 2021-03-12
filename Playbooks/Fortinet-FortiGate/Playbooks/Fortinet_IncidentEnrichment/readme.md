@@ -2,9 +2,9 @@
 
 ## Summary
 This playbook enriches the incident with address object and address group.
- [Learn more about Threat Intelligence in Fortinet enrichment](https://www.fortinet.com/fortiguard/threat-intelligence/threat-research)
 
- ![Fortinet](./Enrichment.png)<br>
+![Fortinet](./Inicdent_Enrichment.PNG)<br>
+ ![Fortinet](./Enrichment.PNG)<br>
 
 When a new Azure Sentinel is created, this playbook gets triggered and performs below actions:
 - It fetches details of the address object.
@@ -31,7 +31,7 @@ When a new Azure Sentinel is created, this playbook gets triggered and performs 
     * Managed Identities Name: Enter the managed identity name (ex: managed identities name).
 
 ### Post-Deployment instructions 
-####a. Authorize connections
+#### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.  Click the Azure Sentinel connection resource
 2.  Click edit API connection
@@ -39,7 +39,7 @@ Once deployment is complete, you will need to authorize each connection.
 4.  Sign in
 5.  Click Save
 
-####b. Configurations in Sentinel
+#### b. Configurations in Sentinel
 - In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 - Configure the automation rules to trigger this playbook
 
@@ -49,7 +49,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 - Capture IP and check for existence and if IP does not exist, create an address object for IP's
 
-###For each-malicious IP received from the incident
+### For each-malicious IP received from the incident
 Iterates on the IPs found in this incident (probably one) and performs the following:
 - Fetches the address object details
 - Retrieve the address groups details
@@ -58,7 +58,7 @@ Iterates on the IPs found in this incident (probably one) and performs the follo
 
 ## Enrich Incident with address object and address groups details look as follows
 
- ![Fortinet](./Inicdent_Enrichment.png)<br>
+ ![Fortinet](./Inicdent_Enrichment.PNG)<br>
     
 ## Known Issues and Limitations
 - When pre-defined group reaches the max limit user must create the new pre-defined group and change in the play book

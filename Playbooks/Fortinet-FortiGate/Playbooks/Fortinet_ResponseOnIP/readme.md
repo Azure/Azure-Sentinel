@@ -8,11 +8,13 @@ This playbook allows the SOC users to automatically response to Azure Sentinel i
 ![Fortinet](./DesginerIPResponse.png)<br>
 
 
-**This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore ::**<br><br>
-![Fortinet](./ResponseOnIpAdaptivecard.png)<br>
+**This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore:**<br><br>
+![Fortinet](./ResponseOnIPAdaptiveCard.PNG)<br>
 
-**This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration ::**<br><br>
-![Consolidated Adaptive Card example](./FortinetSummaryAdaptiveCard.PNG)<br>
+**This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration:**<br><br>
+![Consolidated Adaptive Card example](./FortinetSummaryAdaptivecard.PNG)<br>
+
+![Fortinet](./CommentOnIPIncident.PNG)<br>
 
 ### Prerequisites 
 - Sentinel IP block group should create in the VM
@@ -56,7 +58,7 @@ Once deployment is complete, you will need to authorize each connection.
 1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
-##Playbook steps explained
+## Playbook steps explained
 
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
@@ -102,7 +104,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 ## Incident will comment as follows
 
-![Fortinet](./CommentOnIPIncident.png)<br>
+![Fortinet](./CommentOnIPIncident.PNG)<br>
 
 ## Known Issues and Limitations
 
