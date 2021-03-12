@@ -8,7 +8,7 @@
 
 1. [Overview](#overview)
 1. [Deploy Custom Connector + Function App + 3 Playbook templates](#deployall)
-1. [Authentication](#importantnotes)
+1. [Authentication](#authentication)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post Deployment Steps](#postdeployment)
@@ -21,16 +21,19 @@
 
 FortiGate, a next-generation firewall from IT Cyber Security leaders Fortinet, provides the ultimate threat protection for businesses of all sizes. This integration is built over the FortiOS REST API which allows you to perform configuration and monitoring operations on a FortiGate appliance or VM. 
 
+<a name="deployall">
+
 ## Deploy Custom Connector+ Function App + 3 Playbook templates
 This package includes:
-* [Function App]((./FunctionApp)) for Fortinet
-* [Custom connector](./CustomConnector) for Fortinet
+* [Custom connector](./CustomConnector) 
+* [Function App]((./FunctionApp)) 
 * Three playbook templates leverage fortinet custom connector and Function App:
   * [Block IP](./Playbooks/FortinetFortiGate-ResponseOnIP)
   * [Block URL](./Playbooks/FortinetFortiGate-ResponseOnURL)
   * [Enrich incident](./Playbooks/FortinetFortiGate-Enrichment)
+  
+*The Azure Function handles the Get calls on FortiOS API in the playbook templates. These calls are not part of the custom connector due to platform limitations.*
 
-*Due to platform limitations, Get calls are not part of a custom connector and require an Azure Function*
 
 You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one seperately from it's specific folder.
 
@@ -52,12 +55,13 @@ Authentication methods this connector supports- [API Key authentication](https:/
 - Create the key vaults and capture secret identifier
 - Create the managed identity and capture name
 
-
+<a name="deployment">
+ 
 ### Deployment instructions 
 - Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters for deploying custom connector and playbooks
 
-### Deployment instructions
+#### Parameters
 
 | Parameter  | Description |
 | ------------- | ------------- |
