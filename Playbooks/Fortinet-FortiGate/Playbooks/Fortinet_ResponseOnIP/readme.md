@@ -102,7 +102,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 ## Incident will comment as follows
 
-![Fortinet](./CommentOnIPIncident.png)<br>
+![Fortinet](./CommentOnIPIncident.PNG)<br>
 
 ## Known Issues and Limitations
 
