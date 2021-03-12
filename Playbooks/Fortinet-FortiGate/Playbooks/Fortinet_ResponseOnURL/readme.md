@@ -9,10 +9,10 @@ This playbook allows the SOC users to automatically response to Azure Sentinel i
 
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore ::**<br><br>
-![Fortinet](./ResponseOnURLAdaptiveCard.png)<br>
+![Fortinet](./ResponseOnURLAdaptiveCard.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration ::**<br><br>
-![Consolidated Adaptive Card example](./FortinetSummaryAdaptiveCardURL.PNG)<br>
+![Consolidated Adaptive Card example](./FortinetSummaryAdaptivecardURL.PNG)<br>
 
 
 ### Prerequisites 
@@ -102,7 +102,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 ## Incident will comment as follows
 
-![Fortinet](./CommentOnURLIncident.png)<br>
+![Fortinet](./CommentOnURLIncident.PNG)<br>
 
 ## Known Issues and Limitations
 
