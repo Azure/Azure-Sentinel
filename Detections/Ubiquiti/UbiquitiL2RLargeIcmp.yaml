@@ -1,0 +1,38 @@
+id: fd200125-9d57-4838-85ca-6430c63e4e5d
+name: Ubiquiti - Large ICMP to external server
+description: |
+  'Detects large ICMP packets to external host.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Ubiquiti
+    dataTypes:
+      - Ubiquiti_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+query: |
+  let lbtime_60d = 60d;
+  UbiquitiAuditEvent
+  | where EventCategory == 'firewall'
+  | where ipv4_is_private(SrcIpAddr)
+  | where ipv4_is_private(DstIpAddr) == 'False'
+  | where NetworkProtocol =~ 'ICMP'
+  | summarize avg_packet_length = avg(toint(NetworkBytes))
+  | extend a = 1
+  | join (UbiquitiAuditEvent
+    | where EventCategory == 'firewall'
+    | where ipv4_is_private(SrcIpAddr)
+    | where ipv4_is_private(DstIpAddr) == 'False'
+    | where NetworkProtocol =~ 'ICMP'
+    | extend a = 1) on a
+  | where toint(NetworkBytes) > 2*avg_action_length
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

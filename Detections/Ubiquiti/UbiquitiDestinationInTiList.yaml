@@ -1,0 +1,35 @@
+id: db60ca0b-b668-439b-b889-b63b57ef20fb
+name: Ubiquiti - Connection to known malicious IP or C2
+description: |
+  'Detects allowed connections to IP addresses which are in TI list and are known to be malicious.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Ubiquiti
+    dataTypes:
+      - Ubiquiti_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+query: |
+  let ioc_lookback = 30d;
+  let malicious_ips =
+  ThreatIntelligenceIndicator
+  | where TimeGenerated > ago(ioc_lookback)
+  | where isnotempty(NetworkIP)
+  | summarize make_list(NetworkIP);
+  UbiquitiAuditEvent
+  | where EventCategory == 'firewall'
+  | where ipv4_is_private(SrcIpAddr)
+  | where ipv4_is_private(DstIpAddr) == 'False'
+  | where DstIpAddr in (malicious_ips)
+  | where DvcAction == 'Accepted'
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
