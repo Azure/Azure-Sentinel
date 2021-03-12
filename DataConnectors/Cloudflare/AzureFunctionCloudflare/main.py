@@ -9,7 +9,7 @@ import azure.functions as func
 import re
 
 from .sentinel_connector_async import AzureSentinelMultiConnectorAsync
-from .state_manager import StateManager
+from .state_manager import StateManagerAsync
 
 
 # interval of script execution
@@ -40,10 +40,10 @@ if not match:
 
 async def main(mytimer: func.TimerRequest):
     checkpoint_manager = CheckpointManager(conn_string=os.environ['AzureWebJobsStorage'])
-
-    script_is_active = checkpoint_manager.script_is_active()
-    last_date = checkpoint_manager.get_last_date()
-    exclude_files = checkpoint_manager.get_exclude_files()
+    script_is_active = await checkpoint_manager.script_is_active()
+    last_date = await checkpoint_manager.get_last_date()
+    exclude_files = await checkpoint_manager.get_exclude_files()
+    include_files = await checkpoint_manager.get_include_files()
     now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
 
     if last_date and (now - last_date).seconds > MAX_SCRIPT_EXEC_TIME_MINUTES * 60:
@@ -59,10 +59,10 @@ async def main(mytimer: func.TimerRequest):
     print('Getting files updated after {}'.format(last_date))
     logging.info('Getting files updated after {}'.format(last_date))
 
-    checkpoint_manager.mark_script_as_active()
+    await checkpoint_manager.mark_script_as_active()
 
     conn = AzureBlobStorageConnector(AZURE_STORAGE_CONNECTION_STRING, CONTAINER_NAME)
-    await conn.get_blobs(updated_after=last_date, exclude_files=exclude_files)
+    await conn.get_blobs(updated_after=last_date, exclude_files=exclude_files, include_files=include_files)
     await conn.process_blobs()
 
     message = 'Program finished. {} events have been sent. {} events have not been sent'.format(
@@ -77,12 +77,9 @@ async def main(mytimer: func.TimerRequest):
     if conn.has_errors():
         raise Exception('Program finished with errors')
 
-    checkpoint_manager.post_last_date(conn.get_last_blob_date())
-    checkpoint_manager.post_exclude_files(conn.get_last_date_blob_names())
-
     await conn.delete_old_blobs()
 
-    checkpoint_manager.mark_script_as_inactive()
+    await checkpoint_manager.mark_script_as_inactive()
 
 
 class AzureBlobStorageConnector:
@@ -94,18 +91,27 @@ class AzureBlobStorageConnector:
         self.log_type = LOG_TYPE
         self.sentinel = AzureSentinelMultiConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
         self._processed_blobs = []
+        self._processed_blob_names = set()
         self._blobs_to_delete = []
+        self.checkpoint_manager = CheckpointManager(conn_string=os.environ['AzureWebJobsStorage'])
+        self.checkpoint_lock = asyncio.Lock()
+        self.last_saved_date = None
+        self.last_saved_exclude_files = None
+        self.last_saved_include_files = set()
 
     def _create_container_client(self):
         return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False)
 
-    async def get_blobs(self, updated_after: datetime.datetime, exclude_files: list):
+    async def get_blobs(self, updated_after: datetime.datetime, exclude_files: list, include_files: set):
         print('Start getting blobs')
         logging.info('Start getting blobs')
         container_client = self._create_container_client()
         async with container_client:
             async for blob in container_client.list_blobs():
                 if 'ownership-challenge' in blob['name']:
+                    continue
+                if blob['name'] in include_files:
+                    self.blobs.append(blob)
                     continue
                 if updated_after and blob['last_modified'] < updated_after:
                     self._blobs_to_delete.append(blob)
@@ -147,10 +153,33 @@ class AzureBlobStorageConnector:
                     await self.sentinel.send(event, log_type=self.log_type)
             print("Finish processing {}".format(blob['name']))
             logging.info("Finish processing {}".format(blob['name']))
-            self._processed_blobs.append(blob)
-
+            await self.save_checkpoint(blob)
+            
     def has_errors(self):
         return len(self._processed_blobs) != len(self.blobs)
+
+    async def save_checkpoint(self, blob):
+        async with self.checkpoint_lock:
+            self._processed_blobs.append(blob)
+            self._processed_blob_names.add(blob['name'])
+            include_files = self.get_not_processed_files_names()
+            last_date = self.get_last_blob_date()
+            exlude_files = self.get_last_date_blob_names()
+            cors = []
+            if not self.last_saved_date or self.last_saved_date <= last_date:
+                cors.append(self.checkpoint_manager.post_last_date(last_date))
+            if self.last_saved_exclude_files != exlude_files:
+                cors.append(self.checkpoint_manager.post_exclude_files(exlude_files))
+            if self.last_saved_include_files != include_files:
+                cors.append(self.checkpoint_manager.post_include_files(include_files))
+
+            if cors:
+                await asyncio.wait(cors)
+                self.last_saved_date = last_date
+                self.last_saved_exclude_files = exlude_files
+                self.last_saved_include_files = include_files
+                print('Checkpoint {} saved'.format(last_date))
+                logging.info('Checkpoint {} saved'.format(last_date))
 
     def get_last_blob_date(self):
         if self._processed_blobs:
@@ -166,53 +195,61 @@ class AzureBlobStorageConnector:
                 names.append(b['name'])
         return names
 
+    def get_not_processed_files_names(self):
+        return set([x['name'] for x in self.blobs if x['name'] not in self._processed_blob_names])
+
 
 class CheckpointManager:
     def __init__(self, conn_string):
-        self.last_date_state_manager = StateManager(connection_string=conn_string, file_path='last_date')
-        self.exclude_files_state_manager = StateManager(connection_string=conn_string, file_path='exclude_files')
-        self.exec_marker_state_manager = StateManager(connection_string=conn_string, file_path='exec_marker')
+        self.last_date_state_manager = StateManagerAsync(connection_string=conn_string, file_path='last_date')
+        self.exclude_files_state_manager = StateManagerAsync(connection_string=conn_string, file_path='exclude_files')
+        self.exec_marker_state_manager = StateManagerAsync(connection_string=conn_string, file_path='exec_marker')
+        self.include_files_state_manager = StateManagerAsync(connection_string=conn_string, file_path='include_files')
 
-    def get_last_date(self):
-        res = self.last_date_state_manager.get()
+    async def get_last_date(self):
+        res = await self.last_date_state_manager.get()
         if res:
             return parse_date(res)
 
-    def post_last_date(self, date: datetime.datetime):
+    async def post_last_date(self, date: datetime.datetime):
         if date:
-            self.last_date_state_manager.post(date.isoformat())
-            print('Checkpoint date saved - {}'.format(date))
-            logging.info('Checkpoint date saved - {}'.format(date))
-        else:
-            print('Checkpoint date not saved. Nothing to save')
-            logging.info('Checkpoint date not saved. Nothing to save')
+            await self.last_date_state_manager.post(date.isoformat())
 
-    def get_exclude_files(self):
-        res = self.exclude_files_state_manager.get()
+    async def get_exclude_files(self):
+        res = await self.exclude_files_state_manager.get()
         if res:
             return [row.strip() for row in res.split('\n') if row.strip()]
         else:
             return []
 
-    def post_exclude_files(self, exclude_files: list):
+    async def post_exclude_files(self, exclude_files: list):
         if exclude_files:
             data = '\n'.join(exclude_files)
-            self.exclude_files_state_manager.post(data)
-            print('Exclude files saved - {}'.format(exclude_files))
-            logging.info('Exclude files saved - {}'.format(exclude_files))
-        else:
-            print('Exclude files not saved. Nothing to save')
-            logging.info('Exclude files not saved. Nothing to save')
+            await self.exclude_files_state_manager.post(data)
 
-    def script_is_active(self):
-        res = self.exec_marker_state_manager.get()
+    async def script_is_active(self):
+        res = await self.exec_marker_state_manager.get()
         if res == '1':
             return True
         else:
             return False
 
-    def mark_script_as_inactive(self):
-        self.exec_marker_state_manager.post('0')
+    async def mark_script_as_inactive(self):
+        await self.exec_marker_state_manager.post('0')
 
-    def mark_script_as_active(self):
-        self.exec_marker_state_manager.post('1')
+    async def mark_script_as_active(self):
+        await self.exec_marker_state_manager.post('1')
+
+    async def get_include_files(self):
+        res = await self.include_files_state_manager.get()
+        if res:
+            return set([row.strip() for row in res.split('\n') if row.strip()])
+        else:
+            return set()
+
+    async def post_include_files(self, include_files: list):
+        if include_files:
+            data = '\n'.join(include_files)
+        else:
+            data = ''
+        await self.include_files_state_manager.post(data)
