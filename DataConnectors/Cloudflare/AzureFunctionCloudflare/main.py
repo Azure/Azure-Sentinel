@@ -79,6 +79,9 @@ async def main(mytimer: func.TimerRequest):
 
     checkpoint_manager.post_last_date(conn.get_last_blob_date())
     checkpoint_manager.post_exclude_files(conn.get_last_date_blob_names())
+
+    await conn.delete_old_blobs()
+
     checkpoint_manager.mark_script_as_inactive()
 
 
@@ -91,6 +94,7 @@ class AzureBlobStorageConnector:
         self.log_type = LOG_TYPE
         self.sentinel = AzureSentinelMultiConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
         self._processed_blobs = []
+        self._blobs_to_delete = []
 
     def _create_container_client(self):
         return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False)
@@ -104,8 +108,10 @@ class AzureBlobStorageConnector:
                 if 'ownership-challenge' in blob['name']:
                     continue
                 if updated_after and blob['last_modified'] < updated_after:
+                    self._blobs_to_delete.append(blob)
                     continue
                 if blob['name'] in exclude_files:
+                    self._blobs_to_delete.append(blob)
                     continue
                 self.blobs.append(blob)
         print('Finish getting blobs. Count {}'.format(len(self.blobs)))
@@ -117,6 +123,17 @@ class AzureBlobStorageConnector:
             async with container_client:
                 await asyncio.wait([self._process_blob(blob, container_client) for blob in self.blobs])
             await self.sentinel.flush()
+
+    async def delete_old_blobs(self):
+        if self._blobs_to_delete:
+            container_client = self._create_container_client()
+            async with container_client:
+                await asyncio.wait([self._delete_blob(blob, container_client) for blob in self._blobs_to_delete])
+
+    async def _delete_blob(self, blob, container_client):
+        print("Deleting blob {}".format(blob['name']))
+        logging.info("Deleting blob {}".format(blob['name']))
+        await container_client.delete_blob(blob['name'])
 
     async def _process_blob(self, blob, container_client):
         async with self.semaphore:
