@@ -3,6 +3,7 @@
 ## Summary
 This playbook enriches the incident with address object and address group.
 
+![Fortinet](./Inicdent_Enrichment.PNG)<br>
  ![Fortinet](./Enrichment.PNG)<br>
 
 When a new Azure Sentinel is created, this playbook gets triggered and performs below actions:
