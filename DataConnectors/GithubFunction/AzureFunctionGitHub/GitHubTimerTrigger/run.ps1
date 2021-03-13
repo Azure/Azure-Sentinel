@@ -43,6 +43,14 @@ $RepoLogTable = "GitHubRepoLogs_CL"
 
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
 
+if (-Not [string]::IsNullOrEmpty($LAURI)){
+	if($LAURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "DocuSign-SecurityEvents: Invalid Log Analytics Uri." -ErrorAction Stop
+		Exit
+	}
+}
+
 function Write-OMSLogfile {
     <#
     .SYNOPSIS
