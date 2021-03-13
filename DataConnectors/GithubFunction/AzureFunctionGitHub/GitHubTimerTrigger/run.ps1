@@ -129,6 +129,10 @@ function Write-OMSLogfile {
 		if ([string]::IsNullOrEmpty($LAURI)){
 			$LAURI = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 		}
+		else
+		{
+			$LAURI = $LAURI + $resource + "?api-version=2016-04-01"
+		}
 		
         $headers = @{
             "Authorization"        = $signature;
@@ -395,11 +399,11 @@ foreach($org in $githubOrgs){
 
 			$uri = "https://api.github.com/repos/$orgName/$repoName/secret-scanning/alerts"
             $secretscanningalerts = $null
-            $forkLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
             if ($secretscanningalerts.Length -gt 0){
                 $secretscanningalerts | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $secretscanningalerts | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-                $secretscanningalerts | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
+                $secretscanningalerts | Add-Member -NotePropertyName LogType -NotePropertyValue SecretScanningAlerts
                 #Send to log A
                 SendToLogA -gitHubData $secretscanningalerts -customLogName $RepoLogTable
             }      
