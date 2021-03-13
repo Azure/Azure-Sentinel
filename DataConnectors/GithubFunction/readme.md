@@ -26,11 +26,11 @@ A GitHub API Token is required. See the documentation to learn more about the [G
    Group
    
 3. Enter the following value in the ARM template deployment
-		```
-	"PersonalAccessToken": This is the GITHUB PAT​
-	"Workspace Id": The Sentinel Log Analytics Workspace Id​
-	"Workspace Key": The Sentinel Log Analytics Workspace Key
-	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule
+	```
+	"PersonalAccessToken": This is the GITHUB PAT  
+	"Workspace Id": The Sentinel Log Analytics Workspace Id  
+	"Workspace Key": The Sentinel Log Analytics Workspace Key  
+	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule  
 	```
 
 ## Post Deployment Steps
