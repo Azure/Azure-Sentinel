@@ -75,7 +75,7 @@ namespace Kqlvalidations.Tests
             var yamlFiles = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
             var AllFiles = Directory.GetFiles(detectionPath,"*", SearchOption.AllDirectories).ToList();
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
-            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles);
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections folder are supposed to end with .yaml");
         }
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
