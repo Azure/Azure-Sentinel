@@ -74,7 +74,7 @@ namespace Kqlvalidations.Tests
             string detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
             var yamlFiles = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
             var AllFiles = Directory.GetFiles(detectionPath,"*", SearchOption.AllDirectories).ToList();
-            var numberOfNotYamlFiles = 1;
+            var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
             Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles);
         }
 
