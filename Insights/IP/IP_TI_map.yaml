@@ -5,12 +5,10 @@ DataTypes:
   - DataType: Heartbeat
   - DataType: VMConnection
   - DataType: VMComputer
-  - DataType: ServiceMapComputer_CL
   - DataType: WireData
   - DataType: ProtectionStatus
   - DataType: DeviceNetworkInfo
   - DataType: DeviceNetworkEvents
-  - DataType: AzureNetworkAnalytics_CL
   - DataType: DnsEvents
   - DataType: CommonSecurityLog
   - DataType: Event
@@ -19,12 +17,12 @@ DataTypes:
 EntitiesFilter: 
  Host_OsFamily: []
 RequiredInputFieldsSets: 
- - - IP_Address
+ - - Ip_Address
 BaseQuery: |  
-  let GetIPStats = (IP_Address:string){
+  let GetIPStats = (Ip_Address:string){
   //checking time span to lock to 7 days or less for Entity page usage
-  let start = datetime('{{Start_Time_ISO}}');
-  let end = datetime('{{End_Time_ISO}}');
+  let start = datetime('{{StartTimeISO}}');
+  let end = datetime('{{EndTimeISO}}');
   let end_start = datetime_diff('day',end,start);
   let start_time = iff(end_start > 7, end - 7d, start);
   let end_time = end;
@@ -32,7 +30,7 @@ BaseQuery: |
   (
   VMConnection
   | where TimeGenerated between (start_time..end_time)
-  | where SourceIp =~ IP_Address
+  | where SourceIp =~ Ip_Address
   | where SourceIp != DestinationIp
   | where Direction =~ "outbound"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by IPAddress = SourceIp, Type, RemoteIPAddress = DestinationIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
@@ -40,7 +38,7 @@ BaseQuery: |
   (
   VMConnection
   | where TimeGenerated between (start_time..end_time)
-  | where DestinationIp =~ IP_Address
+  | where DestinationIp =~ Ip_Address
   | where SourceIp != DestinationIp
   | where Direction =~ "inbound"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by IPAddress = DestinationIp, Type, RemoteIPAddress = SourceIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
@@ -48,7 +46,7 @@ BaseQuery: |
   (
   WireData
   | where TimeGenerated between (start_time..end_time)
-  | where LocalIP =~ IP_Address
+  | where LocalIP =~ Ip_Address
   | where LocalIP != RemoteIP
   | where Direction =~ "outbound"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by IPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
@@ -56,7 +54,7 @@ BaseQuery: |
   (
   WireData
   | where TimeGenerated between (start_time..end_time)
-  | where RemoteIP =~ IP_Address
+  | where RemoteIP =~ Ip_Address
   | where LocalIP != RemoteIP
   | where Direction =~ "inbound"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by IPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
@@ -64,7 +62,7 @@ BaseQuery: |
   (
   DeviceNetworkEvents
   | where TimeGenerated between (start_time..end_time)
-  | where LocalIP =~ IP_Address
+  | where LocalIP =~ Ip_Address
   | where LocalIP != RemoteIP
   | extend Direction = "outbound"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess") by IPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
@@ -72,52 +70,24 @@ BaseQuery: |
   (
   DeviceNetworkEvents
   | where TimeGenerated between (start_time..end_time)
-  | where RemoteIP =~ IP_Address
+  | where RemoteIP =~ Ip_Address
   | where LocalIP != RemoteIP
   | extend Direction = "inbound"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by IPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
   ),
   (
-  AzureNetworkAnalytics_CL
-  | where TimeGenerated between (start_time..end_time)
-  | where SrcIP_s =~ IP_Address
-  | where isnotempty(SrcIP_s) and isnotempty(DestPublicIPs_s)
-  | extend DestPublicIPs_s = split(DestPublicIPs_s, ' ')
-  | mv-expand DestPublicIPs_s
-  | extend DestPublicIPs_s = tostring(split(DestPublicIPs_s, '|')[0])
-  | where SrcIP_s != DestPublicIPs_s
-  | extend Direction = "outbound"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = count() by IPAddress = SrcIP_s, Type, RemoteIPAddress = DestPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d), ReceivedBytes = tolong(InboundBytes_d)
-  ),
-  (
-  AzureNetworkAnalytics_CL
-  | where TimeGenerated between (start_time..end_time)
-  | where DestIP_s =~ IP_Address
-  | where isnotempty(DestIP_s) and isnotempty(SrcPublicIPs_s)
-  | extend SrcPublicIPs_s = split(SrcPublicIPs_s, ' ')
-  | mv-expand SrcPublicIPs_s
-  | extend SrcPublicIPs_s = tostring(split(SrcPublicIPs_s, '|')[0])
-  | where DestIP_s != SrcPublicIPs_s
-  | extend Direction = "inbound"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = count() by IPAddress = DestIP_s, Type, RemoteIPAddress = SrcPublicIPs_s, Direction, SentBytes = tolong(OutboundBytes_d), ReceivedBytes = tolong(InboundBytes_d)
-  ),
-  (
   CommonSecurityLog
   | where TimeGenerated between (start_time..end_time)
-  | where SourceIP =~ IP_Address
+  | where SourceIP =~ Ip_Address
   | where SourceIP != DestinationIP
-  //| where DeviceAction has_any ('allow', 'allowed', 'accept', 'built', 'start', 'connect', '')
-  //| where not(DeviceAction has_any ('built','deny', 'denied', 'rst', 'blocked', 'teardown'))
   | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by IPAddress = SourceIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = DestinationIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
   ),
   (
   CommonSecurityLog
   | where TimeGenerated between (start_time..end_time)
-  | where DestinationIP =~ IP_Address
+  | where DestinationIP =~ Ip_Address
   | where SourceIP != DestinationIP
-  //| where DeviceAction has_any ('allow', 'allowed', 'accept', 'built', 'start', 'connect', '')
-  //| where not(DeviceAction has_any ('built','deny', 'denied', 'rst', 'blocked', 'teardown'))
   | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by IPAddress = DestinationIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = SourceIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
   )
@@ -127,7 +97,7 @@ BaseQuery: |
   | where Active = true and isnotempty(NetworkIP)
   | summarize arg_max(TimeGenerated, *) by ThreatIntelMatch = Description, ThreatType, NetworkIP) on $left.RemoteIPAddress == $right.NetworkIP
   };
-  GetIPStats('{{IP_Address}}')
+  GetIPStats('{{Ip_Address}}')
 
 Insights:
  Id: 340e5f6f-d218-4a11-8638-09e1af7847cc
