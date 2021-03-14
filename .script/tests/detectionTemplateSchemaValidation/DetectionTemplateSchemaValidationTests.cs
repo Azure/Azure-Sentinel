@@ -67,6 +67,16 @@ namespace Kqlvalidations.Tests
             var isValid = connectorIds.Count() == 0;
             Assert.True(isValid, isValid ? string.Empty : $"Template Id:'{id}' doesn't have valid connectorIds:'{string.Join(",", connectorIds)}'. If a new connector is used and already configured in the Portal, please add it's Id to the list in 'ValidConnectorIds.json' file.");
         }
+        
+        [Fact]
+        public void Validate_DetectionTemplates_AllFilesAreYamls()
+        {
+            string detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+            var yamlFiles = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
+            var AllFiles = Directory.GetFiles(detectionPath,"*", SearchOption.AllDirectories).ToList();
+            var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles);
+        }
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
