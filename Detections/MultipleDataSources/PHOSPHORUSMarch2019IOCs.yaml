@@ -20,6 +20,9 @@ requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -66,14 +69,30 @@ query: |
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host),
   (VMConnection 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | where isnotempty(SourceIP) or isnotempty(DestinationIP) or isnotempty(DNSName)
-  | where SourceIP in (IPList) or DestinationIP in (IPList) or DNSName in~ (DomainNames)
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), Host = Computer),
+  | where isnotempty(SourceIp) or isnotempty(DestinationIp) or isnotempty(DNSName)
+  | where SourceIp in (IPList) or DestinationIp in (IPList) or DNSName in~ (DomainNames)
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer),
   (OfficeActivity
   | extend SourceIPAddress = ClientIP, Account = UserId
   | where  SourceIPAddress in (IPList)
-  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account )
+  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPCustomEntity = ClientIP),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPCustomEntity = SourceHost 
+  )
   )
 entityMappings:
   - entityType: Account

@@ -66,7 +66,7 @@ if (!(Test-Path -Path $ruleExportPath))
 try {
     $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "Scheduled"} 
     Write-Host ("Exporting " + $rules.count + " Scheduled rules...") -ForegroundColor Yellow
-    $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "Scheduled.json") -Force
+    $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "\" + "Scheduled.json") -Force
 }
 catch {
     Write-Warning "Either your Azure connection is invalid or your Azure Sentinel settings are incorrect"
@@ -79,7 +79,7 @@ catch {
 try {
     $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "Fusion"} 
     Write-Host ("Exporting " + $rules.count + " Fusion rules...") -ForegroundColor Yellow
-    $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "Fusion.json") -Force
+    $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "\" + "Fusion.json") -Force
 }
 catch {
     Write-Warning "Either your Azure connection is invalid or your Azure Sentinel settings are incorrect"
@@ -91,7 +91,7 @@ catch {
 try {
     $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "MicrosoftSecurityIncidentCreation"} 
     Write-Host ("Exporting " + $rules.count + " MicrosoftSecurityIncidentCreation rules...") -ForegroundColor Yellow
-    $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "MicrosoftSecurityIncidentCreation.json") -Force
+    $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "\" + "MicrosoftSecurityIncidentCreation.json") -Force
 }
 catch {
     Write-Warning "Either your Azure connection is invalid or your Azure Sentinel settings are incorrect"

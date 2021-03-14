@@ -67,7 +67,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
 }
 
 let fileTypeSuffixes = ["json"];
-let filePathFolderPrefixes = ["DataConnectors"];
+let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
