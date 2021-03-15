@@ -1,0 +1,55 @@
+id: 2bc7b4ae-eeaa-4538-ba15-ef298ec1ffae
+name: Starting or Stopping HealthService to Avoid Detection
+description: |
+   'This query detects events where an actor is stopping or starting HealthService to disable telemetry collection/detection from the agent.
+    The query requires a SACL to audit for access request to the service.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let timeframe = 1d;
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4656
+  | extend data = parse_xml(EventData).EventData.Data
+  | extend ObjectServer = tostring(data[4]["#text"])
+  | extend ObjectType = tostring(data[5]["#text"])
+  | extend ObjectName = tostring(data[6]["#text"])
+  | where ObjectServer =~ "SC Manager"
+  | where ObjectType =~ "SERVICE OBJECT"
+  | where ObjectName =~ "HealthService"
+  | project-away data
+  // Comment out the join below if the SACL only audits users that are part of the Network logon users, i.e. with user/group target pointing to "NU."
+  | join (
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4624
+  ) on TargetLogonId
+  | project TimeGenerated, Computer, Account, TargetAccount, IpAddress
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
