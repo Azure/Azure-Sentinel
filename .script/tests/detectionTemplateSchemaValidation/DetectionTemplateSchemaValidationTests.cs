@@ -87,7 +87,12 @@ namespace Kqlvalidations.Tests
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
             var duplicationsById = templatesAsObjects.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
-            Assert.True(duplicationsById.Count() == 0, "Found duplication of IDs. There should not be 2 templates with the same ID");
+            var duplicatedId = "";
+            if (duplicationsById.Count() > 0){
+                
+                duplicatedId = duplicationsById.Last().Select(x => x["id"]).First().ToString();
+            }
+            Assert.True(duplicationsById.Count() == 0, $"There should not be 2 templates with the same ID, but the id {duplicatedId} is duplicated.");
         }
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
