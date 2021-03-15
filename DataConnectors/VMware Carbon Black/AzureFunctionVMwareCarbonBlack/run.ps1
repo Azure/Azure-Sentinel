@@ -17,6 +17,7 @@ param($Timer)
 
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
+$logAnalyticsUri = $env:logAnalyticsUri
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
@@ -40,6 +41,18 @@ function CarbonBlackAPI()
 
     $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time)).ToString("yyyy-MM-ddTHH:mm:ssZ")
     $now = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    if ([string]::IsNullOrEmpty($logAnalyticsUri))
+    {
+        $logAnalyticsUri = "https://" + $workspaceId + ".ods.opinsights.azure.com"
+    }
+    
+    # Returning if the Log Analytics Uri is in incorrect format.
+    # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+    if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+    {
+        throw "VMware Carbon Black: Invalid Log Analytics Uri."
+    }    
 
     $authHeaders = @{
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
@@ -121,14 +134,14 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     $rfc1123date = [DateTime]::UtcNow.ToString("r");
     $contentLength = $body.Length;
     $signature = Build-Signature -customerId $customerId -sharedKey $sharedKey -date $rfc1123date -contentLength $contentLength -method $method -contentType $contentType -resource $resource;
-    $uri = "https://$($customerId).ods.opinsights.azure.com$($resource)?api-version=2016-04-01";
+    $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
     $headers = @{
         "Authorization" = $signature;
         "Log-Type" = $logType;
         "x-ms-date" = $rfc1123date;
         "time-generated-field" = $TimeStampField;
     };
-    $response = Invoke-WebRequest -Body $body -Uri $uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
+    $response = Invoke-WebRequest -Body $body -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
     return $response.StatusCode
 }
 

@@ -1,3 +1,7 @@
+## 2.1
+- Implemented new logic to ingest users without duplication
+- Adding UserId and UserName to Storage Account Table to avoid duplication
+
 ## 2.0
 - Added CHANGELOG.MD to track future code changes
 - Re-designed architecture of the Data connector

@@ -24,7 +24,7 @@ export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCod
 } 
 
 let fileTypeSuffixes = [".json"];
-let filePathFolderPrefixes = ["Workbooks"];
+let filePathFolderPrefixes = ["Workbooks","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
