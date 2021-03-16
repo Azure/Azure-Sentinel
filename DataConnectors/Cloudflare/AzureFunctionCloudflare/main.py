@@ -146,11 +146,19 @@ class AzureBlobStorageConnector:
             print("Start processing {}".format(blob['name']))
             logging.info("Start processing {}".format(blob['name']))
             blob_cor = await container_client.download_blob(blob['name'])
-            content = await blob_cor.readall()
-            for event in content.decode().split('\n'):
-                if event:
-                    event = json.loads(event)
-                    await self.sentinel.send(event, log_type=self.log_type)
+            s = ''
+            async for chunk in blob_cor.chunks():
+                s += chunk.decode()
+                lines = s.splitlines()
+                for n, line in enumerate(lines):
+                    if n < len(lines) - 1:
+                        if line:
+                            event = json.loads(line)
+                            await self.sentinel.send(event, log_type=self.log_type)
+                s = line
+            if s:
+                event = json.loads(s)
+                await self.sentinel.send(event, log_type=self.log_type)
             print("Finish processing {}".format(blob['name']))
             logging.info("Finish processing {}".format(blob['name']))
             await self.save_checkpoint(blob)
