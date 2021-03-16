@@ -1,0 +1,55 @@
+id: 93a25f10-593d-4c57-a752-a8a75f031425
+name: Dynamics 365 - User Bulk Retrieval Outside Normal Activity
+description: |
+  'This query detects users retrieving significantly more records from Dynamics 365 than they have in the past 2 weeks. This could indicate potentially unauthorized access to data within Dynamics 365.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1530
+query: |
+  let baseline_time = 14d;
+  let detection_time = 1d;
+  Dynamics365Activity
+  | where TimeGenerated between(ago(baseline_time)..ago(detection_time-1d))
+  | extend Message = tostring(split(OriginalObjectId, ' ')[0])
+  | where Message =~ "RetrieveMultiple"
+  | extend numQueryCount = todouble(QueryResults)
+  | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
+  | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))
+  | summarize sum(QueryCount) by UserId
+  | extend HistoricalBaseline = sum_QueryCount
+  | join (Dynamics365Activity
+  | where TimeGenerated > ago(detection_time)
+  | extend Message = tostring(split(OriginalObjectId, ' ')[0])
+  | where Message =~ "RetrieveMultiple"
+  | extend numQueryCount = todouble(QueryResults)
+  | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
+  | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))
+  | summarize sum(QueryCount) by UserId
+  | extend CurrentExportRate = sum_QueryCount) on UserId
+  | where CurrentExportRate > HistoricalBaseline
+  | project UserId, HistoricalBaseline, CurrentExportRate
+  | join kind=inner(Dynamics365Activity
+  | where TimeGenerated > ago(detection_time)
+  | extend Message = tostring(split(OriginalObjectId, ' ')[0])
+  | where Message =~ "RetrieveMultiple"
+  | extend numQueryCount = todouble(QueryResults)
+  | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
+  | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))) on UserId
+  | project TimeGenerated, UserId, QueryCount, UserAgent, Message, ClientIP, HistoricalBaseline, CurrentExportRate, CorrelationId, CrmOrganizationUniqueName, Query
+  | summarize QuerySizes = make_set(QueryCount), MostRecentQuery = max(TimeGenerated), IPs = make_set(ClientIP), UserAgents = make_set(UserAgent), make_set(Query) by UserId, CrmOrganizationUniqueName, HistoricalBaseline, CurrentExportRate
+  | extend timestamp = MostRecentQuery, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

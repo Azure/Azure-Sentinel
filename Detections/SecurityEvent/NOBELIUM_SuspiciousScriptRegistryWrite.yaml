@@ -1,0 +1,44 @@
+id: 00cb180c-08a8-4e55-a276-63fb1442d5b5
+name: NOBELIUM - Script payload stored in Registry
+description: |
+  'This query idenifies when a process execution commandline indicates that a registry value is written to allow for later execution a malicious script
+   References: https://www.microsoft.com/security/blog/2021/03/04/goldmax-goldfinder-sibot-analyzing-nobelium-malware/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+tags:
+  - NOBELIUM
+query: |
+  let cmdTokens0 = dynamic(['vbscript','jscript']);
+  let cmdTokens1 = dynamic(['mshtml','RunHTMLApplication']);
+  let cmdTokens2 = dynamic(['Execute','CreateObject','RegRead','window.close']);
+  SecurityEvent
+  | where TimeGenerated >= ago(14d)
+  | where EventID == 4688
+  | where CommandLine has @'\Microsoft\Windows\CurrentVersion'
+  | where not(CommandLine has_any (@'\Software\Microsoft\Windows\CurrentVersion\Run', @'\Software\Microsoft\Windows\CurrentVersion\RunOnce'))
+  // If you are receiving false positives, then it may help to make the query more strict by uncommenting one or both of the lines below to refine the matches
+  //| where CommandLine has_any (cmdTokens0)
+  //| where CommandLine has_all (cmdTokens1)
+  | where CommandLine has_all (cmdTokens2)
+  | project TimeGenerated, Computer, Account, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
