@@ -2,8 +2,11 @@ import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
+import gitP, { SimpleGit } from 'simple-git/promise';
 
 let pullRequestDetails: PullRequestProperties | undefined;
+const workingDir:string = process.cwd();
+const git: SimpleGit = gitP(workingDir);
 
 export async function GetPRDetails() {
   if (typeof pullRequestDetails == "undefined"){
@@ -24,6 +27,9 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
  
   let changedFiles = await pr.diff();
   console.log(`${changedFiles.length} files changed in current PR`);
+  let options = [pr.targetBranch, pr.sourceBranch, "Workbooks/WorkbooksMetadata.json"];
+  let diffSummary = await git.diff(options);
+  console.log(diffSummary)
 
   const filterChangedFiles = changedFiles
     .filter(change => fileKinds.includes(change.kind))
