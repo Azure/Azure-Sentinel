@@ -77,6 +77,23 @@ namespace Kqlvalidations.Tests
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
             Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections folder are supposed to end with .yaml");
         }
+        
+        [Fact]
+        public void Validate_DetectionTemplates_NoSameTemplateIdTwice()
+        {
+            string detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+            var yamlFiles = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories);
+            var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
+
+            var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
+            var duplicationsById = templatesAsObjects.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
+            var duplicatedId = "";
+            if (duplicationsById.Count() > 0){
+                
+                duplicatedId = duplicationsById.Last().Select(x => x["id"]).First().ToString();
+            }
+            Assert.True(duplicationsById.Count() == 0, $"There should not be 2 templates with the same ID, but the id {duplicatedId} is duplicated.");
+        }
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
