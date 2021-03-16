@@ -18,7 +18,6 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
-    
 }
 
 # Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <PROVIDER NAME APPLIANCE NAME> API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
@@ -116,9 +115,22 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "time-generated-field" = $TimeStampField;
     }
 
-    $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
-    return $response.StatusCode
+    try {
+        $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    }
+    catch {
+        Write-Error "Error during sending logs to Azure Sentinel: $_.Exception.Message"
+        # Exit out of context
+        Exit
+    }
+    if ($response.StatusCode -eq 200) {
+        Write-Host "Logs have been successfully sent to Azure Sentinel."
+    }
+    else {
+        Write-Host "Error during sending logs to Azure Sentinel. Response code : $response.StatusCode"
+    }
 
+    return $response.StatusCode
 }
 
 <# Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
