@@ -3,7 +3,7 @@ Microsoft released threat indicators related to Covid19 as described at https://
 These playbooks automate the ingest of these threat indicators into the ThreatIntelligenceIndicator table of an Azure Sentinel workspace. Detailed instructions for deploying these workbooks can be found at https://aka.ms/sentinelc19blog
 **Note**: You must deploy the **C19ImportToSentinel** playbook before deploying the **C19IndicatorProcessor** playbook. You must also make sure the Playbook2Name parameter uses the exact name you chose when importing the **C19ImportToSentinel** playbook.
 
-![parameters](playbookparameter.png)
+![parameters](./playbookparameter.png)
 
 Here is the order of deployment:
 
