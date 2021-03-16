@@ -129,13 +129,20 @@ def clean_up(path=output_file_path):
         print("Clean up command failed to run")
 
 
+def handle_commands(commands=command_dict):
+    """
+    :param commands: A dictionary of commands to iterate over
+    """
+    for command in commands.keys():
+        command_object = run_command(command)
+        append_content_to_file(command_object)
+
+
 def main():
     print_notice("Note this script should be run in elevated privileges")
     print("Beginning to collect server data- This may take a moment")
     clean_up()
-    for command in command_dict.keys():
-        command_object = run_command(command)
-        append_content_to_file(command_object)
+    handle_commands()
     print_notice(
         "Data collection completed successfully. Please provide CSS with the content of the file {}".format(
             output_file_path))
