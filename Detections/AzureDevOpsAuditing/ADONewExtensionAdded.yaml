@@ -1,0 +1,32 @@
+id: bf07ca9c-e408-443a-8939-6860a45a929e
+name: Azure DevOps - New Extension Added
+description: |
+  'Extensions added additional features to Azure DevOps. An attacker could use a malicious extension to conduct malicious activity. This query looks for new extensions that are not from a configurable list of approved publishers.'
+severity: Low
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1505
+query: |
+  let allowed_publishers = dynamic([]);
+  AzureDevOpsAuditing
+  | where OperationName =~ "Extension.Installed"
+  | extend ExtensionName = tostring(Data.ExtensionName)
+  | extend PublisherName = tostring(Data.PublisherName)
+  | where PublisherName !in (allowed_publishers)
+  | project-reorder TimeGenerated, OperationName, ExtensionName, PublisherName, ActorUPN, IpAddress, UserAgent, ScopeDisplayName, Data
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
