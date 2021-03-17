@@ -137,9 +137,9 @@ namespace SampleDataIngestTool
                 var datestring = DateTime.UtcNow.ToString("r");
                 string json = ReadFile(filePath);
 
-                //Updated Code to remove _s,_t,_d,_s if already there in sample data before ingest
-                var strippedDate = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(StripSuffix(json)));
-                string updatedjson = JsonConvert.SerializeObject(strippedDate);
+                //Updated Code to remove _s,_t,_d,_s if already there in sample data before ingest to LA.
+                var strippedData = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(StripSuffix(json)));
+                string updatedjson = JsonConvert.SerializeObject(strippedData);
                 var jsonBytes = Encoding.UTF8.GetBytes(updatedjson);
 
                 //var jsonBytes = Encoding.UTF8.GetBytes(json);
@@ -196,6 +196,7 @@ namespace SampleDataIngestTool
             }
         }
 
+        // Stripsuffix _s,_t,_d,_g,_b if any for key
         private static List<JObject> StripSuffix(string json)
         {
             JArray a = JArray.Parse(json);
