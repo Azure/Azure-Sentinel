@@ -1,5 +1,8 @@
 # Okta Logic Apps connector and playbook templates
 
+<br>
+<img src="https://www.okta.com/sites/default/files/Okta_Logo_BrightBlue_Medium-thumbnail.png" width = 200>
+<br>
 
 ## Table of Contents
 
