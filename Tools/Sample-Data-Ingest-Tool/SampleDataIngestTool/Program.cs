@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -133,11 +136,17 @@ namespace SampleDataIngestTool
                 //Create a hash for the API signature
                 var datestring = DateTime.UtcNow.ToString("r");
                 string json = ReadFile(filePath);
-                var jsonBytes = Encoding.UTF8.GetBytes(json);
+
+                //Updated Code to remove _s,_t,_d,_s if already there in sample data before ingest
+                var strippedDate = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(StripSuffix(json)));
+                string updatedjson = JsonConvert.SerializeObject(strippedDate);
+                var jsonBytes = Encoding.UTF8.GetBytes(updatedjson);
+
+                //var jsonBytes = Encoding.UTF8.GetBytes(json);
                 string stringToHash = "POST\n" + jsonBytes.Length + "\napplication/json\n" + "x-ms-date:" + datestring + "\n/api/logs";
                 string hashedString = BuildSignature(stringToHash, sharedKey);
                 string signature = "SharedKey " + customerId + ":" + hashedString;
-                PostData(signature, datestring, json, filePath);
+                PostData(signature, datestring, updatedjson, filePath);
             }
             catch (Exception excep)
             {
@@ -185,6 +194,30 @@ namespace SampleDataIngestTool
             {
                 Console.WriteLine("API Post Exception: " + excep.Message);
             }
+        }
+
+        private static List<JObject> StripSuffix(string json)
+        {
+            JArray a = JArray.Parse(json);
+            var obj = new List<JObject>();
+            foreach (JObject o in a.Children<JObject>())
+            {
+                JObject addob = new JObject();
+                foreach (JProperty p in o.Properties())
+                {
+                    string name = p.Name;
+                    string value = (string)p.Value;
+                    Console.WriteLine(name + " -- " + value);
+                    if (name.EndsWith("_s") || name.EndsWith("_t") || name.EndsWith("_d") || name.EndsWith("_g") || name.EndsWith("_b"))
+                    {
+                        name = name.Substring(0, name.Length - 2);
+                    }
+
+                    addob.Add(new JProperty(name, value));
+                }
+                obj.Add(addob);
+            }
+            return obj;
         }
     }
 }
