@@ -20,9 +20,10 @@ Azure Firewall is a cloud-based network security service, sitting at the edge of
 This integration allows to automate response to Azure Sentinel incidents which contains IPs. It contains the basic connector component, with which you can create your own playbooks that interact with Azure Firewall, Azure Firewall Policy and IP Groups. <br>
 It also contains 3 playbook templates, ready to quick use, that allow direct response on Azure Firewall from Microsoft Teams together and VirusTotal enrichment.
 
-|                                    | **Works With**     |
-| ---------------------------------- | ------------------ |
+The playbooks in this integration work with:
+
 | **Playbook Name**                  | **Premium Policy** | **Standard Policy** | **Classic Rules** |
+|------------------------------------|--------------------|---------------------|-------------------|
 | AzureFirewall-BlockIP-addToIPGroup | Yes                | Yes | Yes |
 | AzureFirewall-AddIPtoTIAllowList   | No                 | Yes | No |
 | AzureFirewall-BlockIP-addNewRule   | No                 | No | Yes |
