@@ -17,8 +17,17 @@ jira_token = os.environ['JiraAccessToken']
 jira_username = os.environ['JiraUsername']
 jira_homesite_name = os.environ['JiraHomeSiteName']
 connection_string = os.environ['AzureWebJobsStorage']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 log_type = 'Jira_Audit'
 jira_uri_audit = "https://" + jira_homesite_name + ".atlassian.net/rest/api/3/auditing/record"
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Invalid Log Analytics Uri.")
 
 def generate_date():
     current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
@@ -95,7 +104,7 @@ def post_data(body):
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+    uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
 
     headers = {
         'content-type': content_type,
