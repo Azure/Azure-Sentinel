@@ -28,7 +28,7 @@ When a new Azure Sentinel is created, this playbook gets triggered and performs 
     * Playbook Name: Enter the playbook name here (ex:Fortinet_EnrichmentwithIP)
     * Function app Name: Enter Function app name which is created as Prerequisite
     * Address Group: Pre-defined address group name which is created in VM
-    * Managed Identities Name: Enter the managed identity name (ex: managed identities name).
+    * Managed Identities Name: Enter the managed identity name (ex: managed identities name)[Create user assigned manage identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal).
 
 ### Post-Deployment instructions 
 #### a. Authorize connections
