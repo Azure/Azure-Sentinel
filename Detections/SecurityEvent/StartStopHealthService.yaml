@@ -20,23 +20,18 @@ tags:
   - Solorigate
   - NOBELIUM
 query: |
-  let timeframe = 1d;
   SecurityEvent
-  | where TimeGenerated > ago(timeframe)
   | where EventID == 4656
-  | extend data = parse_xml(EventData).EventData.Data
-  | extend ObjectServer = tostring(data[4]["#text"])
-  | extend ObjectType = tostring(data[5]["#text"])
-  | extend ObjectName = tostring(data[6]["#text"])
-  | where ObjectServer =~ "SC Manager"
-  | where ObjectType =~ "SERVICE OBJECT"
-  | where ObjectName =~ "HealthService"
-  | project-away data
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)
+  | where ObjectServer =~ "SC Manager" and ObjectType =~ "SERVICE OBJECT" and ObjectName =~ "HealthService"
   // Comment out the join below if the SACL only audits users that are part of the Network logon users, i.e. with user/group target pointing to "NU."
-  | join (
-  SecurityEvent
-  | where TimeGenerated > ago(timeframe)
-  | where EventID == 4624
+  | join kind=leftouter (
+    SecurityEvent
+    | where EventID == 4624
   ) on TargetLogonId
   | project TimeGenerated, Computer, Account, TargetAccount, IpAddress
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, IPCustomEntity = IpAddress
