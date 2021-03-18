@@ -34,7 +34,8 @@ This playbook allows the SOC users to automatically response to Azure Sentinel i
     * Teams group ID: Enter the teams channel id
     * Pre-defined Group Name: Group name which is created in firewall
     * Function app Name: Enter Function app name which is created as Prerequisites
-    * Managed Identities Name: Enter the managed identity name (ex: managed identities name)
+    * Managed Identities Name: Enter the managed identity name (ex: managed identities name) [Create user assigned manage identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal)
+
 
 ### Post-Deployment instructions
 * Go to logic app designer.
