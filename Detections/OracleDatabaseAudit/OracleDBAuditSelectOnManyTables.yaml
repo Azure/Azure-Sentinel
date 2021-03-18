@@ -7,23 +7,23 @@ requiredDataConnectors:
   - connectorId: OracleDatabaseAudit
     dataTypes:
       - Syslog
-queryFrequency: 5m
-queryPeriod: 5m
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Collection
+relevantTechniques:
+  - T1119
 query: |
-  let lbtime = 3m;
   let tbl_threshold = 10;
   OracleDatabaseAuditEvent
-  | where TimeGenerated > ago(lbtime)
   | where isnotempty(DstUserName)
   | where DbAction =~ 'SELECT'
   | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
   | where isnotempty(TableName)
-  | where tolower(TableName) != 'SELECT'
-  | summarize tbl_count = dcount(TableName) by DstUserName
+  | where TableName !~ 'SELECT'
+  | summarize tbl_count = dcount(TableName) by DstUserName, bucket = bin(TimeGenerated, 5m)
   | where tbl_count > tbl_threshold
   | extend AccountCustomEntity = DstUserName
 entityMappings:
