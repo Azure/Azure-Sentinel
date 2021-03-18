@@ -39,8 +39,6 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
-            var lines = Regex.Split(queryStr, @"\n\r?");
-
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationRes.IsValid)
