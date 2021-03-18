@@ -13,22 +13,23 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
+relevantTechniques:
+  - T1078
 query: |
-  let lbperiod = 60d;
+  let lbperiod = 14d;
   let lbtime = 1h;
   BoxEvents
   | where TimeGenerated between (ago(lbperiod) .. ago(lbtime))
-  | where EventType == 'COLLABORATION_INVITE'
-  | where AdditionalDetailsRole != 'Owner'
+  | where EventType =~ 'COLLABORATION_INVITE'
+  | where AdditionalDetailsRole !~ 'Owner'
   | summarize min(TimeGenerated) by AccessibleByName, FileDirectory, AdditionalDetailsRole
   | project AccessibleByName, FileDirectory, InitialRole = AdditionalDetailsRole
   |join (BoxEvents
-            | where TimeGenerated > ago(lbtime)
-            | where EventType == 'COLLABORATION_ROLE_CHANGE'
+            | where EventType =~ 'COLLABORATION_ROLE_CHANGE'
             | summarize max(TimeGenerated) by AccessibleByName, FileDirectory, AdditionalDetailsRole
             | project AccessibleByName, FileDirectory, NewRole = AdditionalDetailsRole
             ) on FileDirectory, AccessibleByName
-  | where NewRole == 'Owner'
+  | where NewRole =~ 'Owner'
   | project AccessibleByName, FileDirectory
   | extend AccountCustomEntity = AccessibleByName
 entityMappings:
