@@ -50,11 +50,11 @@ Authentication methods this connector supports- [API Key authentication](https:/
 
 ### Prerequisites for using and deploying Custom Connector
 
-- Fortinet end point should be known.[Fortinet Console](https://{https://fndn.fortinet.net/index.php?/category/1-fortianswers/})
-- Generate an API key ([learn how](https://www.insoftservices.uk/FortiGate-rest-api-token-authentication)), and grant it to the following access levels.
+- Function app must deploy before deploying consloidated template 
+- Fortinet end point should be known. [Fortinet Console](https://{https://fndn.fortinet.net/index.php?/category/1-fortianswers/})
+- Generate an API key ([learn how](https://www.insoftservices.uk/fortigate-rest-api-token-authentication)).
 - Create the key vaults and capture secret identifier
-- Create the managed identity and capture name
-
+- Create the managed identity and capture name [Create user assigned manage identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal)
 <a name="deployment">
  
 ### Deployment instructions 
@@ -65,14 +65,15 @@ Authentication methods this connector supports- [API Key authentication](https:/
 
 | Parameter  | Description |
 | ------------- | ------------- |
-| **Endpoint URL**  | Enter the Fortinet end point (e.g.https://{FortnetTrafficManager})  |
-| **Secret identifier** | Enter the Secret identifier whick is captured in key valuts secret |
-| **Fortinet-ResponseOnIP Playbook Name** | Enter the playbook name here for ResponseOnIP playbook(e.g. Fortinet-ResponseOnIP) |
-| **Fortinet-ResponseOnUrl Playbook Name** | Enter the playbook name here for ResponseOnURL(e.g. Fortinet-ResponseOnUrl) |
+| **Endpoint URL**  | Enter the Fortinet end point (e.g. https://{FortnetTrafficManager})  |
+| **Secret identifier** | Enter the Secret identifier which is captured in key vaults secret |
+| **Fortinet-ResponseOnIP Playbook Name** | Enter the playbook name here for ResponseOnIP playbook (e.g. Fortinet-ResponseOnIP) |
+| **Fortinet-ResponseOnUrl Playbook Name** | Enter the playbook name here for ResponseOnURL (e.g. Fortinet-ResponseOnUrl) |
 | **Fortinet-Enrichment Playbook Name**  | Enter the playbook name here for Enrichment (e.g. Fortinet-Enrichment) | 
 | **Teams GroupId** | Enter the Teams channel id to send the adaptive card |
 | **Teams ChannelId**  | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)|
-| **User identifier name** | Enter the User identifier name which you created |
+| **Function app name** | Enter the Function app name which you created as prerequisites|
+| **User identifier name** | Enter the User identifier name which you created for the Managed Identity [Create user assigned manage identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal) |
 
 <a name="postdeployment">
 
