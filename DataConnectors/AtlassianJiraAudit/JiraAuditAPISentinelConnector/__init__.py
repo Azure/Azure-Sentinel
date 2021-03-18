@@ -9,6 +9,7 @@ import hashlib
 import os
 import tempfile
 import logging
+import re
 from .state_manager import StateManager
 
 customer_id = os.environ['WorkspaceID'] 
