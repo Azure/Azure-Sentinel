@@ -11,6 +11,7 @@ from .state_manager import StateManager
 from dateutil.parser import parse as parse_date
 import azure.functions as func
 import logging
+import re
 
 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
