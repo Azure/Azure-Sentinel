@@ -6,12 +6,15 @@
  1. Add a comment to the incident with the information collected from the Crowdstrike, summary of the actions taken and close the incident
 
 **Adaptive card that will be sent in the Teams SOC Channel:**
+
 ![Crowdstrike-ResponsefromTeams](./adaptivecardcrowdstrike.png)
 
 **Summary card that will be sent in the Teams SOC Channel to indicate actions success:**
+
 ![Crowdstrike-ResponsefromTeams](./SummarizedAdaptiveCard.PNG)
 
 **Playbook overview:**
+
 ![Crowdstrike-ResponsefromTeams](./ResponsefromTeams.png)
 
 
