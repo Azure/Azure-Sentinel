@@ -1,0 +1,37 @@
+id: de58ee9e-b229-4252-8537-41a4c2f4045e
+name: Cisco Umbrella - Request to blocklisted file type
+description: |
+  'Detects request to potentially harmful file types (.ps1, .bat, .vbs, etc.).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: |
+  let file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+  let lbtime = 10m;
+  Cisco_Umbrella
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'proxylogs'
+  | where DvcAction =~ 'Allowed'
+  | extend file_ext = extract(@'.*(\.\w+)$', 1, UrlOriginal)
+  | extend Filename = extract(@'.*\/*\/(.*\.\w+)$', 1, UrlOriginal)
+  | where file_ext in (file_ext_blocklist)
+  | project TimeGenerated, SrcIpAddr, Identities, Filename
+  | extend IPCustomEntity = SrcIpAddr
+  | extend AccountCustomEntity = Identities
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
