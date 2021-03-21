@@ -35,20 +35,20 @@ query: |
       SigninLogs
       | where TimeGenerated >= ago(lookBack)
       | where ResultType == 0
-      | summarize successfulAccountSigninCount = dcount(UserPrincipalName), successfulAccountSigninSet = makeset(UserPrincipalName, 15) by IPAddress
+      | summarize successSigninStart = min(TimeGenerated), successSigninEnd = max(TimeGenerated), successfulAccountSigninCount = dcount(UserPrincipalName), successfulAccountSigninSet = makeset(UserPrincipalName, 15) by IPAddress
       // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe
       | where successfulAccountSigninCount < threshold
   ) on IPAddress  
   // IPs from which attempts to authenticate as disabled user accounts originated, and had a non-zero success rate for some other account
   | where successfulAccountSigninCount != 0
   // Successful Account Signins occur within the same lookback period as the failed 
-  | extend SuccessBeforeFailure = iff(TimeGenerated < StartTime, true, false) 
+  | extend SuccessBeforeFailure = iff(successSigninStart >= StartTime and successSigninEnd <= EndTime, true, false)  
   | project StartTime, EndTime, IPAddress, disabledAccountLoginAttempts, disabledAccountsTargeted, disabledAccountSet, applicationSet, 
   successfulAccountSigninCount, successfulAccountSigninSet
   | order by disabledAccountLoginAttempts
   // Break up the string of Succesfully signed into accounts into individual events
   | mvexpand successfulAccountSigninSet
-  | extend AccountCustomEntity = tostring(successfulAccountSigninSet), timestamp = StartTime, IPCustomEntity = IPAddress
+  | extend timestamp = StartTime, IPCustomEntity = IPAddress
 
 entityMappings:
   - entityType: Account
