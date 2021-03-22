@@ -14,3 +14,12 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: "let SensitiveOperationList = dynamic(\r\n  [\"VaultDelete\", \"KeyDelete\", \"SecretDelete\", \"SecretPurge\", \"KeyPurge\", \"SecretBackup\", \"KeyBackup\"]);\r\n  AzureDiagnostics\r\n  | extend ResultType = columnifexists(\"ResultType\", \"NoResultType\")\r\n  | extend requestUri_s = columnifexists(\"requestUri_s\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\r\n  | extend id_s = columnifexists(\"id_s\", \"None\"), CallerIPAddress = columnifexists(\"CallerIPAddress\", \"None\"), clientInfo_s = columnifexists(\"clientInfo_s\", \"None\")\r\n  | where ResultType !~ \"None\" and isnotempty(ResultType)\r\n  | where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\r\n  | where id_s !~ \"None\" and isnotempty(id_s)\r\n  | where CallerIPAddress !~ \"None\" and isnotempty(CallerIPAddress)\r\n  | where clientInfo_s !~ \"None\" and isnotempty(clientInfo_s)\r\n  | where requestUri_s !~ \"None\" and isnotempty(requestUri_s)\r\n  | where ResourceType =~ \"VAULTS\" and ResultType =~ \"Success\" \r\n  | where OperationName in~ (SensitiveOperationList)  \r\n  | summarize EventCount=count(), StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated), TimeTriggered=makelist(TimeGenerated),OperationNameList=make_set(OperationName), RequestURLList=make_set(requestUri_s), CallerIPList = make_set(CallerIPAddress),  CallerIPMax= arg_max(CallerIPAddress,*) by ResourceType, ResultType, Resource, id_s, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, clientInfo_s\r\n  | extend timestamp = StartTimeUtc, IPCustomEntity = CallerIPMax, AccountCustomEntity = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
