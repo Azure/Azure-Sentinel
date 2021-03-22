@@ -41,6 +41,13 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [Range(0, 10000)]
         public int TriggerThreshold { get; set; }
 
+        [JsonProperty("customDetails", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
+        [DictionaryLength(20)]
+        [DictionaryMaxKeyAndValueLengths(maxKeyLength: 20, maxValueLength: 500)] // 500 is the max length of a column name in LA
+        [DictionaryKeyMatchesRegex("^[a-zA-Z]+\\w*$")] // The custom field key must start with an English letter and contain only alphanumeric characters (i.e. [a-zA-Z0-9_])
+        [DictionaryValueMatchesRegex("^[a-zA-Z_]+\\w*$")] // The custom field value must start with an English letter or an underscore and contain only alphanumeric characters (i.e. [a-zA-Z0-9_])
+        public Dictionary<string, string> CustomDetails { get; set; }
+
         [JsonProperty("entityMappings", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
         [ValidEntityMappings(entityMappingsMinLength: 1, entityMappingsMaxLength: 5, fieldMappingsMinLength: 1, fieldMappingsMaxLength: 3)]
         public List<EntityMapping> EntityMappings { get; set; }

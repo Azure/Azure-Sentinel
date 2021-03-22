@@ -1,0 +1,97 @@
+id: 0bd65651-1404-438b-8f63-eecddcec87b4
+name: Gain Code Execution on ADFS Server via Remote WMI Execution
+description: |
+   'This query detects instances where an attacker has gained the ability to execute code on an ADFS Server through remote WMI Execution.
+   In order to use this query you need to be collecting Sysmon EventIDs 19, 20, and 21.
+   If you do not have Sysmon data in your workspace this query will raise an error stating:
+        Failed to resolve scalar expression named "[@Name]"
+   For more on how WMI was used in Solorigate see https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/.
+   The query contains some features from the following detections to look for potentially malicious ADFS activity. See them for more details.
+   - ADFS Key Export (Sysmon): https://github.com/Azure/Azure-Sentinel/blob/master/Detections/SecurityEvent/ADFSKeyExportSysmon.yaml
+   - ADFS DKM Master Key Export: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/MultipleDataSources/ADFS-DKM-MasterKey-Export.yaml'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1210
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let timeframe = 1d;
+  // Adjust for a longer timeframe for identifying ADFS Servers
+  let lookback = 6d;
+  // Identify ADFS Servers
+  let ADFS_Servers = (
+  Event
+  | where TimeGenerated > ago(timeframe+lookback)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | extend process = split(Image, '\\', -1)[-1]
+  | where process =~ "Microsoft.IdentityServer.ServiceHost.exe"
+  | distinct Computer
+  | union isfuzzy=true (
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe+lookback)
+  | where EventID == 4688 and SubjectLogonId != "0x3e4"
+  | where ProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
+  | distinct Computer
+  )
+  | distinct Computer);
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where Computer in~ (ADFS_Servers)
+  | where ParentProcessName has 'wmiprvse.exe'
+  // Looking for rundll32.exe is based on intel from the blog linked in the description
+  // This can be commented out or altered to filter out known internal uses
+  | where CommandLine has_any ('rundll32') 
+  | project TimeGenerated, TargetAccount, CommandLine, Computer, Account, TargetLogonId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  // Search for recent logons to identify lateral movement
+  | join kind= inner
+  (SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4624 and LogonType == 3
+  | where Account !endswith "$"
+  | project TargetLogonId
+  ) on TargetLogonId
+  ),
+  (
+  Event
+  | where TimeGenerated > ago(timeframe)
+  | where Source == "Microsoft-Windows-Sysmon"
+  // Check for WMI Events
+  | where Computer in~ (ADFS_Servers) and EventID in (19, 20, 21)
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | project TimeGenerated, EventType, Image, Computer, UserName
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = UserName
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
