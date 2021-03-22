@@ -21,6 +21,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -29,28 +32,24 @@ tactics:
   - CommandAndControl
   - CredentialAccess
 query: |
-  let timeframe = 1d;
   let DomainNames = dynamic(["asyspy256.ddns.net","hotkillmail9sddcc.ddns.net","rosaf112.ddns.net","cvdfhjh1231.myftp.biz","sz2016rose.ddns.net","dffwescwer4325.myftp.biz","cvdfhjh1231.ddns.net"]);
   let SHA1Hash = dynamic (["53a44c2396d15c3a03723fa5e5db54cafd527635", "9c5e496921e3bc882dc40694f1dcc3746a75db19", "aeb573accfd95758550cf30bf04f389a92922844", "79ef78a797403a4ed1a616c68e07fff868a8650a", "4f6f38b4cec35e895d91c052b1f5a83d665c2196", "1e8c2cac2e4ce7cbd33c3858eb2e24531cb8a84d", "e841a63e47361a572db9a7334af459ddca11347a", "c28f606df28a9bc8df75a4d5e5837fc5522dd34d", "2e94b305d6812a9f96e6781c888e48c7fb157b6b", "dd44133716b8a241957b912fa6a02efde3ce3025", "8793bf166cb89eb55f0593404e4e933ab605e803", "a39b57032dbb2335499a51e13470a7cd5d86b138", "41cc2b15c662bc001c0eb92f6cc222934f0beeea", "d209430d6af54792371174e70e27dd11d3def7a7", "1c6452026c56efd2c94cea7e0f671eb55515edb0", "c6b41d3afdcdcaf9f442bbe772f5da871801fd5a", "4923d460e22fbbf165bbbaba168e5a46b8157d9f", "f201504bd96e81d0d350c3a8332593ee1c9e09de", "ddd2db1127632a2a52943a2fe516a2e7d05d70d2"]);
   let SHA256Hash = dynamic (["9ae7c4a4e1cfe9b505c3a47e66551eb1357affee65bfefb0109d02f4e97c06dd", "7772d624e1aed327abcd24ce2068063da0e31bb1d5d3bf2841fc977e198c6c5b", "657fc7e6447e0065d488a7db2caab13071e44741875044f9024ca843fe4e86b5", "2ef157a97e28574356e1d871abf75deca7d7a1ea662f38b577a06dd039dbae29", "52fd7b90d7144ac448af4008be639d4d45c252e51823f4311011af3207a5fc77", "a370e47cb97b35f1ae6590d14ada7561d22b4a73be0cb6df7e851d85054b1ac3", "5bf80b871278a29f356bd42af1e35428aead20cd90b0c7642247afcaaa95b022", "6f690ccfd54c2b02f0c3cb89c938162c10cbeee693286e809579c540b07ed883", "3c884f776fbd16597c072afd81029e8764dd57ee79d798829ca111f5e170bd8e", "1922a419f57afb351b58330ed456143cc8de8b3ebcbd236d26a219b03b3464d7", "fe0e4ef832b62d49b43433e10c47dc51072959af93963c790892efc20ec422f1", "7ce9e1c5562c8a5c93878629a47fe6071a35d604ed57a8f918f3eadf82c11a9c", "178d5ee8c04401d332af331087a80fb4e5e2937edfba7266f9be34a5029b6945", "51f70956fa8c487784fd21ab795f6ba2199b5c2d346acdeef1de0318a4c729d9", "889bca95f1a69e94aaade1e959ed0d3620531dc0fc563be9a8decf41899b4d79", "332ddaa00e2eb862742cb8d7e24ce52a5d38ffb22f6c8bd51162bd35e84d7ddf", "44bcf82fa536318622798504e8369e9dcdb32686b95fcb44579f0b4efa79df08", "63552772fdd8c947712a2cff00dfe25c7a34133716784b6d486227384f8cf3ef", "056744a3c371b5938d63c396fe094afce8fb153796a65afa5103e1bffd7ca070"]);
   let SigNames = dynamic(["TrojanDropper:Win32/BlackMould.A!dha", "Trojan:Win32/BlackMould.B!dha", "Trojan:Win32/QuarkBandit.A!dha", "Trojan:Win32/Sidelod.A!dha"]);
   (union isfuzzy=true
   (CommonSecurityLog 
-  | where TimeGenerated >= ago(timeframe) 
   | parse Message with * '(' DNSName ')' * 
   | where isnotempty(FileHash)
   | where FileHash in (SHA256Hash) or DNSName in~ (DomainNames)
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
   ),
   (DnsEvents 
-  | where TimeGenerated >= ago(timeframe) 
   | extend DNSName = Name
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
   | extend IPAddress = ClientIP
   ),
   (VMConnection 
-  | where TimeGenerated >= ago(timeframe) 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
@@ -58,7 +57,6 @@ query: |
   ),
   (Event
   //This query uses sysmon data depending on table name used this may need updataing
-  | where TimeGenerated >= ago(3d)
   | where Source == "Microsoft-Windows-Sysmon"
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
@@ -69,9 +67,25 @@ query: |
   | extend Account = UserName
   ),
   (SecurityAlert
-  | where TimeGenerated >= ago(timeframe)
   | where Entities has_any (SigNames)
-  | extend Computer = tostring(parse_json(Entities)[0].HostName) 
+  | extend Computer = tostring(parse_json(Entities)[0].HostName)
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   )
   )
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress

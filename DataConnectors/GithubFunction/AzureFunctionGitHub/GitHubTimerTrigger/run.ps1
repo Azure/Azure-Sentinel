@@ -3,7 +3,7 @@
     Language:       PowerShell
     Version:        1.2
     Author:         Nicholas Dicola, Sreedhar Ande
-    Last Modified:  02/08/2021
+    Last Modified:  03/12/2021
     
     DESCRIPTION
     This Function App calls the GitHub REST API (https://api.github.com/) to pull the GitHub
@@ -36,24 +36,20 @@ $AzureWebJobsStorage = $env:AzureWebJobsStorage
 $personalAccessToken = $env:PersonalAccessToken
 $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
+$LAURI = $env:LAURI
 $storageAccountContainer = "github-repo-logs"
-
-$AuditLogTable = $env:GitHubAuditLogsTableName
-if ([string]::IsNullOrEmpty($AuditLogTable))
-{
-	$AuditLogTable = "GitHub_CL"
-}
-
-$RepoLogTable = $env:GitHubRepoLogsTableName
-if ([string]::IsNullOrEmpty($RepoLogTable))
-{
-	$RepoLogTable = "GitHubRepoLogs_CL"
-}
-
-#The AzureTenant variable is used to specify other cloud environments like Azure Gov(.us) etc.,
-$AzureTenant = $env:AZURE_TENANT
+$AuditLogTable = "GitHub_CL"
+$RepoLogTable = "GitHubRepoLogs_CL"
 
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
+
+if (-Not [string]::IsNullOrEmpty($LAURI)){
+	if($LAURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "DocuSign-SecurityEvents: Invalid Log Analytics Uri." -ErrorAction Stop
+		Exit
+	}
+}
 
 function Write-OMSLogfile {
     <#
@@ -129,12 +125,13 @@ function Write-OMSLogfile {
             -contentType $ContentType `
             -resource $resource
         
-		# Compatible with Commercial and Gov Tenants
-		if ([string]::IsNullOrEmpty($AzureTenant)){
-			$uri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		# Compatible with previous version
+		if ([string]::IsNullOrEmpty($LAURI)){
+			$LAURI = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 		}
-		else{		
-			$uri = "https://" + $CustomerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+		else
+		{
+			$LAURI = $LAURI + $resource + "?api-version=2016-04-01"
 		}
 		
         $headers = @{
@@ -143,7 +140,7 @@ function Write-OMSLogfile {
             "x-ms-date"            = $rfc1123date
             "time-generated-field" = $dateTime
         }
-        $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $ContentType -Headers $headers -Body $Body -UseBasicParsing
+        $response = Invoke-WebRequest -Uri $LAURI -Method $method -ContentType $ContentType -Headers $headers -Body $Body -UseBasicParsing
         Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
         return $response.statuscode
     }
@@ -398,14 +395,23 @@ foreach($org in $githubOrgs){
                 $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
                 #Send to log A
                 SendToLogA -gitHubData $forkLogs -customLogName $RepoLogTable
-            }          
+            }
+
+			$uri = "https://api.github.com/repos/$orgName/$repoName/secret-scanning/alerts"
+            $secretscanningalerts = $null
+            $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            if ($secretscanningalerts.Length -gt 0){
+                $secretscanningalerts | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $secretscanningalerts | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $secretscanningalerts | Add-Member -NotePropertyName LogType -NotePropertyValue SecretScanningAlerts
+                #Send to log A
+                SendToLogA -gitHubData $secretscanningalerts -customLogName $RepoLogTable
+            }      
         }		 
         else {
             Write-Host "$repoName is empty"
             Write-Verbose "$repoName is empty"
-        }
-        
-        
+        }       
     }
     
     # get blobs for last run

@@ -1,0 +1,41 @@
+id: 
+name: New Child Process of W3WP.exe 
+description: |
+  'This Hunting Query looks for child processes of w3wp.exe that have not been seen as a child process on that host within the last 14 days.
+  w3wp.exe running suspicious processes such as 'cmd.exe /c echo', 'certutil.exe', or 'powershell.exe' that result in the creation of script files in web -accessible folders is a rare event and is, thus, typically a strong sign of web server compromise and web shell installation.
+  Ref: https://www.microsoft.com/security/blog/2021/02/11/web-shell-attacks-continue-to-rise/'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1203
+query: |
+  let timeframe = 1d;
+  let lookback = 14d;
+  let known_procs = (
+  SecurityEvent
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where EventID == 4688
+  | where ParentProcessName hassuffix "w3wp.exe"
+  | extend ProcessHost = strcat(Process, "-", Computer)
+  | summarize by ProcessHost);
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4688
+  | where ParentProcessName hassuffix "w3wp.exe"
+  | extend ProcessHost = strcat(Process, "-", Computer)
+  | where ProcessHost !in (known_procs)
+  | project-reorder TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
