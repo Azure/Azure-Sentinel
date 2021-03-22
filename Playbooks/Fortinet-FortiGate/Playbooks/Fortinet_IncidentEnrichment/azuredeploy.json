@@ -27,10 +27,9 @@
       "defaultValue": "fortinetuseridentity",
       "type": "String",
       "metadata": {
-        "description": "Address Group"
+        "description": "User identity"
       }
     }
-
   },
   "variables": {
     "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
@@ -39,58 +38,10 @@
   },
   "resources": [
     {
-      "type": "Microsoft.Web/connections",
-      "apiVersion": "2016-06-01",
-      "name": "[variables('AzureSentinelConnectionName')]",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "customParameterValues": {},
-        "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.Logic/workflows",
-      "apiVersion": "2017-07-01",
-      "name": "[parameters('Playbook Name')]",
-      "location": "[resourceGroup().location]",
-      "identity": {
-        "type": "UserAssigned",
-        "userAssignedIdentities": {
-          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('UserIdentifier'))]": {}
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
-      ],
       "properties": {
         "state": "Enabled",
         "definition": {
           "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-          "contentVersion": "1.0.0.0",
-          "parameters": {
-            "$connections": {
-              "defaultValue": {},
-              "type": "Object"
-            }
-          },
-          "triggers": {
-            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
-              "type": "ApiConnectionWebhook",
-              "inputs": {
-                "body": {
-                  "callback_url": "@{listCallbackUrl()}"
-                },
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
-                },
-                "path": "/incident-creation"
-              }
-            }
-          },
           "actions": {
             "Add_comment_to_incident_(V3)": {
               "runAfter": {
@@ -135,53 +86,73 @@
               }
             },
             "For_each_IP": {
+              "type": "Foreach",
               "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
               "actions": {
                 "Condition_to_check_if_Ip_address_already_present_in_list_of_address_objects": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@length(body('Parse_JSON_for_address_object_dynamic_content'))",
+                          0
+                        ]
+                      }
+                    ]
+                  },
                   "actions": {
                     "Append_to_array_variable_address_object_details": {
-                      "runAfter": {
-                        "Create_HTML_table_address_object_details": [
-                          "Succeeded"
-                        ]
-                      },
                       "type": "AppendToStringVariable",
                       "inputs": {
                         "name": "commentDes",
                         "value": "@body('Create_HTML_table_address_object_details')"
                       },
+                      "runAfter": {
+                        "Create_HTML_table_address_object_details": [
+                          "Succeeded"
+                        ]
+                      },
                       "description": "This appends address object details"
                     },
                     "Condition_to_check_if_Ip_already_present_in_predefined_address_group": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "greater": [
+                              "@length(body('Filter_array_address_name_from_address_group'))",
+                              0
+                            ]
+                          }
+                        ]
+                      },
                       "actions": {
                         "Append_to_string_variable": {
-                          "runAfter": {},
                           "type": "AppendToStringVariable",
                           "inputs": {
                             "name": "commentDes",
                             "value": "There is an address object for this IP and this address object is a part of address group.\n"
-                          }
+                          },
+                          "runAfter": {}
                         },
                         "Append_to_string_variable_comment_address_group_details": {
-                          "runAfter": {
-                            "Create_HTML_table_for_address_group_details": [
-                              "Succeeded"
-                            ]
-                          },
                           "type": "AppendToStringVariable",
                           "inputs": {
                             "name": "commentDes",
                             "value": "Below are the details:\nAddress group details:\n@{body('Create_HTML_table_for_address_group_details')}\nAddress object details:"
+                          },
+                          "runAfter": {
+                            "Create_HTML_table_for_address_group_details": [
+                              "Succeeded"
+                            ]
                           }
                         },
                         "Create_HTML_table_for_address_group_details": {
-                          "runAfter": {
-                            "Append_to_string_variable": [
-                              "Succeeded"
-                            ]
-                          },
                           "type": "Table",
                           "inputs": {
+                            "from": "@body('Parse_JSON_for_address_group_dynamic_content')",
+                            "format": "HTML",
                             "columns": [
                               {
                                 "header": "name",
@@ -203,9 +174,12 @@
                                 "header": "allow_routing",
                                 "value": "@item()['allow-routing']"
                               }
-                            ],
-                            "format": "HTML",
-                            "from": "@body('Parse_JSON_for_address_group_dynamic_content')"
+                            ]
+                          },
+                          "runAfter": {
+                            "Append_to_string_variable": [
+                              "Succeeded"
+                            ]
                           },
                           "description": "This creates table of objects from address group"
                         }
@@ -218,36 +192,22 @@
                       "else": {
                         "actions": {
                           "Append_to_string_variable_comment_if_address_object_exist": {
-                            "runAfter": {},
                             "type": "AppendToStringVariable",
                             "inputs": {
                               "name": "commentDes",
                               "value": "There is an address object for this IP and this address object is not a part of predefined address group.\nBelow are the address object details:"
-                            }
+                            },
+                            "runAfter": {}
                           }
                         }
                       },
-                      "expression": {
-                        "and": [
-                          {
-                            "greater": [
-                              "@length(body('Filter_array_address_name_from_address_group'))",
-                              0
-                            ]
-                          }
-                        ]
-                      },
-                      "type": "If",
                       "description": "condition to check the malicious IP address is present in the predefined address group"
                     },
                     "Create_HTML_table_address_object_details": {
-                      "runAfter": {
-                        "Condition_to_check_if_Ip_already_present_in_predefined_address_group": [
-                          "Succeeded"
-                        ]
-                      },
                       "type": "Table",
                       "inputs": {
+                        "from": "@body('Parse_JSON_for_address_object_dynamic_content')",
+                        "format": "HTML",
                         "columns": [
                           {
                             "header": "name",
@@ -285,19 +245,22 @@
                             "header": "allow-routing",
                             "value": "@item()?['allow-routing']"
                           }
-                        ],
-                        "format": "HTML",
-                        "from": "@body('Parse_JSON_for_address_object_dynamic_content')"
+                        ]
+                      },
+                      "runAfter": {
+                        "Condition_to_check_if_Ip_already_present_in_predefined_address_group": [
+                          "Succeeded"
+                        ]
                       },
                       "description": "This create table of content for address object"
                     },
                     "Filter_array_address_name_from_address_group": {
-                      "runAfter": {},
                       "type": "Query",
                       "inputs": {
                         "from": "@body('Parse_JSON_for_address_group_dynamic_content')?[0]?['member']",
                         "where": "@contains(item()['name'], body('Parse_JSON_for_address_object_dynamic_content')?[0]?['name'])"
                       },
+                      "runAfter": {},
                       "description": "This filters the address name of address object from address group"
                     }
                   },
@@ -309,57 +272,70 @@
                   "else": {
                     "actions": {
                       "Append_to_array_variable_comment": {
-                        "runAfter": {},
                         "type": "AppendToArrayVariable",
                         "inputs": {
                           "name": "Comment",
                           "value": "There is no address object for this IP"
-                        }
+                        },
+                        "runAfter": {}
                       }
                     }
                   },
-                  "expression": {
-                    "and": [
-                      {
-                        "greater": [
-                          "@length(body('Parse_JSON_for_address_object_dynamic_content'))",
-                          0
-                        ]
-                      }
-                    ]
-                  },
-                  "type": "If",
                   "description": "This checks if Ip is a member of any of the list of address objects"
                 },
                 "Construct_filter_for_address_group": {
-                  "runAfter": {
-                    "Parse_JSON_for_address_object_dynamic_content": [
-                      "Succeeded"
-                    ]
-                  },
                   "type": "SetVariable",
                   "inputs": {
                     "name": "filter",
                     "value": "filter=member=@{concat('@',body('Parse_JSON_for_address_object_dynamic_content')[0]?['name'])}"
+                  },
+                  "runAfter": {
+                    "Parse_JSON_for_address_object_dynamic_content": [
+                      "Succeeded"
+                    ]
                   }
                 },
                 "Construct_filter_for_address_object": {
-                  "runAfter": {},
                   "type": "SetVariable",
                   "inputs": {
                     "name": "filter",
                     "value": "filter=start-ip=@{concat('@',items('for_each_IP')?['Address'])}"
                   },
+                  "runAfter": {},
                   "description": "Filter construction to apply on get the details of address object API call"
                 },
                 "Fetch_the_details_of_the_address_object": {
+                  "type": "Function",
+                  "inputs": {
+                    "method": "GET",
+                    "queries": {
+                      "entity": "address",
+                      "filter": "@{variables('filter')}"
+                    },
+                    "authentication": {
+                      "audience": "https://management.azure.com",
+                      "identity": "[variables('UserIdentifier')]",
+                      "type": "ManagedServiceIdentity"
+                    },
+                    "function": {
+                      "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',variables('Functionappname'),'/functions/Fortinet-GetEntityDetails')]"
+                    }
+                  },
                   "runAfter": {
                     "Construct_filter_for_address_object": [
                       "Succeeded"
                     ]
                   },
+                  "description": "This gets the address object details"
+                },
+                "Get_address_group_details": {
                   "type": "Function",
                   "inputs": {
+                    "method": "GET",
+                    "queries": {
+                      "entity": "addrgrp",
+                      "filter": "@variables('filter')"
+                    },
                     "authentication": {
                       "audience": "https://management.azure.com",
                       "identity": "[variables('UserIdentifier')]",
@@ -367,45 +343,16 @@
                     },
                     "function": {
                       "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',variables('Functionappname'),'/functions/Fortinet-GetEntityDetails')]"
-                    },
-                    "method": "GET",
-                    "queries": {
-                      "entity": "address",
-                      "filter": "@{variables('filter')}"
                     }
                   },
-                  "description": "This gets the address object details"
-                },
-                "Get_address_group_details": {
                   "runAfter": {
                     "Construct_filter_for_address_group": [
                       "Succeeded"
                     ]
                   },
-                  "type": "Function",
-                  "inputs": {
-                    "authentication": {
-                      "audience": "https://management.azure.com",
-                      "identity": "[variables('UserIdentifier')]",
-                      "type": "ManagedServiceIdentity"
-                    },
-                    "function": {
-                      "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',variables('Functionappname'),'/functions/Fortinet-GetEntityDetails')]"
-                    },
-                    "method": "GET",
-                    "queries": {
-                      "entity": "addrgrp",
-                      "filter": "@variables('filter')"
-                    }
-                  },
                   "description": "This gets the address group details"
                 },
                 "Parse_JSON_for_address_group_dynamic_content": {
-                  "runAfter": {
-                    "Parse_address_group_JSON": [
-                      "Succeeded"
-                    ]
-                  },
                   "type": "ParseJson",
                   "inputs": {
                     "content": "@body('Parse_address_group_JSON')",
@@ -495,14 +442,14 @@
                       "type": "array"
                     }
                   },
-                  "description": "Parse JSON for the address group dynamic content"
-                },
-                "Parse_JSON_for_address_object_dynamic_content": {
                   "runAfter": {
-                    "Parse_JSON_for_the_address_object_body": [
+                    "Parse_address_group_JSON": [
                       "Succeeded"
                     ]
                   },
+                  "description": "Parse JSON for the address group dynamic content"
+                },
+                "Parse_JSON_for_address_object_dynamic_content": {
                   "type": "ParseJson",
                   "inputs": {
                     "content": "@body('Parse_JSON_for_the_address_object_body')",
@@ -623,14 +570,14 @@
                       "type": "array"
                     }
                   },
-                  "description": "Parse JSON for the address object dynamic content"
-                },
-                "Parse_JSON_for_the_address_object_body": {
                   "runAfter": {
-                    "Fetch_the_details_of_the_address_object": [
+                    "Parse_JSON_for_the_address_object_body": [
                       "Succeeded"
                     ]
                   },
+                  "description": "Parse JSON for the address object dynamic content"
+                },
+                "Parse_JSON_for_the_address_object_body": {
                   "type": "ParseJson",
                   "inputs": {
                     "content": "@body('Fetch_the_details_of_the_address_object')",
@@ -3309,14 +3256,14 @@
                       "type": "array"
                     }
                   },
-                  "description": "Parse body of the address object"
-                },
-                "Parse_address_group_JSON": {
                   "runAfter": {
-                    "Get_address_group_details": [
+                    "Fetch_the_details_of_the_address_object": [
                       "Succeeded"
                     ]
                   },
+                  "description": "Parse body of the address object"
+                },
+                "Parse_address_group_JSON": {
                   "type": "ParseJson",
                   "inputs": {
                     "content": "@body('Get_address_group_details')",
@@ -3446,6 +3393,11 @@
                       "type": "array"
                     }
                   },
+                  "runAfter": {
+                    "Get_address_group_details": [
+                      "Succeeded"
+                    ]
+                  },
                   "description": "To parse the output of the function address group in to JSON"
                 }
               },
@@ -3454,15 +3406,9 @@
                   "Succeeded"
                 ]
               },
-              "type": "Foreach",
               "description": "loops on each malicious IP"
             },
             "Initialize_variable_comment_": {
-              "runAfter": {
-                "Entities_-_Get_IPs": [
-                  "Succeeded"
-                ]
-              },
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
@@ -3472,14 +3418,14 @@
                   }
                 ]
               },
-              "description": "This is used to comment in the incident"
-            },
-            "Initialize_variable_comment_Description": {
               "runAfter": {
-                "Initialize_variable_filter": [
+                "Entities_-_Get_IPs": [
                   "Succeeded"
                 ]
               },
+              "description": "This is used to comment in the incident"
+            },
+            "Initialize_variable_comment_Description": {
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
@@ -3488,14 +3434,14 @@
                     "type": "string"
                   }
                 ]
+              },
+              "runAfter": {
+                "Initialize_variable_filter": [
+                  "Succeeded"
+                ]
               }
             },
             "Initialize_variable_filter": {
-              "runAfter": {
-                "Initialize_variable_comment_": [
-                  "Succeeded"
-                ]
-              },
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
@@ -3505,10 +3451,54 @@
                   }
                 ]
               },
+              "runAfter": {
+                "Initialize_variable_comment_": [
+                  "Succeeded"
+                ]
+              },
               "description": "Initialize variable for function call to apply filter on API call"
             }
           },
-          "outputs": {}
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "staticResults": {
+            "Entities_-_Get_IPs0": {
+              "status": "Succeeded",
+              "outputs": {
+                "body": {
+                  "IPs": [
+                    {
+                      "Address": "81.42.197.222"
+                    }
+                  ]
+                },
+                "headers": {},
+                "statusCode": "OK"
+              }
+            }
+          }
         },
         "parameters": {
           "$connections": {
@@ -3521,7 +3511,36 @@
             }
           }
         }
+      },
+      "name": "[parameters('Playbook Name')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('UserIdentifier'))]": {}
+        }
+      },
+      "apiVersion": "2016-06-01",
+      "tags": {
+        "displayName": "LogicApp"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
       }
     }
-  ]
+  ],
+  "outputs": {}
 }
