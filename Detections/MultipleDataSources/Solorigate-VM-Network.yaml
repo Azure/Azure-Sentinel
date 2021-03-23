@@ -1,0 +1,78 @@
+id: ab4b6944-a20d-42ab-8b63-238426525801
+name: Solorigate Domains Found in VM Insights
+description: | 
+  'Identifies connections to Solorigate-related DNS records based on VM insights data'
+severity: High 
+requiredDataConnectors: 
+  - connectorId: AzureMonitor(VMInsights) 
+    dataTypes: 
+      - VMConnection 
+  - connectorId: AzureMonitor(VMInsights) 
+    dataTypes: 
+      - VMProcess
+  - connectorId: AzureMonitor(VMInsights) 
+    dataTypes: 
+      - VMComputer
+queryFrequency: 1h 
+queryPeriod: 1h
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - CommandAndControl 
+relevantTechniques:
+  - T1102
+tags:
+  - Solorigate
+  - NOBELIUM
+query:  |  
+
+  let domains = dynamic(["incomeupdate.com","zupertech.com","databasegalore.com","panhardware.com","avsvmcloud.com","digitalcollege.org","freescanonline.com","deftsecurity.com","thedoccloud.com","virtualdataserver.com","lcomputers.com","webcodez.com","globalnetworkissues.com","kubecloud.com","seobundlekit.com","solartrackingsystem.net","virtualwebdata.com"]);
+  let timeframe = 1h;
+  let connections = VMConnection 
+      | where TimeGenerated >= ago(timeframe)
+      | extend DNSName = set_union(todynamic(RemoteDnsCanonicalNames),todynamic(RemoteDnsQuestions))
+      | mv-expand DNSName
+      | where isnotempty(DNSName)
+      | where DNSName has_any (domains)
+      | extend IPCustomEntity = RemoteIp
+      | summarize TimeGenerated = arg_min(TimeGenerated, *), requests = count() by IPCustomEntity, DNSName = tostring(DNSName), AgentId, Machine, Process;
+  let processes = VMProcess
+      | where TimeGenerated >= ago(timeframe)
+      | project AgentId, Machine, Process, UserName, UserDomain, ExecutablePath, CommandLine, FirstPid
+      | extend exePathArr = split(ExecutablePath, "\\")
+      | extend DirectoryName = array_strcat(array_slice(exePathArr, 0, array_length(exePathArr) - 2), "\\")
+      | extend Filename = array_strcat(array_slice(exePathArr, array_length(exePathArr) - 1, array_length(exePathArr)), "\\")
+      | project-away exePathArr;
+  let computers = VMComputer
+      | where TimeGenerated >= ago(timeframe)
+      | project HostCustomEntity = HostName, AzureResourceId = _ResourceId, AgentId, Machine;
+  connections | join kind = inner (processes) on AgentId, Machine, Process
+              | join kind = inner (computers) on AgentId, Machine
+               
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity 
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNSName
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: FirstPid
+      - identifier: CommandLine
+        columnName: CommandLine
+  - entityType: File
+    fieldMappings:
+      - identifier: Directory
+        columnName: DirectoryName
+      - identifier: Name
+        columnName: Filename
+        

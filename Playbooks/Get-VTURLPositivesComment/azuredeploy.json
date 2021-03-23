@@ -1,0 +1,1052 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "<PlaybookName>",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "VirustotalApiKey": {
+            "defaultValue": "<VirusTotal API Key>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "eastus",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "message": "<p><strong>URL: </strong><strong>@{items('For_each')?['Url']}</strong><strong><br>\nVirus Total Malware Positives:</strong> @{body('Parse_JSON_2')?['positives']}<br>\n</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_JSON_2')?['response_code']",
+                                                    1
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "GET",
+                                        "queries": {
+                                            "apikey": "@variables('ApiKey')",
+                                            "resource": "@items('For_each')?['Url']"
+                                        },
+                                        "uri": "https://www.virustotal.com/vtapi/v2/url/report"
+                                    }
+                                },
+                                "Parse_JSON_2": {
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "properties": {
+                                                "filescan_id": {},
+                                                "permalink": {
+                                                    "type": "string"
+                                                },
+                                                "positives": {
+                                                    "type": "integer"
+                                                },
+                                                "resource": {
+                                                    "type": "string"
+                                                },
+                                                "response_code": {
+                                                    "type": "integer"
+                                                },
+                                                "scan_date": {
+                                                    "type": "string"
+                                                },
+                                                "scan_id": {
+                                                    "type": "string"
+                                                },
+                                                "scans": {
+                                                    "properties": {
+                                                        "ADMINUSLabs": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "AegisLab WebGuard": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "AlienVault": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Antiy-AVL": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "AutoShun": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Avira": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "BADWARE.INFO": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Baidu-International": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "BitDefender": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Blueliv": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "CLEAN MX": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "CRDF": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Comodo Site Inspector": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Comodo Valkyrie Verdict": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "CyRadar": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "CyberCrime": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "DNS8": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Dr.Web": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ESET": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ESTsecurity-Threat Inside": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Emsisoft": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "EonScope": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Forcepoint ThreatSeeker": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Fortinet": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "FraudScore": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "FraudSense": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "G-Data": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Google Safebrowsing": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "K7AntiVirus": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Kaspersky": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Malc0de Database": {
+                                                            "properties": {
+                                                                "detail": {
+                                                                    "type": "string"
+                                                                },
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Malekal": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Malware Domain Blocklist": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "MalwareDomainList": {
+                                                            "properties": {
+                                                                "detail": {
+                                                                    "type": "string"
+                                                                },
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "MalwarePatrol": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Malwarebytes hpHosts": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Malwared": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Netcraft": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "NotMining": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Nucleon": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "OpenPhish": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Opera": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "PhishLabs": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Phishtank": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Quttera": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Rising": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "SCUMWARE.org": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "SecureBrain": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Segasec": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Sophos": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Spam404": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Spamhaus": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "StopBadware": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Sucuri SiteCheck": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Tencent": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ThreatHive": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Trustwave": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "URLQuery": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "URLhaus": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "VX Vault": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Virusdie External Site Scan": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Web Security Guard": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Yandex Safebrowsing": {
+                                                            "properties": {
+                                                                "detail": {
+                                                                    "type": "string"
+                                                                },
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ZCloudsec": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ZDB Zeus": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ZeroCERT": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "Zerofox": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ZeusTracker": {
+                                                            "properties": {
+                                                                "detail": {
+                                                                    "type": "string"
+                                                                },
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "desenmascara.me": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "malwares.com URL checker": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "securolytics": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "zvelo": {
+                                                            "properties": {
+                                                                "detected": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "result": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
+                                                "verbose_msg": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ApiKey",
+                                        "type": "string",
+                                        "value": "[parameters('VirustotalApiKey')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

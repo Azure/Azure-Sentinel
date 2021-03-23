@@ -14,7 +14,7 @@ requiredDataConnectors:
     dataTypes:
       - SigninLogs
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -28,7 +28,6 @@ relevantTechniques:
 query: |
 
   //The bigger the window the better the data sample size, as we use IP prevalence, more sample data is better.
-  let timeRange = 30d;
   //The minimum number of countries that the account has been accessed from [default: 2]
   let minimumCountries = 2;
   //The delta (%) between the largest in-use IP and the smallest [default: 90]
@@ -40,7 +39,6 @@ query: |
   //Get Teams successful signins globally
   let signinData =
     SigninLogs
-    | where TimeGenerated >= ago(timeRange)
     | where AppDisplayName has "Teams"
     | where ConditionalAccessStatus =~ "success"
     | extend country = tostring(LocationDetails['countryOrRegion'])
@@ -95,8 +93,7 @@ query: |
   | project UserPrincipalName, SuspiciousIP, UserIPDelta = delta, SuspiciousLoginCountry = country, SuspiciousCountryPrevalence = prevalence, EventTimes
   //Teams join to collect operations the user account has performed within the given time range
   | join kind=inner( 
-    TeamsData 
-    | where TimeGenerated >= ago(timeRange)
+    OfficeActivity
     | where Operation in~ ("TeamsAdminAction", "MemberAdded", "MemberRemoved", "MemberRoleChanged", "AppInstalled", "BotAddedToTeam")
     | project Operation, UserId=tolower(UserId), OperationTime=TimeGenerated
   ) on $left.UserPrincipalName == $right.UserId

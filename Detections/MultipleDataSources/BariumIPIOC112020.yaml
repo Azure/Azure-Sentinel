@@ -38,7 +38,7 @@ requiredDataConnectors:
   - connectorId: AWS 
     dataTypes: 
       - AWSCloudTrail 
-  - connectorId: Microsoft 365 Defender 
+  - connectorId: MicrosoftThreatProtection
     dataTypes: 
       - DeviceNetworkEvents 
 queryFrequency: 1d 
@@ -49,7 +49,6 @@ tactics:
   - CommandAndControl 
 query:  | 
 
-  let timeframe = 1d; 
   let IPList = dynamic(["216.24.185.74", "107.175.189.159", "192.210.132.102", "67.230.163.214", 
     "199.19.110.240", "107.148.130.176", "154.212.129.218", "172.86.75.54", "45.61.136.199", 
     "149.28.150.195", "108.61.214.194", "144.202.98.198", "149.28.84.98", "103.99.209.78", 
@@ -63,7 +62,6 @@ query:  |
     "89.43.60.113"]); 
   (union isfuzzy=true 
   (CommonSecurityLog 
-  | where TimeGenerated >= ago(timeframe)  
   | where isnotempty(SourceIP) or isnotempty(DestinationIP) 
   | where SourceIP in (IPList) or DestinationIP in (IPList) or Message has_any (IPList) 
   | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "Message")  
@@ -71,26 +69,22 @@ query:  |
   | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field")  
   ), 
   (OfficeActivity 
-  | where TimeGenerated >= ago(timeframe)  
   |extend SourceIPAddress = ClientIP, Account = UserId 
   | where  SourceIPAddress in (IPList) 
   | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account 
   ), 
   (DnsEvents  
-  | where TimeGenerated >= ago(timeframe)  
   | extend DestinationIPAddress = IPAddresses,  Host = Computer 
   | where  DestinationIPAddress has_any (IPList)  
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host 
   ), 
   (VMConnection  
-  | where TimeGenerated >= ago(timeframe)  
   | where isnotempty(SourceIp) or isnotempty(DestinationIp)  
   | where SourceIp in (IPList) or DestinationIp in (IPList)  
   | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None")  
   | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer 
   ), 
   (Event 
-  | where TimeGenerated >= ago(timeframe) 
   | where Source == "Microsoft-Windows-Sysmon" 
   | where EventID == 3 
   | extend EvData = parse_xml(EventData) 
@@ -101,39 +95,33 @@ query:  |
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None") 
   ),  
   (WireData  
-  | where TimeGenerated >= ago(timeframe) 
   | where isnotempty(RemoteIP) 
   | where RemoteIP in (IPList) 
   | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = Computer 
   ), 
   (SigninLogs 
-  | where TimeGenerated >= ago(timeframe) 
   | where isnotempty(IPAddress) 
   | where IPAddress in (IPList) 
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress 
   ), 
   (W3CIISLog  
-  | where TimeGenerated >= ago(timeframe) 
   | where isnotempty(cIP) 
   | where cIP in (IPList) 
   | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName 
   ), 
   (AzureActivity  
-  | where TimeGenerated >= ago(timeframe) 
   | where isnotempty(CallerIpAddress) 
   | where CallerIpAddress in (IPList) 
   | extend timestamp = TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller 
   ), 
   ( 
   AWSCloudTrail 
-  | where TimeGenerated >= ago(timeframe) 
   | where isnotempty(SourceIpAddress) 
   | where SourceIpAddress in (IPList) 
   | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName 
   ), 
   ( 
   DeviceNetworkEvents 
-  | where TimeGenerated >= ago(timeframe)  
   | where isnotempty(RemoteIP)  
   | where RemoteIP in (IPList)  
   | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName  

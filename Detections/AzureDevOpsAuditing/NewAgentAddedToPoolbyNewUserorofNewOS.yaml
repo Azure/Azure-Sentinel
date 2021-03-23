@@ -1,0 +1,63 @@
+id: 4ce177b3-56b1-4f0e-b83e-27eed4cb0b16
+name: New Agent Added to Pool by New User or of a New OS Type.
+description: |
+  'As seen in attacks such as SolarWinds attackers can look to subvert a build process by controlling build servers. Azure DevOps uses agent pools to execute pipeline tasks. An attacker could insert compromised agents that they control into the pools in order to execute malicious code. This query looks for users adding agents to pools they have not added agents to before, or adding agents to a pool of an OS that has not been added to that pool before. This detection has potential for false positives so has a configurable allow list to allow for certain users to be excluded from the logic.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1053
+query: |
+  let lookback = 14d;
+  let timeframe = 1d;
+  // exclude allowed users from query such as the ADO service
+  let allowed_users = dynamic(["Azure DevOps Service"]);
+  union
+  // Look for agents being added to a pool of a OS type not seen with that pool before
+  (AzureDevOpsAuditing
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where OperationName =~ "Library.AgentAdded"
+  | where ActorUPN !in (allowed_users)
+  | extend AgentPoolName = tostring(Data.AgentPoolName)
+  | extend OsDescription = tostring(Data.OsDescription)
+  | where isnotempty(OsDescription)
+  | extend OsDescription = tostring(split(OsDescription, "#", 0)[0])
+  | project AgentPoolName, OsDescription
+  | join kind=rightanti (AzureDevOpsAuditing
+  | where TimeGenerated > ago(timeframe)
+  | where OperationName == "Library.AgentAdded"
+  | extend AgentPoolName = tostring(Data.AgentPoolName)
+  | extend OsDescription = tostring(Data.OsDescription)
+  | where isnotempty(OsDescription)
+  | extend OsDescription = tostring(split(OsDescription, "#", 0)[0])) on AgentPoolName, OsDescription),
+  // Look for users addeing agents to a pool that they have not added agents to before.
+  (AzureDevOpsAuditing
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | extend AgentPoolName = tostring(Data.AgentPoolName)
+  | where ActorUPN !in (allowed_users)
+  | project AgentPoolName, ActorUPN
+  | join kind=rightanti (AzureDevOpsAuditing
+  | where TimeGenerated > ago(timeframe)
+  | where OperationName == "Library.AgentAdded"
+  | where ActorUPN !in (allowed_users)
+  | extend AgentPoolName = tostring(Data.AgentPoolName)
+  ) on AgentPoolName, ActorUPN)
+  | extend AgentName = tostring(Data.AgentName)
+  | extend OsDescription = tostring(Data.OsDescription)
+  | extend SystemDetails = Data.SystemCapabilities
+  | project-reorder TimeGenerated, OperationName, ScopeDisplayName, AgentPoolName, AgentName, ActorUPN, IpAddress, UserAgent, OsDescription, SystemDetails, Data
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

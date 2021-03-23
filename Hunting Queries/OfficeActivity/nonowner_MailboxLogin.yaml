@@ -9,18 +9,30 @@ description: |
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
-      - OfficeActivity
+      - OfficeActivity (Exchange)
 tactics:
   - Collection
   - Exfiltration
 relevantTechniques:
   - T1114
   - T1020
+tags:
+  - Solorigate
+  - NOBELIUM
 query: |
 
   let timeframe = 1d;
   OfficeActivity
   | where TimeGenerated >= ago(timeframe)
   | where Operation == "MailboxLogin" and Logon_Type != "Owner" 
-  | summarize count(), min(TimeGenerated), max(TimeGenerated) by Operation, OrganizationName, UserType, UserId, MailboxOwnerUPN, Logon_Type
-  | extend timestamp = min_TimeGenerated, AccountCustomEntity = UserId
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Operation, OrganizationName, UserType, UserId, MailboxOwnerUPN, Logon_Type, ClientIP
+  | extend timestamp = StartTime, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

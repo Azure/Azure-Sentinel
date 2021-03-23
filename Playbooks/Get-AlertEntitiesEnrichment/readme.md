@@ -1,21 +1,21 @@
 # Get-AlertEntitiesEnrichment
+
 author: Sebastien Molendijk - Microsoft
 
 This playbook allows you to enrich your alerts entities using solutions like:
 
-* Azure Active Directory
-* Azure Active Directory Identity Protection
-* Microsoft Cloud App Security
-* Microsoft Defender for Endpoints (MDATP)
-
+- Azure Active Directory
+- Azure Active Directory Identity Protection
+- Microsoft Cloud App Security
+- Microsoft Defender for Endpoints (MDATP)
 
 ### Additional resources
 
-* Complete explanation and demonstration of this playbook in [this video](https://youtu.be/YZr-New3yCI).
-* [Registering a service principal in Azure AD](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal)
-* [Microsoft Graph permissions reference](https://docs.microsoft.com/en-us/graph/permissions-reference)
-* [Create an MCAS API token](https://docs.microsoft.com/cloud-app-security/api-tokens)
-* [Defender Advanced Hunting API](https://docs.microsoft.com/windows/security/threat-protection/microsoft-defender-atp/run-advanced-query-api)
+- Complete explanation and demonstration of this playbook in [this video](https://youtu.be/YZr-New3yCI).
+- [Registering a service principal in Azure AD](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal)
+- [Microsoft Graph permissions reference](https://docs.microsoft.com/graph/permissions-reference)
+- [Create an MCAS API token](https://docs.microsoft.com/cloud-app-security/api-tokens)
+- [Defender Advanced Hunting API](https://docs.microsoft.com/windows/security/threat-protection/microsoft-defender-atp/run-advanced-query-api)
 
 <br>
 
@@ -23,7 +23,7 @@ This playbook allows you to enrich your alerts entities using solutions like:
 
 The main playbook (_Get-AlertEntitiesEnrichment_) calls other playbooks, acting as functions, which return details per entity type:
 
-* **UserEnrichment**: returns a JSON per user entiy containing the properties below:
+- **UserEnrichment**: returns a JSON per user entiy containing the properties below:
 
 ```
 {
@@ -179,64 +179,59 @@ This playbook uses an API token to obtain the user's MCAS profile and an AAD ser
 
 ### Scope: User
 
-|Logic App action|API|Endpoint|AAD Required Permission|
-|----------------|---|--------|-----------------------|
-|Get_user_details|Microsoft Graph|/users/{user UPN}|User.Read.All|
-|Get_user_manager|Microsoft Graph|/users/{user UPN}/manager|User.Read.All|
-|Get_user_MFA-SSPR_status|Microsoft Graph|/reports/credentialUserRegistrationDetails|Reports.Read.All|
-|Get_user_AAD_risk_status|Microsoft Graph|/riskyUsers/{user AAD object Id}|IdentityRiskyUser.Read.All|
+| Logic App action         | API             | Endpoint                                   | AAD Required Permission    |
+| ------------------------ | --------------- | ------------------------------------------ | -------------------------- |
+| Get_user_details         | Microsoft Graph | /users/{user UPN}                          | User.Read.All              |
+| Get_user_manager         | Microsoft Graph | /users/{user UPN}/manager                  | User.Read.All              |
+| Get_user_MFA-SSPR_status | Microsoft Graph | /reports/credentialUserRegistrationDetails | Reports.Read.All           |
+| Get_user_AAD_risk_status | Microsoft Graph | /riskyUsers/{user AAD object Id}           | IdentityRiskyUser.Read.All |
 
 <br>
 
 ### Scope: Devices
 
-|Logic App action|API|Endpoint|AAD Required Permission|
-|----------------|---|--------|-----------------------|
-|Get_user_owned_devices|Microsoft Graph|/users/{user UPN}/ownedDevices|Directory.Read.All|
-|Advanced_Hunting|WindowsDefenderAtp|/advancedqueries/run|AdvancedQuery.Read.All|
+| Logic App action       | API                | Endpoint                       | AAD Required Permission |
+| ---------------------- | ------------------ | ------------------------------ | ----------------------- |
+| Get_user_owned_devices | Microsoft Graph    | /users/{user UPN}/ownedDevices | Directory.Read.All      |
+| Advanced_Hunting       | WindowsDefenderAtp | /advancedqueries/run           | AdvancedQuery.Read.All  |
 
 <br>
 
 ### Scope: Group membership
 
-|Logic App action|API|Endpoint|AAD Required Permission|
-|----------------|---|--------|-----------------------|
-|Check_group_membership|Microsoft Graph|/users/{user UPN}/checkMemberGroups|User.Read.All and GroupMember.Read.All|
-|Get_user_admin_roles|Microsoft Graph|/roleManagement/directory/roleAssignments|Directory.Read.All|
-|Get_role_details|Microsoft Graph|/roleManagement/directory/roleAssignments|Directory.Read.All|
+| Logic App action       | API             | Endpoint                                  | AAD Required Permission                |
+| ---------------------- | --------------- | ----------------------------------------- | -------------------------------------- |
+| Check_group_membership | Microsoft Graph | /users/{user UPN}/checkMemberGroups       | User.Read.All and GroupMember.Read.All |
+| Get_user_admin_roles   | Microsoft Graph | /roleManagement/directory/roleAssignments | Directory.Read.All                     |
+| Get_role_details       | Microsoft Graph | /roleManagement/directory/roleAssignments | Directory.Read.All                     |
 
 <br>
 
 ### Scope: User changes
 
-|Logic App action|API|Endpoint|AAD Required Permission|
-|----------------|---|--------|-----------------------|
-|Get_user_password_reset_activities|Microsoft Graph|/reports/userCredentialUsageDetails|Reports.Read.All|
-
+| Logic App action                   | API             | Endpoint                            | AAD Required Permission |
+| ---------------------------------- | --------------- | ----------------------------------- | ----------------------- |
+| Get_user_password_reset_activities | Microsoft Graph | /reports/userCredentialUsageDetails | Reports.Read.All        |
 
 <br>
 
 ### Scope: Mailbox
 
-|Logic App action|API|Endpoint|AAD Required Permission|
-|----------------|---|--------|-----------------------|
-|Get_user_inbox_rules|Microsoft Graph|/users/{user UPN}/mailFolders/inbox/messageRules|MailboxSettings.Read|
-|Get_user_OOF|Microsoft Graph|/users/{user UPN}/getMailTips|Mail.Read|
-
+| Logic App action     | API             | Endpoint                                         | AAD Required Permission |
+| -------------------- | --------------- | ------------------------------------------------ | ----------------------- |
+| Get_user_inbox_rules | Microsoft Graph | /users/{user UPN}/mailFolders/inbox/messageRules | MailboxSettings.Read    |
+| Get_user_OOF         | Microsoft Graph | /users/{user UPN}/getMailTips                    | Mail.Read               |
 
 <br>
 
 ### Scope: Mcas Profile
 
-|Logic App action|API|Endpoint|AAD Required Permission|
-|----------------|---|--------|-----------------------|
-|Get_user_locations_habits|MCAS API|/cas/api/v1/activities_locations/by_user/||
-|Get_mcas_user_profile|MCAS API|/cas/api/v1/entities/||
-
+| Logic App action          | API      | Endpoint                                  | AAD Required Permission |
+| ------------------------- | -------- | ----------------------------------------- | ----------------------- |
+| Get_user_locations_habits | MCAS API | /cas/api/v1/activities_locations/by_user/ |                         |
+| Get_mcas_user_profile     | MCAS API | /cas/api/v1/entities/                     |                         |
 
 <br>
-
-
 
 ## Deployment
 
@@ -244,20 +239,29 @@ You can use the **Deploy.ps1** script, after updating the required parameters in
 
 <br>
 
-**Get-AlertEntitiesEnrichment:**
+**UserEnrichment:**
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
-**UserEnrichment:**
+**IPsEnrichment:**
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FIPsEnrichment.template.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlertEntitiesEnrichment%2FUserEnrichment.template.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FIPsEnrichment.template.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
+**Get-AlertEntitiesEnrichment (requires UserEnrichment to be deployed first):**
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSebmolendijk%2FARMLogicApps%2Fmaster%2FEntitiesEnrichment%2FGet-AlertEntitiesEnrichment.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>

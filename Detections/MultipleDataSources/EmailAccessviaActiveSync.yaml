@@ -1,0 +1,72 @@
+id: 2f561e20-d97b-4b13-b02d-18b34af6e87c
+name: Email access via active sync
+description: |
+   This query detects attempts to add attacker devices as allowed IDs for active sync using the Set-CASMailbox command.
+   This technique was seen in relation to Solorigate attack but the results can indicate potential malicious activity used in different attacks.
+   - Note that this query can be changed to use the KQL "has_all" operator, which hasn't yet been documented officially, but will be soon.
+     In short, "has_all" will only match when the referenced field has all strings in the list.
+   - Refer to Set-CASMailbox syntax: https://docs.microsoft.com/powershell/module/exchange/set-casmailbox?view=exchange-ps  
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1068
+  - T1078
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let timeframe = 1d;
+  let cmdList = dynamic(["Set-CASMailbox","ActiveSyncAllowedDeviceIDs","add"]);
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where CommandLine has_all (cmdList)
+  | project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where InitiatingProcessCommandLine has_all (cmdList)
+  | project Type, TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName
+  ),
+  (
+  Event
+  | where TimeGenerated > ago(timeframe)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | where TimeGenerated >= ago(timeframe)
+  | where CommandLine has_all (cmdList)
+  | extend Type = strcat(Type, ": ", Source)
+  | project Type, TimeGenerated, Computer, User, Process, ParentImage, CommandLine
+  | extend timestamp = TimeGenerated, AccountCustomEntity = User, HostCustomEntity = Computer
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

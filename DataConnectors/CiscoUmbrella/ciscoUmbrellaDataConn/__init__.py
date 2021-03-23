@@ -16,6 +16,7 @@ from threading import Thread
 from io import StringIO
 
 import azure.functions as func
+import re
 
 
 TIME_INTERVAL_MINUTES = 10
@@ -30,7 +31,15 @@ sentinel_log_type = 'Cisco_Umbrella'
 aws_s3_bucket = os.environ.get('S3Bucket')
 aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
-aws_region_name = os.environ.get('AWSRegionName')
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Cisco_Umbrella: Invalid Log Analytics Uri.")
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -39,7 +48,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
     logging.info('Starting program')
 
-    cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_region_name, aws_s3_bucket)
+    cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
     ts_from, ts_to = cli.get_time_interval()
     logging.info('Searching files last modified from {} to {}'.format(ts_from, ts_to))
     obj_list = cli.get_files_list(ts_from, ts_to)
@@ -68,36 +77,36 @@ def main(mytimer: func.TimerRequest) -> None:
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 cdfw_files.append(obj)
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in dns_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in proxy_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in ip_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in cdfw_files:
                 cli.process_file(obj, dest=sentinel)
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
-    
+
     else:
-        sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
+        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
             for obj in obj_list:
                 cli.process_file(obj, dest=sentinel)
@@ -119,10 +128,9 @@ def convert_list_to_csv_line(ls):
 
 class UmbrellaClient:
 
-    def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_region_name, aws_s3_bucket):
+    def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_s3_bucket):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_acces_key = aws_secret_acces_key
-        self.aws_region_name = aws_region_name
         self.aws_s3_bucket = self._get_s3_bucket_name(aws_s3_bucket)
         self.aws_s3_prefix = self._get_s3_prefix(aws_s3_bucket)
         self.total_events = 0
@@ -132,8 +140,7 @@ class UmbrellaClient:
         self.s3 = boto3.client(
             's3',
             aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_acces_key,
-            region_name=self.aws_region_name
+            aws_secret_access_key=self.aws_secret_acces_key
         )
 
     def _get_s3_bucket_name(self, aws_s3_bucket):
@@ -169,7 +176,7 @@ class UmbrellaClient:
 
     def _make_objects_list_request(self, marker='', prefix=''):
         response = self.s3.list_objects(
-            Bucket=self.aws_s3_bucket, 
+            Bucket=self.aws_s3_bucket,
             Marker=marker,
             Prefix=prefix
         )
@@ -399,7 +406,7 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_ip
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
-            
+
             if parser_func:
                 file_events = 0
                 for event in parser_func(csv_file):
@@ -412,7 +419,8 @@ class UmbrellaClient:
 
 
 class AzureSentinelConnector:
-    def __init__(self, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+    def __init__(self, log_analytics_uri, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+        self.log_analytics_uri = log_analytics_uri
         self.customer_id = customer_id
         self.shared_key = shared_key
         self.log_type = log_type
@@ -464,7 +472,7 @@ class AzureSentinelConnector:
     def _build_signature(self, customer_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
         string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")  
+        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
@@ -479,7 +487,7 @@ class AzureSentinelConnector:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+        uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
 
         headers = {
             'content-type': content_type,

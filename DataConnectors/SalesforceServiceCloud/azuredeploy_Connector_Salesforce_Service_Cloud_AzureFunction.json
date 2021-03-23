@@ -4,6 +4,8 @@
     "parameters": {
         "FunctionName": {
             "defaultValue": "SFSCConn",
+            "minLength": 1,
+            "maxLength": 11,
             "type": "string"
         },
         "WorkspaceID": {
@@ -36,7 +38,9 @@
         }
     },
     "variables": {
-        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]"
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
     },
     "resources": [
         {
@@ -153,7 +157,7 @@
                         "FUNCTIONS_WORKER_RUNTIME": "python",
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
-                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                         "WorkspaceID": "[parameters('WorkspaceID')]",
                         "WorkspaceKey": "[parameters('WorkspaceKey')]",
                         "SalesforceUser": "[parameters('SalesforceUser')]",
@@ -161,23 +165,11 @@
                         "SalesforceSecurityToken": "[parameters('SalesforceSecurityToken')]",
                         "SalesforceConsumerKey": "[parameters('SalesforceConsumerKey')]",
                         "SalesforceConsumerSecret": "[parameters('SalesforceConsumerSecret')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/SalesforceServiceCloudConnector/DataConnectors/SalesforceServiceCloud/SalesforceSentinelConn.zip?raw=true"
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/SalesforceServiceCloud/SalesforceSentinelConn.zip?raw=true"
                     }
                 }
             ]
-        },
-        {
-            "type": "Microsoft.Web/sites/hostNameBindings",
-            "apiVersion": "2018-11-01",
-            "name": "[concat(variables('FunctionName'), '/', variables('FunctionName'), '.azurewebsites.net')]",
-            "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
-            ],
-            "properties": {
-                "siteName": "[variables('FunctionName')]",
-                "hostNameType": "Verified"
-            }
         },
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",

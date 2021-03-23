@@ -1,0 +1,50 @@
+id: 4a3073ac-7383-48a9-90a8-eb6716183a54
+name: SUNBURST suspicious SolarWinds child processes
+description: |
+  Identifies suspicious child processes of SolarWinds.Orion.Core.BusinessLayer.dll that may be evidence of the SUNBURST backdoor
+  References:
+  - https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html
+  - https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1195.002
+tags:
+  - Solorigate
+  - NOBELIUM
+query:  |
+
+  let excludeProcs = dynamic([@"\SolarWinds\Orion\APM\APMServiceControl.exe", @"\SolarWinds\Orion\ExportToPDFCmd.Exe", @"\SolarWinds.Credentials\SolarWinds.Credentials.Orion.WebApi.exe", @"\SolarWinds\Orion\Topology\SolarWinds.Orion.Topology.Calculator.exe", @"\SolarWinds\Orion\Database-Maint.exe", @"\SolarWinds.Orion.ApiPoller.Service\SolarWinds.Orion.ApiPoller.Service.exe", @"\Windows\SysWOW64\WerFault.exe"]);
+  DeviceProcessEvents
+  | where InitiatingProcessFileName =~ "solarwinds.businesslayerhost.exe"
+  | where not(FolderPath has_any (excludeProcs))
+  | extend
+      timestamp = TimeGenerated,
+      AccountCustomEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),
+      HostCustomEntity = DeviceName,
+      FileHashCustomEntity = MD5
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: MD5
+      - identifier: Value
+        columnName: FileHashCustomEntity

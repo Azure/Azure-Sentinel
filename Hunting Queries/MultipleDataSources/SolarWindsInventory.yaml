@@ -1,0 +1,48 @@
+id:  278592b5-612b-48a4-bb38-4c01ff8ee2a5
+name: SolarWinds Inventory
+description: |
+  'Beyond your internal software management systems, it is possible you may not have visibility into your entire footprint of SolarWinds installations.  This is intended to help use process exection information to discovery any systems that have SolarWinds processes'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - Execution
+relevantTechniques:
+  - T1072
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+
+  let timeframe = 30d; 
+  (union isfuzzy=true 
+  ( 
+  SecurityEvent 
+  | where TimeGenerated >= ago(timeframe) 
+  | where EventID == '4688' 
+  | where tolower(NewProcessName) has 'solarwinds' 
+  | extend MachineName = Computer , Process = NewProcessName
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), MachineCount = dcount(MachineName), AccountCount = dcount(Account), MachineNames = make_set(MachineName), Accounts = make_set(Account) by Process, Type
+  ), 
+  ( 
+  DeviceProcessEvents 
+  | where TimeGenerated >= ago(timeframe) 
+  | where tolower(InitiatingProcessFolderPath) has 'solarwinds' 
+  | extend MachineName = DeviceName , Process = InitiatingProcessFolderPath, Account = AccountName
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), MachineCount = dcount(MachineName), AccountCount = dcount(Account), MachineNames = make_set(MachineName), Accounts = make_set(Account)  by Process, Type
+  ), 
+  ( 
+  Event 
+  | where TimeGenerated >= ago(timeframe) 
+  | where Source == "Microsoft-Windows-Sysmon" 
+  | where EventID == 1 
+  | extend Image = EventDetail.[4].["#text"] 
+  | where tolower(Image) has 'solarwinds' 
+  | extend MachineName = Computer , Process = Image, Account = UserName
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), MachineCount = dcount(MachineName), AccountCount = dcount(Account), MachineNames = make_set(MachineName), Accounts = make_set(Account)  by Process, Type
+  ) 
+  ) 

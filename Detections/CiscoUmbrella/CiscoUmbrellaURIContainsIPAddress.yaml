@@ -1,0 +1,34 @@
+id: ee1818ec-5f65-4991-b711-bcf2ab7e36c3
+name: Cisco Umbrella - URI contains IP address
+description: |
+  'Malware can use IP address to communicate with C2.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandandControl
+query: |
+  let lbtime = 10m;
+  Cisco_Umbrella
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'proxylogs'
+  | where DvcAction =~ 'Allowed'
+  | where UrlOriginal matches regex @'\Ahttp:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.*'
+  | project TimeGenerated, SrcIpAddr, Identities
+  | extend IPCustomEntity = SrcIpAddr
+  | extend AccountCustomEntity = Identities
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

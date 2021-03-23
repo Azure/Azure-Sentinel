@@ -14,7 +14,7 @@
       "content": {
         "version": "KqlParameterItem/1.0",
         "crossComponentResources": [
-          "{Subscription}"
+          "value::all"
         ],
         "parameters": [
           {
@@ -37,9 +37,9 @@
             "name": "InternalSub",
             "type": 1,
             "isRequired": true,
-            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where name =~ '{InternalWSs}'\r\n| project subscriptionId ",
             "crossComponentResources": [
-              "value::selected"
+              "value::all"
             ],
             "isHiddenWhenLocked": true,
             "timeContext": {
@@ -55,11 +55,12 @@
             "name": "Subscription",
             "type": 6,
             "isRequired": true,
-            "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{InternalSub}', true, false)",
+            "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{InternalSub}', true, false)\r\n| where selected == 1",
+            "crossComponentResources": [
+              "value::all"
+            ],
             "typeSettings": {
-              "additionalResourceOptions": [
-                "value::1"
-              ],
+              "additionalResourceOptions": [],
               "showDefault": false
             },
             "timeContext": {
@@ -240,20 +241,40 @@
             "version": "KqlParameterItem/1.0",
             "name": "resourceGroup",
             "type": 1,
-            "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where id == \"{Workspace:lable}\"\r\n| project resourceGroup",
+            "query": "where type =~ \"microsoft.operationalinsights/workspaces\"\r\n| where name =~  \"{InternalWSs}\"\r\n| project resourceGroup",
             "crossComponentResources": [
-              "{Subscription}"
+              "value::all"
             ],
             "isHiddenWhenLocked": true,
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "2908f26a-6238-43ed-9aa0-546c9041d918",
+            "version": "KqlParameterItem/1.0",
+            "name": "Help",
+            "label": "Show Help",
+            "type": 10,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": []
+            },
+            "jsonData": "[{ \"value\": \"Yes\", \"label\": \"Yes\"},\r\n {\"value\": \"No\", \"label\": \"No\", \"selected\":true }]",
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange"
           }
         ],
-        "style": "pills",
+        "style": "above",
         "queryType": 1,
         "resourceType": "microsoft.resourcegraph/resources"
       },
-      "customWidth": "65",
+      "customWidth": "100",
       "name": "parameters - 6"
     },
     {
@@ -261,6 +282,11 @@
       "content": {
         "json": "The Incident Overview workbook is designed to assist in triaging and investigation by providing in-depth information about the incident, including:\r\n* General information\r\n* Entity data\r\n* Triage time (time between incident creation and first response)\r\n* Mitigation time (time between incident creation and closing)\r\n* Comments\r\n\r\nCustomize this workbook by saving and editing it. \r\nYou can reach this workbook template from the incidents panel as well. Once you have customized it, the link from the incident panel will open the customized workbook instead of the template.\r\n",
         "style": "info"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Help",
+        "comparison": "isEqualTo",
+        "value": "Yes"
       },
       "customWidth": "100",
       "name": "Info"
@@ -276,7 +302,7 @@
             "name": "IncidentNumber",
             "label": "Incident Number",
             "type": 1,
-            "value": "",
+            "value": "12004",
             "timeContext": {
               "durationMs": 2592000000
             },
@@ -302,7 +328,6 @@
             "label": "Incident Name",
             "type": 1,
             "query": "SecurityIncident\r\n| where IncidentNumber == {IncidentNumber}\r\n| take 1\r\n| project IncidentName\r\n",
-            "value": null,
             "isHiddenWhenLocked": true,
             "timeContext": {
               "durationMs": 2592000000
@@ -317,7 +342,6 @@
             "name": "RuleId",
             "type": 1,
             "query": "SecurityIncident\r\n| where IncidentNumber == {IncidentNumber}\r\n| summarize arg_max(TimeGenerated, RelatedAnalyticRuleIds) by IncidentNumber\r\n| project RelatedAnalyticRuleIds",
-            "value": null,
             "timeContext": {
               "durationMs": 0
             },
@@ -346,14 +370,6 @@
       },
       "customWidth": "67",
       "name": "Headline - general info"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "## Closing Classifications of Similar Incidents\r\nClosing classifications of incidents that where created from the same rule in the past month "
-      },
-      "customWidth": "33",
-      "name": "Headline - classification"
     },
     {
       "type": 3,
@@ -399,46 +415,76 @@
       "name": "general info"
     },
     {
-      "type": 3,
+      "type": 12,
       "content": {
-        "version": "KqlItem/1.0",
-        "query": "let alertText =  strcat_array(dynamic([{RuleId}]),\",\");\r\nlet getAmountOfIncidentForRuleId = (classification:string){\r\n    SecurityIncident\r\n    | where TimeGenerated >= ago(30d)\r\n    | where Classification == classification\r\n    | mv-expand AlertId=AlertIds\r\n    | extend AlertId=tostring(AlertId)\r\n    | join  (SecurityAlert| where TimeGenerated >=ago(30d)) on $left.AlertId==$right.SystemAlertId\r\n    | mv-expand RuleId=RelatedAnalyticRuleIds\r\n    | extend RuleId=iff(ProductName!= 'Azure Sentinel', ProductName,RuleId)\r\n    | summarize counter=count() by RuleIdentifier=tostring(RuleId)\r\n    | extend RuleId=RuleIdentifier\r\n    | project-away RuleIdentifier\r\n};\r\nlet falsePositiveClassificationTable = getAmountOfIncidentForRuleId(\"FalsePositive\") | extend FalsePositiveCounter=counter | project-away counter;\r\nlet undeterminedClassificationTable = getAmountOfIncidentForRuleId(\"Undetermined\") | extend UndeterminedCounter=counter | project-away counter;\r\nlet benignPositiveClassificationTable = getAmountOfIncidentForRuleId(\"BenignPositive\") | extend BenignPositiveCounter=counter | project-away counter;\r\nlet truePositiveClassificationTable = getAmountOfIncidentForRuleId(\"TruePositive\") | extend TruePositiveCounter=counter | project-away counter;\r\nlet closedIncidentTable = SecurityIncident| where TimeGenerated >= ago(30d) |where Status == \"Closed\" | mv-expand AlertId=AlertIds| extend AlertId=tostring(AlertId)| join  SecurityAlert on $left.AlertId==$right.SystemAlertId| mv-expand RelatedAnalyticRuleIds| extend RuleId= iff(ProductName == 'Azure Sentinel', tostring(RelatedAnalyticRuleIds), ProductName);\r\nlet joinByRuleId = (T:(RuleId:string), S:(RuleId:string)){\r\n    T \r\n    | join kind=fullouter S on $left.RuleId == $right.RuleId\r\n    | extend RuleId= iff(RuleId == '', RuleId1,RuleId)\r\n    | project-away RuleId1\r\n};\r\njoinByRuleId(joinByRuleId(joinByRuleId(joinByRuleId(falsePositiveClassificationTable, undeterminedClassificationTable) , benignPositiveClassificationTable), truePositiveClassificationTable),closedIncidentTable)\r\n| join kind=leftouter  (SecurityAlert\r\n| where TimeGenerated >= ago(30d)\r\n| where ProductName  ==  'Azure Sentinel'\r\n| extend RuleId = parsejson( tostring(todynamic(ExtendedProperties)['Analytic Rule Ids']))\r\n| mv-expand RuleId=RuleId\r\n| extend RuleId=tostring(RuleId)\r\n| extend RuleName=  tostring(todynamic(ExtendedProperties)['Analytic Rule Name'])\r\n| project RuleId,RuleName\r\n| distinct RuleId,RuleName)\r\n on $left.RuleId==$right.RuleId\r\n| extend RuleName=iff(isempty(RuleName),RuleId,RuleName)\r\n| project-away RuleId1\r\n| where alertText has RuleId \r\n| summarize dcount(IncidentNumber) by Classification",
-        "size": 0,
-        "noDataMessage": "No recent closed incident were found",
-        "noDataMessageStyle": 4,
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "crossComponentResources": [
-          "{Workspace}"
-        ],
-        "visualization": "piechart",
-        "sortBy": [],
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "Field1",
-            "formatter": 1,
-            "numberFormat": {
-              "unit": 0,
-              "options": {
-                "style": "decimal"
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Closing Classifications of Similar Incidents"
+            },
+            "name": "Headline - classification"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "Closing classifications of incidents that where created from the same rule in the past month",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "Info - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let alertText =  strcat_array(dynamic([{RuleId}]),\",\");\r\nlet getAmountOfIncidentForRuleId = (classification:string){\r\n    SecurityIncident\r\n    | where TimeGenerated >= ago(30d)\r\n    | where Classification == classification\r\n    | mv-expand AlertId=AlertIds\r\n    | extend AlertId=tostring(AlertId)\r\n    | join  (SecurityAlert| where TimeGenerated >=ago(30d)) on $left.AlertId==$right.SystemAlertId\r\n    | mv-expand RuleId=RelatedAnalyticRuleIds\r\n    | extend RuleId=iff(ProductName!= 'Azure Sentinel', ProductName,RuleId)\r\n    | summarize counter=count() by RuleIdentifier=tostring(RuleId)\r\n    | extend RuleId=RuleIdentifier\r\n    | project-away RuleIdentifier\r\n};\r\nlet falsePositiveClassificationTable = getAmountOfIncidentForRuleId(\"FalsePositive\") | extend FalsePositiveCounter=counter | project-away counter;\r\nlet undeterminedClassificationTable = getAmountOfIncidentForRuleId(\"Undetermined\") | extend UndeterminedCounter=counter | project-away counter;\r\nlet benignPositiveClassificationTable = getAmountOfIncidentForRuleId(\"BenignPositive\") | extend BenignPositiveCounter=counter | project-away counter;\r\nlet truePositiveClassificationTable = getAmountOfIncidentForRuleId(\"TruePositive\") | extend TruePositiveCounter=counter | project-away counter;\r\nlet closedIncidentTable = SecurityIncident| where TimeGenerated >= ago(30d) |where Status == \"Closed\" | mv-expand AlertId=AlertIds| extend AlertId=tostring(AlertId)| join  SecurityAlert on $left.AlertId==$right.SystemAlertId| mv-expand RelatedAnalyticRuleIds| extend RuleId= iff(ProductName == 'Azure Sentinel', tostring(RelatedAnalyticRuleIds), ProductName);\r\nlet joinByRuleId = (T:(RuleId:string), S:(RuleId:string)){\r\n    T \r\n    | join kind=fullouter S on $left.RuleId == $right.RuleId\r\n    | extend RuleId= iff(RuleId == '', RuleId1,RuleId)\r\n    | project-away RuleId1\r\n};\r\njoinByRuleId(joinByRuleId(joinByRuleId(joinByRuleId(falsePositiveClassificationTable, undeterminedClassificationTable) , benignPositiveClassificationTable), truePositiveClassificationTable),closedIncidentTable)\r\n| join kind=leftouter  (SecurityAlert\r\n| where TimeGenerated >= ago(30d)\r\n| where ProductName  ==  'Azure Sentinel'\r\n| extend RuleId = parsejson( tostring(todynamic(ExtendedProperties)['Analytic Rule Ids']))\r\n| mv-expand RuleId=RuleId\r\n| extend RuleId=tostring(RuleId)\r\n| extend RuleName=  tostring(todynamic(ExtendedProperties)['Analytic Rule Name'])\r\n| project RuleId,RuleName\r\n| distinct RuleId,RuleName)\r\n on $left.RuleId==$right.RuleId\r\n| extend RuleName=iff(isempty(RuleName),RuleId,RuleName)\r\n| project-away RuleId1\r\n| where alertText has RuleId \r\n| summarize dcount(IncidentNumber) by Classification",
+              "size": 0,
+              "noDataMessage": "No recent closed incident were found",
+              "noDataMessageStyle": 4,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "sortBy": [],
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Field1",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 1
+                },
+                "showBorder": false,
+                "sortCriteriaField": "Order",
+                "sortOrderField": 1,
+                "size": "auto"
+              },
+              "chartSettings": {
+                "createOtherGroup": null
               }
-            }
-          },
-          "leftContent": {
-            "columnMatch": "Value",
-            "formatter": 1
-          },
-          "showBorder": false,
-          "sortCriteriaField": "Order",
-          "sortOrderField": 1,
-          "size": "auto"
-        },
-        "chartSettings": {
-          "createOtherGroup": null
-        }
+            },
+            "name": "Closing classification"
+          }
+        ]
       },
-      "customWidth": "34",
-      "name": "Closing classification"
+      "customWidth": "33",
+      "name": "Similar"
     },
     {
       "type": 1,
@@ -451,7 +497,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2020-01-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.metaData\",\"columns\":[]}}]}",
+        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{InternalSub}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-01-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.metaData\",\"columns\":[]}}]}",
         "size": 2,
         "noDataMessage": "No entities were found",
         "noDataMessageStyle": 4,
@@ -489,7 +535,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2020-01-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.entities\",\"columns\":[{\"path\":\"$.kind\",\"columnid\":\"Kind\"},{\"path\":\"$.properties.friendlyName\",\"columnid\":\"Name\"}]}}]}",
+        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{InternalSub}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-01-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.entities\",\"columns\":[{\"path\":\"$.kind\",\"columnid\":\"Kind\"},{\"path\":\"$.properties.friendlyName\",\"columnid\":\"Name\"}]}}]}",
         "size": 2,
         "noDataMessage": "No entities were found",
         "noDataMessageStyle": 4,
@@ -546,7 +592,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| where IncidentNumber == '{IncidentNumber}' or '{IncidentNumber}' ==  ''\n| order by LastModifiedTime \n| project LastModifiedTime,IncidentNumber, Title, Product, IncidentUrl, ModifiedBy,Status, Severity\n| take 250\n\n\n",
+              "query": "SecurityIncident\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| where IncidentNumber == '{IncidentNumber}' or '{IncidentNumber}' ==  ''\n| order by LastModifiedTime \n| project LastModifiedTime,IncidentNumber, Title, Product, IncidentUrl, ModifiedBy,Status, Severity, Owner\n| take 250\n\n\n",
               "size": 1,
               "timeContext": {
                 "durationMs": 2592000000
@@ -645,7 +691,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\n| summarize arg_max(TimeGenerated,Status, Severity, Owner, AdditionalData, IncidentUrl, Comments) by IncidentNumber\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| where IncidentNumber == '{IncidentNumber}' or '{IncidentNumber}' ==  ''\n| mvexpand Comments to typeof(string)\n| extend Message = extract('message\":\"(.*?)\"',1,tostring(Comments)), Author = extract('name\":\"(.*?)\"',1,tostring(Comments)), CreatedTimeUTC = extract('createdTimeUtc\":\"(.*?)\"',1,tostring(Comments))\n| project CreatedTimeUTC, Author, Message\n| take 250\n\n\n",
+              "query": "SecurityIncident\n| summarize arg_max(TimeGenerated,Status, Severity, Owner, AdditionalData, IncidentUrl, Comments) by IncidentNumber\n| where Severity in ({Severity}) or '{Severity:label}' ==  \"All\"\n| extend Tactics = todynamic(AdditionalData.tactics)\n| where Tactics in ({Tactics}) or '{Tactics:label}' ==  \"All\"\n| extend Owner = todynamic(Owner.assignedTo) \n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\n| where IncidentNumber == '{IncidentNumber}' or '{IncidentNumber}' ==  ''\n| mvexpand Comments to typeof(string)\n| extend Message = extract('message\":\"(.*?)\"',1,tostring(Comments)), Author = extract('name\":\"(.*?)\"',1,tostring(Comments)), CreatedTimeUTC = extract('createdTimeUtc\":\"(.*?)\"',1,tostring(Comments))\n| project CreatedTimeUTC, Author, Message, IncidentNumber, Owner\n| take 250\n\n\n",
               "size": 1,
               "timeContext": {
                 "durationMs": 2592000000
@@ -706,9 +752,22 @@
           {
             "type": 1,
             "content": {
-              "json": "## Time to closure\r\nThe mean time between the incident creation and first modification by owner\r\n\r\n"
+              "json": "## Time to closure\r\n"
             },
             "name": "text - 2 - Copy"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "The mean time between the incident creation and first modification by owner\r\n\r\n",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "text - 2 - Copy - Copy"
           },
           {
             "type": 3,
@@ -771,9 +830,22 @@
           {
             "type": 1,
             "content": {
-              "json": "## Time to triage \r\nThe mean time between the incident creation and first modification by owner\r\n\r\n"
+              "json": "## Time to triage \r\n"
             },
             "name": "text - 2 - Copy"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "The mean time between the incident creation and first modification by owner\r\n\r\n",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "text - 2 - Copy - Copy"
           },
           {
             "type": 3,

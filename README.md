@@ -39,11 +39,32 @@ Brand new or update to a contribution via these methods:
 * After submission, check the [Pull Request](https://github.com/Azure/Azure-Sentinel/pulls) for comments
 * Make changes as suggested and update your branch or explain why no change is needed. Resolve the comment when done.
 
+### Pull Request Detection Template Structure Validation Check
+As part of the PR checks we run a structure validation to make sure all required parts of the YAML structure are included.  For Detections, there is a new section that must be included.  See the [contribution guidelines](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries#now-onto-the-how) for more information.  If this section or any other required section is not included, then a validation error will occur similar to the below.
+The example is specifically if the YAML is missing the entityMappings section:
+
+```
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.95]     Kqlvalidations.Tests.DetectionTemplateStructureValidationTests.Validate_DetectionTemplates_HaveValidTemplateStructure(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [FAIL]
+  X Kqlvalidations.Tests.DetectionTemplateStructureValidationTests.Validate_DetectionTemplates_HaveValidTemplateStructure(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [104ms]
+  Error Message:
+   Expected object to be <null>, but found System.ComponentModel.DataAnnotations.ValidationException with message "An old mapping for entity 'AccountCustomEntity' does not have a matching new mapping entry."
+```
+
 ### Pull Request Kql Validation Check
 As part of the PR checks we run a syntax validation of the kql queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
 ![Azurepipeline](.github/Media/Azurepipeline.png)
 In the pipeline you can see which test failed and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
+
+Example error message:
+```
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.81]     Kqlvalidations.Tests.KqlValidationTests.Validate_DetectionQueries_HaveValidKql(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [FAIL]
+  X Kqlvalidations.Tests.KqlValidationTests.Validate_DetectionQueries_HaveValidKql(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [21ms]
+  Error Message:
+   Template Id:fa0ab69c-7124-4f62-acdd-61017cf6ce89 is not valid Errors:The name 'SymantecEndpointProtection' does not refer to any known table, tabular variable or function., Code: 'KS204', Severity: 'Error', Location: '67..93',The name 'SymantecEndpointProtection' does not refer to any known table, tabular variable or function., Code: 'KS204', Severity: 'Error', Location: '289..315'
+```
 If you are using custom logs table (a table which is not defined on all workspaces by default) you should verify
 your table schema is defined in json file in the folder *Azure-Sentinel\\.script\tests\KqlvalidationsTests\CustomTables*
 
@@ -107,15 +128,15 @@ Total tests: 171
  Total time: 25.7973 Seconds
 ```
 
-### Detection structure validation tests
-Similarly to KQL Validation, there is an automatic validation the structure of a detection.
-The structure includes the detection's frequency and period, the detection's trigger type and threshold, etc.
+### Detection schema validation tests
+Similarly to KQL Validation, there is an automatic validation of the schema of a detection.
+The schema vlidation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids ([valid connectors Ids list](https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateSchemaValidation/ValidConnectorIds.json)), etc.
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
-### Run Detection Structure Validation Locally
+### Run Detection Schema Validation Locally
 In order to run the kql validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateStructureValidation\`
+* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
 * Execute `dotnet test`
 
 
