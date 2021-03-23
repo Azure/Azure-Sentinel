@@ -1,0 +1,35 @@
+id: dff3c841-6e3e-432e-ad68-3ddd7326bc01
+name: McAfee ePO - Agent Errors
+description: |
+  'Query searches for error events from McAfee agents.'
+requiredDataConnectors:
+  - connectorId: McAfeeePO
+    dataTypes:
+      - Syslog
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1070
+query: |
+  let lbtime = 24h;
+  McAfeeEPOEvent
+  | where TimeGenerated > ago(lbtime)
+  | where EventId in ('2402', '2412', '1119', '1123', '2201', '2202', '2204', '2208', '3020', '3021')
+  | extend EventMessage = case(EventId == '2402', "Update Failed",
+                                EventId == '2412', "Deployment Failed",
+                                EventId == '1119', 
+                                "The update failed; see event log",
+                                EventId == '1123', "The upgrade failed; see event log",
+                                EventId == '2201', "McAfee Agent: Failed to install software package",
+                                EventId == '2202', "McAfee Agent: Install retry limit reached for software package",
+                                EventId == '2204', "McAfee Agent: Insufficient disk space to install software", 
+                                EventId == '2208', "McAfee Agent: Insufficient disk space to download software",
+                                EventId == '3020', "Invalid virus signature files",
+                                "Scan engine error")
+  | project DvcIpAddr, EventId, EventMessage
+  | extend IPCustomEntity = DvcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
