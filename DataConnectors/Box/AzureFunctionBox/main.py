@@ -11,11 +11,21 @@ from .state_manager import StateManager
 from dateutil.parser import parse as parse_date
 import azure.functions as func
 import logging
+import re
 
 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 LOG_TYPE = 'BoxEvents'
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+    logAnalyticsUri = 'https://' + WORKSPACE_ID + '.ods.opinsights.azure.com'
+
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Invalid Log Analytics Uri.")
 
 # interval of script execution
 SCRIPT_EXECUTION_INTERVAL_MINUTES = 2
@@ -41,7 +51,7 @@ def main(mytimer: func.TimerRequest):
 
     logging.info('Script started. Getting events from stream_position {}, created_after {}'.format(stream_position, created_after))
 
-    sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
+    sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri = logAnalyticsUri, shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
     with sentinel:
         for events, stream_position in get_events(config_dict, created_after, stream_position=stream_position):
             for event in events:
