@@ -53,8 +53,6 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 <br>
 
 
-https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSOAR-connectors-Private-Preview%2FPlaybooks%2FCiscoASA%2FCustomConnector%2Fazuredeploy-gateway.json
-
 ### Connector **not** via on-premises data gateway
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
