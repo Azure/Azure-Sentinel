@@ -7,15 +7,25 @@ import hmac
 import hashlib
 import os
 import logging
+import re
 from .state_manager import StateManager
 
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
 slack_api_bearer_token = os.environ['SlackAPIBearerToken']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 log_type = 'SlackAudit'
 slack_uri_audit = "https://api.slack.com/audit/v1/logs"
 offset_limit = 1000
 connection_string = os.environ['AzureWebJobsStorage']
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Invalid Log Analytics Uri.")
 
 def action_mapping(event):
     action_id = event["action"]
@@ -194,7 +204,7 @@ def post_data(body):
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+    uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     headers = {
         'content-type': content_type,
         'Authorization': signature,
