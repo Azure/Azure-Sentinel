@@ -5,8 +5,8 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Authentication](#authentication)
 1. [Prerequisites](#prerequisites)
+1. [Deployment](#deployment)
 1. [References](#references)
 
 
@@ -17,12 +17,9 @@ Cisco Adaptive Security Appliance (ASA) Software is the core operating system fo
 This integration allows to automate response to Azure Sentinel incidents which contain IPs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco ASA.
 It also contains 3 playbook templates, ready to quick use, that allow direct response on Cisco ASA from Microsoft Teams.
 
-
-# Deployment
-
 <a name="prerequisites"></a>
 
-## Prerequisites
+# Prerequisites
 
 ### Authentication
 The custom connector supports **basic authentication**. In Cisco ASA create a local user and allow it to use the REST API. Depending on the playbook used the user needs to be able to add members to a network object group or create access control entries, by default that requires privilege level 15.
@@ -44,6 +41,8 @@ When using the connector you will be asked to select the data gateway you want t
 
 #### Secure tunnel between your network and Azure
 Create an Azure Virtual Network and connect it to your on-premise network using Azure VPN, for a sample see [Sample configuration: Cisco ASA device (IKEv2/no BGP)](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-3rdparty-device-config-cisco-asa). When creating the Logic App make sure to select the option 'Associate with integration service environment'. When the Logic App is created you can connect it to the Azure Virtual Network. See (Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment [Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment (ISE)](https://docs.microsoft.com/en-us/azure/logic-apps/connect-virtual-network-vnet-isolated-environment)] and [Access to Azure Virtual Network resources from Azure Logic Apps by using integration service environments (ISEs)](https://docs.microsoft.com/en-us/azure/logic-apps/connect-virtual-network-vnet-isolated-environment-overview) for documentation.
+
+<a name="deployment"></a>
 
 # Deployment instructions
 
