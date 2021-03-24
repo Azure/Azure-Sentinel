@@ -1,5 +1,5 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "comments": "This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident",
@@ -109,7 +109,7 @@
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
-       "name": "[parameters('Playbook Name')]",
+      "name": "[parameters('Playbook Name')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
@@ -182,14 +182,30 @@
                 "Choice_list_-_Firewall_and_Rule_collection": {
                   "foreach": "@body('Select_Firewall_and_Rules_collection_name')",
                   "actions": {
-                    "Append_to_choice_list": {
-                      "runAfter": {},
-                      "type": "AppendToArrayVariable",
-                      "inputs": {
-                        "name": "FirewallsList",
-                        "value": "@item()"
+                    "Condition": {
+                      "actions": {
+                        "Append_to_choice_list": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "FirewallsList",
+                            "value": "@item()"
+                          },
+                          "description": "Append prepared Firewall and Rules collection list"
+                        }
                       },
-                      "description": "Append prepared Firewall and Rules collection list"
+                      "runAfter": {},
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@item()?['action']",
+                              "Deny"
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
                     }
                   },
                   "runAfter": {
@@ -206,6 +222,7 @@
                   "inputs": {
                     "from": "@items('For_each_Firewall')?['properties']?['networkRuleCollections']",
                     "select": {
+                      "action": "@item()?['properties']?['action']?['type']",
                       "title": "@{split(items('For_each_firewall')?['id'],'/')?[4]}  @{items('For_each_Firewall')?['name']}  @{item()?['name']}",
                       "value": "@{split(items('For_each_firewall')?['id'],'/')?[4]}::@{items('For_each_Firewall')?['name']}::@{item()?['name']}"
                     }
@@ -482,32 +499,6 @@
                             "method": "put",
                             "path": "/Incidents"
                           }
-                        },
-                        "Updates_tags_for_Azure_Firewall_resource": {
-                          "runAfter": {
-                            "Update_incident": [
-                              "Succeeded"
-                            ]
-                          },
-                          "type": "ApiConnection",
-                          "inputs": {
-                            "body": {
-                              "tags": {
-                                "Configuration": "Sentinel"
-                              }
-                            },
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['AzureFirewallConnector']['connectionId']"
-                              }
-                            },
-                            "method": "patch",
-                            "path": "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(outputs('Resource_Group_name'))}/providers/Microsoft.Network/azureFirewalls/@{encodeURIComponent(outputs('Firewall_name'))}",
-                            "queries": {
-                              "api-version": "2020-07-01"
-                            }
-                          },
-                          "description": "update tags for Azure Firewall resource"
                         }
                       },
                       "runAfter": {
