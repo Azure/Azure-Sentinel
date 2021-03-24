@@ -131,6 +131,8 @@ class PrismaCloudConnector:
                 data = json.dumps(data)
                 async with aiohttp.ClientSession() as session:
                     async with session.post(uri, data=data, headers=headers) as response:
+                        if response.status != 200:
+                            raise Exception('Error while getting Prisma Cloud auth token. HTTP status code: {}'.format(response.status))
                         res = await response.text()
 
                 res = json.loads(res)
@@ -160,6 +162,8 @@ class PrismaCloudConnector:
             }
             data = json.dumps(data)
             async with session.post(uri, headers=headers, data=data) as response:
+                if response.status != 200:
+                    raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
                 res = json.loads(res)
 
@@ -172,6 +176,8 @@ class PrismaCloudConnector:
                 }
                 data = json.dumps(data)
                 async with session.post(uri, headers=headers, data=data) as response:
+                    if response.status != 200:
+                        raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                     res = await response.text()
                     res = json.loads(res)
                 for item in res['items']:
@@ -199,6 +205,8 @@ class PrismaCloudConnector:
                 'endTime': unix_ts_now
             }
             async with session.get(uri, headers=headers, params=params) as response:
+                if response.status != 200:
+                    raise Exception('Error while getting audit logs. HTTP status code: {}'.format(response.status))
                 res = await response.text()
                 res = json.loads(res)
 
