@@ -9,8 +9,9 @@ from threading import Thread
 
 
 class AzureSentinelConnector:
-    def __init__(self, workspace_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+    def __init__(self, workspace_id, logAnalyticsUri, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
         self.workspace_id = workspace_id
+        self.logAnalyticsUri = logAnalyticsUri
         self.shared_key = shared_key
         self.log_type = log_type
         self.queue_size = queue_size
@@ -79,7 +80,7 @@ class AzureSentinelConnector:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(workspace_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        uri = 'https://' + workspace_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+        uri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
 
         headers = {
             'content-type': content_type,

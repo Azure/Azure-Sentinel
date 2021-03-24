@@ -39,8 +39,6 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
-            var lines = Regex.Split(queryStr, @"\n\r?");
-
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationRes.IsValid)
@@ -48,6 +46,36 @@ namespace Kqlvalidations.Tests
                 firstErrorLocation =  GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
             }
             Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid in Line:{firstErrorLocation.Line} col:{firstErrorLocation.Col} Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+        }
+        
+        [Theory]
+        [ClassData(typeof(DetectionsYamlFilesTestData))]
+        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string detectionsYamlFileName)
+        {
+            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            var yaml = File.ReadAllText(detectionsYamlFile);
+            var deserializer = new DeserializerBuilder().Build();
+            var res = deserializer.Deserialize<dynamic>(yaml);
+            string queryStr = res["query"];
+            string id = res["id"];
+
+            //Templates that are in the skipped templates should not pass the validateion (if they pass, why skip?)
+            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            {
+                var validationRes = _queryValidator.ValidateSyntax(queryStr);
+                var firstErrorLocation = (Line: 0, Col: 0);
+                if (!validationRes.IsValid)
+                {
+                    firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
+                }
+                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+            }
+
+            else
+            {
+                return;
+            }
+            
         }
 
         private (int Line, int Col) GetLocationInQuery(string queryStr, int pos)
