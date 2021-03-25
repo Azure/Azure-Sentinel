@@ -24,7 +24,7 @@ Assign RBAC 'Azure Sentinel Responder' role to the Logic App at the Resource Gro
 
 Logic App is utilitzed by Automation rules. You must setup an Automation rule. Go to the Automation Rules blade in Azure Sentinel. 
 
-If you have not set permissions yet, [review here](https://docs.microsoft.com/en-us/azure/sentinel/automate-incident-handling-with-automation-rules#permissions-for-automation-rules-to-run-playbooks)
+If you have not set permissions yet, [review here](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#permissions-for-automation-rules-to-run-playbooks)
 
 ![createautomation0](Images/createautomation0.png)
 
