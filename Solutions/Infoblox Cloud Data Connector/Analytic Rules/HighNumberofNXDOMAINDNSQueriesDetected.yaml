@@ -1,0 +1,38 @@
+id: b49637ac-36cc-451c-a67d-bb08a66c0a22
+name: High Number of NXDOMAIN DNS Queries Detected
+description: |
+  'This creates an incident in the event a host generates a high number of DNS queries for non-existent domains.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes: 
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+
+  let threshold = 200;
+  CommonSecurityLog
+  | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector"
+  | where DeviceEventClassID has "RPZ"
+  | where SimplifiedDeviceAction == "NXDOMAIN"
+  | summarize count() by SourceIP, bin(TimeGenerated,15m)
+  | where count_ > threshold
+  | join kind=inner (CommonSecurityLog
+      | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector"
+      | where DeviceEventClassID has "RPZ"
+      | where SimplifiedDeviceAction == "NXDOMAIN"
+      ) on SourceIP
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
