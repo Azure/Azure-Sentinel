@@ -3,7 +3,7 @@
     Language:       PowerShell
     Version:        1.2
     Author:         Nicholas Dicola, Sreedhar Ande
-    Last Modified:  03/12/2021
+    Last Modified:  03/29/2021
     
     DESCRIPTION
     This Function App calls the GitHub REST API (https://api.github.com/) to pull the GitHub
@@ -202,8 +202,8 @@ $headers = @{
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $checkBlob = Get-AzStorageBlob -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext
 if($checkBlob -ne $null){
-    Get-AzStorageBlobContent -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\orgs.json" -Force
-    $githubOrgs = Get-Content "$env:TMPDIR\orgs.json" | ConvertFrom-Json
+    Get-AzStorageBlobContent -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\orgs.json" -Force
+    $githubOrgs = Get-Content "$env:temp\orgs.json" | ConvertFrom-Json
 }
 else{
     Write-Error "No ORGS.json file, exiting"
@@ -222,8 +222,8 @@ foreach($org in $githubOrgs){
     $checkBlob = Get-AzStorageBlob -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext
     if($checkBlob -ne $null){
         #Blob found get data
-        Get-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\lastrun-Audit.json" -Force
-        $lastRunAuditContext = Get-Content "$env:TMPDIR\lastrun-Audit.json" | ConvertFrom-Json
+        Get-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\lastrun-Audit.json" -Force
+        $lastRunAuditContext = Get-Content "$env:temp\lastrun-Audit.json" | ConvertFrom-Json
     }
     else {
         #no blob create the context
@@ -235,7 +235,7 @@ foreach($org in $githubOrgs){
 "lastContext": ""
 }
 "@
-        $lastRunAudit | Out-File "$env:TMPDIR\lastrun-Audit.json"
+        $lastRunAudit | Out-File "$env:temp\lastrun-Audit.json"
         $lastRunAuditContext = $lastRunAudit | ConvertFrom-Json
     }
 
@@ -280,8 +280,8 @@ foreach($org in $githubOrgs){
 			$lastRunContext.org = $orgName
             $lastRunContext.lastContext = $lastRunContext.lastContext
             $lastRunContext.lastRun = $currentStartTime
-            $lastRunAuditContext | ConvertTo-Json | Out-File "$env:TMPDIR\lastrun-Audit.json"
-            Set-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-Audit.json" -Force
+            $lastRunAuditContext | ConvertTo-Json | Out-File "$env:temp\lastrun-Audit.json"
+            Set-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-Audit.json" -Force
         }
     } until ($hasNextPage -eq $false)
     
@@ -420,8 +420,8 @@ foreach($org in $githubOrgs){
     foreach($repo in $repoList){
         $repoName = $repo.name
         if($blobs.Name -contains "lastrun-$orgName-$repoName.json"){
-            Get-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
-            $lastRunVulnContext = Get-Content "$env:TMPDIR\lastrun-$orgName-$repoName.json" | ConvertFrom-Json
+            Get-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\lastrun-$orgName-$repoName.json" -Force
+            $lastRunVulnContext = Get-Content "$env:temp\lastrun-$orgName-$repoName.json" | ConvertFrom-Json
         }
         else {
             $lastRun = $currentStartTime
@@ -431,9 +431,9 @@ foreach($org in $githubOrgs){
 "lastContext": ""
 }
 "@
-            $lastRunVuln| Out-File "$env:TMPDIR\lastrun-$orgName-$repoName.json"
+            $lastRunVuln| Out-File "$env:temp\lastrun-$orgName-$repoName.json"
             $lastRunVulnContext = $lastRunVuln | ConvertFrom-Json
-            Set-AzStorageBlobContent -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
+            Set-AzStorageBlobContent -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-$orgName-$repoName.json" -Force
         }
 
         #Build the query based on previous context or not
@@ -476,11 +476,13 @@ foreach($org in $githubOrgs){
             else {
                 $lastRunVulnContext.lastContext = $lastRunContext
                 $lastRunVulnContext.lastRun = $currentStartTime
-                $lastRunVulnContext | ConvertTo-Json | Out-File "$env:TMPDIR\lastrun-$orgName-$repoName.json"
-                Set-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
+                $lastRunVulnContext | ConvertTo-Json | Out-File "$env:temp\lastrun-$orgName-$repoName.json"
+                Set-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-$orgName-$repoName.json" -Force
             }
         } until ($hasNextPage -eq $false)
     }
     #clear the repo list for next org
     $repoList = @()
+	#clear the temp folder
+	Remove-Item $env:temp\* -Recurse -Force -ErrorAction SilentlyContinue
 }

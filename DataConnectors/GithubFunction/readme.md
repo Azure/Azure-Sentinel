@@ -116,21 +116,5 @@ A GitHub API Token is required. See the documentation to learn more about the [G
    ```
    **Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 5 minutes is `0 */5 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 5, for any hour, day of the month, month, day of the week, or year".**
 
-7. Once Azure Function App is deployed
-	 ```
-	a.	Go to `<<Function App Name>><<uniqueid>>`
-	b.	Click on "Advanced Tools" under Development Tools 
-	c.	Click on Go --> You will be redirected to Web App --> Check Temp folder path. 
-	d.	It can be either C:\local\Temp\ or D:\local\Temp\.
-	 ```
-8. After finding Temp folder path
-	```
-	a.	Go to `<<Function App Name>><<uniqueid>>`
-	b.	Click on "Configuration" under Settings
-	c.	Click on "TMPDIR" under "Application Settings"
-	d.	Update Drive (C//D) based on your findings from Step 9.
-	```
-	**Note: Make sure the value in "TMPDIR" doesnt have "\\" at the end.**
-
 	
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/GitHub] to make the logs useful
