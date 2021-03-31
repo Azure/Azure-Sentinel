@@ -238,9 +238,6 @@ e. Configure API Key variable. API Key can be generated in the Profile Section i
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 <br>
-
-GIB-TI Collections Playbooks:
-
 2. GIBTIA_Suspicious_ip_tor_node Playbook
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_tor_node%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
