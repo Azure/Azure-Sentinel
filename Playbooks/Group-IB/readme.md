@@ -209,7 +209,7 @@ b. Save only indicators - set to true if only indicators enrichment is required,
 Note: Some collections provide no indicators, so do not have this parameter configurable and add GIB TI&A events only in Log Workspace
 c. GIB <Indicator Description> Action - This is an action required to set in a particular indicator type provided through the current collection.(The action to apply if the indicator is matched from within the targetProduct security tool. Possible values are: unknown, allow, block, alert) <br>
 d. GIB API URL - is an GIB TI&A API URL <br>
-e. Configure API Key variable. API Key can be generated in the Profile Section in Group-IB TI&A Web Interface
+e. Configure API Key variable. API Key can be generated in the Profile Section in Group-IB TI&A Web Interface, it's highly recommended to use Azure Key Vault Playbook Get Secret control
 
 ## Register an Azure AD App for TI Indicators Graph API Write Access
 1. Go to Azure Active Directory / App Registrations
@@ -231,187 +231,209 @@ e. Configure API Key variable. API Key can be generated in the Profile Section i
 ## Deploy the Logic App template
 
 1. GIBIndicatorsProcessor Playbook:
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBIndicatorsProcessor%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBIndicatorsProcessor%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBIndicatorsProcessor%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBIndicatorsProcessor%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
-
+<br>
 2. Required collections Playbooks:
 
-GIBTIA_Suspicious_ip_tor_node Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_tor_node%2Fazuredeploy.json" target="_blank">
+GIBTIA_Suspicious_ip_tor_node Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_tor_node%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_tor_node%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_tor_node%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Suspicious_ip_socks_proxy Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_socks_proxy%2Fazuredeploy.json" target="_blank">
+<br>
+GIBTIA_Suspicious_ip_socks_proxy Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_socks_proxy%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_socks_proxy%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_socks_proxy%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Suspicious_ip_open_proxy Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_open_proxy%2Fazuredeploy.json" target="_blank">
+<br>
+GIBTIA_Suspicious_ip_open_proxy Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_open_proxy%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_open_proxy%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Suspicious_ip_open_proxy%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_OSI_Vulnerability Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_Vulnerability%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_OSI_Vulnerability Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_Vulnerability%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_Vulnerability%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_Vulnerability%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_OSI_PublicLeak Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_PublicLeak%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_OSI_PublicLeak Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_PublicLeak%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_PublicLeak%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_PublicLeak%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_OSI_GitLeak Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_GitLeak%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_OSI_GitLeak Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_GitLeak%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_GitLeak%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_OSI_GitLeak%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Malware_Targeted_Malware Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_Targeted_Malware%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Malware_Targeted_Malware Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_Targeted_Malware%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_Targeted_Malware%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_Targeted_Malware%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Malware_cnc Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_cnc%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Malware_cnc Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_cnc%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_cnc%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Malware_cnc%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_HI_Threat_Actor Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat_Actor%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_HI_Threat_Actor Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat_Actor%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat_Actor%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat_Actor%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_HI_Threat Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_HI_Threat Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_HI_Threat%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Compromised_mule Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_mule%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Compromised_mule Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_mule%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_mule%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_mule%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Compromised_imei Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_imei%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Compromised_imei Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_imei%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_imei%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_imei%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Compromised_card Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_card%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Compromised_card Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_card%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_card%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_card%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Compromised_account Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_account%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Compromised_account Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_account%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_account%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Compromised_account%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_BP_phishing_kit Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing_kit%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_BP_phishing_kit Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing_kit%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing_kit%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing_kit%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_BP_phishing Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_BP_phishing Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_BP_phishing%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Attacks_phishing_kit Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing_kit%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Attacks_phishing_kit Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing_kit%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing_kit%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing_kit%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Attacks_phishing Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Attacks_phishing Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_phishing%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Attacks_deface Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_deface%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Attacks_deface Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_deface%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_deface%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_deface%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_Attacks_ddos Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_ddos%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_Attacks_ddos Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_ddos%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_ddos%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_Attacks_ddos%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_APT_Threats Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_Threats%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_APT_Threats Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_Threats%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_Threats%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_Threats%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
- <br>
-GIBTIA_APT_ThreatActor Playbook  <br>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_ThreatActor%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<br>
+GIBTIA_APT_ThreatActor Playbook
+<br>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_ThreatActor%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_ThreatActor%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBTIA_APT_ThreatActor%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
