@@ -2,7 +2,7 @@
 
 The Check Point Logic App Connector will allow you to automate security operations to all managed Check Point devices. The connector enables you to create Logic App workbooks that utilize Check Point Management API to automate most common security operations tasks. 
 
-Logic App can easily integrate Check Point with all native Azure services and hundreds of connectors such as ServiceNow, Jira, PagerDuty, ZenDesk, and more. See the [full list of available connectors here.](https://docs.microsoft.com/en-us/connectors/connector-reference/)
+Logic App can easily integrate Check Point with all native Azure services and hundreds of connectors such as ServiceNow, Jira, PagerDuty, ZenDesk, and more. See the [full list of available connectors here.](https://docs.microsoft.com/connectors/connector-reference/)
 
 Common use cases include: 
 
@@ -13,7 +13,7 @@ Common use cases include:
 
 For more information see
 [Check Point Management API](https://sc1.checkpoint.com/documents/latest/APIs/#introduction~v1.7%20) and 
-[Logic App Overview](https://azure.microsoft.com/en-us/services/logic-apps/) 
+[Logic App Overview](https://azure.microsoft.com/services/logic-apps/) 
 
 # How does the Logic App Connector work? 
 
@@ -41,8 +41,8 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
 # Deploy 
 
-[![Deploy to Azure](https://azuredeploy.net/deploybutton.png)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
-
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
 
 # Logic App playbook components
 
@@ -91,7 +91,8 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
 2. Launch the template
 
-    [![Deploy to Azure](https://azuredeploy.net/deploybutton.png)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
 
 3. Template - Make sure you include the backslash of API extension /web_api/ 
 
@@ -161,7 +162,7 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
 # Security Guidance: 
 
-1. Lockdown the Logic App, API Management, and Function App service with respective Azure region IP ranges. [List of Azure IP ranges here](https://www.microsoft.com/en-us/download/details.aspx?id=56519) 
+1. Lockdown the Logic App, API Management, and Function App service with respective Azure region IP ranges. [List of Azure IP ranges here](https://www.microsoft.com/download/details.aspx?id=56519) 
 
     ```
       Logic Apps Ranges: 
