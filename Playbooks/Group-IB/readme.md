@@ -231,10 +231,10 @@ e. Configure API Key variable. API Key can be generated in the Profile Section i
 ## Deploy the Logic App template
 
 1. GIBIndicatorsProcessor Playbook:
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBIndicatorsProcessor%2Fazuredeploy-GIBIndicatorsProcessor.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGroup-IB%2Fazuredeploy-GIBIndicatorsProcessor.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGIBIndicatorsProcessor%2Fazuredeploy-GIBIndicatorsProcessor.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhesaad%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGroup-IB%2Fazuredeploy-GIBIndicatorsProcessor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 <br>
