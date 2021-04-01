@@ -203,8 +203,16 @@ BaseQuery: |
   );
   IpStats | join kind=leftouter Host_Account on HostIPAddress | project-away HostIPAddress1
   | join kind=inner (ThreatIntelligenceIndicator | where TimeGenerated < ago(1m)
-  | where Active = true and isnotempty(NetworkIP)
-  | summarize arg_max(TimeGenerated, *) by ThreatIntelMatch = Description, ThreatType, NetworkIP) on $left.RemoteIPAddress == $right.NetworkIP
+  | where Active = true
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | extend TI_ipEntity = case(
+  isnotempty(NetworkIP), NetworkIP,
+  isempty(NetworkIP) and isnotempty(NetworkSourceIP), NetworkSourceIP,
+  isempty(NetworkIP) and isempty(NetworkSourceIP) and isnotempty(NetworkDestinationIP), NetworkDestinationIP,
+  isempty(NetworkIP) and isempty(NetworkSourceIP) and isempty(NetworkDestinationIP), EmailSourceIpAddress,
+  "NotAvailable"
+  )
+  | summarize arg_max(TimeGenerated, *) by ThreatIntelMatch = Description, ThreatType, TI_ipEntity) on $left.RemoteIPAddress == $right.TI_ipEntity
   };
   GetIPResolutionWithHost('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
 
