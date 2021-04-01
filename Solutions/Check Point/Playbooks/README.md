@@ -18,7 +18,7 @@ For more information see
 # How does the Logic App Connector work? 
 
 <p align="left">  
-<img width="800" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/cp_LogicApp_01.png"> </a>
+<img width="800" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/cp_LogicApp_01.png"> </a>
 </p>
 
 The Logic App workbook can get triggers from any of the hundreds of connectors containing user-defined perimeters to fulfill the change request. 
@@ -30,7 +30,7 @@ The Check Point Logic App Connector contains Check Point Mgmt API parameters to 
 # How does everything tie together?
 
 <p align="left">  
-<img width="800" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/cp_LogicApp_detail_01.png"> </a>
+<img width="800" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/cp_LogicApp_01.png"> </a>
 </p>
 
 The solution is using Azure API Management, Function App, and Logic Apps. These services are secured by allowing access from respective Azure IP ranges and secured by API keys. See security guidance below.
@@ -41,8 +41,8 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
 # Deploy 
 
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FPlaybooks%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FPlaybooks%2FdeployCPgov.json)
 
 # Logic App playbook components
 
@@ -50,39 +50,39 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
     Example 1 - Scheduled tasks
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/example1.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/example1.png"> </a>
     </p>
 
     Example 2 - Azure Sentinel Alert
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/example2.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/example2.png"> </a>
     </p>
 
     Example 3 - HTTP post
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/example3.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/example3.png"> </a>
     </p>
 
 2. Workflow - Logic App instructions
 
 	  Define the Check Point gateway and policy package
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/workflow1.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow1.png"> </a>
     </p>
 
 	  Define the Check Point management station user/pw
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/workflow2.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow2.png"> </a>
     </p>
 
     Define what action to take, in this case, create and add each host to predefined group
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/workflow3.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow3.png"> </a>
     </p>
 
     Publish and Install security policy
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/workflow4.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow4.png"> </a>
     </p>
 
 # Deployment instructions
@@ -91,25 +91,25 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
 2. Launch the template
 
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCP.json)
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FCheck-Point-Logic-App-Connector%2Fmain%2FdeployCPgov.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FPlaybooks%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FPlaybooks%2FdeployCPgov.json)
 
 3. Template - Make sure you include the backslash of API extension /web_api/ 
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/deploy1.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/deploy1.png"> </a>
     </p>
 
 4. Copy the API key from the function app
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/deploy2.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/deploy2.png"> </a>
     </p>
 
 5. Paste function API key into the API management
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/deploy3.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/deploy3.png"> </a>
     </p>
 
 ## Test
@@ -119,13 +119,13 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 2. Copy the logic app trigger URL
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/test1.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test1.png"> </a>
     </p>
 
 3. Paste the URL and Body into Postman
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/test2.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test2.png"> </a>
     </p>
 
     Request Body
@@ -151,13 +151,13 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 4. Logic App run history should have green tickets next to each successful tasks
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/test3.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test3.png"> </a>
     </p>
 
 5. Smart Console should contain the above IP addresses in the Sentinel group created earlier
 
     <p align="left">  
-    <img width="400" src="https://raw.githubusercontent.com/chkp-jguo/Check-Point-Logic-App-Connector/main/images/test4.png"> </a>
+    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test4.png"> </a>
     </p>
 
 # Security Guidance: 
