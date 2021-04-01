@@ -21,4 +21,21 @@ query: |
   | where ActivityStatus == "Succeeded" 
   | project Caller, CallerIpAddress
   | evaluate basket()
-  | extend AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+  | join kind=leftouter (AzureActivity
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName == "Create role assignment"
+  | where ActivityStatus == "Succeeded"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Caller, CallerIpAddress)
+  on Caller, CallerIpAddress
+  | project-away Caller1, CallerIpAddress1
+  | extend timestamp = StartTime, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

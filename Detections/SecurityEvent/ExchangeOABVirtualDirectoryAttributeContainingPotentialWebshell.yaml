@@ -1,0 +1,46 @@
+id: faf1a6ff-53b5-4f92-8c55-4b20e9957594
+name: Exchange OAB Virtual Directory Attribute Containing Potential Webshell
+description: |
+  'This query uses Windows Event ID 5136 in order to detect potential webshell deployment by exploitation of CVE-2021-27065.
+  This query looks for changes to the InternalHostName or ExternalHostName properties of Exchange OAB Virtual Directory objects in AD Directory Services
+  where the new objects contain potential webshell objects. Ref: https://aka.ms/ExchangeVulns'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  SecurityEvent
+  // Look for specific Directory Service Changes and parse data
+  | where EventID == 5136
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion = array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key =tostring(['@Name']), Value = ['#text']
+  | evaluate pivot(Key, any(Value),TimeGenerated, EventID, Computer, Account, AccountType, EventSourceName, Activity, SubjectAccount)
+  // Where changes relate to Exchange OAB
+  | where ObjectClass =~ "msExchOABVirtualDirectory"
+  // Look for InternalHostName or ExternalHostName properties being changed
+  | where AttributeLDAPDisplayName in ("msExchExternalHostName", "msExchInternalHostName")
+  // Look for suspected webshell activity
+  | where AttributeValue has "script"
+  | project-rename LastSeen = TimeGenerated
+  | project-reorder LastSeen, Computer, Account, ObjectDN, AttributeLDAPDisplayName, AttributeValue
+  | extend timestamp = LastSeen, AccountCustomEntity = Account, HostCustomEntity = Computer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
