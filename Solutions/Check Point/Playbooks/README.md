@@ -30,7 +30,7 @@ The Check Point Logic App Connector contains Check Point Mgmt API parameters to 
 # How does everything tie together?
 
 <p align="left">  
-<img width="800" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/cp_LogicApp_01.png"> </a>
+<img width="800" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/cp_LogicApp_detail_01.png"> </a>
 </p>
 
 The solution is using Azure API Management, Function App, and Logic Apps. These services are secured by allowing access from respective Azure IP ranges and secured by API keys. See security guidance below.
