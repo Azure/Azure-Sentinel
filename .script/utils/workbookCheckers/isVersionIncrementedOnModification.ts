@@ -15,14 +15,15 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
 
   if(pr){ // pr may return undefined
     const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
+    const options = ["-W", pr.targetBranch, pr.sourceBranch, "Workbooks/WorkbooksMetadata.json"];
+    const diffSummary = await git.diff(options);
+    console.log(diffSummary)
     if(changedFiles && changedFiles.length > 0){
       items
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`Workbooks/${workbookMetadata.templateRelativePath}`))
       .forEach(async (workbookMetadata: WorkbookMetadata) => {
-        let options = [pr.targetBranch, pr.sourceBranch, "Workbooks/WorkbooksMetadata.json"];
-        let diffSummary = await git.diff(options);
-        console.log(workbookMetadata)
-        console.log(diffSummary)
+        //console.log(workbookMetadata)
+        //console.log(diffSummary)
       });
     }
   }
