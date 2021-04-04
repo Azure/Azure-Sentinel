@@ -22,6 +22,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
       items
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`Workbooks/${workbookMetadata.templateRelativePath}`))
       .forEach(async (workbookMetadata: WorkbookMetadata) => {
+        workbookMetadata["version"] = workbookMetadata["version"]
         //console.log(workbookMetadata)
         //console.log(diffSummary)
       });
