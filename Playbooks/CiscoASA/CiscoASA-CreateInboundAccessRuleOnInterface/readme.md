@@ -7,6 +7,17 @@ This playbook allows blocking/unblocking of IPs in Cisco ASA, using **Access Rul
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions
 1. For the IPs we check if they are already directly blocked by an access rule on the interface
 2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depdening on it's current status block it by adding an access rule or unblock it by removing an access rule
+    ![Adaptive card](./images/CreateInboundAccessRuleOnInterface-AdaptiveCard.png)
+3. Comment is added to Azure Sentinel incident.
+![playbook overview](./images/CreateInboundAccessRuleOnInterface-AzureSentinel-Comments.png)
+
+**Inbound access rule is added in Cisco ASA:**
+![playbook overview](./images/CreateInboundAccessRuleOnInterface-CiscoASA.png)
+
+**Playbook overview:**
+
+![playbook overview](./images/CreateInboundAccessRuleOnInterface-LogicApp.png)
+
 
 ### Prerequisites
 1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.

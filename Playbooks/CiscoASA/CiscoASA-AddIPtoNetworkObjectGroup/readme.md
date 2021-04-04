@@ -8,6 +8,20 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 1. For the IPs we check if the are already a member of the Network Object Group
 2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depdening on it's current status block it by adding it to the Network Object Group or unblock it by removing it from the Network Object Group
 
+    ![Adaptive card](./images/AddIPtoNetworkObjectGroup-AdaptiveCard.png)
+3. Comment is added to Azure Sentinel incident.
+    ![playbook overview](./images/AddIPtoNetworkObjectGroup-AzureSentinel-Comments.png)
+
+**IP is added to Cisco ASA object group:**
+
+![playbook overview](./images/AddIPtoNetworkObjectGroup-CiscoASAd.png)
+
+**Playbook overview:**
+
+![playbook overview](./images/AddIPtoNetworkObjectGroup-LogicApp.png)
+
+
+
 ### Prerequisites
 1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
 2. Cisco ASA custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.
