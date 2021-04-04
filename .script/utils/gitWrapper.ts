@@ -27,7 +27,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
  
   let changedFiles = await pr.diff();
   console.log(`${changedFiles.length} files changed in current PR`);
-  let options = [pr.targetBranch, pr.sourceBranch, "Workbooks/WorkbooksMetadata.json"];
+  let options = [pr.targetBranch, pr.sourceBranch, "-W", "Workbooks/WorkbooksMetadata.json"];
   let diffSummary = await git.diff(options);
   console.log(diffSummary)
 
