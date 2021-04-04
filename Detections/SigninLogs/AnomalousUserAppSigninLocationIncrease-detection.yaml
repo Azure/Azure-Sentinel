@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -23,9 +26,11 @@ query: |
   let lookBack_long = 14d;
   let lookBack_med = 7d;
   let lookBack = 1d;
-  SigninLogs
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where TimeGenerated >= startofday(ago(lookBack_long))
-  | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";") 
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+  | extend locationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city), ";") 
   | project TimeGenerated, AppDisplayName , UserPrincipalName, locationString 
   // Create time series 
   | make-series dLocationCount = dcount(locationString) on TimeGenerated in range(startofday(ago(lookBack_long)),now(), 1d) 
@@ -37,30 +42,35 @@ query: |
   | where Slope > 0.3
   | top 50 by Slope desc
   | join kind = leftsemi (
-  SigninLogs
+  table(tableName)
   | where TimeGenerated >= startofday(ago(lookBack_med))
-  | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";") 
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+  | extend locationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city), ";") 
   | project TimeGenerated, AppDisplayName , UserPrincipalName, locationString 
   | make-series dLocationCount = dcount(locationString) on TimeGenerated in range(startofday(ago(lookBack_med)) ,now(), 1d) 
   by UserPrincipalName, AppDisplayName 
-  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount) 
-  | top 50 by Slope desc
+  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount)
   | where Slope > 0.3
+  | top 50 by Slope desc
   ) on UserPrincipalName, AppDisplayName
   | join kind = leftsemi (
-  SigninLogs
+  table(tableName)
   | where TimeGenerated >= startofday(ago(lookBack))
-  | extend locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/", tostring(LocationDetails["city"]), ";") 
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+  | extend locationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city), ";") 
   | project TimeGenerated, AppDisplayName , UserPrincipalName, locationString 
   | make-series dLocationCount = dcount(locationString) on TimeGenerated in range(startofday(ago(lookBack)) ,now(), 1d) 
   by UserPrincipalName, AppDisplayName 
-  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount) 
+  | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dLocationCount)
+  | where Slope > 5
   | top 50 by Slope desc
   // Higher threshold requirement on last day anomaly
-  | where Slope > 5
   ) on UserPrincipalName, AppDisplayName
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName
-
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:

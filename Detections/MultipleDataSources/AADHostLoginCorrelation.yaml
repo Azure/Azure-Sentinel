@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
@@ -29,10 +32,11 @@ query: |
   //Adjust this threshold to fit the environment
   let signin_threshold = 5;
   //Make a list of all IPs with failed signins to AAD above our threshold
+  let aadFunc = (tableName:string){
   let suspicious_signins =
-  SigninLogs
+  table(tableName)
   | where ResultType !in ("0", "50125", "50140")
-  | where IPAddress != "127.0.0.1"
+  | where IPAddress !in ('127.0.0.1', '::1')
   | summarize count() by IPAddress
   | where count_ > signin_threshold
   | summarize make_list(IPAddress);
@@ -56,6 +60,10 @@ query: |
   | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, Reason;
   union isfuzzy=true linux_logons,win_logons
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, IPCustomEntity = IpAddress, HostCustomEntity = Computer
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
