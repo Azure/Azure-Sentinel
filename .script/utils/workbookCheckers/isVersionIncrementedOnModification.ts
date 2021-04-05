@@ -27,26 +27,17 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`Workbooks/${workbookMetadata.templateRelativePath}`))
       .forEach((workbookMetadata: WorkbookMetadata) => {
         const workbookKey = workbookMetadata.workbookKey;
-        console.log("here2");
         if(versionChanges[workbookKey] == null){
-          console.log("here3");
           // If the workbook has changed but the version was not updated (a matching key was not found in the versionChanges dictionary) - throw error
           throw new WorkbookValidationError(`The workbook ${workbookKey} has been modified but the version has not been incremented in the Workbooks/WorkbooksMetadata.json file.`);
         }
         else{
-          console.log("here4");
           if(versionChanges[workbookKey]["newVersion"] <= versionChanges[workbookKey]["oldVersion"]){ // If the version was updated but the new version is not greater than old version - throw error
-            console.log("here5");
             throw new WorkbookValidationError(`The new updated version must be greater than the old version for workbook ${workbookKey} in the Workbooks/WorkbooksMetadata.json file.`);
           }
         }
       });
-
-      throw new WorkbookValidationError("here");
     }
-  }
-  else{
-    throw new WorkbookValidationError("here else");
   }
 }
 
@@ -83,6 +74,5 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
     currentLine++;
   }
 
-  console.log("here6");
   return workbookVersionChanges;
 }
