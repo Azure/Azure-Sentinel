@@ -19,15 +19,15 @@ confluence_homesite_name = os.environ['ConfluenceHomeSiteName']
 connection_string = os.environ['AzureWebJobsStorage']
 log_type = 'Confluence_Audit'
 confluence_uri_audit = "https://" + confluence_homesite_name + ".atlassian.net/wiki/rest/api/audit"
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-if 'logAnalyticsUri' in os.environ:
-   logAnalyticsUri = os.environ['logAnalyticsUri']
-   pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
-   match = re.match(pattern,str(logAnalyticsUri))
-   if not match:
-       raise Exception("Invalid Log Analytics Uri.")
-else:
-    logAnalyticsUri = "https://" + customer_id + ".ods.opinsights.azure.com"
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Invalid Log Analytics Uri.")
 
 def generate_date():
     current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
