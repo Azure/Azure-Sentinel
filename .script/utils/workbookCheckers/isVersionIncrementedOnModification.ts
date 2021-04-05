@@ -35,7 +35,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
         }
         else{
           if(versionChanges[templateRelativePath]["newVersion"] <= versionChanges[templateRelativePath]["oldVersion"]){ // If the version was updated but the new version is not greater than old version - throw error
-            throw new WorkbookValidationError(`The new updated version must be greater than the old version for workbook ${workbookMetadata.templateRelativePath} in the ${workbooksDirectoryPath}/WorkbooksMetadata.json file.`);
+            throw new WorkbookValidationError(`The new updated version (${versionChanges[templateRelativePath]["newVersion"]}) must be greater than the old version (${versionChanges[templateRelativePath]["oldVersion"]}) for workbook ${workbookMetadata.templateRelativePath} in the ${workbooksDirectoryPath}/WorkbooksMetadata.json file.`);
           }
         }
       });
