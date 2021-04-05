@@ -1,6 +1,7 @@
 import { GetDiffFiles, GetPRDetails } from "../gitWrapper";
 import { WorkbookMetadata } from "../workbookMetadata";
 import gitP, { SimpleGit } from 'simple-git/promise';
+import { WorkbookValidationError } from "../validationError";
 
 const workingDir:string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
@@ -15,18 +16,63 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
 
   if(pr){ // pr may return undefined
     const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
-    const options = [pr.targetBranch, pr.sourceBranch, "Workbooks/WorkbooksMetadata.json", "-W"];
-    console.log("options: " + options)
-    const diffSummary = await git.diff(options);
-    console.log(diffSummary)
+    
     if(changedFiles && changedFiles.length > 0){
+      const options = [pr.targetBranch, pr.sourceBranch, "-W", "Workbooks/WorkbooksMetadata.json"];
+      const diffSummary = await git.diff(options);
+      const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
+      const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
+
       items
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`Workbooks/${workbookMetadata.templateRelativePath}`))
-      .forEach(async (workbookMetadata: WorkbookMetadata) => {
-        workbookMetadata["version"] = workbookMetadata["version"]
-        //console.log(workbookMetadata)
-        //console.log(diffSummary)
+      .forEach((workbookMetadata: WorkbookMetadata) => {
+        const workbookKey = workbookMetadata.workbookKey;
+        if(versionChanges[workbookKey] == null){
+          // If the workbook has changed but the version was not updated (a matching key was not found in the versionChanges dictionary) - throw error
+          throw new WorkbookValidationError(`The workbook ${workbookKey} has been modified but the version has not been incremented in the Workbooks/WorkbooksMetadata.json file.`);
+        }
+        else{
+          if(versionChanges[workbookKey]["newVersion"] <= versionChanges[workbookKey]["oldVersion"]){ // If the version was updated but the new version is not greater than old version - throw error
+            throw new WorkbookValidationError(`The new updated version must be greater than the old version for workbook ${workbookKey} in the Workbooks/WorkbooksMetadata.json file.`);
+          }
+        }
       });
     }
   }
+}
+
+function extractVersionChangesByWorkbook(diffLines: string[]){
+  let currentLine = 0;
+  let workbookVersionChanges: any = {};
+  while(diffLines[currentLine++] != '['){} // Skip to beginning of Workbooks array
+
+  while(diffLines[currentLine] != "]"){
+    if(diffLines[currentLine] == "{"){ // Beginning of a workbook metadata object
+      currentLine++;
+      let workbookKey, newVersion, oldVersion;
+
+      while(!(diffLines[currentLine] == "}" || diffLines[currentLine] == "},")){ // While current line is not end of object
+        if(diffLines[currentLine].startsWith('"workbookKey"')){
+          workbookKey = diffLines[currentLine].split(':')[1].trim().replace('"', "").replace(',', "");
+        }
+
+        if(diffLines[currentLine].startsWith('+    "version"')){ // We are only interested in changes of the version value of an existing workbook
+          newVersion = diffLines[currentLine].split(':')[1].trim().replace('"', "").replace(',', "");
+        }
+
+        if(diffLines[currentLine].startsWith('-    "version"')){ // We are only interested in changes of the version value of an existing workbook
+          oldVersion = diffLines[currentLine].split(':')[1].trim().replace('"', "").replace(',', "");
+        }
+
+        currentLine++;
+      }
+      // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
+      if(workbookKey != null && newVersion != null && oldVersion != null){
+        workbookVersionChanges[workbookKey] = {"newVersion": newVersion, "oldVersion": oldVersion};
+      }
+    }
+    currentLine++;
+  }
+
+  return workbookVersionChanges;
 }
