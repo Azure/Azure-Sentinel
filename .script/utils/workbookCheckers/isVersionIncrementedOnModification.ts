@@ -45,6 +45,9 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
       throw new WorkbookValidationError("here");
     }
   }
+  else{
+    throw new WorkbookValidationError("here else");
+  }
 }
 
 function extractVersionChangesByWorkbook(diffLines: string[]){
