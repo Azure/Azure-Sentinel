@@ -78,5 +78,6 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
     currentLine++;
   }
 
+  console.log(workbookVersionChanges);
   return workbookVersionChanges;
 }
