@@ -22,7 +22,6 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
     if(changedFiles && changedFiles.length > 0){
       const options = [pr.targetBranch, pr.sourceBranch, "-W", `${workbooksDirectoryPath}/WorkbooksMetadata.json`]; // -W option to get the full file content
       const diffSummary = await git.diff(options);
-      console.log(diffSummary);
       const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
       const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
 
@@ -54,18 +53,19 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
     if(diffLines[currentLine] == "{"){ // Beginning of a workbook metadata object
       currentLine++;
       let templateRelativePath, newVersion, oldVersion;
+      const replaceQuotesRegex = /\"/gi; // If the replace method receives a string as the first parameter, then only the first occurrence is replaced. To replace all, a regex is required.
 
       while(!(diffLines[currentLine] == "}" || diffLines[currentLine] == "},")){ // While current line is not end of object
         if(diffLines[currentLine].startsWith('"templateRelativePath":')){
-          templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace(/\"/gi, "").replace(',', "");
+          templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
         if(diffLines[currentLine].startsWith('+    "version":')){ // We are only interested in changes of the version value of an existing workbook
-          newVersion = diffLines[currentLine].split(':')[1].trim().replace(/\"/gi, "").replace(',', "");
+          newVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
         if(diffLines[currentLine].startsWith('-    "version":')){ // We are only interested in changes of the version value of an existing workbook
-          oldVersion = diffLines[currentLine].split(':')[1].trim().replace(/\"/gi, "").replace(',', "");
+          oldVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
         currentLine++;
@@ -78,6 +78,5 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
     currentLine++;
   }
 
-  console.log(workbookVersionChanges);
   return workbookVersionChanges;
 }
