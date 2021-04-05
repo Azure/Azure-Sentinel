@@ -2,11 +2,11 @@ import { cli, devOps } from "@azure/avocado";
 import * as logger from "./logger";
 import "./stringExtenssions";
 import { PullRequestProperties } from '@azure/avocado/dist/dev-ops';
-import gitP, { SimpleGit } from 'simple-git/promise';
+//import gitP, { SimpleGit } from 'simple-git/promise';
 
 let pullRequestDetails: PullRequestProperties | undefined;
-const workingDir:string = process.cwd();
-const git: SimpleGit = gitP(workingDir);
+//const workingDir:string = process.cwd();
+//const git: SimpleGit = gitP(workingDir);
 
 export async function GetPRDetails() {
   if (typeof pullRequestDetails == "undefined"){
