@@ -57,15 +57,15 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
 
       while(!(diffLines[currentLine] == "}" || diffLines[currentLine] == "},")){ // While current line is not end of object
         if(diffLines[currentLine].startsWith('"templateRelativePath":')){
-          templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace('"', "").replace(',', "");
+          templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace(/\"/gi, "").replace(',', "");
         }
 
         if(diffLines[currentLine].startsWith('+    "version":')){ // We are only interested in changes of the version value of an existing workbook
-          newVersion = diffLines[currentLine].split(':')[1].trim().replace('"', "").replace(',', "");
+          newVersion = diffLines[currentLine].split(':')[1].trim().replace(/\"/gi, "").replace(',', "");
         }
 
         if(diffLines[currentLine].startsWith('-    "version":')){ // We are only interested in changes of the version value of an existing workbook
-          oldVersion = diffLines[currentLine].split(':')[1].trim().replace('"', "").replace(',', "");
+          oldVersion = diffLines[currentLine].split(':')[1].trim().replace(/\"/gi, "").replace(',', "");
         }
 
         currentLine++;
