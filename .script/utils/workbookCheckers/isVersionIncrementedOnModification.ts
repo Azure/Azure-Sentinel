@@ -63,19 +63,19 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
           templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
-        // The '+' may added to a line as part of the 'git diff' output
+        // The '+' may be added to a line as part of the 'git diff' output
         if(diffLines[currentLine].startsWith('+') && diffLines[currentLine].includes('"version":')){ // We are only interested in changes of the version value of an existing workbook
           newVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
-        // The '-' may added to a line as part of the 'git diff' output
+        // The '-' may be added to a line as part of the 'git diff' output
         if(diffLines[currentLine].startsWith('-') && diffLines[currentLine].includes('"version":')){ // We are only interested in changes of the version value of an existing workbook
           oldVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
         currentLine++;
       }
-      
+
       // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
       if(templateRelativePath != null && newVersion != null && oldVersion != null){
         workbookVersionChanges[templateRelativePath] = {"newVersion": newVersion, "oldVersion": oldVersion};
