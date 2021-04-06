@@ -10,8 +10,8 @@ import requests
 import datetime
 
 
-AppSecret = os.environ['WorkplaceAppSecret']
-VerifyToken = os.environ['WorkplaceVerifyToken']
+AppSecret = os.environ['WorkplaceForFacebookAppSecret']
+VerifyToken = os.environ['WorkplaceForFacebookVerifyToken']
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
