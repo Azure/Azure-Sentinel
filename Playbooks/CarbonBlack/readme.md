@@ -26,6 +26,8 @@ The Carbon Black Cloud is a cloud-native endpoint protection platform (EPP) that
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:
 * [Logic Apps custom connector for Carbon Black](./CarbonBlackConnector)
+
+  ![custom connector](./CarbonBlackConnector/CarbonBlackListOfActions.png)
 * Three playbook templates leverage CarbonBlack custom connector:
   * [Response from Teams](./Playbooks/CarbonBlack-TakeDeviceActionFromTeams) - allow SOC to take action on suspicious devices arrived in incidents (apply a pre-defined policy or quarantine) and change incident configuration directly from Teams channel. Post information about the incident as a comment to the incident.
   * [Quarantine device](./Playbooks/CarbonBlack-QuarantineDevice) - move the device arrived in the incident to quarantine (if not already quarantined). Post information about the incident as a comment to the incident.
