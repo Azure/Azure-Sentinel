@@ -11,6 +11,7 @@ const filePathFolderPrefixes = ["Workbooks"];
 const fileKinds = ["Modified"];
 
 const workbooksDirectoryPath = "Workbooks";
+const gitDiffFileFullContentOption = "-W"; // -W option to get the full file content
 
 // Checks that the version of a workbook template is incremented if modified
 export async function isVersionIncrementedOnModification(items: Array<WorkbookMetadata>) {
@@ -20,7 +21,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
     const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
     
     if(changedFiles && changedFiles.length > 0){
-      const options = [pr.targetBranch, pr.sourceBranch, "-W", `${workbooksDirectoryPath}/WorkbooksMetadata.json`]; // -W option to get the full file content
+      const options = [pr.targetBranch, pr.sourceBranch, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
       const diffSummary = await git.diff(options);
       const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
       const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
@@ -34,7 +35,9 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
           throw new WorkbookValidationError(`The workbook ${workbookMetadata.templateRelativePath} has been modified but the version has not been incremented in the ${workbooksDirectoryPath}/WorkbooksMetadata.json file.`);
         }
         else{
-          if(versionChanges[templateRelativePath]["newVersion"] <= versionChanges[templateRelativePath]["oldVersion"]){ // If the version was updated but the new version is not greater than old version - throw error
+          const isNewVersionGreaterThanOldVersion = versionChanges[templateRelativePath]["newVersion"] > versionChanges[templateRelativePath]["oldVersion"];
+
+          if(!isNewVersionGreaterThanOldVersion){ // If the version was updated but the new version is not greater than old version - throw error
             throw new WorkbookValidationError(`The new updated version (${versionChanges[templateRelativePath]["newVersion"]}) must be greater than the old version (${versionChanges[templateRelativePath]["oldVersion"]}) for workbook ${workbookMetadata.templateRelativePath} in the ${workbooksDirectoryPath}/WorkbooksMetadata.json file.`);
           }
         }
@@ -60,16 +63,19 @@ function extractVersionChangesByWorkbook(diffLines: string[]){
           templateRelativePath = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
-        if(diffLines[currentLine].startsWith('+    "version":')){ // We are only interested in changes of the version value of an existing workbook
+        // The '+' may added to a line as part of the 'git diff' output
+        if(diffLines[currentLine].startsWith('+') && diffLines[currentLine].includes('"version":')){ // We are only interested in changes of the version value of an existing workbook
           newVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
-        if(diffLines[currentLine].startsWith('-    "version":')){ // We are only interested in changes of the version value of an existing workbook
+        // The '-' may added to a line as part of the 'git diff' output
+        if(diffLines[currentLine].startsWith('-') && diffLines[currentLine].includes('"version":')){ // We are only interested in changes of the version value of an existing workbook
           oldVersion = diffLines[currentLine].split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
         }
 
         currentLine++;
       }
+      
       // Here we finish iterating over the current workbook metadata object. We will add the parsed workbook changes only if all fields are populated.
       if(templateRelativePath != null && newVersion != null && oldVersion != null){
         workbookVersionChanges[templateRelativePath] = {"newVersion": newVersion, "oldVersion": oldVersion};
