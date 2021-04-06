@@ -4,6 +4,8 @@
  1. Fetches the device information from Crowdstrike
  2. Contain host if it is not already contained
  3. Enrich the incident with device information from Crowdstrike
+    ![Comment example](./Incident_Comment.png)
+
  4. Close the incident if contained the host
 
 ![Crowdstrike_ContainHost](./ContainHost.png)

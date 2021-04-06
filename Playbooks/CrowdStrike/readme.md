@@ -31,6 +31,7 @@ You can choose to deploy the whole package (Four playbook templates) from the De
 * [Contain Host playbook](./Playbooks/CrowdStrike_ContainHost) will automatically contain hosts found in the incident.
 * [Enrichment playbook](./Playbooks/CrowdStrike_Enrichment_GetDeviceInformation) will post a comment to the incident with device information and related detections found in CrowdStrike.
 * [Response from Teams playbook](./Playbooks/CrowdStrike_ResponsefromTeams) will send the SOC Channel interactive cards with host information, allowing taking action on the host: Running a script or contain the host in CrowdStrike.
+
   ![Crowdstrike-ResponsefromTeams](./Playbooks/Crowdstrike_ResponsefromTeams/adaptivecardcrowdstrike.png)
 
 

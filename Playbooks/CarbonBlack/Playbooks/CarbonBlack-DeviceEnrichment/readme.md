@@ -3,7 +3,7 @@
  When a new sentinal incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
  2. Enrich the incident with device information by adding a comment to the incident
-
+     ![Comment example](./Incident_Comment.png)
 
 ![CarbonBlack-Enrich Incident With devices information](./CarbonBlack_Enrichment.png)
 ### Prerequisites 

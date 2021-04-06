@@ -17,6 +17,9 @@ When a new Azure Sentinel is created,this playbook gets triggered and performs b
 **This is the adaptive card SOC will recieve when playbook is triggered:**<br><br>
 ![Adaptive Card example](./AdaptiveCard.jpg)
 
+**Comment example:**<br><br>
+![Comment example](./Incident_Comment.png)
+
 ### Prerequisites 
 1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.

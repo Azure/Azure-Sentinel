@@ -2,9 +2,16 @@
  ## Summary
  When a new sentinal incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
- 2. Quarantine the device or Update the policy based on SOC action
- 2. Add a comment to the incident with the information collected from the carbon black, summary of the actions taken and close the incident
+ 2. Sends an adaptive card to the SOC Teams channel, let the analyst decide on action:
+    Quarantine the device or Update the policy based on SOC action
 
+    ![card example](./adaptiveCard.png)
+
+ 3. Add a comment to the incident with the information collected from the carbon black, summary of the actions taken and close the incident
+     ![Comment example](./Incident_Comment.png)
+
+
+**Playbook overview**
 
 ![CarbonBlack-Enrich Incident With devices information](./CarbonBlack-TakeDeviceActionFromTeams.png
 )

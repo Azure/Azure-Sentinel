@@ -4,6 +4,7 @@
  1. Fetches the device information from Crowdstrike
  1. Contain the device or run a script based on SOC action
  1. Add a comment to the incident with the information collected from the Crowdstrike, summary of the actions taken and close the incident
+    ![Comment example](./Incident_Comment.png)
 
 **Adaptive card that will be sent in the Teams SOC Channel:**
 

@@ -16,6 +16,10 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 **This is the adaptive card SOC will recieve when playbook is triggered:**<br><br>
 ![Adaptive Card example](./IPGroupsAdaptiveCard.png)
 
+**Comment example:**<br><br>
+![Comment example](./Incident_Comment.png)
+
+
 ### Prerequisites 
 
 1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.

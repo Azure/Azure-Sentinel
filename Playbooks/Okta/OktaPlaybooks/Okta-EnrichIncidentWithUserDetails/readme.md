@@ -3,6 +3,7 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the user details and user group details from Okta
  2. Adds a rich comment to the incident with all the collected information
+    ![Comment example](./Incident_Comment.png)
 
 
 ![Playbook Designer view](./Okta-EnrichIncidentwithuserdetails.PNG)<br>
