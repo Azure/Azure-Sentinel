@@ -1,7 +1,7 @@
-# Ingest Group-IB TI Feeds and Indicators Collections
+# Ingest Group-IB Threat Intelligence & Attribution Feeds and Indicators Collections
 Author: Hesham Saad
 
-Group-IB Azure Sentinel playbooks designed by Group-IB team and supported by Microsoft team to ingest TI feeds and indicators from multiple Group-IB data collections and writes them to Microsoft Security Graph API to be listed under Azure Sentinel ThreatIntelligenceIndicators table and custom log tables as well for adversaries, threat actors,...etc
+Group-IB Azure Sentinel playbooks designed by Group-IB team and supported by Microsoft team to ingest Threat Intelligence & Attribution feeds and indicators from multiple Group-IB data collections and writes them to Microsoft Security Graph API to be listed under Azure Sentinel ThreatIntelligenceIndicators table and custom log tables as well for adversaries, threat actors,...etc
 
 There are a number of pre-configuration steps required before deploying the playbooks.
 
@@ -214,8 +214,7 @@ e. Configure API Key variable. API Key can be generated in the Profile Section i
 Note:
 <br>
 - In case if you faced an issue while deploying one of the Playbooks via the ARM template's option, please refer to the Playbook json file and do a manual copy & paste activity to a blank Playbook (Logic App).
-<br> 
-- Please ensure keeping the default value of PlaybookName as is since there is a dependencies at other playbooks for the messages batching process.
+- Please ensure keeping the default value of PlaybookName as is since there is a dependencies at other playbooks for the messages batching process on the names, ensure that GIBIndicatorsProcessor playbook be installed first then deploy any other needed playbook (Collection) and ensure that all PLaybooks have the same resource group region.
 <br>
 - Based on the Playbooks (Logic App) selected region (East US, UAE North, West Europe,...etc) please ensure validating the Logic APP region outbound IPs list are been whitelisted with Group-IB, for more details: https://docs.microsoft.com/en-us/azure/logic-apps/logic-apps-limits-and-config#outbound-ip-addresses
 
