@@ -2,12 +2,12 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "comments": "Perform automated actions on the Azure Sentinels Incident based on RiskIQ Reputation data.",
+        "comments": "Perform automated enrichment on the Azure Sentinel Incidents based on RiskIQ Internet data.",
         "author": "Brandon Dixon, RiskIQ"
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Sentinel-Incident-Action-RiskIQ-Reputation-All",
+            "defaultValue": "Sentinel-Incident-Enrich-RiskIQ-Data-PassiveDns-All",
             "type": "string"
         },
         "UserName": {
@@ -83,7 +83,7 @@
                             "path": "/entities/host"
                         },
                         "runAfter": {
-                            "Init_Classification_Bit": [
+                            "Init_Lookback_Period": [
                                 "Succeeded"
                             ]
                         },
@@ -101,19 +101,19 @@
                             "path": "/entities/ip"
                         },
                         "runAfter": {
-                            "Init_Classification_Bit": [
+                            "Init_Lookback_Period": [
                                 "Succeeded"
                             ]
                         },
                         "type": "ApiConnection"
                     },
-                    "For_each_Host": {
+                    "For_each_host": {
                         "actions": {
                             "Add_comment_to_incident_(V3)": {
                                 "inputs": {
                                     "body": {
                                         "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                        "message": "<p>RiskIQ Reputation: @{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}<br>\nClassification: @{body('Get_reputation_for_host')?['classification']} (@{body('Get_reputation_for_host')?['score']})<br>\n@{body('Create_Host_HTML_table')}</p>"
+                                        "message": "<p>Last week of Passive DNS for @{items('For_each_host')?['HostName']}.@{items('For_each_host')?['DnsDomain']}<br>\n@{variables('domain_comment')}</p>"
                                     },
                                     "host": {
                                         "connection": {
@@ -124,37 +124,89 @@
                                     "path": "/Incidents/Comment"
                                 },
                                 "runAfter": {
-                                    "Create_Host_HTML_table": [
+                                    "Condition": [
                                         "Succeeded"
                                     ]
                                 },
                                 "type": "ApiConnection"
                             },
-                            "Append_host_classification": {
-                                "inputs": {
-                                    "name": "classification_bit",
-                                    "value": "@body('Get_reputation_for_host')?['classification']"
+                            "Condition": {
+                                "actions": {
+                                    "Create_Host_HTML_table": {
+                                        "inputs": {
+                                            "format": "HTML",
+                                            "from": "@variables('domain_results')"
+                                        },
+                                        "runAfter": {},
+                                        "type": "Table"
+                                    },
+                                    "Set_domain_comment": {
+                                        "inputs": {
+                                            "name": "domain_comment",
+                                            "value": "@body('Create_Host_HTML_table')"
+                                        },
+                                        "runAfter": {
+                                            "Create_Host_HTML_table": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable"
+                                    }
+                                },
+                                "else": {
+                                    "actions": {
+                                        "Set_domain_comment_empty": {
+                                            "inputs": {
+                                                "name": "domain_comment",
+                                                "value": "No results found."
+                                            },
+                                            "runAfter": {},
+                                            "type": "SetVariable"
+                                        }
+                                    }
+                                },
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "greater": [
+                                                "@length(variables('domain_results'))",
+                                                0
+                                            ]
+                                        }
+                                    ]
                                 },
                                 "runAfter": {
-                                    "Set_host_variable": [
+                                    "For_each_host_resolve": [
                                         "Succeeded"
                                     ]
                                 },
-                                "type": "AppendToArrayVariable"
+                                "type": "If"
                             },
-                            "Create_Host_HTML_table": {
-                                "inputs": {
-                                    "format": "HTML",
-                                    "from": "@variables('result_output_host')"
+                            "For_each_host_resolve": {
+                                "actions": {
+                                    "Append_to_array_variable": {
+                                        "inputs": {
+                                            "name": "domain_results",
+                                            "value": {
+                                                "First": "@body('Get_passive_DNS')?['firstSeen']",
+                                                "Last": "@body('Get_passive_DNS')?['lastSeen']",
+                                                "Type": "@items('For_each_host_resolve')?['recordType']",
+                                                "Value": "@items('For_each_host_resolve')?['resolve']"
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "type": "AppendToArrayVariable"
+                                    }
                                 },
+                                "foreach": "@body('Get_passive_DNS')?['results']",
                                 "runAfter": {
-                                    "Append_host_classification": [
+                                    "Get_passive_DNS": [
                                         "Succeeded"
                                     ]
                                 },
-                                "type": "Table"
+                                "type": "Foreach"
                             },
-                            "Get_reputation_for_host": {
+                            "Get_passive_DNS": {
                                 "inputs": {
                                     "host": {
                                         "connection": {
@@ -162,42 +214,32 @@
                                         }
                                     },
                                     "method": "get",
-                                    "path": "/reputation",
+                                    "path": "/dns/passive",
                                     "queries": {
-                                        "query": "@{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}"
+                                        "query": "@{items('For_each_host')?['HostName']}.@{items('For_each_host')?['DnsDomain']}",
+                                        "start": "@variables('lookback')",
+                                        "timeout": 7
                                     }
                                 },
                                 "runAfter": {},
                                 "type": "ApiConnection"
-                            },
-                            "Set_host_variable": {
-                                "inputs": {
-                                    "name": "result_output_host",
-                                    "value": "@body('Get_reputation_for_host')?['rules']"
-                                },
-                                "runAfter": {
-                                    "Get_reputation_for_host": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "SetVariable"
                             }
                         },
                         "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
                         "runAfter": {
-                            "Init_Result_Host": [
+                            "Init_domain_comment": [
                                 "Succeeded"
                             ]
                         },
                         "type": "Foreach"
                     },
-                    "For_each_IP_Address": {
+                    "For_each_ip": {
                         "actions": {
                             "Add_comment_to_incident_(V3)_2": {
                                 "inputs": {
                                     "body": {
                                         "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                        "message": "<p>RiskIQ Reputation: @{items('For_each_IP_Address')?['Address']}<br>\nClassification: @{body('Get_reputation')?['classification']} (@{body('Get_reputation')?['score']})<br>\n@{body('Create_IP_HTML_table')}</p>"
+                                        "message": "<p>Last week of Passive DNS for @{items('For_each_ip')?['Address']}<br>\n@{variables('ip_comment')}</p>"
                                     },
                                     "host": {
                                         "connection": {
@@ -208,37 +250,89 @@
                                     "path": "/Incidents/Comment"
                                 },
                                 "runAfter": {
-                                    "Create_IP_HTML_table": [
+                                    "Condition_2": [
                                         "Succeeded"
                                     ]
                                 },
                                 "type": "ApiConnection"
                             },
-                            "Append_ip_classification": {
-                                "inputs": {
-                                    "name": "classification_bit",
-                                    "value": "@body('Get_reputation')?['classification']"
+                            "Condition_2": {
+                                "actions": {
+                                    "Create_IP_HTML_table": {
+                                        "inputs": {
+                                            "format": "HTML",
+                                            "from": "@variables('ip_results')"
+                                        },
+                                        "runAfter": {},
+                                        "type": "Table"
+                                    },
+                                    "Set_ip_comment": {
+                                        "inputs": {
+                                            "name": "ip_comment",
+                                            "value": "@body('Create_IP_HTML_table')"
+                                        },
+                                        "runAfter": {
+                                            "Create_IP_HTML_table": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable"
+                                    }
+                                },
+                                "else": {
+                                    "actions": {
+                                        "Set_variable": {
+                                            "inputs": {
+                                                "name": "ip_comment",
+                                                "value": "No results found."
+                                            },
+                                            "runAfter": {},
+                                            "type": "SetVariable"
+                                        }
+                                    }
+                                },
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "greater": [
+                                                "@length(variables('ip_results'))",
+                                                0
+                                            ]
+                                        }
+                                    ]
                                 },
                                 "runAfter": {
-                                    "Set_ip_variable": [
+                                    "For_each_ip_resolve": [
                                         "Succeeded"
                                     ]
                                 },
-                                "type": "AppendToArrayVariable"
+                                "type": "If"
                             },
-                            "Create_IP_HTML_table": {
-                                "inputs": {
-                                    "format": "HTML",
-                                    "from": "@variables('result_output_ip')"
+                            "For_each_ip_resolve": {
+                                "actions": {
+                                    "Append_to_array_variable_2": {
+                                        "inputs": {
+                                            "name": "ip_results",
+                                            "value": {
+                                                "First": "@item()?['firstSeen']",
+                                                "Last": "@item()?['lastSeen']",
+                                                "Type": "@items('For_each_ip_resolve')?['recordType']",
+                                                "Value": "@items('For_each_ip_resolve')?['resolve']"
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "type": "AppendToArrayVariable"
+                                    }
                                 },
+                                "foreach": "@body('Get_passive_DNS_2')?['results']",
                                 "runAfter": {
-                                    "Append_ip_classification": [
+                                    "Get_passive_DNS_2": [
                                         "Succeeded"
                                     ]
                                 },
-                                "type": "Table"
+                                "type": "Foreach"
                             },
-                            "Get_reputation": {
+                            "Get_passive_DNS_2": {
                                 "inputs": {
                                     "host": {
                                         "connection": {
@@ -246,41 +340,32 @@
                                         }
                                     },
                                     "method": "get",
-                                    "path": "/reputation",
+                                    "path": "/dns/passive",
                                     "queries": {
-                                        "query": "@items('For_each_IP_Address')?['Address']"
+                                        "query": "@items('For_each_ip')?['Address']",
+                                        "start": "@variables('lookback')",
+                                        "timeout": 7
                                     }
                                 },
                                 "runAfter": {},
                                 "type": "ApiConnection"
-                            },
-                            "Set_ip_variable": {
-                                "inputs": {
-                                    "name": "result_output_ip",
-                                    "value": "@body('Get_reputation')?['rules']"
-                                },
-                                "runAfter": {
-                                    "Get_reputation": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "SetVariable"
                             }
                         },
                         "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
                         "runAfter": {
-                            "Init_Result_IP": [
+                            "Init_ip_comment": [
                                 "Succeeded"
                             ]
                         },
                         "type": "Foreach"
                     },
-                    "Init_Classification_Bit": {
+                    "Init_Lookback_Period": {
                         "inputs": {
                             "variables": [
                                 {
-                                    "name": "classification_bit",
-                                    "type": "array"
+                                    "name": "lookback",
+                                    "type": "string",
+                                    "value": "@{formatDateTime(addDays(utcNow(), -7), 'yyyy-MM-dd')}"
                                 }
                             ]
                         },
@@ -291,11 +376,27 @@
                         },
                         "type": "InitializeVariable"
                     },
-                    "Init_Result_Host": {
+                    "Init_domain_comment": {
                         "inputs": {
                             "variables": [
                                 {
-                                    "name": "result_output_host",
+                                    "name": "domain_comment",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Init_domain_results": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    },
+                    "Init_domain_results": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "domain_results",
                                     "type": "array"
                                 }
                             ]
@@ -307,11 +408,27 @@
                         },
                         "type": "InitializeVariable"
                     },
-                    "Init_Result_IP": {
+                    "Init_ip_comment": {
                         "inputs": {
                             "variables": [
                                 {
-                                    "name": "result_output_ip",
+                                    "name": "ip_comment",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Init_ip_results": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    },
+                    "Init_ip_results": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "ip_results",
                                     "type": "array"
                                 }
                             ]
@@ -322,109 +439,6 @@
                             ]
                         },
                         "type": "InitializeVariable"
-                    },
-                    "Malicious_or_Suspicious": {
-                        "actions": {
-                            "Condition_2": {
-                                "actions": {
-                                    "Update_incident": {
-                                        "inputs": {
-                                            "body": {
-                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                                "owner": "@body('Alert_-_Get_incident')?['properties']?['owner']?['objectId']",
-                                                "ownerAction": "Unassign",
-                                                "severity": "High",
-                                                "status": "Active",
-                                                "tagsToAdd": {
-                                                    "TagsToAdd": [
-                                                        {
-                                                            "Tag": "RiskIQ Malicious"
-                                                        }
-                                                    ]
-                                                }
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                }
-                                            },
-                                            "method": "put",
-                                            "path": "/Incidents"
-                                        },
-                                        "runAfter": {},
-                                        "type": "ApiConnection"
-                                    }
-                                },
-                                "else": {
-                                    "actions": {
-                                        "Update_incident_2": {
-                                            "inputs": {
-                                                "body": {
-                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                                    "owner": "@body('Alert_-_Get_incident')?['properties']?['owner']?['objectId']",
-                                                    "ownerAction": "Unassign",
-                                                    "severity": "Medium",
-                                                    "status": "Active",
-                                                    "tagsToAdd": {
-                                                        "TagsToAdd": [
-                                                            {
-                                                                "Tag": "RiskIQ Suspicious"
-                                                            }
-                                                        ]
-                                                    }
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/Incidents"
-                                            },
-                                            "runAfter": {},
-                                            "type": "ApiConnection"
-                                        }
-                                    }
-                                },
-                                "expression": {
-                                    "and": [
-                                        {
-                                            "contains": [
-                                                "@variables('classification_bit')",
-                                                "MALICIOUS"
-                                            ]
-                                        }
-                                    ]
-                                },
-                                "runAfter": {},
-                                "type": "If"
-                            }
-                        },
-                        "expression": {
-                            "or": [
-                                {
-                                    "contains": [
-                                        "@variables('classification_bit')",
-                                        "MALICIOUS"
-                                    ]
-                                },
-                                {
-                                    "contains": [
-                                        "@variables('classification_bit')",
-                                        "SUSPICIOUS"
-                                    ]
-                                }
-                            ]
-                        },
-                        "runAfter": {
-                            "For_each_Host": [
-                                "Succeeded"
-                            ],
-                            "For_each_IP_Address": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "If"
                     }
                 },
                 "contentVersion": "1.0.0.0",
