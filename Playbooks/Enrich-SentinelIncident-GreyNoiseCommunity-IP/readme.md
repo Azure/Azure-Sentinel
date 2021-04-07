@@ -44,4 +44,4 @@ Once completed press Apply button at bottom to add the Automation rule.
 
 Open the Logic App and Edit. Within the UI editor go to Parameters button towards top and add the key ass a default value as shown below. In addition open the CommunityIP action and add Key and the Parameter GreyNoiseKey.
 
-![createautomation2](Images/apikey.png)
+![apikey](Images/apikey.png)
