@@ -206,17 +206,27 @@ namespace SampleDataIngestTool
                 JObject addob = new JObject();
                 foreach (JProperty p in o.Properties())
                 {
-                    string name = p.Name;
-                    string value = (string)p.Value;
-                    Console.WriteLine(name + " -- " + value);
-                    if (name.EndsWith("_s") || name.EndsWith("_t") || name.EndsWith("_d") || name.EndsWith("_g") || name.EndsWith("_b"))
+
+                    try
                     {
-                        name = name.Substring(0, name.Length - 2);
+                        string name = p.Name;
+                        if (name.EndsWith("_s") || name.EndsWith("_t") || name.EndsWith("_d") || name.EndsWith("_g") || name.EndsWith("_b"))
+                        {
+                            name = name.Substring(0, name.Length - 2);
+                        }
+
+                        addob.Add(new JProperty(name, p.Value));
                     }
 
-                    addob.Add(new JProperty(name, value));
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Issue while stripping data: ",ex);
+                    }
+
+                    obj.Add(addob);
+
                 }
-                obj.Add(addob);
+
             }
             return obj;
         }
