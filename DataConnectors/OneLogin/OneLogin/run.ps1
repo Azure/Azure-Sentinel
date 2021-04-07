@@ -6,7 +6,7 @@ param($Request, $TriggerMetadata)
 # param
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
-$LogType = "OneLogin"
+$LogType = $env:customLogName
 
 # Create the function to create the authorization signature
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource) {
