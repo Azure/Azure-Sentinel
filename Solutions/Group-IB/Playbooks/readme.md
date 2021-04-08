@@ -398,26 +398,26 @@ Note:
 </a>
 <br>
 21. GIBTIA_Attacks_ddos Playbook
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 <br>
 22. GIBTIA_APT_Threats Playbook
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 <br>
 23. GIBTIA_APT_ThreatActor Playbook
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 <br>
