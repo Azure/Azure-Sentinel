@@ -16,9 +16,11 @@ export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCod
   if(filePath === workbooksMetadataFilePath){
     return ExitCode.SUCCESS;
   }
-  
-  isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);
-  doesNotContainResourceInfo(workbookTemplateString); // Pass the json file as string so we can perform a regex search on the content
+
+  if(filePath.includes("Workbooks/")){  
+    isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);
+    doesNotContainResourceInfo(workbookTemplateString); // Pass the json file as string so we can perform a regex search on the content
+  }
   
   return ExitCode.SUCCESS;
 } 
