@@ -222,11 +222,9 @@ namespace SampleDataIngestTool
                     {
                         Console.WriteLine("Issue while stripping data: ",ex);
                     }
-
-                    obj.Add(addob);
-
                 }
 
+                obj.Add(addob);
             }
             return obj;
         }
