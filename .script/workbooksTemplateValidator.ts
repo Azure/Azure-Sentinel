@@ -17,14 +17,24 @@ export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCod
     return ExitCode.SUCCESS;
   }
   
-  isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);
-  doesNotContainResourceInfo(workbookTemplateString); // Pass the json file as string so we can perform a regex search on the content
-  
+  if(isValidWorkbookJson(parsedWorkbookTemplate))
+  {
+    isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);
+    doesNotContainResourceInfo(workbookTemplateString); // Pass the json file as string so we can perform a regex search on the content
+  }
   return ExitCode.SUCCESS;
-} 
+}
+
+function isValidWorkbookJson(jsonFile: any) {
+  if(typeof jsonFile.$schema != "undefined" && typeof jsonFile.$schema.includes("schema/workbook.json") && typeof jsonFile.version != "undefined" && jsonFile.version === "Notebook/1.0")
+  {
+    return true;
+  }
+  return false;
+}
 
 let fileTypeSuffixes = [".json"];
-let filePathFolderPrefixes = ["Workbooks","Solutions/Workbooks"];
+let filePathFolderPrefixes = ["Workbooks","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
