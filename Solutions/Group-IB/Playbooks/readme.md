@@ -380,6 +380,7 @@ Note:
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing_kit" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>  
+                                                                                                                                     
 19. GIBTIA_Attacks_phishing Playbook
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
