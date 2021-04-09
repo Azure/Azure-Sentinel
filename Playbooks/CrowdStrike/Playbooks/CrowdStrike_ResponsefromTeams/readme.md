@@ -23,7 +23,7 @@
 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)
 2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment
-3. The base playbook should be added in the access policies of Key vault [learn how](https://docs.microsoft.com/en-us/azure/key-vault/general/assign-access-policy-portal)
+3. The base playbook should be added in the access policies of Key vault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)
 4. There should be a list of prewritten scripts in Crowdstrike.[learn how](https://falcon.crowdstrike.com/support/documentation/71/real-time-response-and-network-containment#rtr_custom_scripts) our playbook does not provide an option to create a script.
 5. To run a script user needs to be an RTR Active Responder and RTR Administrator in the falcon console.[Understand and assign Real Time Responder roles](https://falcon.crowdstrike.com/support/documentation/71/real-time-response-and-network-containment#rtr_roles)
 6. The following needs to be done on the host to run a script:
@@ -41,7 +41,7 @@
     * CrowdStrike_Base_Playbook_Name : Enter the base playbook name here (Ex:CrowdStrike_Base)
     * Teams GroupId : Enter the Teams GroupId
     * Teams ChannelId : Enter the Teams ChannelId
-      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
+      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
     
 ### Post-Deployment instructions 
 #### a. Authorize connections

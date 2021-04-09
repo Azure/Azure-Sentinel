@@ -3,7 +3,7 @@
  ## Summary
 
 This playbook allows the SOC to automatically response to Azure Sentinel incidents which includes IPs, by adding the IPs to the TI Allow list in Azure Firewall Policy.
- [Learn more about Threat Intelligence in Azure Firewall Policies](https://docs.microsoft.com/en-us/azure/firewall/threat-intel)
+ [Learn more about Threat Intelligence in Azure Firewall Policies](https://docs.microsoft.com/azure/firewall/threat-intel)
 
 
 When a new Azure Sentinel is created,this playbook gets triggered and performs below actions:
@@ -50,7 +50,7 @@ This playbook **Gets** and **Updates** Azure Firewall Policies in the subscripti
     * Playbook Name : Enter the playbook name here (ex:AzureFirewall-BlockIP-addNewRule)
     * Teams GroupId : Enter the Teams channel id to send the adaptive card
     * Teams ChannelId : Enter the Teams Group id to send the adaptive card
-    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
+    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
     * ClientId : Enter the ClientId of the application
     * ClientSecret : Enter the Client secret of the application
 

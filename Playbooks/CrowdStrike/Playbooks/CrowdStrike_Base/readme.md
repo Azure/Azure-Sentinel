@@ -22,7 +22,7 @@ This is Crowdstrike base template which is used to generate access token and thi
     
 ### Post-Deployment instructions 
 #### a. Authorize playbook
-Once deployment is complete, we need to add the playbook in the access policy of the Keyvault [learn how](https://docs.microsoft.com/en-us/azure/key-vault/general/assign-access-policy-portal)
+Once deployment is complete, we need to add the playbook in the access policy of the Keyvault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2FPlaybooks%2FCrowdStrike_Base%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2FPlaybooks%2FCrowdStrike_Base%2Fazuredeploy.json)

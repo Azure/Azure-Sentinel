@@ -74,7 +74,7 @@ This connector supports API Key authentication. When creating the connection for
 |**OrganizationId** | Enter the OrganizationId|
 |**PolicyId** | Enter the pre-defined PolicyId to which Teams adapative card will offer to move device|
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
-|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)|
+|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
 
 <br>
 <a name="postdeployment">

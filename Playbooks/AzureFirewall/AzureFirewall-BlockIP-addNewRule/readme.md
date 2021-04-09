@@ -42,7 +42,7 @@ This playbook **Gets** and **Updates** Azure Firewalls. The registered applicati
     * Playbook Name: Enter the playbook name here (ex:AzureFirewall-BlockIP-addNewRule)
     * Teams GroupId : Enter the Teams channel id to send the adaptive card
     * Teams ChannelId : Enter the Teams Group id to send the adaptive card
-    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
+    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
     * ClientId : Enter the ClientId of the application
     * ClientSecret : Enter the Client secret of the application
 

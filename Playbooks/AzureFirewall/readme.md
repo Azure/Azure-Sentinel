@@ -104,7 +104,7 @@ To use your own application with the Azure Sentinel connector, perform the follo
 |**AzureFirewall-BlockIP-addToIPGroup Playbook Name** | Enter the playbook name here (e.g. AzureFirewall-BlockIP-addToIPGroup)| 
 |**AzureFirewall-AddIPtoTIAllowList Playbook Name** |Enter the playbook name here (e.g. AzureFirewall-AddIPtoTIAllowList)|
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
-|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)|
+|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
 |**ClientId** | Enter the Client Id of the Service Principal which the custom connector will authenticate with|
 |**ClientSecret** | Enter the Client secret of the Service Principal which the custom connector will authenticate with|
 <a name="postdeployment">

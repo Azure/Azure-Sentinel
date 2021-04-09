@@ -62,7 +62,7 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 |**PaloAlto-PAN-OS-BlockIP Playbook Name**| Enter name for the response playbook which blocks IPs name here (e.g. PaloAlto-PAN-OS-BlockIP)|
 |**PaloAlto-PAN-OS-BlockURL Playbook Name**|  Enter name for the response playbook which blocks URLs (e.g. PaloAlto-PAN-OS-BlockURL)|
 |**Teams GroupId**| Enter the Teams channel id to send the adaptive card in both response playbooks<br>|
-| **Teams ChannelId**| Enter the Teams Group id to send the adaptive card in both response playbooks <br>[Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)<br>|
+| **Teams ChannelId**| Enter the Teams Group id to send the adaptive card in both response playbooks <br>[Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)<br>|
 |**Predefined address group name for block IP:** | Enter the pre-defined address group name which blocks IP|
 |**Predefined address group name for block URL:** | Enter the pre-defined address group name which blocks URL|
 

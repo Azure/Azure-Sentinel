@@ -77,13 +77,13 @@ Authentication methods this end point supports- [oauth2 authentication](https://
 |**Crowdstrike_Enrichment_GetDeviceInformation_Playbook_Name** | Enter the playbook name here (e.g. Crowdstrike_Enrichment)| 
 |**Crowdstrike-ResponsefromTeams_Playbook_Name** | Enter the playbook name here (e.g. Crowdstrike-ResponsefromTeams)| 
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
-|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)|
+|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
 
 
 <a name="postdeployment">
 
 ### Post-Deployment instructions 
-The base playbook should be added in the access policies of Key vault [learn how](https://docs.microsoft.com/en-us/azure/key-vault/general/assign-access-policy-portal)
+The base playbook should be added in the access policies of Key vault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource

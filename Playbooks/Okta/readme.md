@@ -77,7 +77,7 @@ Authentication methods this connector supports- [API Key authentication](https:/
 * Teams GroupId : Enter the Teams channel id to send the adaptive card
 
 * Teams ChannelId : Enter the Teams Group id to send the adaptive card
-    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/en-us/powershell/module/teams/get-teamchannel?view=teams-ps)
+    [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
 
 #### d. For Okta-ResponseFromTeams playbook :
 
