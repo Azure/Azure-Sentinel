@@ -1,0 +1,40 @@
+id: 975f3faf-dcdb-49ae-aafc-9cdf1b2647b8
+name: High Number of High Threat Level Detected
+description: |
+  'This creates an incident in the event a host generates a high number of high threat level queries.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes: 
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+
+  let threshold = 200;
+  CommonSecurityLog
+  | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector"
+  | where DeviceEventClassID has "RPZ"
+  | extend ThreatLevel_Score = toint(extract("InfobloxThreatLevel=(.*)", 1, AdditionalExtensions))
+  | where ThreatLevel_Score >=80
+  | summarize count() by SourceIP, bin(TimeGenerated,15m)
+  | where count_ > threshold
+  | join kind=inner (CommonSecurityLog
+      | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector"
+      | where DeviceEventClassID has "RPZ"
+      | extend ThreatLevel_Score = toint(extract("InfobloxThreatLevel=(.*)", 1, AdditionalExtensions))
+      | where ThreatLevel_Score >=80
+      ) on SourceIP
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
