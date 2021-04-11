@@ -1,8 +1,8 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
-# This script is used to install CEF agent on a linux machine an configure the
-# syslog daemon on the linux machine.
+# This script is used to gather info about the collector machine running the CEF collector
+# in order to use it for investigating customer issues.
 # Supported OS:
 #   64-bit
 #       CentOS 7 and 8
@@ -96,7 +96,7 @@ def append_content_to_file(command_object, file_path=output_file_path):
 def run_command(command):
     """
 
-    :param command: the key value pair from the command dict
+    :param command: the key from the command dict
     :return: a command object consisting of a name and an output
     """
     if len(command_dict[command]) == 1:
