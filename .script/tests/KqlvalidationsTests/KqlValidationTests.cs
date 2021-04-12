@@ -34,7 +34,7 @@ namespace Kqlvalidations.Tests
             string id = res["id"];
 
             //we ignore known issues
-            if (ShouldSkipTemplate(id))
+            if (ShouldSkipTemplateValidation(id))
             {
                 return;
             }
@@ -60,7 +60,7 @@ namespace Kqlvalidations.Tests
             string id = res["id"];
 
             //Templates that are in the skipped templates should not pass the validateion (if they pass, why skip?)
-            if (ShouldSkipTemplate(id))
+            if (ShouldSkipTemplateValidation(id))
             {
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
                 var firstErrorLocation = (Line: 0, Col: 0);
@@ -78,7 +78,7 @@ namespace Kqlvalidations.Tests
             
         }
 
-        private bool ShouldSkipTemplate(string templateId)
+        private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
                 .Where(template => template.id == templateId)
