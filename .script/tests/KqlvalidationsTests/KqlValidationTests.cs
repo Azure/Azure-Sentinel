@@ -63,11 +63,6 @@ namespace Kqlvalidations.Tests
             if (ShouldSkipTemplateValidation(id))
             {
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                var firstErrorLocation = (Line: 0, Col: 0);
-                if (!validationRes.IsValid)
-                {
-                    firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
-                }
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
 
