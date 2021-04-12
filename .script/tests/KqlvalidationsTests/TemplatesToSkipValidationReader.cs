@@ -6,6 +6,14 @@ using System.Text;
 
 namespace Kqlvalidations.Tests
 {
+    public class SkipTemplate
+    {
+        public string id;
+        public string templateName;
+        public string validationFailReason;
+
+    }
+
     public static class TemplatesToSkipValidationReader
     {
         private const string SKipJsonFileName = "SkipValidationsTemplates.json";
@@ -16,10 +24,10 @@ namespace Kqlvalidations.Tests
             using (StreamReader r = new StreamReader(jsonFilePath))
             {
                 string json = r.ReadToEnd();
-                WhiteListTemplateIds = JsonConvert.DeserializeObject<IEnumerable<string>>(json);
+                WhiteListTemplates = JsonConvert.DeserializeObject<IEnumerable<SkipTemplate>>(json);
             }
         }
 
-        public static IEnumerable<string> WhiteListTemplateIds { get; private set; }
+        public static IEnumerable<SkipTemplate> WhiteListTemplates { get; private set; }
     }
 }

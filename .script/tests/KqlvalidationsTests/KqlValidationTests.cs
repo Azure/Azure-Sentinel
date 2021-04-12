@@ -33,8 +33,8 @@ namespace Kqlvalidations.Tests
             string queryStr = res["query"];
             string id = res["id"];
 
-            //we ignore known issues (in progress)
-            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            //we ignore known issues
+            if (ShouldSkipTemplate(id))
             {
                 return;
             }
@@ -60,7 +60,7 @@ namespace Kqlvalidations.Tests
             string id = res["id"];
 
             //Templates that are in the skipped templates should not pass the validateion (if they pass, why skip?)
-            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            if (ShouldSkipTemplate(id))
             {
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
                 var firstErrorLocation = (Line: 0, Col: 0);
@@ -76,6 +76,15 @@ namespace Kqlvalidations.Tests
                 return;
             }
             
+        }
+
+        private bool ShouldSkipTemplate(string templateId)
+        {
+            return TemplatesToSkipValidationReader.WhiteListTemplates
+                .Where(template => template.id == templateId)
+                .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))
+                .Where(template => !string.IsNullOrWhiteSpace(template.templateName))
+                .Any();
         }
 
         private (int Line, int Col) GetLocationInQuery(string queryStr, int pos)
