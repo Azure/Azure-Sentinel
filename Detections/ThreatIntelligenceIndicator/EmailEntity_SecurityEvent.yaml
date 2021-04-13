@@ -28,18 +28,19 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | where Active == true
   //Filtering the table for Email related IOCs
-  | where isnotempty(EmailRecipient)
+  | where isnotempty(EmailSenderAddress)
   | join (
       SecurityEvent | where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)
-      //Normalizing the column to lower case for exact match with EmailRecipient column
+      //Normalizing the column to lower case for exact match with EmailSenderAddress column
       | extend TargetUserName = tolower(TargetUserName)
       // renaming timestamp column so it is clear the log this came from SecurityEvent table
       | extend SecurityEvent_TimeGenerated = TimeGenerated
   )
-  on $left.EmailRecipient == $right.TargetUserName
+  on $left.EmailSenderAddress == $right.TargetUserName
+  | where SecurityEvent_TimeGenerated >= TimeGenerated and SecurityEvent_TimeGenerated < ExpirationDateTime
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, SecurityEvent_TimeGenerated,
-  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,
+  EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,
   LogonTypeName, LogonProcessName, Status, SubStatus
   | extend timestamp = SecurityEvent_TimeGenerated, AccountCustomEntity = TargetUserName, IPCustomEntity = IpAddress, HostCustomEntity = Computer, URLCustomEntity = Url
 entityMappings:

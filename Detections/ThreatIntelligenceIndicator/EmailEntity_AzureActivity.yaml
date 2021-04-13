@@ -28,17 +28,18 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | where Active == true
   //Filtering the table for Email related IOCs
-  | where isnotempty(EmailRecipient)
+  | where isnotempty(EmailSenderAddress)
   | join (
       AzureActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Caller)
       | extend Caller = tolower(Caller)
       | where Caller matches regex emailregex
       | extend AzureActivity_TimeGenerated = TimeGenerated
   )
-  on $left.EmailRecipient == $right.Caller
+  on $left.EmailSenderAddress == $right.Caller
+  | where AzureActivity_TimeGenerated >= TimeGenerated and AzureActivity_TimeGenerated < ExpirationDateTime
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, AzureActivity_TimeGenerated,
-  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Caller, Level, CallerIpAddress, Category, OperationName,
+  EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Caller, Level, CallerIpAddress, Category, OperationName,
   OperationNameValue, ActivityStatus, ResourceGroup, SubscriptionId
   | extend timestamp = AzureActivity_TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, URLCustomEntity = Url
 entityMappings:

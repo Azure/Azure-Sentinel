@@ -28,7 +28,7 @@ query: |
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | where Active == true
   //Filtering the table for Email related IOCs
-  | where isnotempty(EmailRecipient)
+  | where isnotempty(EmailSenderAddress)
   | join (
       CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)
       // Filtering PAN Logs for specific event type to match relevant email entities
@@ -37,10 +37,11 @@ query: |
       | where DestinationUserID matches regex emailregex
       | extend CommonSecurityLog_TimeGenerated = TimeGenerated
   )
-  on $left.EmailRecipient == $right.DestinationUserID
+  on $left.EmailSenderAddress == $right.DestinationUserID
+  | where CommonSecurityLog_TimeGenerated >= TimeGenerated and CommonSecurityLog_TimeGenerated < ExpirationDateTime
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, CommonSecurityLog_TimeGenerated,
-  EmailSenderName, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction,
+  EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction,
   SourceIP, SourcePort, DestinationIP, DestinationPort, Protocol, ApplicationProtocol
   | extend timestamp = CommonSecurityLog_TimeGenerated, AccountCustomEntity = DestinationUserID, IPCustomEntity = SourceIP, URLCustomEntity = Url
 entityMappings:

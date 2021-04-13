@@ -1,0 +1,44 @@
+id: 5e93a535-036b-4570-9e58-d8992f30e1ae
+name: OracleDBAudit - User activity after long inactivity time
+description: |
+  'Detects when an action was made by a user which last activity was observed more than 30 days ago.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let lbtime_14d = 14d;
+  let lbtime_7d = 7d;
+  let lbtime_24h = 24h;
+  let known_users_14d = OracleDatabaseAuditEvent
+  | where TimeGenerated between (ago(lbtime_14d) .. ago(lbtime_14d))
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  let known_users_7d = OracleDatabaseAuditEvent
+  | where TimeGenerated between (ago(lbtime_7d) .. ago(lbtime_24h))
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  OracleDatabaseAuditEvent
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | where DstUserName !in (known_users_7d)
+  | where DstUserName in (known_users_14d)
+  | project DstUserName
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
