@@ -109,12 +109,12 @@ namespace Kqlvalidations.Tests
         public void Validate_DetectionTemplates_AllFilesAreYamls()
         {
             List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
-            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList();
-            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s=>s.Contains("Analytic Rules")));
+            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList(); // Detection folder
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s=>s.Contains("Analytic Rules"))); // Extending detection validation to solution folder
             var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
             AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
-            var numberOfNotYamlFiles = 2; //This is the readme.md file in the directory
-            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections folder are supposed to end with .yaml");
+            var numberOfNotYamlFiles = 2; //This is the readme.md file in the detection and Cisco Ise soluton directory.
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
         }
         
         [Fact]
@@ -138,21 +138,16 @@ namespace Kqlvalidations.Tests
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
             var detectionsYamlFile = "";
+            // Get file present in detection folder or else check in solution folder 
             try
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+                detectionsYamlFile = detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
             catch
             {
-                try
-                {
-                    detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
-                }
-                catch
-                {
-                    detectionsYamlFile = detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
-                }
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
             }
+
             return File.ReadAllText(detectionsYamlFile);
         }
 
