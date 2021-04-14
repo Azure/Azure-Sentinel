@@ -14,7 +14,8 @@ namespace Kqlvalidations.Tests
 {
     public class DetectionTemplateSchemaValidationTests
     {
-        private static readonly string DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+        private static readonly List<string> DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+        private static readonly string RootDetectionPath = DetectionsYamlFilesTestData.GetRootPath();
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
@@ -107,18 +108,21 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_DetectionTemplates_AllFilesAreYamls()
         {
-            string detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
-            var yamlFiles = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
-            var AllFiles = Directory.GetFiles(detectionPath,"*", SearchOption.AllDirectories).ToList();
-            var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
+            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList();
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s=>s.Contains("Analytic Rules")));
+            var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
+            AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+            var numberOfNotYamlFiles = 2; //This is the readme.md file in the directory
             Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections folder are supposed to end with .yaml");
         }
         
         [Fact]
         public void Validate_DetectionTemplates_NoSameTemplateIdTwice()
         {
-            string detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
-            var yamlFiles = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories);
+            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).Where(s=>!s.Contains("CiscoUmbrella")).ToList(); // Removing duplicate CiscoUmbrella detections. already present in solution folder
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending it to solution folder for detection validation
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
@@ -133,7 +137,22 @@ namespace Kqlvalidations.Tests
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
-            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            var detectionsYamlFile = "";
+            try
+            {
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            }
+            catch
+            {
+                try
+                {
+                    detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+                }
+                catch
+                {
+                    detectionsYamlFile = detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
+                }
+            }
             return File.ReadAllText(detectionsYamlFile);
         }
 
