@@ -138,10 +138,10 @@ namespace Kqlvalidations.Tests
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
             var detectionsYamlFile = "";
-            // Get file present in detection folder or else check in solution folder 
+            // Get file present in detection folder or else check in solution analytics rules folder 
             try
             {
-                detectionsYamlFile = detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
             catch
             {
