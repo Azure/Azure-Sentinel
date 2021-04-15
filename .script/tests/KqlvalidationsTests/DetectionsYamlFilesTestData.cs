@@ -17,18 +17,6 @@ namespace Kqlvalidations.Tests
             files.ForEach(f => AddData(Path.GetFileName(f)));
         }
 
-        //public static string GetDetectionPath()
-        //{
-        //    var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
-        //    var testFolderDepth = 6;
-        //    for (int i = 0; i < testFolderDepth; i++)
-        //    {
-        //        rootDir = rootDir.Parent;
-        //    }
-        //    var detectionPath = Path.Combine(rootDir.FullName, "Detections");
-        //    return detectionPath;
-        //}
-
         public static List<string> GetDetectionPath()
         {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
