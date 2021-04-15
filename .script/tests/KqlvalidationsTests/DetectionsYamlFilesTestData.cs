@@ -11,21 +11,37 @@ namespace Kqlvalidations.Tests
     {
         public DetectionsYamlFilesTestData()
         {
-            string detectionPath = GetDetectionPath();
-            var files = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
+            List<string> detectionPath = GetDetectionPath();
+            var files = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList();
+            files.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
             files.ForEach(f => AddData(Path.GetFileName(f)));
         }
 
-        public static string GetDetectionPath()
+        //public static string GetDetectionPath()
+        //{
+        //    var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
+        //    var testFolderDepth = 6;
+        //    for (int i = 0; i < testFolderDepth; i++)
+        //    {
+        //        rootDir = rootDir.Parent;
+        //    }
+        //    var detectionPath = Path.Combine(rootDir.FullName, "Detections");
+        //    return detectionPath;
+        //}
+
+        public static List<string> GetDetectionPath()
         {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
             var testFolderDepth = 6;
+            List<string> detectionPaths = new List<string>();
             for (int i = 0; i < testFolderDepth; i++)
             {
                 rootDir = rootDir.Parent;
             }
-            var detectionPath = Path.Combine(rootDir.FullName, "Detections");
-            return detectionPath;
+            detectionPaths.Add(Path.Combine(rootDir.FullName, "Detections"));
+            detectionPaths.Add(Path.Combine(rootDir.FullName, "Solutions"));
+
+            return detectionPaths;
         }
 
         public static string GetCustomTablesPath()

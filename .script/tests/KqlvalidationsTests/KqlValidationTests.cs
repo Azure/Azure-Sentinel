@@ -1,6 +1,7 @@
 ﻿using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -12,7 +13,7 @@ namespace Kqlvalidations.Tests
     public class KqlValidationTests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
-        private static readonly string DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+        private static readonly List<string> DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
@@ -25,7 +26,7 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_HaveValidKql(string detectionsYamlFileName)
         {
-            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            var detectionsYamlFile = getDetectionsYamlFile(detectionsYamlFileName);
             var yaml = File.ReadAllText(detectionsYamlFile);
             var deserializer = new DeserializerBuilder().Build();
             var res = deserializer.Deserialize<dynamic>(yaml);
@@ -42,16 +43,17 @@ namespace Kqlvalidations.Tests
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationRes.IsValid)
             {
-                firstErrorLocation =  GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
+                firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
             }
             Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid in Line:{firstErrorLocation.Line} col:{firstErrorLocation.Col} Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
-        
+
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string detectionsYamlFileName)
         {
-            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            var detectionsYamlFile = getDetectionsYamlFile(detectionsYamlFileName);
+
             var yaml = File.ReadAllText(detectionsYamlFile);
             var deserializer = new DeserializerBuilder().Build();
             var res = deserializer.Deserialize<dynamic>(yaml);
@@ -69,7 +71,7 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
-            
+
         }
 
         private bool ShouldSkipTemplateValidation(string templateId)
@@ -94,6 +96,23 @@ namespace Kqlvalidations.Tests
             }
             var col = (pos - curPos + 1);
             return (curlineIndex + 1, col);
+        }
+
+        /// <summary>
+        ///Get detection yaml file from Detection or solution analytics rule folder
+        /// </summary>
+        /// <param name="detectionsYamlFileName">detections Yaml File Name</param>
+        /// <returns>detections yaml file path</returns>
+        private string getDetectionsYamlFile(string detectionsYamlFileName)
+        {
+            try
+            {
+                return Directory.GetFiles(DetectionPath[0], detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            }
+            catch
+            {
+                return  Directory.GetFiles(DetectionPath[1], detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+            }
         }
     }
 
