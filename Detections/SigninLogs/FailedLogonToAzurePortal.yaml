@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
@@ -29,7 +32,8 @@ query: |
   let threshold_FailedwithSingleIP = 20;
   let threshold_IPAddressCount = 2;
   let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
-  let azPortalSignins = materialize(SigninLogs
+  let aadFunc = (tableName:string){
+  let azPortalSignins = materialize(table(tableName)
   | where TimeGenerated >= ago(lookBack)
   // Azure Portal only
   | where AppDisplayName =~ "Azure Portal")
@@ -70,16 +74,22 @@ query: |
   // Join Signins that had resolved names with list of unresolved that now have a resolved name
   let u_azPortalSignins = failnoSuccess | where Unresolved == false | union unresolvedNames;
   u_azPortalSignins
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
   | extend Status = strcat(ResultType, ": ", ResultDescription), OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
-  | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
+  | extend FullLocation = strcat(Region,'|', State, '|', City)
   | summarize TimeGenerated = makelist(TimeGenerated), Status = makelist(Status), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress), FailedLogonCount = count()
-  by UserPrincipalName, UserId, UserDisplayName, AppDisplayName, Browser, OS, FullLocation
+  by UserPrincipalName, UserId, UserDisplayName, AppDisplayName, Browser, OS, FullLocation, Type
   | mvexpand TimeGenerated, IPAddresses, Status
   | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses), Status = tostring(Status)
   | project-away IPAddresses
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status, FailedLogonCount, IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status, FailedLogonCount, IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation, Type
   | where (IPAddressCount >= threshold_IPAddressCount and FailedLogonCount >= threshold_Failed) or FailedLogonCount >= threshold_FailedwithSingleIP
   | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
