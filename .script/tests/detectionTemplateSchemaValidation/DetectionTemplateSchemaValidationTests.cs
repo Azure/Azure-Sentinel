@@ -113,7 +113,7 @@ namespace Kqlvalidations.Tests
             yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s=>s.Contains("Analytic Rules"))); // Extending detection validation to solution folder
             var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
             AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
-            var numberOfNotYamlFiles = 2; //This is the readme.md file in the detection and Cisco Ise soluton directory.
+            var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
             Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
         }
         
