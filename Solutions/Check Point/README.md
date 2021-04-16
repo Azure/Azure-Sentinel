@@ -27,18 +27,6 @@ Change request items include IP addresses, URLs, groups, gateways, and policy pa
 
 The Check Point Logic App Connector contains Check Point Mgmt API parameters to cater most common tasks you want to automate. 
 
-# How does everything tie together?
-
-<p align="left">  
-<img width="800" src="./CheckPointConnector/images/cp_LogicApp_detail_01.png"> </a>
-</p>
-
-The solution is using Azure API Management, Function App, and Logic Apps. These services are secured by allowing access from respective Azure IP ranges and secured by API keys. See security guidance below.
-
-  * API Management allows you to consolidate all API from a single static IP, fine-grained control and provides detailed reporting of your APIs. 
-  * The Function App help connect Logic App to both cloud and on-prem Check Point Management station
-
-
 # Deploy 
 
    [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FCheckPointConnector%2FdeployCP.json)
