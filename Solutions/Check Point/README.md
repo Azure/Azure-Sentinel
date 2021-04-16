@@ -18,7 +18,7 @@ For more information see
 # How does the Logic App Connector work? 
 
 <p align="left">  
-<img width="800" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/cp_LogicApp_01.png"> </a>
+<img width="800" src="./CheckPointConnector/images/cp_LogicApp_01.png"> </a>
 </p>
 
 The Logic App workbook can get triggers from any of the hundreds of connectors containing user-defined perimeters to fulfill the change request. 
@@ -30,7 +30,7 @@ The Check Point Logic App Connector contains Check Point Mgmt API parameters to 
 # How does everything tie together?
 
 <p align="left">  
-<img width="800" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/cp_LogicApp_detail_01.png"> </a>
+<img width="800" src="./CheckPointConnector/images/cp_LogicApp_detail_01.png"> </a>
 </p>
 
 The solution is using Azure API Management, Function App, and Logic Apps. These services are secured by allowing access from respective Azure IP ranges and secured by API keys. See security guidance below.
@@ -50,39 +50,39 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 
     Example 1 - Scheduled tasks
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/example1.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/example1.png"> </a>
     </p>
 
     Example 2 - Azure Sentinel Alert
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/example2.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/example2.png"> </a>
     </p>
 
     Example 3 - HTTP post
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/example3.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/example3.png"> </a>
     </p>
 
 2. Workflow - Logic App instructions
 
 	  Define the Check Point gateway and policy package
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow1.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/workflow1.png"> </a>
     </p>
 
 	  Define the Check Point management station user/pw
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow2.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/workflow2.png"> </a>
     </p>
 
     Define what action to take, in this case, create and add each host to predefined group
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow3.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/workflow3.png"> </a>
     </p>
 
     Publish and Install security policy
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/workflow4.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/workflow4.png"> </a>
     </p>
 
 # Deployment instructions
@@ -97,19 +97,19 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 3. Template - Make sure you include the backslash of API extension /web_api/ 
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/deploy1.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/deploy1.png"> </a>
     </p>
 
 4. Copy the API key from the function app
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/deploy2.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/deploy2.png"> </a>
     </p>
 
 5. Paste function API key into the API management
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/deploy3.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/deploy3.png"> </a>
     </p>
 
 ## Test
@@ -119,13 +119,13 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 2. Copy the logic app trigger URL
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test1.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/test1.png"> </a>
     </p>
 
 3. Paste the URL and Body into Postman
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test2.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/test2.png"> </a>
     </p>
 
     Request Body
@@ -151,82 +151,11 @@ The solution is using Azure API Management, Function App, and Logic Apps. These 
 4. Logic App run history should have green tickets next to each successful tasks
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test3.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/test3.png"> </a>
     </p>
 
 5. Smart Console should contain the above IP addresses in the Sentinel group created earlier
 
     <p align="left">  
-    <img width="400" src="https://github.com/chkp-jguo/Azure-Sentinel/blob/b95ddb3cf3af55f75695737e555d57c17ce435a5/Solutions/Check%20Point/Playbooks/images/test4.png"> </a>
+    <img width="400" src="./CheckPointConnector/images/test4.png"> </a>
     </p>
-
-# Security Guidance: 
-
-1. Lockdown the Logic App, API Management, and Function App service with respective Azure region IP ranges. [List of Azure IP ranges here](https://www.microsoft.com/download/details.aspx?id=56519) 
-
-    ```
-      Logic Apps Ranges: 
-      
-      {
-      "name": "LogicApps.AustraliaEast",
-      "id": "LogicApps.AustraliaEast",
-      "properties": {
-      "changeNumber": 1,
-      "region": "australiaeast",
-      "regionId": 3,
-      "platform": "Azure",
-      "systemService": "LogicApps",
-      "addressPrefixes": [
-      "13.70.78.192/27",
-      "13.75.149.4/32",
-      "13.75.153.66/32",
-      …
-      "2603:1010:6:402::3c0/124",
-      "2603:1010:6:402::3e0/123"
-      ],
-      
-      
-      API Management Ranges: 
-      
-      "name": "ApiManagement.AustraliaEast",
-      "id": "ApiManagement.AustraliaEast",
-      "properties": {
-      "changeNumber": 2,
-      "region": "australiaeast",
-      "regionId": 3,
-      "platform": "Azure",
-      "systemService": "AzureApiManagement",
-      "addressPrefixes": [
-      "13.70.72.28/31",
-      "13.70.72.240/28",
-      "13.75.217.184/32",
-      …
-      "20.40.125.155/32",
-      "2603:1010:6:402::140/124"
-      ],
-      
-      Azure Functions Ranges:
-      
-      {
-      "name": "AzureCloud.australiaeast",
-      "id": "AzureCloud.australiaeast",
-      "properties": {
-      "changeNumber": 13,
-      "region": "australiaeast",
-      "regionId": 3,
-      "platform": "Azure",
-      "systemService": "",
-      "addressPrefixes": [
-      "13.70.64.0/18",
-      "13.72.224.0/19",
-      "13.73.192.0/20",
-      "13.75.128.0/17",
-      …
-      "2603:1016:1400:60::/59",
-      "2603:1016:2402::/48",
-      "2603:1016:2500:c::/64",
-      "2603:1017:0:60::/59"
-      ],
-    ```
-  
-2. Rotate access keys to API management, Function App, and Check Point user password/access keys every 90 days
