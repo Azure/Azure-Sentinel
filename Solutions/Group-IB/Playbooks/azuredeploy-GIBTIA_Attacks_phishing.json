@@ -1,0 +1,879 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GIBTIA_Attacks_phishing",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "azuremonitorlogsConnectionName": "[concat('azuremon-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Set_variable": {
+                                    "inputs": {
+                                        "name": "seqUpdate",
+                                        "value": "@body('Get_last_received_item_ID_from_Azure_Log_DB')?['value'][0]['seqUpdate_d']"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "HTTP": {
+                                        "inputs": {
+                                            "headers": {
+                                                "accept": "*/*",
+                                                "x-auth-key": "@variables('GIB API Key')",
+                                                "x-auth-login": "@parameters('GIB Username')"
+                                            },
+                                            "method": "GET",
+                                            "queries": {
+                                                "collection": "@parameters('Collection Name')",
+                                                "date": "@{addDays(utcNow(), -3, 'yyyy-MM-dd')}"
+                                            },
+                                            "uri": "@{parameters('GIB API URL ')}sequence_list"
+                                        },
+                                        "runAfter": {},
+                                        "type": "Http"
+                                    },
+                                    "Parse_JSON": {
+                                        "inputs": {
+                                            "content": "@body('HTTP')",
+                                            "schema": {
+                                                "properties": {
+                                                    "list": {
+                                                        "properties": {
+                                                            "attacks/phishing": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "HTTP": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ParseJson"
+                                    },
+                                    "Update_Last_Item_id_in_Tech_table_": {
+                                        "inputs": {
+                                            "body": "{\n\"collection_name\" : \"@{parameters('Collection Name')}\",\n\"seqUpdate\" : @{body('Parse_JSON')?['list']?['attacks/phishing']}\n}",
+                                            "headers": {
+                                                "Log-Type": "GIBTechTable"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/logs"
+                                        },
+                                        "runAfter": {
+                                            "Parse_JSON": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "set_seqUpdate_": {
+                                        "inputs": {
+                                            "name": "seqUpdate",
+                                            "value": 0
+                                        },
+                                        "runAfter": {
+                                            "Update_Last_Item_id_in_Tech_table_": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(body('Get_last_received_item_ID_from_Azure_Log_DB')?['value'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Get_last_received_item_ID_from_Azure_Log_DB": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_last_received_item_ID_from_Azure_Log_DB": {
+                            "inputs": {
+                                "body": "GIBTechTable_CL | where collection_name_s == \"@{parameters('Collection Name')}\" |  sort by TimeGenerated | limit 1",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "Group-IB-WS",
+                                    "resourcename": "Group-IB",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "6a021fde-5198-441e-9190-9d634e1f4a84",
+                                    "timerange": "Last 7 days"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_API_Key": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GIB API Key",
+                                        "type": "string",
+                                        "value": "XXXXXX"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_seqUpdate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_seqUpdate": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "seqUpdate",
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IsPortionEmpty",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Until": {
+                            "actions": {
+                                "Get_items_from_response": {
+                                    "inputs": {
+                                        "content": "@body('Get_next_portion_of_events_from_GIB')",
+                                        "schema": {
+                                            "properties": {
+                                                "count": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "items": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "dateBlocked": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "dateDetected": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "evaluation": {
+                                                                "properties": {
+                                                                    "admiraltyCode": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "credibility": {
+                                                                        "type": [
+                                                                            "integer",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "reliability": {
+                                                                        "type": [
+                                                                            "integer",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "severity": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "tlp": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "ttl": {
+                                                                        "type": [
+                                                                            "integer",
+                                                                            "null"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "history": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "date": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "field": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "reason": {},
+                                                                        "reporter": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        },
+                                                                        "value": {
+                                                                            "type": [
+                                                                                "string",
+                                                                                "null"
+                                                                            ]
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "date",
+                                                                        "field",
+                                                                        "reason",
+                                                                        "reporter",
+                                                                        "value"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "id": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "ipv4": {
+                                                                "properties": {
+                                                                    "asn": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "city": {},
+                                                                    "countryCode": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "countryName": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "ip": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "provider": {},
+                                                                    "region": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "isFavourite": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "isHidden": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "oldId": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "phishingDomain": {
+                                                                "properties": {
+                                                                    "dateRegistered": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "domain": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "local": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "registrar": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "title": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "portalLink": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "seqUpdate": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "status": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "targetBrand": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "targetCategory": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "targetCountryName": {},
+                                                            "targetDomain": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "type": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "dateBlocked",
+                                                            "dateDetected",
+                                                            "evaluation",
+                                                            "history",
+                                                            "id",
+                                                            "ipv4",
+                                                            "isFavourite",
+                                                            "isHidden",
+                                                            "oldId",
+                                                            "phishingDomain",
+                                                            "portalLink",
+                                                            "seqUpdate",
+                                                            "status",
+                                                            "targetBrand",
+                                                            "targetCategory",
+                                                            "targetCountryName",
+                                                            "targetDomain",
+                                                            "type"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "seqUpdate": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_next_portion_of_events_from_GIB": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                },
+                                "Get_next_portion_of_events_from_GIB": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Accept": "*/*",
+                                            "x-auth-key": "@variables('GIB API Key')",
+                                            "x-auth-login": "@parameters('GIB Username')"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "limit": "100",
+                                            "seqUpdate": "@{variables('seqUpdate')}"
+                                        },
+                                        "uri": "@{parameters('GIB API URL ')}@{parameters('Collection Name')}/updated"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "IfPortionHasItems": {
+                                    "actions": {
+                                        "Filter_Out_Empty_Domains": {
+                                            "inputs": {
+                                                "from": "@body('Select_Domain')",
+                                                "where": "@not(equals(item()?['domainName'], null))"
+                                            },
+                                            "runAfter": {
+                                                "Select_Domain": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query"
+                                        },
+                                        "Filter_Out_Empty_IPs": {
+                                            "inputs": {
+                                                "from": "@body('Select_IP')",
+                                                "where": "@not(equals(item()?['networkIPv4'], null))"
+                                            },
+                                            "runAfter": {
+                                                "Select_IP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query"
+                                        },
+                                        "Filter_Out_Empty_URLs": {
+                                            "inputs": {
+                                                "from": "@body('Select_URL')",
+                                                "where": "@not(equals(item()?['url'], null))"
+                                            },
+                                            "runAfter": {
+                                                "Select_URL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query"
+                                        },
+                                        "GIBIndicatorProcessor": {
+                                            "inputs": {
+                                                "batchName": "GIBIndicatorsBatch",
+                                                "content": "@body('Filter_Out_Empty_Domains')",
+                                                "host": {
+                                                    "triggerName": "Batch_messages",
+                                                    "workflow": {
+                                                        "id": "/subscriptions/6a021fde-5198-441e-9190-9d634e1f4a84/resourceGroups/Group-IB-WS/providers/Microsoft.Logic/workflows/GIBIndicatorProcessor"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_Out_Empty_Domains": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SendToBatch"
+                                        },
+                                        "GIBIndicatorProcessor_2": {
+                                            "inputs": {
+                                                "batchName": "GIBIndicatorsBatch",
+                                                "content": "@body('Filter_Out_Empty_IPs')",
+                                                "host": {
+                                                    "triggerName": "Batch_messages",
+                                                    "workflow": {
+                                                        "id": "/subscriptions/6a021fde-5198-441e-9190-9d634e1f4a84/resourceGroups/Group-IB-WS/providers/Microsoft.Logic/workflows/GIBIndicatorProcessor"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_Out_Empty_IPs": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SendToBatch"
+                                        },
+                                        "GIBIndicatorProcessor_3": {
+                                            "inputs": {
+                                                "batchName": "GIBIndicatorsBatch",
+                                                "content": "@body('Filter_Out_Empty_URLs')",
+                                                "host": {
+                                                    "triggerName": "Batch_messages",
+                                                    "workflow": {
+                                                        "id": "/subscriptions/6a021fde-5198-441e-9190-9d634e1f4a84/resourceGroups/Group-IB-WS/providers/Microsoft.Logic/workflows/GIBIndicatorProcessor"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_Out_Empty_URLs": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SendToBatch"
+                                        },
+                                        "Save_only_as_Indicators": {
+                                            "actions": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Send_Data": {
+                                                        "inputs": {
+                                                            "body": "@{body('Get_items_from_response')?['items']}",
+                                                            "headers": {
+                                                                "Log-Type": "GIBTIAAttacksPhishing"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/logs"
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('Save only indicators')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        },
+                                        "Select_Domain": {
+                                            "inputs": {
+                                                "from": "@body('Get_items_from_response')?['items']",
+                                                "select": {
+                                                    "action": "unknown",
+                                                    "activityGroupNames": [],
+                                                    "confidence": "@item()?['evaluation']?['credibility']",
+                                                    "description": "GIB Phishing Domain",
+                                                    "domainName": "@{item()?['phishingDomain']?['domain']}",
+                                                    "expirationDateTime": "@{addDays(item()?['dateDetected'], item()?['evaluation']?['ttl'])}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 3,
+                                                    "tags": [
+                                                        "attacks-phishing"
+                                                    ],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "Phishing",
+                                                    "tlpLevel": "@{item()?['evaluation']?['tlp']}"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "GIBIndicatorProcessor_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Select"
+                                        },
+                                        "Select_IP": {
+                                            "inputs": {
+                                                "from": "@body('Get_items_from_response')?['items']",
+                                                "select": {
+                                                    "action": "unknown",
+                                                    "activityGroupNames": [],
+                                                    "confidence": "@item()?['evaluation']?['credibility']",
+                                                    "description": "GIB Phishing IP",
+                                                    "expirationDateTime": "@{addDays(item()?['dateDetected'], item()?['evaluation']?['ttl'])}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "networkIPv4": "@{item()?['ipv4']?['ip']}",
+                                                    "severity": 3,
+                                                    "tags": [
+                                                        "attacks-phishing"
+                                                    ],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "Phishing",
+                                                    "tlpLevel": "@{item()?['evaluation']?['tlp']}"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Save_only_as_Indicators": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Select"
+                                        },
+                                        "Select_URL": {
+                                            "inputs": {
+                                                "from": "@body('Get_items_from_response')?['items']",
+                                                "select": {
+                                                    "action": "unknown",
+                                                    "activityGroupNames": [],
+                                                    "confidence": "@item()?['evaluation']?['credibility']",
+                                                    "description": "GIB Phishing URL",
+                                                    "expirationDateTime": "@{addDays(item()?['dateDetected'], item()?['evaluation']?['ttl'])}",
+                                                    "killChain": [],
+                                                    "malwareFamilyNames": [],
+                                                    "severity": 3,
+                                                    "tags": [
+                                                        "attacks-phishing"
+                                                    ],
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "Phishing",
+                                                    "tlpLevel": "@{item()?['evaluation']?['tlp']}",
+                                                    "url": "@{item()?['url']}"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "GIBIndicatorProcessor_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Select"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Empty_portion_value": {
+                                                "inputs": {
+                                                    "name": "IsPortionEmpty",
+                                                    "value": true
+                                                },
+                                                "runAfter": {},
+                                                "type": "SetVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@length(body('Get_items_from_response')?['items'])",
+                                                        0
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Reset_seqUpdate": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Reset_seqUpdate": {
+                                    "inputs": {
+                                        "name": "seqUpdate",
+                                        "value": "@body('Get_items_from_response')?['seqUpdate']"
+                                    },
+                                    "runAfter": {
+                                        "Get_items_from_response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Save_seqUpdate": {
+                                    "inputs": {
+                                        "body": "{\n\"collection_name\" :  \"@{parameters('Collection Name')}\",\n\"seqUpdate\" : @{variables('seqUpdate')}\n}",
+                                        "headers": {
+                                            "Log-Type": "GIBTechTable"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    },
+                                    "runAfter": {
+                                        "IfPortionHasItems": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "expression": "@equals(variables('IsPortionEmpty'), true)",
+                            "limit": {
+                                "count": 10,
+                                "timeout": "PT1H"
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Collection Name": {
+                            "defaultValue": "attacks/phishing",
+                            "type": "String"
+                        },
+                        "GIB API URL ": {
+                            "defaultValue": "https://bt.group-ib.com/api/v2/",
+                            "type": "String"
+                        },
+                        "GIB Username": {
+                            "defaultValue": "XXXX@domain.com",
+                            "type": "String"
+                        },
+                        "Save only indicators": {
+                            "defaultValue": true,
+                            "type": "Bool"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', 'Group-IB-WS', '/providers/Microsoft.Web/connections/')]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', 'Group-IB-WS', '/providers/Microsoft.Web/connections/')]",
+                                "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

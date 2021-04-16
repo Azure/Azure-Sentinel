@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -16,12 +19,16 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  SigninLogs
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where ResultType == 500121
   | where Status has "MFA Denied; user declined the authentication"
-  | extend AccountCustomEntity = AlternateSignInName
-  | extend IPCustomEntity = IPAddress
-  | extend URLCustomEntity = ClientAppUsed
+  | extend Type = Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, URLCustomEntity = ClientAppUsed
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:

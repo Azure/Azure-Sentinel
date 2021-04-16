@@ -1,0 +1,35 @@
+id: 80b1dd6d-1aea-471e-be7a-a4a0afdeec80
+name: OracleDBAudit - Connection to database from unknown IP
+description: |
+  'Detects when user connects to a database from IP address which is not present in AllowList.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let ip_allowlist = dynamic(['127.0.0.2']);
+  OracleDatabaseAuditEvent
+  | where isnotempty(SrcIpAddr)
+  | where DbAction =~ 'CONNECT'
+  | where SrcIpAddr !in (ip_allowlist)
+  | project SrcIpAddr, DstUserName
+  | extend AccountCustomEntity = DstUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

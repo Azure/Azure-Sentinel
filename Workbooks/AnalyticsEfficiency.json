@@ -13,9 +13,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [
-          "value::all"
-        ],
         "parameters": [
           {
             "id": "26d2fea7-3646-4993-b79f-6722f9ef8ddb",
@@ -24,13 +21,24 @@
             "type": 1,
             "isRequired": true,
             "query": "where type =~ 'microsoft.operationalinsights/workspaces'\n| take 1\n| project subscriptionId",
-            "crossComponentResources": [
-              "value::selected"
-            ],
             "isHiddenWhenLocked": true,
             "timeContextFromParameter": "TimeRange",
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "109f8d4a-05e3-4d1b-adac-087873d109a6",
+            "version": "KqlParameterItem/1.0",
+            "name": "InternalWSs",
+            "type": 1,
+            "isRequired": true,
+            "query": "SecurityIncident\n| take 1\n| parse IncidentUrl with * \"/workspaces/\" Workspace \"/\" *\n| project Workspace",
+            "isHiddenWhenLocked": true,
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
           },
           {
             "id": "55d3ab63-6e1f-4d02-8d9e-2225526689c7",
@@ -58,7 +66,7 @@
             "name": "Workspace",
             "type": 5,
             "isRequired": true,
-            "query": "where type =~ \"microsoft.operationalinsights/workspaces\"\r\n| where '{Subscription}' has subscriptionId",
+            "query": "where type =~ \"microsoft.operationalinsights/workspaces\"\r\n| project subscriptionId,id,name\r\n| where '{Subscription}' has subscriptionId\r\n| project value =id, label = name, selected = iff(name =~ '{InternalWSs}', true, false)",
             "crossComponentResources": [
               "value::all"
             ],
@@ -78,7 +86,7 @@
             "type": 4,
             "isRequired": true,
             "value": {
-              "durationMs": 604800000
+              "durationMs": 2592000000
             },
             "typeSettings": {
               "selectableValues": [
@@ -221,7 +229,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{InternalRG}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/alertRules\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2020-01-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"$.properties.displayName\",\"columnid\":\"RuleName\"},{\"path\":\"$.properties.description\",\"columnid\":\"Description\"},{\"path\":\"$.name\",\"columnid\":\"AlertRuleID\"},{\"path\":\"$.kind\",\"columnid\":\"Kind\"},{\"path\":\"$.properties.productFilter\",\"columnid\":\"ProductName\"},{\"path\":\"$.properties.tactics\",\"columnid\":\"Tactics\"},{\"path\":\"$.properties.enabled\",\"columnid\":\"Status\"},{\"path\":\"$.properties\",\"columnid\":\"prop\"}]}}]}",
+        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{InternalRG}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/alertRules\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2020-01-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"$.properties.displayName\",\"columnid\":\"RuleName\"},{\"path\":\"$.properties.description\",\"columnid\":\"Description\"},{\"path\":\"$.name\",\"columnid\":\"AlertRuleID\"},{\"path\":\"$.kind\",\"columnid\":\"Kind\"},{\"path\":\"$.properties.productFilter\",\"columnid\":\"ProductName\"},{\"path\":\"$.properties.tactics\",\"columnid\":\"Tactics\"},{\"path\":\"$.properties.enabled\",\"columnid\":\"Status\"},{\"path\":\"$.properties\",\"columnid\":\"prop\"},{\"path\":\"$.properties.lastModifiedUtc\",\"columnid\":\"lastModifiedUtc\"}]}}]}",
         "size": 0,
         "noDataMessage": "No analytic rules are defined ",
         "exportMultipleValues": true,
@@ -338,8 +346,8 @@
           "filter": true,
           "sortBy": [
             {
-              "itemKey": "RuleName",
-              "sortOrder": 1
+              "itemKey": "lastModifiedUtc",
+              "sortOrder": 2
             }
           ],
           "labelSettings": [
@@ -375,8 +383,8 @@
         },
         "sortBy": [
           {
-            "itemKey": "RuleName",
-            "sortOrder": 1
+            "itemKey": "lastModifiedUtc",
+            "sortOrder": 2
           }
         ],
         "graphSettings": {
@@ -526,7 +534,7 @@
               "parameterName": "AlertRuleID",
               "comparison": "isNotEqualTo"
             },
-            "name": "Incedent closing reasons"
+            "name": "Incident closing reasons"
           },
           {
             "type": 3,
@@ -534,7 +542,7 @@
               "version": "KqlItem/1.0",
               "query": "let alertText =  strcat_array(dynamic([{AlertRuleID}]),\",\");\r\nlet isProductMarked = (product:string) {\r\n    let productText = strcat_array(dynamic([{ProductName}]),\",\");\r\n    array_index_of(split(productText,','),product)\r\n};\r\nSecurityIncident\r\n| project TimeGenerated, RelatedAnalyticRuleIds, AdditionalData\r\n| where TimeGenerated >= {TimeRange:start} and TimeGenerated <= {TimeRange:end}\r\n| mv-expand AlertRuleId=RelatedAnalyticRuleIds\r\n| extend AlertRuleId=tostring(AlertRuleId)\r\n| extend AlertProductNames = todynamic(AdditionalData)[\"alertProductNames\"]\r\n| mv-expand AlertProductName =AlertProductNames\r\n| extend  AlertProductName=tostring(AlertProductName)\r\n| project AlertProductName,AlertRuleId\r\n| where  isProductMarked(AlertProductName)!=-1 or alertText has AlertRuleId\r\n| summarize count() by AlertProductName",
               "size": 2,
-              "title": "Incedent created by rules",
+              "title": "Incident created by rules",
               "noDataMessage": "No incedents created",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1243,7 +1251,6 @@
       "name": "text - 19"
     }
   ],
-  "styleSettings": {},
   "fromTemplateId": "sentinel-AnalyticsEfficiency",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }

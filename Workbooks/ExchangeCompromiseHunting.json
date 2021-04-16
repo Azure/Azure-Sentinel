@@ -1,0 +1,349 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Exchange server compromise hunting\n----------------------------------------------------------------------------------------------------------------------------\n\nThis workbook is intended to help defenders in responding to the Excahnge Server vulnerabilities disclosed in March 2021, as well as hunting for potential compromise activity. More details on these vulnearbilities can be found at: https://aka.ms/exchangevulns\n"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "a8cccc32-2fda-4a4b-8de9-68bad1d3d5a0",
+            "cellValue": "view_tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Exchange Server Identification",
+            "subTarget": "1",
+            "preText": "Exchange Server Identification",
+            "style": "link"
+          },
+          {
+            "id": "89ada413-8ed2-40fa-9b3c-c95c02ba7d6b",
+            "cellValue": "view_tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Exploit Hunting",
+            "subTarget": "2",
+            "style": "link"
+          },
+          {
+            "id": "75c0b6ea-43ec-4d68-a00b-30e84a655ec3",
+            "cellValue": "view_tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Webshell Hunting",
+            "subTarget": "3",
+            "style": "link"
+          },
+          {
+            "id": "5e93a3fd-4fa7-4ac8-8a8e-1e19e072c1a7",
+            "cellValue": "view_tab",
+            "linkTarget": "parameter",
+            "linkLabel": "HAFNIUM activity hunting",
+            "subTarget": "4",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "links - 2"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "W3CIISLog\r\n| where TimeGenerated > ago(7d)\r\n| where csUriStem has_any(\"/owa/auth/\", \"/ecp/healthcheck.htm\", \"/ews/exchange.asmx\") \r\n| summarize by ExchangeServer=tolower(Computer) ",
+              "size": 1,
+              "showAnalytics": true,
+              "title": "Exchange Servers",
+              "noDataMessage": "No Exhchange Servers found",
+              "showRefreshButton": true,
+              "exportFieldName": "ExchangeServer",
+              "exportParameterName": "server",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "computer"
+                },
+                "showBorder": false
+              }
+            },
+            "customWidth": "33",
+            "name": "query - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "DeviceInfo\r\n| where TimeGenerated > ago(7d)\r\n| where DeviceName =~ '{server}'\r\n| summarize by DeviceName, MachineGroup, PublicIP, OSPlatform, DeviceId",
+              "size": 0,
+              "title": "Server Details",
+              "noDataMessage": "No MDE data for this sever",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "66",
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "union isfuzzy=true(\r\nSecurityAlert\r\n| where TimeGenerated > ago(7d)\r\n| where CompromisedEntity =~ \"{server}\"),\r\n(SecurityAlert\r\n| where TimeGenerated > ago(7d)\r\n| where Entities contains \"{server}\")",
+              "size": 0,
+              "title": "Security Alerts related to {server}",
+              "noDataMessage": "No alerts found",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 2"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "view_tab",
+        "comparison": "isEqualTo",
+        "value": "1"
+      },
+      "name": "group - 3"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": " let scriptExtensions = dynamic([\".php\", \".jsp\", \".js\", \".aspx\", \".asmx\", \".asax\", \".cfm\", \".shtml\"]);\r\n  union isfuzzy=true\r\n  (SecurityEvent\r\n  | where EventID == 4663\r\n  | where Process has_any (\"umworkerprocess.exe\", \"UMService.exe\")\r\n  | where ObjectName has_any (scriptExtensions)\r\n  | where AccessMask in ('0x2','0x100', '0x10', '0x4')),\r\n  (DeviceFileEvents\r\n  | where ActionType =~ \"FileCreated\"\r\n  | where InitiatingProcessFileName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\r\n  | where FileName has_any(scriptExtensions))\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress",
+              "size": 0,
+              "title": "Exchnage UM Service Writing Suspicious File",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "  let lookback = 14d;\r\n  let timeframe = 1d;\r\n  SecurityEvent\r\n  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)\r\n  | where EventID == 4688\r\n  | where ParentProcessName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\r\n  | join kind=rightanti (\r\n  SecurityEvent\r\n  | where TimeGenerated > ago(timeframe)\r\n  | where ParentProcessName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\r\n  | where EventID == 4688) on NewProcessName\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress",
+              "size": 0,
+              "title": "Exchange UM Service New Child Process",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "  Event\r\n  | where EventLog =~ \"Application\"\r\n  | where Source startswith \"MSExchange\"\r\n  | where EventLevelName =~ \"error\"\r\n  | where (RenderedDescription startswith \"Watson report\" and RenderedDescription contains \"umworkerprocess\" and RenderedDescription contains \"TextFormattingRunProperties\") or RenderedDescription startswith \"An unhandled exception occurred in a UM worker process\" or RenderedDescription startswith \"The Microsoft Exchange Unified Messaging service\" or RenderedDescription contains \"MSExchange Unified Messaging\"\r\n  | where RenderedDescription !contains \"System.OutOfMemoryException\"\r\n  | project-reorder TimeGenerated, Computer, RenderedDescription",
+              "size": 0,
+              "title": "Exchange UM Service Errors",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 2"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityEvent\r\n  // Look for specific Directory Service Changes and parse data\r\n  | where EventID == 5136\r\n  | extend EventData = parse_xml(EventData).EventData.Data\r\n  | mv-expand bagexpansion = array EventData\r\n  | evaluate bag_unpack(EventData)\r\n  | extend Key =tostring(['@Name']), Value = ['#text']\r\n  | evaluate pivot(Key, any(Value),TimeGenerated, EventID, Computer, Account, AccountType, EventSourceName, Activity, SubjectAccount)\r\n  // Where changes relate to Exchange OAB\r\n  | where ObjectClass =~ \"msExchOABVirtualDirectory\"\r\n  // Look for InternalHostName or ExternalHostName properties being changed\r\n  | where AttributeLDAPDisplayName in (\"msExchExternalHostName\", \"msExchInternalHostName\")\r\n  // Look for suspected webshell activity\r\n  | where AttributeValue has \"script\"\r\n  | project-rename LastSeen = TimeGenerated\r\n  | project-reorder LastSeen, Computer, Account, ObjectDN, AttributeLDAPDisplayName, AttributeValue",
+              "size": 0,
+              "title": "Exchange OAB Virtual Directory Attribute Containing Potential Webshell",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 3"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let iocs = externaldata(DateAdded:string,FirstSeen:string,IoC:string,Type:string,TLP:string)\r\n  [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/MSTICIoCs-ExchangeServerVulnerabilitiesDisclosedMarch2021.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\r\n  let file_paths = (iocs | where Type =~ \"filepath\");\r\n  let sha256s = (iocs | where Type =~ \"sha256\");\r\n  let ips = (iocs | where Type =~ \"ip\");\r\n  union isfuzzy=true\r\n  (SecurityEvent\r\n  | where EventID == 4663\r\n  | where ObjectName in (file_paths)\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer\r\n  ),\r\n  (DeviceFileEvents\r\n  | where FolderPath in (file_paths)\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName\r\n  ),\r\n  (DeviceEvents\r\n  | where InitiatingProcessSHA256 in (sha256s)\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName\r\n  ),\r\n  (CommonSecurityLog\r\n  | where FileHash in (sha256s)\r\n  | extend timestamp = TimeGenerated\r\n  ),\r\n  (Event\r\n  //This query uses sysmon data depending on table name used this may need updating\r\n  | where Source == \"Microsoft-Windows-Sysmon\"\r\n  | extend EvData = parse_xml(EventData)\r\n  | extend EventDetail = EvData.DataItem.EventData.Data\r\n  | extend Hashes = EventDetail.[16].[\"#text\"]\r\n  | where isnotempty(Hashes)\r\n  | parse Hashes with * 'SHA256=' SHA256 ',' * \r\n  | where SHA256 in~ (sha256s) \r\n  | extend Type = strcat(Type, \": \", Source), Account = UserName, FileHash = Hashes\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer\r\n  ),\r\n  (CommonSecurityLog \r\n  | where isnotempty(SourceIP) or isnotempty(DestinationIP) \r\n  | where SourceIP in (ips) or DestinationIP in (ips) or Message has_any (ips) \r\n  | extend IPMatch = case(SourceIP in (ips), \"SourceIP\", DestinationIP in (ips), \"DestinationIP\", \"Message\")  \r\n  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP, DestinationIP, DeviceProduct, DeviceAction, Message, Protocol, SourcePort, DestinationPort, DeviceAddress, DeviceName, IPMatch \r\n  | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIP, IPMatch == \"DestinationIP\", DestinationIP, \"IP in Message Field\")  \r\n  ), \r\n  (VMConnection  \r\n  | where isnotempty(SourceIp) or isnotempty(DestinationIp)  \r\n  | where SourceIp in (ips) or DestinationIp in (ips)  \r\n  | extend IPMatch = case( SourceIp in (ips), \"SourceIP\", DestinationIp in (ips), \"DestinationIP\", \"None\")  \r\n  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIp, IPMatch == \"DestinationIP\", DestinationIp, \"None\"), Host = Computer \r\n  ), \r\n  (Event \r\n  | where Source == \"Microsoft-Windows-Sysmon\" \r\n  | where EventID == 3 \r\n  | extend EvData = parse_xml(EventData) \r\n  | extend EventDetail = EvData.DataItem.EventData.Data \r\n  | extend SourceIP = EventDetail.[9].[\"#text\"], DestinationIP = EventDetail.[14].[\"#text\"] \r\n  | where SourceIP in (ips) or DestinationIP in (ips)  \r\n  | extend IPMatch = case( SourceIP in (ips), \"SourceIP\", DestinationIP in (ips), \"DestinationIP\", \"None\")  \r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIP, IPMatch == \"DestinationIP\", DestinationIP, \"None\") \r\n  ),  \r\n  (WireData  \r\n  | where isnotempty(RemoteIP) \r\n  | where RemoteIP in (ips) \r\n  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = Computer \r\n  ), \r\n  (W3CIISLog  \r\n  | where isnotempty(cIP) \r\n  | where cIP in (ips) \r\n  | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName \r\n  ), \r\n  ( \r\n  DeviceNetworkEvents \r\n  | where isnotempty(RemoteIP)  \r\n  | where RemoteIP in (ips)  \r\n  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName  \r\n  ),\r\n  (\r\n  WindowsFirewall\r\n  | where SourceIP in (ips) or DestinationIP in (ips)\r\n  | extend IPMatch = case( SourceIP in (ips), \"SourceIP\", DestinationIP in (ips), \"DestinationIP\", \"None\")\r\n  )",
+              "size": 0,
+              "title": "MSTIC IOC Matches",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 4"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "view_tab",
+        "comparison": "isEqualTo",
+        "value": "2"
+      },
+      "name": "group - 3"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "W3CIISLog \r\n| where cIP !startswith \"10.\" and cIP !startswith \"fe80\" and cIP !startswith \"::\" and cIP !startswith \"127.\" and cIP !startswith \"172.\" \r\n| where (csUriStem matches regex @\"\\/owa\\/auth\\/[A-Za-z0-9]{1,30}\\.js\") or (csUriStem matches regex @\"\\/ecp\\/[A-Za-z0-9]{1,30}\\.(js|flt|css)\") \r\n| project TimeGenerated, sSiteName, csMethod, csUriStem, sPort, cIP, csUserAgent",
+              "size": 0,
+              "title": "Generic Webshell Detection",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let timeRange = 7d; \r\n//Calculate number of suspicious URI stems visited by user \r\nW3CIISLog \r\n| where TimeGenerated > ago(timeRange)  \r\n| where cIP !startswith \"10.\" and cIP !startswith \"fe80\" and cIP !startswith \"::\" and cIP !startswith \"127.\" and cIP !startswith \"172.\" \r\n| where (csUriStem matches regex @\"\\/owa\\/auth\\/[A-Za-z0-9]{1,30}\\.js\") or (csUriStem matches regex @\"\\/ecp\\/[A-Za-z0-9]{1,30}\\.(js|flt|css)\") or (csUriStem =~ \"/ews/exchange.asmx\") \r\n| extend userHash = hash_md5(strcat(cIP, csUserAgent)) \r\n| summarize susCount=dcount(csUriStem), make_list(csUriStem), min(TimeGenerated), max(TimeGenerated) by userHash, cIP, csUserAgent \r\n| join kind=leftouter  ( \r\n//Calculate unique URI stems visited by each user \r\nW3CIISLog \r\n| where TimeGenerated > ago(timeRange) \r\n| where cIP !startswith \"10.\" and cIP !startswith \"fe80\" and cIP !startswith \"::\" and cIP !startswith \"127.\" and cIP !startswith \"172.\" \r\n| extend userHash = hash_md5(strcat(cIP, csUserAgent)) \r\n| summarize allCount=dcount(csUriStem) by userHash \r\n) on userHash \r\n//Find instances where only a common endpoint was seen \r\n| extend containsDefault = iff(list_csUriStem contains \"/ews/exchange.asmx\", 1, 0) \r\n//If we only see the common endpoint and nothing else dump it \r\n| extend result = iff(containsDefault == 1, containsDefault+susCount, 0) \r\n| where result != 2 \r\n| extend susPercentage = susCount / allCount * 100 \r\n| where susPercentage > 90 \r\n| project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, AttackerIP=cIP, AttackerUA=csUserAgent, URIsVisited=list_csUriStem, suspiciousPercentage=susPercentage, allUriCount=allCount, suspiciousUriCount=susCount ",
+              "size": 0,
+              "title": "Suspicious URIs visited by IP Addresses",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityAlert\r\n| where DisplayName contains \"webshell\"",
+              "size": 0,
+              "title": "Webshell alerts",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 2"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "view_tab",
+        "comparison": "isEqualTo",
+        "value": "3"
+      },
+      "name": "group - 4"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "  let exchange_servers = (\r\n  W3CIISLog\r\n  | where TimeGenerated > ago(14d)\r\n  | where sSiteName =~ \"Exchange Back End\"\r\n  | summarize by Computer);\r\n  W3CIISLog\r\n  | where TimeGenerated > ago(7d)\r\n  | where Computer in (exchange_servers)\r\n  | where csUriQuery startswith \"t=\"\r\n  | project-reorder TimeGenerated, Computer, csUriStem, csUriQuery, csUserName, csUserAgent, cIP\r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = csUserName, HostCustomEntity = Computer, IPCustomEntity = cIP",
+              "size": 0,
+              "title": "HAFNIUM Request Pattern",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "  SecurityEvent\r\n  | where EventID == 4688\r\n  | where Process has_any (\"powershell.exe\", \"PowerShell_ISE.exe\", \"cmd.exe\")\r\n  | where CommandLine has \"$client = New-Object System.Net.Sockets.TCPClient\"",
+              "size": 0,
+              "title": "Invoke-PowerShellTcpOneLine Usage",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "  SecurityEvent\r\n  | where EventID == 4688\r\n  | where Process has_any (\"cmd.exe\", \"powershell.exe\", \"PowerShell_ISE.exe\")\r\n  | where CommandLine has \"https://raw.githubusercontent.com/besimorhino/powercat/master/powercat.ps1\"",
+              "size": 0,
+              "title": "Powercat Download",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 2"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "  SecurityEvent\r\n  | where EventID == 4688\r\n  | where Process in(\"powershell.exe\",\"powershell_ise.exe\") and CommandLine contains \"-e\" \r\n  | mvexpand SS = split(CommandLine, \" \") \r\n  | where SS matches regex \"[A-Za-z0-9+/]{50,}[=]{0,2}\" \r\n  | extend DecodeString = base64_decodestring(tostring(SS)) \r\n  | extend FinalString = replace(\"\\\\0\", \"\", DecodeString) \r\n  | where FinalString has \"tcpclient\" and FinalString contains \"$\" and (FinalString contains \"invoke\" or FinalString contains \"iex\") \r\n  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer",
+              "size": 0,
+              "title": "Nishang Reverse TCP Shell in Base64",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 3"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "view_tab",
+        "comparison": "isEqualTo",
+        "value": "4"
+      },
+      "name": "group - 5"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-ExchangeCompromiseHunting",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
@@ -48,11 +51,16 @@ query: |
   | where count_ > signin_threshold
   | summarize make_list(SourceIP);
   //See if any of the IPs with failed host logins hve had a sucessful Azure AD login
-  SigninLogs
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where ResultType !in ("0", "50125", "50140")
   | where IPAddress in (win_fails) or IPAddress in (nix_fails)
   | extend Reason=  "Multiple failed host logins from IP address with successful Azure AD login"
-  | extend timstamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend timstamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, Type = Type
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
