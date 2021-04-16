@@ -13,9 +13,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [
-          "value::all"
-        ],
         "parameters": [
           {
             "id": "9a199167-2dde-49dd-8f01-23e9d1fa8151",
@@ -37,9 +34,9 @@
             "name": "InternalSub",
             "type": 1,
             "isRequired": true,
-            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where name =~ '{InternalWSs}'\r\n| project subscriptionId ",
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
             "crossComponentResources": [
-              "value::all"
+              "value::selected"
             ],
             "isHiddenWhenLocked": true,
             "timeContext": {
@@ -55,21 +52,17 @@
             "name": "Subscription",
             "type": 6,
             "isRequired": true,
-            "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{InternalSub}', true, false)\r\n| where selected == 1",
-            "crossComponentResources": [
-              "value::all"
-            ],
+            "value": "",
             "typeSettings": {
               "additionalResourceOptions": [],
+              "includeAll": false,
               "showDefault": false
             },
             "timeContext": {
               "durationMs": 0
             },
             "timeContextFromParameter": "TimeRange",
-            "defaultValue": "value::1",
-            "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources"
+            "defaultValue": "value::1"
           },
           {
             "id": "95a45501-31b5-4ea2-bcb3-eb208e0080e2",
@@ -241,15 +234,11 @@
             "version": "KqlParameterItem/1.0",
             "name": "resourceGroup",
             "type": 1,
-            "query": "where type =~ \"microsoft.operationalinsights/workspaces\"\r\n| where name =~  \"{InternalWSs}\"\r\n| project resourceGroup",
+            "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where id == \"{Workspace:lable}\"\r\n| project resourceGroup",
             "crossComponentResources": [
-              "value::all"
+              "{Subscription}"
             ],
             "isHiddenWhenLocked": true,
-            "timeContext": {
-              "durationMs": 0
-            },
-            "timeContextFromParameter": "TimeRange",
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources"
           },
@@ -295,6 +284,9 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
         "parameters": [
           {
             "id": "9aec751b-07bd-43ba-80b9-f711887dce45",
@@ -302,11 +294,59 @@
             "name": "IncidentNumber",
             "label": "Incident Number",
             "type": 1,
-            "value": "12004",
+            "isRequired": true,
+            "value": "343",
             "timeContext": {
-              "durationMs": 2592000000
+              "durationMs": 0
             },
             "timeContextFromParameter": "TimeRange"
+          },
+          {
+            "id": "f92a8f2b-ad21-4675-a7fb-45a906a2c00f",
+            "version": "KqlParameterItem/1.0",
+            "name": "show_All",
+            "type": 2,
+            "query": "_GetWatchlist('SocRA')\r\n| join\r\n(SecurityIncident \r\n| summarize arg_max(TimeGenerated, CreatedTime, Status, Severity, Owner, AdditionalData, IncidentUrl, Comments, Classification, ClassificationReason, ClassificationComment, Labels, Title, AlertIds) by IncidentNumber\r\n) on $left.Alert == $right.Title\r\n| project Date, IncidentNumber, Alert, Header = \"Recommended Actions\" \r\n| union SecurityIncident\r\n| extend actions_ = iif(isnotempty(Header),\"Actions available\",\" \")\r\n| summarize by value=IncidentNumber, display = strcat(IncidentNumber,': ',actions_,' : ',Alert)\r\n| order by value desc",
+            "crossComponentResources": [
+              "{Workspace}"
+            ],
+            "value": null,
+            "isHiddenWhenLocked": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "9ef1a34d-5c8e-42ad-b1d7-1353e0091060",
+            "version": "KqlParameterItem/1.0",
+            "name": "testRemediation",
+            "type": 1,
+            "isRequired": true,
+            "query": "SecurityIncident\r\n| where IncidentNumber == '{IncidentNumber:value}' \r\n| summarize arg_max(LastModifiedTime,*) by tostring(IncidentNumber)\r\n| extend Alerts = extract(\"\\\\[(.*?)\\\\]\", 1, tostring(AlertIds))\r\n| mv-expand AlertIds to typeof(string)\r\n| join \r\n(\r\n    SecurityAlert\r\n    | extend Remediation_ = parse_json(RemediationSteps)\r\n    | mv-expand Remediation_\r\n) on $left.AlertIds == $right.SystemAlertId\r\n| summarize  Remediation=make_set(tostring(Remediation_)) by IncidentNumber, Title, Severity\r\n| mv-expand Remediation to typeof(string)\r\n| project value=iif(isempty(Remediation),'0','1')",
+            "isHiddenWhenLocked": true,
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "e5d4131c-43a9-4f92-87c9-dbf647530c9c",
+            "version": "KqlParameterItem/1.0",
+            "name": "watchListExists",
+            "type": 1,
+            "isRequired": true,
+            "query": "_GetWatchlist('SocRA')\r\n| limit 1",
+            "crossComponentResources": [
+              "{Workspace}"
+            ],
+            "isHiddenWhenLocked": true,
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
           }
         ],
         "style": "pills",
@@ -397,13 +437,67 @@
             "numberFormat": {
               "unit": 0,
               "options": {
-                "style": "decimal"
+                "style": "decimal",
+                "useGrouping": false
               }
             }
           },
           "leftContent": {
             "columnMatch": "Value",
-            "formatter": 1
+            "formatter": 18,
+            "formatOptions": {
+              "thresholdsOptions": "colors",
+              "thresholdsGrid": [
+                {
+                  "operator": "==",
+                  "thresholdValue": "Low",
+                  "representation": "green",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Medium",
+                  "representation": "orange",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "High",
+                  "representation": "redBright",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "New",
+                  "representation": "blue",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Active",
+                  "representation": "lightBlue",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "==",
+                  "thresholdValue": "Closed",
+                  "representation": "gray",
+                  "text": "{0}{1}"
+                },
+                {
+                  "operator": "Default",
+                  "thresholdValue": null,
+                  "text": "{0}{1}"
+                }
+              ]
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Remediation_",
+            "formatter": 7,
+            "formatOptions": {
+              "linkTarget": "Url"
+            }
           },
           "showBorder": false,
           "sortCriteriaField": "Order",
@@ -411,8 +505,423 @@
           "size": "auto"
         }
       },
-      "customWidth": "66",
       "name": "general info"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "⚠️ Remediations found - click to Open",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Recommended Actions"
+            },
+            "name": "text - 15"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### Remediations and Actions  Help\r\n- Basic, level shows the Remediation that is contained in the Alert data\r\n- Advanced, level shows an enriched Remediation and Action set, this is obtained for the SocRA Watchlist. \r\n\t- Instructions, you must install the Watchlist file called, SocRa.csv file from \r\n<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"a75e3f3a-2661-410b-82fb-d300d37dea2d\" width=\"18\" height=\"18\" viewBox=\"0 0 18 18\"><defs><linearGradient id=\"aff60ddf-eec1-40bf-8bf5-f3e3b50e8818\" x1=\"9\" y1=\"16.21\" x2=\"9\" y2=\"0.62\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#1b93eb\"/><stop offset=\"0.21\" stop-color=\"#2095eb\"/><stop offset=\"0.44\" stop-color=\"#2e9ced\"/><stop offset=\"0.69\" stop-color=\"#45a7ef\"/><stop offset=\"0.95\" stop-color=\"#64b6f1\"/><stop offset=\"1\" stop-color=\"#6bb9f2\"/></linearGradient></defs><title>Icon-security-248</title><path d=\"M16,8.44c0,4.57-5.53,8.25-6.73,9a.43.43,0,0,1-.46,0C7.57,16.69,2,13,2,8.44V2.94a.44.44,0,0,1,.43-.44C6.77,2.39,5.78.5,9,.5s2.23,1.89,6.53,2a.44.44,0,0,1,.43.44Z\" fill=\"#1b93eb\"/><path d=\"M15.38,8.48c0,4.2-5.07,7.57-6.17,8.25a.4.4,0,0,1-.42,0c-1.1-.68-6.17-4.05-6.17-8.25v-5A.41.41,0,0,1,3,3c3.94-.11,3-1.83,6-1.83S11.05,2.93,15,3a.41.41,0,0,1,.39.4Z\" fill=\"url(#aff60ddf-eec1-40bf-8bf5-f3e3b50e8818)\"/><path d=\"M9,6.53A2.88,2.88,0,0,1,11.84,9a.49.49,0,0,0,.49.4h1.4a.49.49,0,0,0,.5-.53,5.26,5.26,0,0,0-10.46,0,.49.49,0,0,0,.5.53h1.4A.49.49,0,0,0,6.16,9,2.88,2.88,0,0,1,9,6.53Z\" fill=\"#c3f1ff\"/><circle cx=\"9\" cy=\"9.4\" r=\"1.91\" fill=\"#fff\"/></svg>(https://github.com/Azure/Azure-Sentinel)\r\n and name the Watchlist alias as: SocRa"
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "text - ra Help text"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityIncident\r\n| where IncidentNumber == '{IncidentNumber:value}' \r\n| summarize arg_max(LastModifiedTime,*) by tostring(IncidentNumber)\r\n| extend Alerts = extract(\"\\\\[(.*?)\\\\]\", 1, tostring(AlertIds))\r\n| mv-expand AlertIds to typeof(string)\r\n| join \r\n(\r\n    SecurityAlert\r\n    | extend Remediation_ = parse_json(RemediationSteps)\r\n    | mv-expand Remediation_\r\n) on $left.AlertIds == $right.SystemAlertId\r\n| summarize  Remediation=make_set(tostring(Remediation_)) by IncidentNumber, Title, Severity\r\n| mv-expand Remediation to typeof(string)\r\n// extract URL from the string \r\n| extend url_ = iif(Remediation contains 'https://',extract (\"https://([a-zA-Z0-9-_://@.?%=&# +]*)\",0,tostring(Remediation)),\"\")\r\n| serialize\r\n| extend IncidentNumber = iif(prev(IncidentNumber) == IncidentNumber,'',IncidentNumber), Title = iif(prev(Title) == Title,'',Title)\r\n",
+              "size": 1,
+              "title": "Incident and Remediations - Basic View (from Alert)",
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "High",
+                          "representation": "redBright",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Medium",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Low",
+                          "representation": "green",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Informational",
+                          "representation": "gray",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "blue",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "Remediation",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "CellDetails",
+                      "linkIsContextBlade": true
+                    },
+                    "tooltipFormat": {
+                      "tooltip": "Click to see more details about the Remediation step"
+                    }
+                  },
+                  {
+                    "columnMatch": "url_",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "Url",
+                      "linkLabel": "",
+                      "linkIsContextBlade": false
+                    },
+                    "tooltipFormat": {
+                      "tooltip": "Open this link (in another Tab)"
+                    }
+                  },
+                  {
+                    "columnMatch": "entityList",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "CellDetails",
+                      "linkIsContextBlade": true
+                    }
+                  }
+                ],
+                "labelSettings": [
+                  {
+                    "columnId": "IncidentNumber"
+                  },
+                  {
+                    "columnId": "Title"
+                  },
+                  {
+                    "columnId": "Severity"
+                  },
+                  {
+                    "columnId": "Remediation"
+                  },
+                  {
+                    "columnId": "url_",
+                    "label": "URL",
+                    "comment": "Show a URL if available "
+                  }
+                ]
+              },
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "IncidentNumber"
+                },
+                "subtitleContent": {
+                  "columnMatch": "Title"
+                },
+                "leftContent": {
+                  "columnMatch": "Remediation"
+                },
+                "secondaryContent": {
+                  "columnMatch": "url_",
+                  "formatter": 7,
+                  "formatOptions": {
+                    "linkTarget": "Url",
+                    "linkIsContextBlade": false
+                  }
+                },
+                "showBorder": false
+              },
+              "graphSettings": {
+                "type": 2,
+                "topContent": {
+                  "columnMatch": "IncidentNumber"
+                },
+                "leftContent": {
+                  "columnMatch": "Title"
+                },
+                "centerContent": {
+                  "columnMatch": "url_",
+                  "formatter": 7,
+                  "formatOptions": {
+                    "linkTarget": "Url"
+                  }
+                },
+                "hivesContent": {
+                  "columnMatch": "Title",
+                  "formatter": 7,
+                  "formatOptions": {
+                    "linkTarget": "Url"
+                  }
+                },
+                "nodeIdField": "Remediation",
+                "sourceIdField": "Title",
+                "targetIdField": "Remediation",
+                "graphOrientation": 3,
+                "showOrientationToggles": false,
+                "nodeSize": null,
+                "staticNodeSize": 100,
+                "colorSettings": {
+                  "nodeColorField": "url_",
+                  "type": 1,
+                  "colorPalette": "default"
+                },
+                "groupByField": "Title",
+                "hivesMargin": 5
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "watchListExists",
+              "comparison": "isEqualTo"
+            },
+            "name": "query - basic View "
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "_GetWatchlist('SocRA')\r\n| join\r\n  (\r\n   SecurityIncident | where IncidentNumber == '{IncidentNumber}' \r\n   | summarize arg_max(TimeGenerated, CreatedTime, Status, Severity, Owner, AdditionalData, IncidentUrl, Comments, Classification, ClassificationReason, ClassificationComment, Labels, Title, AlertIds) by IncidentNumber\r\n  ) on $left.Alert == $right.Title\r\n| project-keep  A*, Status, Severity //, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19\r\n| project-reorder Alert, Status, Severity, A* asc\r\n| project-away AlertIds, AdditionalData\r\n| evaluate narrow()\r\n| extend url_ = iif(Value contains 'https://',extract (\"https://([a-zA-Z0-9-_://@.?%=&# +]*)\",0,Value),\"\")\r\n| extend r = iif(Column startswith 'A', extract(@\"\\d+\",0,tostring(Column)),\"\")\r\n| where isnotempty(Value)\r\n| project tostring(Column), RemediationStep =Value, URLtoOpen=url_,toint(r)\r\n| order by Column desc, r asc \r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+              "size": 0,
+              "title": "Incident and Remediations - Advanced View (from Watchlist, \"SocRa\") Incident Number:{IncidentNumber}",
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "timeContextFromParameter": "TimeRange",
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Remediation",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "linkTarget": "CellDetails",
+                      "linkIsContextBlade": true,
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Low",
+                          "representation": "green",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Medium",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "High",
+                          "representation": "redBright",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    },
+                    "tooltipFormat": {
+                      "tooltip": "Click to see more details about the Remediation step"
+                    }
+                  },
+                  {
+                    "columnMatch": "URLtoOpen",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "Url"
+                    }
+                  },
+                  {
+                    "columnMatch": "Severity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "High",
+                          "representation": "redBright",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Medium",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Low",
+                          "representation": "green",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Informational",
+                          "representation": "gray",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "blue",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "url_",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "Url",
+                      "linkLabel": "",
+                      "linkIsContextBlade": false
+                    },
+                    "tooltipFormat": {
+                      "tooltip": "Open this link (in another Tab)"
+                    }
+                  },
+                  {
+                    "columnMatch": "entityList",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "CellDetails",
+                      "linkIsContextBlade": true
+                    }
+                  }
+                ],
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "r",
+                    "sortOrder": 1
+                  }
+                ],
+                "labelSettings": [
+                  {
+                    "columnId": "Column"
+                  },
+                  {
+                    "columnId": "r",
+                    "label": "AlertOrder"
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "r",
+                  "sortOrder": 1
+                }
+              ],
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "IncidentNumber"
+                },
+                "subtitleContent": {
+                  "columnMatch": "Title"
+                },
+                "leftContent": {
+                  "columnMatch": "Remediation"
+                },
+                "secondaryContent": {
+                  "columnMatch": "url_",
+                  "formatter": 7,
+                  "formatOptions": {
+                    "linkTarget": "Url",
+                    "linkIsContextBlade": false
+                  }
+                },
+                "showBorder": false
+              },
+              "graphSettings": {
+                "type": 2,
+                "topContent": {
+                  "columnMatch": "IncidentNumber"
+                },
+                "leftContent": {
+                  "columnMatch": "Title"
+                },
+                "centerContent": {
+                  "columnMatch": "url_",
+                  "formatter": 7,
+                  "formatOptions": {
+                    "linkTarget": "Url"
+                  }
+                },
+                "hivesContent": {
+                  "columnMatch": "Title",
+                  "formatter": 7,
+                  "formatOptions": {
+                    "linkTarget": "Url"
+                  }
+                },
+                "nodeIdField": "Remediation",
+                "sourceIdField": "Title",
+                "targetIdField": "Remediation",
+                "graphOrientation": 3,
+                "showOrientationToggles": false,
+                "nodeSize": null,
+                "staticNodeSize": 100,
+                "colorSettings": {
+                  "nodeColorField": "url_",
+                  "type": 1,
+                  "colorPalette": "default"
+                },
+                "groupByField": "Title",
+                "hivesMargin": 5
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "watchListExists",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "query - advanced View"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "testRemediation",
+        "comparison": "isNotEqualTo",
+        "value": "0"
+      },
+      "name": "RecActions"
     },
     {
       "type": 12,
@@ -497,7 +1006,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{InternalSub}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-01-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.metaData\",\"columns\":[]}}]}",
+        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-01-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.metaData\",\"columns\":[]}}]}",
         "size": 2,
         "noDataMessage": "No entities were found",
         "noDataMessageStyle": 4,
@@ -535,7 +1044,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{InternalSub}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-01-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.entities\",\"columns\":[{\"path\":\"$.kind\",\"columnid\":\"Kind\"},{\"path\":\"$.properties.friendlyName\",\"columnid\":\"Name\"}]}}]}",
+        "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"POST\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/incidents/{IncidentID}/entities\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-01-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.entities\",\"columns\":[{\"path\":\"$.kind\",\"columnid\":\"Kind\"},{\"path\":\"$.properties.friendlyName\",\"columnid\":\"Name\"}]}}]}",
         "size": 2,
         "noDataMessage": "No entities were found",
         "noDataMessageStyle": 4,
@@ -899,6 +1408,9 @@
         "padding": "0"
       }
     }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/0208bc97-b7dc-4866-8b2b-c4725af15834/resourcegroups/gbb_sentinel/providers/microsoft.operationalinsights/workspaces/gbbsentinel"
   ],
   "fromTemplateId": "sentinel-IncidentOverview",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
