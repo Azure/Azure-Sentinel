@@ -1,7 +1,6 @@
 ﻿using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -33,8 +32,8 @@ namespace Kqlvalidations.Tests
             string queryStr = res["query"];
             string id = res["id"];
 
-            //we ignore known issues (in progress)
-            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
             {
                 return;
             }
@@ -60,14 +59,9 @@ namespace Kqlvalidations.Tests
             string id = res["id"];
 
             //Templates that are in the skipped templates should not pass the validateion (if they pass, why skip?)
-            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            if (ShouldSkipTemplateValidation(id))
             {
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                var firstErrorLocation = (Line: 0, Col: 0);
-                if (!validationRes.IsValid)
-                {
-                    firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
-                }
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
 
@@ -76,6 +70,15 @@ namespace Kqlvalidations.Tests
                 return;
             }
             
+        }
+
+        private bool ShouldSkipTemplateValidation(string templateId)
+        {
+            return TemplatesToSkipValidationReader.WhiteListTemplates
+                .Where(template => template.id == templateId)
+                .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))
+                .Where(template => !string.IsNullOrWhiteSpace(template.templateName))
+                .Any();
         }
 
         private (int Line, int Col) GetLocationInQuery(string queryStr, int pos)
