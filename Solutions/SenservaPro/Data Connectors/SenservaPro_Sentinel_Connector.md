@@ -15,7 +15,7 @@ The SenservaPro connector allows you to connect SenservaPro Azure Active Directo
 SenservaPro is fully integrated into Azure and exports logs directly to Azure Sentinel every time a Senserva monitored Azure Active Directory configuration changes, or account status changes due to something like a Risky User warning.
 1. In the Azure Sentinel portal, click Data connectors and select 'SenservaPro' and then Open connector page.
 
-2. You will install the data provider to the connector as part of your SenservaPro setup from [our Azure Marketplace offering.](https://azuremarketplace.microsoft.com/en-us/marketplace/apps/senservallc.senserva)
+2. You will install the data provider to the connector as part of your SenservaPro setup from [our Azure Marketplace offering.](https://azuremarketplace.microsoft.com/marketplace/apps/senservallc.senserva)
 
 
 ## Find your data
