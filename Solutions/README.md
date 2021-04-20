@@ -62,7 +62,7 @@ interface SolutionAutomationInput {
   "Data Connectors": [
     "Data%20Connectors/Connector_McAfee_ePO.json"
   ],
-  "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions",
+  "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions"
 }  
 ```
 
