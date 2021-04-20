@@ -101,7 +101,7 @@ After all the checks in arm-ttk tool are passed. Validate the package files by f
   * You should see the user Interface preview of data connector, workbook etc. and descriptions you provided in input file.
   * Check the description and User interface of solution preview.
 
-**1.	Validate maintemplate.json:**
+**2.	Validate maintemplate.json:**
 
 Validate mainTemplate by deploying the template in portal. 
 Follow these steps to deploy in portal:
