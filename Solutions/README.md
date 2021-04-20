@@ -74,8 +74,8 @@ Validate the Solution offer files createUiDefinition.json and mainTemplate.json 
 
 **Through generated xml files:**
 1.	Go to path C:\One\Sentinel-AzMP-Solutions\tmp\results\arm-ttk
-2.	Check the xml files of respective solution to identify errors.
-3.	Make necessary modifications to the files so it passes all validations.
+2.	Check the xml files of respective solution to check the validations.
+3.	If errors are displayed make necessary modifications to the files so it passes all validations.
 
 **Through commands:**
 
