@@ -11,23 +11,26 @@ namespace Kqlvalidations.Tests
     {
         public DetectionsYamlFilesTestData()
         {
-            List<string> detectionPath = GetDetectionPath();
-            var files = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList();
-            files.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+            List<string> detectionPaths = GetDetectionPath();
+            var files = GetDetectionFiles(detectionPaths);
             files.ForEach(f => AddData(Path.GetFileName(f)));
         }
 
         public static List<string> GetDetectionPath()
         {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
+            List<string> dirPaths = new List<string>() { "Detections", "Solutions" };
             var testFolderDepth = 6;
             List<string> detectionPaths = new List<string>();
             for (int i = 0; i < testFolderDepth; i++)
             {
                 rootDir = rootDir.Parent;
             }
-            detectionPaths.Add(Path.Combine(rootDir.FullName, "Detections"));
-            detectionPaths.Add(Path.Combine(rootDir.FullName, "Solutions"));
+
+            foreach (var dirName in dirPaths)
+            {
+                detectionPaths.Add(Path.Combine(rootDir.FullName, dirName));
+            }
 
             return detectionPaths;
         }
@@ -40,8 +43,7 @@ namespace Kqlvalidations.Tests
             {
                 rootDir = rootDir.Parent;
             }
-            var detectionPath = Path.Combine(rootDir.FullName);
-            return detectionPath;
+            return rootDir.FullName;
         }
 
         public static string GetSkipTemplatesPath()
@@ -61,6 +63,14 @@ namespace Kqlvalidations.Tests
             UriBuilder uri = new UriBuilder(codeBase);
             string path = Uri.UnescapeDataString(uri.Path);
             return Path.GetDirectoryName(path);
+        }
+
+        private static List<string> GetDetectionFiles(List<string> detectionPaths)
+        {
+            var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories).ToList();
+            files.AddRange(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+
+            return files;
         }
     }
 }
