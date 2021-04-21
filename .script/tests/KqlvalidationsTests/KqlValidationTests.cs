@@ -13,7 +13,7 @@ namespace Kqlvalidations.Tests
     public class KqlValidationTests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
-        private static readonly List<string> DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+        private static readonly List<string> DetectionPaths = DetectionsYamlFilesTestData.GetDetectionPaths();
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
@@ -107,11 +107,11 @@ namespace Kqlvalidations.Tests
         {
             try
             {
-                return Directory.GetFiles(DetectionPath[0], detectionsYamlFileName, SearchOption.AllDirectories).Single();
+                return Directory.GetFiles(DetectionPaths[0], detectionsYamlFileName, SearchOption.AllDirectories).Single();
             }
             catch
             {
-                return  Directory.GetFiles(DetectionPath[1], detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+                return  Directory.GetFiles(DetectionPaths[1], detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
             }
         }
     }
