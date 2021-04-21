@@ -100,7 +100,6 @@ if($null -eq $row.uri){
     $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 }
 $uri = $row.uri
-Write-Host("Assign existing table $ row.uri to $ uri ")
 
 #Setup uri Headers for requests to OKta
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -128,9 +127,7 @@ do {
     ELSE{
         $exitDoUntil = $true
     }
-    Write-Host("URi :$($uri) -ne URIself : $($uriself) not equal then only processing record to azure sentinel.."); 
     if($uri -ne $uriself){
-        Write-Host("$ uri -ne $ uriself not equal")
         $responseObj = (ConvertFrom-Json $response.content)
         $responseCount = $responseObj.count
         $TotalRecordCount= $TotalRecordCount + $responseCount
@@ -180,10 +177,10 @@ do {
         $result = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
         #update State table for next time we execute function
         #store details in function storage table to retrieve next time function runs 
+        Write-Host("Store URI details in function storage table to retrieve next time function runs  : $($uri)")
         $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     }
     else{
-        Write-Host("$ uri equals to $ uriself hence not processing data to azure sentinel")
         $exitDoUntil = $true
     }
     #check on time running, Azure Function default timeout is 5 minutes, if we are getting close exit function cleanly now and get more records next execution
