@@ -41,6 +41,8 @@ $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("au", "")
 $headers.Add("Authorization", "Basic " + $base64AuthInfo)
 
+Write-Host ("URI : $uri")
+
 # Invoke the API Request and assign the response to a variable ($response)
 $response = Invoke-RestMethod $uri -Method 'GET' -Headers $headers
 
@@ -121,7 +123,8 @@ ForEach ($PPLogType in $ProofpointLogTypes) {
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
         } else {            
             $json = $response.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
-            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
+            $status = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
+            Write-Host ("ProofPointTAP$($PPLogType) reported $($response.$PPLogType.Length) new logs for the time interval configured.Pushed data to Azure sentinel Status code:$($status)")
             }
         }
 }
