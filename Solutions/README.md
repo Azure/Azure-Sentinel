@@ -6,36 +6,38 @@ Azure Sentinel Solutions provide an in-product experience for central discoverab
 * Customers can easily deploy and optionally enable content to get started immediately.
 * Providers or partners can deliver combined product or domain or vertical value via Solutions in Azure Sentinel and be able to productize investments too.
 
-# Solution Package
-Clone the repository [Sentinel-AzMP-Solutions](https://msazure.visualstudio.com/One/_git/Sentinel-AzMP-Solutions) to C:\One.
+# Creating Solution Package
+**Note: Packaging tool is currently not available. it will be available in the near future.**
+
+Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) to C:\One.
 ## Create Input File
-Create an input file and place it in the path C:\One\Sentinel-AzMP-Solutions\solutions\automation\input.
+Create an input file and place it in the path C:\One\Azure-Sentinel\Tools\PowerShell\Create-Sentinel-Solution\input.
 
 **Input File Format:**
 ```
 /**
- * Solution Automation Input File Interface
+ * Solution Automation Input File Json
  * -----------------------------------------------------
- * The purpose of this interface is to provide detail on
+ * The purpose of this json is to provide detail on
  *  the various fields the input file can have.
  */
-interface SolutionAutomationInput {
-  Name: string;                //Solution Name      - Ex. "Symantec Endpoint Protection"
-  Author: string;              //Author of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
-  Logo: string;                //Link to the Logo used in the CreateUiDefinition.json
-  Description: string;         //Solution Description used in the CreateUiDefinition.json
-  WorkbookDescription: string; //Workbook description from ASI-Portal Workbooks Metadata
-
+{
+  "Name": "{SolutionName}",                   //Solution Name      - Ex. "Symantec Endpoint Protection
+  "Author": "{AuthorName - id}",              //Author of Solution - Ex. "Amarnath Pamidi - v-ampami@microsoft.com"
+  "Logo": "{logolink}",                       //Link to the Logo used in the CreateUiDefinition.json
+  "Description": "{ Solution Description}",   //Solution Description used in the CreateUiDefinition.json
+  "WorkbookDescription": "{Description of workbook}", //Workbook description from ASI-Portal Workbooks Metadata
   //The following fields take arrays of paths relative to the solutions folder.
   //Ex. Workbooks: ["Workbooks/SymantecEndpointProtection.json"]
-  Workbooks?: string[];
-  "Analytic Rules"?: string[];
-  Playbooks?: string[];
-  Parsers?: string[];
-  "Hunting Queries"?: string[];
-  "Data Connectors"?: string[];
-  BasePath?: string; //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
+  "Workbooks": [],
+  "Analytic Rules": [],
+  "Playbooks": [],
+  "Parsers": [],
+  "Hunting Queries": [],
+  "Data Connectors": [],
+  "BasePath": "{Path to solution}" //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
 }
+
 ```
 
 **Example of Input File: Solution_McAfeePO.json**
@@ -67,34 +69,29 @@ interface SolutionAutomationInput {
 ```
 
 ## Generate Solution Package
-Run generateSolution script in the automation folder which will create solution package with createUIDefinition.json, mainTemplate.json and zip file(version (1.0.0) as name) in the solutions folder with respect to the given input file. For every new modification to the files createUIDefinition.json and mainTemplate.json, a new zip file containing modified files should be created with latest version name (1.0.1, 1.0.2…..) and should be placed in the solution folder along with previous zip file.
+Run generateSolution script in the automation folder which will create solution package with createUIDefinition.json, mainTemplate.json and zip file("1.0.0" as name) in the solutions folder with respect to the given input file. For every new modification to the files after the initial version of package, a new zip file should be created with latest version name (1.0.1, 1.0.2…..) containing modified createUIDefinition.json and mainTemplate.json files and should be placed in the solution folder along with previous zip file.
 
 ## Validate Package
-Validate the Solution offer files createUiDefinition.json and mainTemplate.json using the Azure Toolkit / TTK CLI tool. This tool helps with static analysis. User can validate package through two methods.
-
-**Through generated xml files:**
-1.	Go to path C:\One\Sentinel-AzMP-Solutions\tmp\results\arm-ttk
-2.	Check the xml files of respective solution to check the validations.
-3.	If errors are displayed make necessary modifications to the files so it passes all validations.
-
-**Through commands:**
+Validate the Solution offer files createUiDefinition.json and mainTemplate.json using the Azure Toolkit / TTK CLI tool. This tool helps with static analysis.
 
 **Setup & Run arm-ttk tool:**
 1.	Clone the repository https://github.com/Azure/arm-ttk to C:\One 
     *	If C:\One does not exist, create the folder. 
     * You may also choose a different folder but reference it properly while importing module.
-1.	Open powershell, go to the solution path and run the following command to import arm-ttk module.
-    * Import-Module C:\One\arm-ttk\arm-ttk\arm-ttk.psd1
-1.	Move to the directory where your solution files reside.
-1.	Run the following command:
+2.	Open powershell, run the following command to add arm-ttk module to profile.
+    * Add-Content -Path $Profile -Value "Import-Module C:\One\arm-ttk\arm-ttk\arm-ttk.psd1"
+3.  Refresh Profile
+	*	Run the following command in Powershell: & $profile
+4.	Move to the directory where your solution files reside.
+5.	Run the following command:
     *	Test-AzTemplate
-1.	Check whether all the validations are passed or not.
-1.	If any errors are displayed make necessary modifications to the files so it passes all validations.
+6.	Check whether all the validations are passed or not.
+7.	If any errors are displayed make necessary modifications to the files so it passes all validations.
 
 After all the checks in arm-ttk tool are passed. Validate the package files by following below steps:
 
 **1.	Validate createUiDefinition.json:**
-  * Open [CreateUISandbox](https://portal.azure.com/?feature.customPortal=false#blade/Microsoft_Azure_CreateUIDef/SandboxBlade).
+  * Open [CreateUISandbox](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade).
   * Copy json content from createUiDefinition.json (in the recent version).
   * Clear that content in the editor and replace with copied content in step #2.
   * Click on preview
@@ -113,10 +110,3 @@ Follow these steps to deploy in portal:
   * Click Save and then progress to selecting subscription, sentinel enabled resource group and corresponding workspace etc. to complete the deployment ->Final Step would be Review + Create to trigger deployment.
   * Check if deployment successfully completes.
   * You should see the data connector workbook etc. deployed in the respective galleries and validate – let us know your feedback.
-
-
-
-
-
-
-
