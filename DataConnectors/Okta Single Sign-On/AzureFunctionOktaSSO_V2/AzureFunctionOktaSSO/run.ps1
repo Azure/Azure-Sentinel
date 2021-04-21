@@ -76,23 +76,31 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
 $storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $StorageTable = Get-AzStorageTable -Name $Tablename -Context $Storage -ErrorAction Ignore
+Write-Host("StorageAccountName : $($storage.StorageAccountName)") 
+Write-Host("StorageTableName : $($StorageTable.Name)") 
 if($null -eq $StorageTable.Name){  
+    Write-Host("StorageTable.Name is not created yet. Creating same.")
     $result = New-AzStorageTable -Name $Tablename -Context $storage
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
     $uri = "$uri$($StartDate)&limit=1000"
     $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
+    Write-Host("updating given $($uri) to table")
 }
 Else {
+    Write-Host("StorageTableName already exists")
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
 }
 # retrieve the row
 $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
+Write-Host("Retrieve Timestamp from last records received from Okta API: $($row.uri)")
 if($null -eq $row.uri){
+    Write-Host("if table row empty, create default uri and update the same in table ")
     $uri = "$uri$($StartDate)&limit=1000"
     $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     $row = Get-azTableRow -table $Table -partitionKey "part1" -RowKey $apiToken -ErrorAction Ignore
 }
 $uri = $row.uri
+Write-Host("Assign existing table $ row.uri to $ uri ")
 
 #Setup uri Headers for requests to OKta
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -100,6 +108,8 @@ $headers.Add("Content-Type", "application/json")
 $headers.Add("User-Agent", "AzureFunction")
 $headers.Add("Authorization", "SSWS $apiToken")
 $headers.Add("Accept-Encoding", "gzip, br")
+
+Write-Host (" headers keys :$($headers.Keys) `n headers values : $($headers.Values)")
 
 # begin looping through responses from OKTA until we get all available records
 $exitDoUntil = $false
@@ -110,6 +120,7 @@ do {
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
     }
     if($response.headers.Keys -contains "link"){
+        Write-Host("Response header links self and next: $($response.Headers.link.split(",;")) ")
         $uritemp = $response.headers.link.split(",;")
         $uritemp = $uritemp.split(";")
         $uri = $uritemp[2] -replace "<|>", ""
@@ -117,7 +128,9 @@ do {
     ELSE{
         $exitDoUntil = $true
     }
+    Write-Host("URi :$($uri) -ne URIself : $($uriself) not equal then only processing record to azure sentinel.."); 
     if($uri -ne $uriself){
+        Write-Host("$ uri -ne $ uriself not equal")
         $responseObj = (ConvertFrom-Json $response.content)
         $responseCount = $responseObj.count
         $TotalRecordCount= $TotalRecordCount + $responseCount
@@ -170,6 +183,7 @@ do {
         $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     }
     else{
+        Write-Host("$ uri equals to $ uriself hence not processing data to azure sentinel")
         $exitDoUntil = $true
     }
     #check on time running, Azure Function default timeout is 5 minutes, if we are getting close exit function cleanly now and get more records next execution
