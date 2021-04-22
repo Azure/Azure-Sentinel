@@ -29,6 +29,12 @@ ForEach ($PPLogType in $ProofpointLogTypes) {
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
         } else {            
             $json = $response.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
+			Write-Output("ProofPointTAP$($PPLogType) reported $($response.$PPLogType.Length) new logs")
+            $responseObj = (ConvertFrom-Json $json)
+            foreach ($record in $responseObj)
+            {
+            Write-Output(" id : $($record.id) `n messageTime : $($record.messageTime) ")
+            }
             Write-Host ("ProofPointTAP$($PPLogType) reported $($response.$PPLogType.Length) new logs for the time interval configured.")
             }
         }
