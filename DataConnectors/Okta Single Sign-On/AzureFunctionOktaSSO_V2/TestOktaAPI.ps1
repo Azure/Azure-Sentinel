@@ -14,5 +14,11 @@ $headers.Add("Accept-Encoding", "gzip, br")
 
 $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body -UseBasicParsing
 $responseObj = (ConvertFrom-Json $response.content)
+
+foreach ($line in $responseObj) {
+     Write-Host(" published : $($line.published) `n transaction uuid : $($line.uuid) `n transaction_id : $($line.transaction.id)")
+     Write-Host("******************************************************")
+}
+
 $responseCount = $responseObj.count
 Write-Host("This $uri retrieves `n: $responseCount records ")
