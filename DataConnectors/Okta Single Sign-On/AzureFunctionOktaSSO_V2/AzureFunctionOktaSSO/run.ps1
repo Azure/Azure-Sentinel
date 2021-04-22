@@ -121,10 +121,10 @@ do {
         
         if($responseObj.count -gt 0)
         {
+            Write-Output("OktaSSO: fetched $($responseObj.count) records.")
             foreach ($line in $responseObj)
             {
-                Write-Host(" published : $($line.published) `n transaction uuid : $($line.uuid) `n transaction_id : $($line.transaction.id)")
-                Write-Host("******************************************************")
+                Write-Output(" published : $($line.published) `n transaction uuid : $($line.uuid) `n transaction_id : $($line.transaction.id)")
             }
         }
     }
