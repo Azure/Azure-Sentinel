@@ -117,6 +117,16 @@ do {
     $uriself = $uri
     if($uri.length -gt 0){
         $response = Invoke-WebRequest -uri $uri  -Method 'GET' -Headers $headers -Body $body
+        $responseObj = (ConvertFrom-Json $response.content)
+        
+        if($responseObj.count -gt 0)
+        {
+            foreach ($line in $responseObj)
+            {
+                Write-Host(" published : $($line.published) `n transaction uuid : $($line.uuid) `n transaction_id : $($line.transaction.id)")
+                Write-Host("******************************************************")
+            }
+        }
     }
     if($response.headers.Keys -contains "link"){
         Write-Host("Response header links self and next: $($response.Headers.link.split(",;")) ")
