@@ -3,8 +3,8 @@
     Language:       PowerShell    
     Version:        1.1
     Author(s):      Microsoft
-    Last Modified:  6/30/2020
-    Comment:        Minor fixes to reduce execution time
+    Last Modified:  12/04/2020
+    Comment:        Added support for special characters in username and/or password
 
     DESCRIPTION
     This Function App calls the Qualys Vulnerability Management (VM) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) specifically for Host List Detection data (/api/2.0/fo/asset/host/vm/detection/).
@@ -20,6 +20,20 @@ param($Timer)
 # Get the current Universal Time
 $currentUTCtime = (Get-Date).ToUniversalTime()
 
+$logAnalyticsUri = $env:logAnalyticsUri
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "Qualys KB: Invalid Log Analytics Uri."
+}
+
 # The 'IsPastDue' property is 'true' when the current function invocation is later than was originally scheduled
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
@@ -32,8 +46,8 @@ $TimeStampField = "DateValue"
 $TableName = "QualysHostDetection"
 
 # Build the headers for the Qualys API request
-$username = $env:apiUserName
-$password = $env:apiPassword
+$username = [uri]::EscapeDataString($env:apiUsername)
+$password = [uri]::EscapeDataString($env:apiPassword)
 $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
 $filterParameters = $env:filterParameters       
@@ -135,8 +149,8 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             -method $method `
             -contentType $contentType `
             -resource $resource
-        $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
-
+        
+        $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $headers = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
@@ -144,7 +158,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             "time-generated-field" = $TimeStampField;
     	}
 
-    	$response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    	$response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     	return $response.StatusCode
 
     }
