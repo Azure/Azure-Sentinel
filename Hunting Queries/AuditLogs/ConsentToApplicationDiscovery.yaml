@@ -34,7 +34,7 @@ query: |
       tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
       | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
       | mvexpand ModProps
-      | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue));
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"',"",tostring(ModProps.newValue));
   };
   // Get just the InitiatedBy and CorrleationId so we can look at associated audit activity
   // 2 other operations that can be part of malicious activity in this situation are 
@@ -64,6 +64,24 @@ query: |
   Results
   | extend newValue = split(newValue, ";")
   | extend PropertyUpdate = pack(PropertyName, newValue, "Id", Id)
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) 
-  by InitiatedBy, IpAddress, TargetResourceName, OperationName, CorrelationId
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = InitiatedBy, HostCustomEntity = TargetResourceName, IPCustomEntity = IpAddress
+  // Extract scope requested
+  | extend perms = tostring(parse_json(tostring(PropertyUpdate.["ConsentAction.Permissions"]))[0])
+  | extend scope = extract('Scope:\\s*([^,\\]]*)',1, perms)
+  // Filter out some common openid, and low privilege request scopes - uncomment line below to filter out where no scope is requested
+  //| where isnotempty(scope)
+  | where scope !contains 'openid' and scope !in ('user_impersonation','User.Read')
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) , make_set(scope)
+    by InitiatedBy, IpAddress, TargetResourceName, OperationName, CorrelationId
+  | extend timestamp = StartTime, AccountCustomEntity = InitiatedBy, IPCustomEntity = IpAddress
+  // uncommnet below to summarize by app if many results
+  //| summarize make_set(InitiatedBy), make_set(IpAddress), make_set(PropertyUpdateSet) by TargetResourceName, tostring(set_scope)
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

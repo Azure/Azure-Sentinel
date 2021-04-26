@@ -1,0 +1,100 @@
+id: cecdbd4c-4902-403c-8d4b-32eb1efe460b
+name: Solorigate Network Beacon  
+description: | 
+  'Identifies a match across various data feeds for domains IOCs related to the Solorigate incident.
+   References: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/, 
+   https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html?1'
+severity: High 
+requiredDataConnectors: 
+  - connectorId: DNS 
+    dataTypes: 
+      - DnsEvents 
+  - connectorId: AzureMonitor(VMInsights)  
+    dataTypes: 
+      - VMConnection 
+  - connectorId: CiscoASA 
+    dataTypes: 
+      - CommonSecurityLog 
+  - connectorId: PaloAltoNetworks 
+    dataTypes: 
+      - CommonSecurityLog 
+  - connectorId: MicrosoftThreatProtection 
+    dataTypes: 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - CommandAndControl 
+relevantTechniques:
+  - T1102
+tags:
+  - Solorigate
+  - NOBELIUM
+query:  |  
+
+  let domains = dynamic(["incomeupdate.com","zupertech.com","databasegalore.com","panhardware.com","avsvmcloud.com","digitalcollege.org","freescanonline.com","deftsecurity.com","thedoccloud.com","virtualdataserver.com","lcomputers.com","webcodez.com","globalnetworkissues.com","kubecloud.com","seobundlekit.com","solartrackingsystem.net","virtualwebdata.com"]);
+  (union isfuzzy=true
+  (CommonSecurityLog 
+    | parse Message with * '(' DNSName ')' * 
+    | where DNSName in~ (domains) or DestinationHostName has_any (domains) or RequestURL has_any(domains)
+    | extend AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName, IPCustomEntity = SourceIP
+    ),
+  (DnsEvents 
+    | extend DNSName = Name
+    | where isnotempty(DNSName)
+    | where DNSName in~ (domains)
+    | extend IPCustomEntity = ClientIP
+    ),
+  (VMConnection 
+    | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+    | where isnotempty(DNSName)
+    | where DNSName in~ (domains)
+    | extend IPCustomEntity = RemoteIp
+    ),
+  (DeviceNetworkEvents 
+    | where isnotempty(RemoteUrl) 
+    | where RemoteUrl  has_any (domains)  
+    | extend DNSName = RemoteUrl
+    | extend IPCustomEntity = RemoteIP 
+    | extend HostCustomEntity = DeviceName 
+    ),
+  (AzureDiagnostics
+    | where ResourceType == "AZUREFIREWALLS"
+    | where Category == "AzureFirewallDnsProxy"
+    | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+    | where Request_Name has_any (domains)  
+    | extend DNSName = Request_Name
+    | extend IPCustomEntity = ClientIP 
+    ),
+  (AzureDiagnostics 
+    | where ResourceType == "AZUREFIREWALLS"
+    | where Category == "AzureFirewallApplicationRule"
+    | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+    | where isnotempty(DestinationHost)
+    | where DestinationHost has_any (domains)  
+    | extend DNSName = DestinationHost 
+    | extend IPCustomEntity = SourceHost
+    ) 
+    )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity 
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNSName

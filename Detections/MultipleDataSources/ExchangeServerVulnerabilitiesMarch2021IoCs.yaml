@@ -1,0 +1,148 @@
+id: d804b39c-03a4-417c-a949-bdbf21fa3305
+name: Exchange Server Vulnerabilities Disclosed March 2021 IoC Match
+description: |
+  'This detection look for IoCs shared by Microsoft relating to attacks exploiting the Exchange Server vulnerabilities disclosed in March 2021. It looks for SHA256 file hashes, IP addresses and file paths in a number of data sources. This query can also be customized with additional data sources that may include these elements.
+  Ref: https://msrc-blog.microsoft.com/2021/03/02/multiple-security-updates-released-for-exchange-server/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+  - connectorId: AzureMonitor(WireData)
+    dataTypes:
+      - WireData
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog (CheckPoint)
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog (Cisco)
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog (F5)
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog (Fortinet)
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog (PaloAlto)
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: WindowsFirewall
+    dataTypes:
+      - WindowsFirewall
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let iocs = externaldata(DateAdded:string,FirstSeen:string,IoC:string,Type:string,TLP:string)
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/MSTICIoCs-ExchangeServerVulnerabilitiesDisclosedMarch2021.csv"] with (format="csv", ignoreFirstRecord=True);
+  let file_paths = (iocs | where Type =~ "filepath");
+  let sha256s = (iocs | where Type =~ "sha256");
+  let ips = (iocs | where Type =~ "ip");
+  let domains = (iocs | where Type =~ "domainname");
+  union isfuzzy=true
+  (SecurityEvent
+  | where EventID == 4663
+  | where ObjectName in (file_paths)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (DeviceFileEvents
+  | where FolderPath in (file_paths)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  ),
+  (DeviceEvents
+  | where InitiatingProcessSHA256 in (sha256s)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  ),
+  (CommonSecurityLog
+  | where FileHash in (sha256s)
+  | extend timestamp = TimeGenerated
+  ),
+  (Event
+  //This query uses sysmon data depending on table name used this may need updating
+  | where Source == "Microsoft-Windows-Sysmon"
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend Hashes = EventDetail.[16].["#text"]
+  | where isnotempty(Hashes)
+  | parse Hashes with * 'SHA256=' SHA256 ',' *
+  | where SHA256 in~ (sha256s)
+  | extend Type = strcat(Type, ": ", Source), Account = UserName, FileHash = Hashes
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (CommonSecurityLog
+  | where isnotempty(SourceIP) or isnotempty(DestinationIP)
+  | where (SourceIP in (ips) or DestinationIP in (ips) or Message has_any (ips)) or (RequestURL has_any (domains))
+  | extend IPMatch = case(SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", "Message")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP, DestinationIP, DeviceProduct, DeviceAction, Message, Protocol, SourcePort, DestinationPort, DeviceAddress, DeviceName, IPMatch
+  | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field")
+  ),
+  (VMConnection
+  | where isnotempty(SourceIp) or isnotempty(DestinationIp)
+  | where SourceIp in (ips) or DestinationIp in (ips)
+  | extend IPMatch = case( SourceIp in (ips), "SourceIP", DestinationIp in (ips), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer
+  ),
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
+  | where SourceIP in (ips) or DestinationIP in (ips)
+  | extend IPMatch = case( SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  ),
+  (WireData
+  | where isnotempty(RemoteIP)
+  | where RemoteIP in (ips)
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = Computer
+  ),
+  (W3CIISLog
+  | where isnotempty(cIP)
+  | where cIP in (ips)
+  | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName
+  ),
+  (
+  DeviceNetworkEvents
+  | where (RemoteIPType =~ "Public" and RemoteUrl has_any (domains)) or (isnotempty(RemoteIP) and RemoteIP in (ips))
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName
+  ),
+  (
+  WindowsFirewall
+  | where SourceIP in (ips) or DestinationIP in (ips)
+  | extend IPMatch = case( SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", "None")
+  ),
+  (
+  DnsEvents
+  | where SubType =~ "LookupQuery"
+  | where Name has_any (domains)
+  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer
+  )
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

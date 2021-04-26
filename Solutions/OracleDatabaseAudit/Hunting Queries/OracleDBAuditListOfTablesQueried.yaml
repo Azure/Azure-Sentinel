@@ -1,0 +1,28 @@
+id: b8fcb5b8-254c-4d49-865e-403b8453f487
+name: OracleDBAudit - Top tables queries
+  'Query searches for tables queries.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - Collection
+relevantTechniques:
+  - T1005
+  - T1119
+query: |
+  let lbtime = 24h;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime)
+  | where DbAction =~ 'SELECT'
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where TableName !~ 'select'
+  | summarize count() by TableName, DstUserName
+  | order by count_
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

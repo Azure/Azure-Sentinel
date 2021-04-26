@@ -18,34 +18,46 @@ query: |
 
   let current = 1d;
   let auditLookback = 14d;
+  let propertyIgnoreList = dynamic(["TargetId.UserType", "StsRefreshTokensValidFrom", "LastDirSyncTime", "DeviceOSVersion", "CloudDeviceOSVersion", "DeviceObjectVersion"]);
   let AuditTrail = AuditLogs 
-  | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current) 
+  | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
+  | where isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
   | extend InitiatedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-  | where isnotempty(InitiatedByUser)
   | extend InitiatedByIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
   | extend ModProps = TargetResources.[0].modifiedProperties
-  | extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+  | extend TargetUserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
   | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
-  | mvexpand ModProps
-  | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
-  | summarize count() by OperationName, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, PropertyName, newValue, TargetResourceName;
+  | mv-expand ModProps
+  | extend PropertyName = tostring(ModProps.displayName), newValue = tostring(parse_json(tostring(ModProps.newValue))[0])
+  | where PropertyName !in~ (propertyIgnoreList) and (PropertyName !~ "Action Client Name" and newValue !~ "DirectorySync") and (PropertyName !~ "Included Updated Properties" and newValue !~ "LastDirSyncTime")
+  | summarize count() by OperationName, InitiatedByUser, InitiatedByIPAddress, TargetUserPrincipalName, PropertyName, TargetResourceName;
   let AccountMods = AuditLogs 
   | where TimeGenerated >= ago(current)
+  | where isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
   | extend InitiatedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-  | where isnotempty(InitiatedByUser)
   | extend InitiatedByIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
   | extend ModProps = TargetResources.[0].modifiedProperties
-  | extend UserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
+  | extend TargetUserPrincipalName = tolower(tostring(TargetResources.[0].userPrincipalName))
   | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
-  | mvexpand ModProps
-  | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue))
-  | where PropertyName !in ("TargetId.UserType", "StsRefreshTokensValidFrom", "LastDirSyncTime") and (PropertyName != "Action Client Name" and newValue != "\"DirectorySync\"") and (PropertyName != "Included Updated Properties" and newValue != "\"LastDirSyncTime\"")
+  | mv-expand ModProps
+  | extend PropertyName = tostring(ModProps.displayName), newValue = tostring(parse_json(tostring(ModProps.newValue))[0])
+  | where PropertyName !in~ (propertyIgnoreList) and (PropertyName !~ "Action Client Name" and newValue !~ "DirectorySync") and (PropertyName !~ "Included Updated Properties" and newValue !~ "LastDirSyncTime")
   | extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, Category, OperationName, PropertyName, newValue, TargetResourceName;
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByUser, InitiatedByIPAddress, TargetUserPrincipalName, Category, OperationName, PropertyName, TargetResourceName;
   let RareAudits = AccountMods | join kind= leftanti (
      AuditTrail 
-  ) on OperationName, InitiatedByUser, InitiatedByIPAddress, UserPrincipalName, PropertyName, newValue;
+  ) on OperationName, InitiatedByUser, InitiatedByIPAddress;//, TargetUserPrincipalName, PropertyName; //uncomment if you want to see Rare Property changes to a given TargetUserPrincipalName.
   RareAudits 
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), make_set(Activity) by InitiatedByUser, InitiatedByIPAddress, OperationName, UserPrincipalName, TargetResourceName
-  | order by UserPrincipalName asc, StartTimeUtc asc
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = InitiatedByUser, HostCustomEntity = TargetResourceName, IPCustomEntity = InitiatedByIPAddress
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), make_set(Activity), make_set(PropertyName) by Type, InitiatedByUser, InitiatedByIPAddress, OperationName, TargetUserPrincipalName, TargetResourceName
+  | order by InitiatedByUser asc, StartTime asc
+  | extend timestamp = StartTime, AccountCustomEntity = InitiatedByUser, HostCustomEntity = iff(set_PropertyName has_any ('DeviceOSType', 'CloudDeviceOSType'), TargetResourceName, ''), IPCustomEntity = InitiatedByIPAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

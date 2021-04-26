@@ -1,0 +1,42 @@
+id: 86490334-5371-40a2-971a-3749c2654954
+name: Signins From VPS Providers
+description: |
+  'Looks for successful logons from known VPS provider network ranges with suspicious token based logon patterns.
+  This is not an exhaustive list of VPS provider ranges but covers some of the most prevelent providers observed.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+
+  let IP_Data = (externaldata(network:string)
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/VPS_Networks.csv"] with (format="csv"));
+  SigninLogs
+  | where TimeGenerated >= ago(1d)
+  | where ResultType == 0
+  | extend additionalDetails = tostring(Status.additionalDetails)
+  | evaluate ipv4_lookup(IP_Data, IPAddress, network, return_unmatched = false)
+  | summarize make_set(additionalDetails), min(TimeGenerated), max(TimeGenerated) by IPAddress, UserPrincipalName
+  // Uncomment the remaining lines to only see logons from VPS providers with token only logons.
+  //| where array_length(set_additionalDetails) == 2
+  //| where (set_additionalDetails[1] == "MFA requirement satisfied by claim in the token" and set_additionalDetails[0] == "MFA requirement satisfied by claim provided by external provider") or (set_additionalDetails[0] == "MFA requirement satisfied by claim in the token" and set_additionalDetails[1] == "MFA requirement satisfied by claim provided by external provider")
+  | extend timestamp = min_TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | project IPCustomEntity, AccountCustomEntity, timestamp, max_TimeGenerated
+  
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  
