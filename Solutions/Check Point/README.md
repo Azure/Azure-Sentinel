@@ -213,7 +213,7 @@ Function Access Restrictions from Azure portal:
 
 <br>
 
-Note: If your subscription is already using API management other than "Consumption" SKU then you can extract the IP address as per [api-management-howto-ip-addresses](https://docs.microsoft.com/en-us/azure/api-management/api-management-howto-ip-addresses)
+Note: If your subscription is already using API management other than "Consumption" SKU then you can extract the IP address as per [api-management-howto-ip-addresses](https://docs.microsoft.com/azure/api-management/api-management-howto-ip-addresses)
 
 <br>
 
@@ -229,7 +229,7 @@ To find the available outbound IP addresses is by using the Cloud Shell:
     az webapp show --resource-group <group_name> --name <app_name> --query possibleOutboundIpAddresses --output tsv
 
 1. Modify nesseary Firewall rules to allow the IP ranges from above
-2. Apply IP ranges as Check Point Mangement GUI clients, [how to define GUI Clients](https://sc1.checkpoint.com/documents/R80.30/WebAdminGuides/EN/CP_R80.30_Gaia_AdminGuide/html_frameset.htm?topic=documents/R80.30/WebAdminGuides/EN/CP_R80.30_Gaia_AdminGuide/214749)
+2. Apply IP ranges as Check Point Mangement GUI clients, [how to define GUI Clients](https://sc1.checkpoint.com/documents/R80.30/WebAdminGuides/CP_R80.30_Gaia_AdminGuide/html_frameset.htm?topic=documents/R80.30/WebAdminGuides/CP_R80.30_Gaia_AdminGuide/214749)
 
 
 <br>
