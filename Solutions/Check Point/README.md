@@ -1,149 +1,243 @@
-# Check Point Software Technologies Azure Logic App Connector
+# Check Point Software Technologies Logic Apps Connector and Sentinel Playbook templates
 
-The Check Point Logic App Connector will allow you to automate security operations to all managed Check Point devices. The connector enables you to create Logic App workbooks that utilize Check Point Management API to automate most common security operations tasks. 
+<br>
+<br>
+<p align="center">  
+<img width="800" src="./images/check_point_logo.png"> </a>
+</p>
+<br>
 
-Logic App can easily integrate Check Point with all native Azure services and hundreds of connectors such as ServiceNow, Jira, PagerDuty, ZenDesk, and more. See the [full list of available connectors here.](https://docs.microsoft.com/connectors/connector-reference/)
+# Table of Contents
 
-Common use cases include: 
+1. [Overview](#overview)
+1. [Deploy Connector and Playbook templates](#deployall)
+1. [Deployment instructions](#deployinstr)
+1. [Test the playbook](#testplaybook)
+1. [Security Recommendations](#securityrecommendation)
 
-  1. Enable operation teams to automate common security functions such as creating objects, updating security policies, and schedule security policy updates to gateways. 
-  2. Fully integrate with any orchestration platforms for both on-prem or public cloud providers
-  3. Integrate with all leading SIEM/SOAR providers such as Azure Sentinel
+<br>
 
+<a name="overview">
 
-For more information see
-[Check Point Management API](https://sc1.checkpoint.com/documents/latest/APIs/#introduction~v1.7%20) and 
-[Logic App Overview](https://azure.microsoft.com/services/logic-apps/) 
+# Overview
 
-# How does the Logic App Connector work? 
+The Check Point Logic App Connector and Playbooks allows you to automate security operations to all managed Check Point devices. The connector enables you to run Logic App playbooks that utilize Check Point Management API to automate most common security operations tasks. 
 
 <p align="left">  
-<img width="800" src="./CheckPointConnector/images/cp_LogicApp_01.png"> </a>
+<img width="800" src="./images/cp_integration_detail.png"> </a>
 </p>
 
-The Logic App workbook can get triggers from any of the hundreds of connectors containing user-defined perimeters to fulfill the change request. 
 
-Change request items include IP addresses, URLs, groups, gateways, and policy packages. 
+For more information see:
 
-The Check Point Logic App Connector contains Check Point Mgmt API parameters to cater most common tasks you want to automate. 
+[Check Point Management API](https://sc1.checkpoint.com/documents/latest/APIs/#introduction~v1.6%20)  
+[Logic App Overview](https://azure.microsoft.com/services/logic-apps/) 
 
-# Deploy 
+<br>
+<a name="deployall">
 
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FCheckPointConnector%2FdeployCP.json)
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FCheckPointConnector%2FdeployCPgov.json)
+# Deploy Connector and Playbook templates
 
-# Logic App playbook components
+## This package includes: 
 
-1. Trigger point - It can be scheduled, use HTTP post, or trigger point from a connector
+1. Custom Connector which is based on Check Point Management API v1.6
+2. Playbook that will create IP objects and add objects to group
+3. FunctionApp Proxy
 
-    Example 1 - Scheduled tasks
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/example1.png"> </a>
-    </p>
+You can deploy Custom Connector, FunctionApp Proxy and Playbook all together or seperately from their specific folder.
 
-    Example 2 - Azure Sentinel Alert
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/example2.png"> </a>
-    </p>
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2Ftestsolutions%2Fmain%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2Ftestsolutions%2Fmain%2FdeployCPgov.json)
 
-    Example 3 - HTTP post
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/example3.png"> </a>
-    </p>
 
-2. Workflow - Logic App instructions
+<br>
 
-	  Define the Check Point gateway and policy package
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/workflow1.png"> </a>
-    </p>
-
-	  Define the Check Point management station user/pw
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/workflow2.png"> </a>
-    </p>
-
-    Define what action to take, in this case, create and add each host to predefined group
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/workflow3.png"> </a>
-    </p>
-
-    Publish and Install security policy
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/workflow4.png"> </a>
-    </p>
+<a name="deployinstr">
 
 # Deployment instructions
 
-1. Create API user from Check Point management console
-
-2. Launch the template
-
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FCheckPointConnector%2FdeployCP.json)
-   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FCheckPointConnector%2FdeployCPgov.json)
-
-3. Template - Make sure you include the backslash of API extension /web_api/ 
+1. Create an API key from Check Point management console
 
     <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/deploy1.png"> </a>
+    <img width="400" src="./images/cp_create_api_key.png"> </a>
+    </p>
+
+2. Launch the template
+<br>
+
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2Ftestsolutions%2Fmain%2FdeployCP.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2Ftestsolutions%2Fmain%2FdeployCPgov.json)
+
+
+3. Fill in the template - Make sure you include the backslash of API extension /web_api/ 
+
+    <p align="left">  
+    <img width="400" src="./images/cp_template.png"> </a>
     </p>
 
 4. Copy the API key from the function app
 
     <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/deploy2.png"> </a>
+    <img width="400" src="./images/cp_copy_function_key.png"> </a>
     </p>
 
 5. Paste function API key into the API management
 
     <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/deploy3.png"> </a>
+    <img width="400" src="./images/cp_copy_apimgmt_key.png"> </a>
     </p>
 
-## Test
-
-1. From SmartConsole - create a simple group, for example, Sentinel_Block_Group
-
-2. Copy the logic app trigger URL
+6. Update LogicApp Sentinel Connection
 
     <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/test1.png"> </a>
+    <img width="400" src="./images/cp_logicapp_sentinel.png"> </a>
     </p>
 
-3. Paste the URL and Body into Postman
+7. Configure Sentinel Analytics Rule
 
     <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/test2.png"> </a>
+    <img width="400" src="./images/cp_sentinel_analytic_rule.png"> </a>
     </p>
 
-    Request Body
 
-```
+<a name="testplaybook"> 
+
+# Test the playbook
+
+* Dry run
+
+    <p align="left">  
+    <img width="400" src="./images/cp_logicapp_test.png"> </a>
+    </p>
+    
+* Dry run result
+
+    <p align="left">  
+    <img width="400" src="./images/cp_logicapp_test_result.png"> </a>
+    </p>
+
+
+<br>
+<br>
+
+<a name="securityrecommendation"> 
+
+# Security Recommendations
+
+## Define Check Point Management User Profile
+
+The following is the recommended Check Point user profile which will allow the Sentinel user to manage objects, policy and install security policy, all other access are turned off. 
+
+1. Create a new user profile
+
+    <p align="left">  
+    <img width="400" src="./images/cp_userprofile.png"> </a>
+    </p>
+
+2. Access Control
+
+    <p align="left">  
+    <img width="400" src="./images/cp_userprofile_acl.png"> </a>
+    </p>
+
+3. Threat Prevention
+
+    <p align="left">  
+    <img width="400" src="./images/cp_userprofile_threat.png"> </a>
+    </p>
+
+4. Management
+
+    <p align="left">  
+    <img width="400" src="./images/cp_userprofile_mgmt.png"> </a>
+    </p>
+
+5. Disable all other settings
+
+<br>
+
+## Access Control for Function Proxy
+
+<br>
+### Ingress to Function Proxy
+Only the Azure API Management is required to access the Proxy Function. 
+
+This deployment template is using Management API "Consumption" SKU, this is the lightweight and serverless version of API Management service, billed per execution and first 1M calls are free. However, this Management API SKU does not offer a static ip address, you will need to extract the IP address ranges of the entire region and apply it to the function rule. 
+
+For example, the following JSON fragment is what the allowlist for Western Europe might look like, Refer to [Azure Region outbound IP ranges](https://docs.microsoft.com/azure/azure-functions/ip-addresses#data-center-outbound-ip-addresses) for your region. 
+ 
+
     {
-      "set-group": "Sentinel_Block_Group",
-        "add-host": [
-            "192.168.100.1",
-            "192.168.100.2",
-            "192.168.100.3",
-            "192.168.100.4",
-            "192.168.100.5",
-            "192.168.100.6",
-            "192.168.100.7",
-            "192.168.100.8",
-            "192.168.100.9",
-            "192.168.100.10",
+    "name": "AzureCloud.westeurope",
+    "id": "AzureCloud.westeurope",
+    "properties": {
+        "changeNumber": 9,
+        "region": "westeurope",
+        "platform": "Azure",
+        "systemService": "",
+        "addressPrefixes": [
+        "13.69.0.0/17",
+        "13.73.128.0/18",
+        ... Some IP addresses not shown here
+        "213.199.180.192/27",
+        "213.199.183.0/24"
         ]
     }
-```
+    }
 
-4. Logic App run history should have green tickets next to each successful tasks
+Once you have the IP address ranges, you can define the IP address under Access Restrictions
 
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/test3.png"> </a>
+    # Setting the SCM to be same as function
+    az functionapp config access-restriction set --use-same-restrictions-for-scm-site true -g ResourceGroup -n AppName
+
+    # Repeat the following per subnet
+    az functionapp config access-restriction add -g ResourceGroup -n AppName --action Allow --ip-address 13.64.0.0/16 --priority 200
+
+
+
+    Example: 
+    az functionapp config access-restriction set --use-same-restrictions-for-scm-site true -g guoapr2311130-rg -n guoapr2311130-proxy-mrbz7
+
+    az functionapp config access-restriction add -g guoapr2311130-rg -n guoapr2311130-proxy-mrbz7 --action Allow --ip-address 13.64.0.0/16 --priority 200
+
+    az functionapp config access-restriction add -g guoapr2311130-rg -n guoapr2311130-proxy-mrbz7 --action Allow --ip-address 13.73.32.0/19 --priority 200
+
+    ....
+
+
+Function Access Restrictions from Azure portal: 
+
+<p align="left">  
+    <img width="600" src="./images/cp_function_acl.png"> </a>
     </p>
 
-5. Smart Console should contain the above IP addresses in the Sentinel group created earlier
+<br>
 
-    <p align="left">  
-    <img width="400" src="./CheckPointConnector/images/test4.png"> </a>
-    </p>
+Note: If your subscription is already using API management other than "Consumption" SKU then you can extract the IP address as per [api-management-howto-ip-addresses](https://docs.microsoft.com/en-us/azure/api-management/api-management-howto-ip-addresses)
+
+<br>
+
+### Egress from Function Proxy
+
+The function proxy will connect to Check Point Management Station
+
+[How to get Function IP outbound IP address](https://docs.microsoft.com/en-us/azure/azure-functions/ip-addresses)
+
+To find the available outbound IP addresses is by using the Cloud Shell:
+
+    az webapp show --resource-group <group_name> --name <app_name> --query outboundIpAddresses --output tsv
+    az webapp show --resource-group <group_name> --name <app_name> --query possibleOutboundIpAddresses --output tsv
+
+1. Modify nesseary Firewall rules to allow the IP ranges from above
+2. Apply IP ranges as Check Point Mangement GUI clients, [how to define GUI Clients](https://sc1.checkpoint.com/documents/R80.30/WebAdminGuides/EN/CP_R80.30_Gaia_AdminGuide/html_frameset.htm?topic=documents/R80.30/WebAdminGuides/EN/CP_R80.30_Gaia_AdminGuide/214749)
+
+
+<br>
+
+## Rotate API Keys
+
+Rotate the following API Keys every 90 days
+
+    * Check Point API Key
+    * Mgmt API Key
+    * Function Proxy Key
