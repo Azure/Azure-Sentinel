@@ -221,7 +221,7 @@ Note: If your subscription is already using API management other than "Consumpti
 
 The function proxy will connect to Check Point Management Station
 
-[How to get Function IP outbound IP address](https://docs.microsoft.com/en-us/azure/azure-functions/ip-addresses)
+[How to get Function IP outbound IP address](https://docs.microsoft.com/azure/azure-functions/ip-addresses)
 
 To find the available outbound IP addresses is by using the Cloud Shell:
 
