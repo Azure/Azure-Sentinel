@@ -42,6 +42,9 @@ function CarbonBlackAPI()
     $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time)).ToString("yyyy-MM-ddTHH:mm:ssZ")
     $now = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+    # Remove if addition slash or space added in hostName
+    $hostName = $hostName.Trim() -replace "[.*/]$",""
+
     if ([string]::IsNullOrEmpty($logAnalyticsUri))
     {
         $logAnalyticsUri = "https://" + $workspaceId + ".ods.opinsights.azure.com"
@@ -65,25 +68,38 @@ function CarbonBlackAPI()
         $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
         {
-            Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
+            $responseObj = (ConvertFrom-Json $AuditLogsJSON)
+            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
+            Write-Host("$($responseObj.count) new Carbon Black Audit Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
         }
         else
         {
             Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
         }
     }
+    else
+    {
+        Write-Host "AuditLogsResult API status failed , Please check."
+    }
+
     if ($eventsResult.success -eq $true)
     {
         $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
         {
-            Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
+            $responseObj = (ConvertFrom-Json $EventLogsJSON)
+            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
+            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
         }
         else
         {
             Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
         }
-      }
+    }
+    else
+    {
+        Write-Host "EventsResult API status failed , Please check."
+    }
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
     {   
@@ -98,14 +114,19 @@ function CarbonBlackAPI()
             $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5       
             if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
             {
-                Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+                $responseObj = (ConvertFrom-Json $NotifLogJson)
+                $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+                Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
             }
             else
             {
                     Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
             }
-                 
-        }      
+        }
+        else
+        {
+            Write-Host "Notifications API status failed , Please check."
+        }
     }    
 }
 
