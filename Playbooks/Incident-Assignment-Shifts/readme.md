@@ -23,8 +23,8 @@ Ensure you have the following details:
 - Create or use an existing user account/ Service Principal/ Managed Identity with Azure Sentinel Responder role.
 
 - This will be used in Azure Sentinel connectors (Incident Trigger, Update incident & Add comment to incident) and a HTTP connector.
-- 
-- This example will walk you through using System Managed Identity for the above connector.
+
+- This example will walk you through using System Managed Identity for the above connectors.
 
 
 ### 2. Setup Shifts schedule
