@@ -11,12 +11,12 @@ namespace Kqlvalidations.Tests
     {
         public DetectionsYamlFilesTestData()
         {
-            List<string> detectionPaths = GetDetectionPath();
+            List<string> detectionPaths = GetDetectionPaths();
             var files = GetDetectionFiles(detectionPaths);
             files.ForEach(f => AddData(Path.GetFileName(f)));
         }
 
-        public static List<string> GetDetectionPath()
+        public static List<string> GetDetectionPaths()
         {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
             List<string> dirPaths = new List<string>() { "Detections", "Solutions" };

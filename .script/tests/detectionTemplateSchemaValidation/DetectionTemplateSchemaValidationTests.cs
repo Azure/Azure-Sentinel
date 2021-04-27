@@ -14,8 +14,8 @@ namespace Kqlvalidations.Tests
 {
     public class DetectionTemplateSchemaValidationTests
     {
-        private static readonly List<string> DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
-        private static readonly string RootDetectionPath = DetectionsYamlFilesTestData.GetRootPath();
+        private static readonly List<string> DetectionPaths = DetectionsYamlFilesTestData.GetDetectionPaths();
+        private static readonly string RootDetectionPaths = DetectionsYamlFilesTestData.GetRootPath();
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
@@ -108,7 +108,7 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_DetectionTemplates_AllFilesAreYamls()
         {
-            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
             var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList(); // Detection folder
             yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s=>s.Contains("Analytic Rules"))); // Extending detection validation to solution folder
             var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
@@ -120,7 +120,7 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_DetectionTemplates_NoSameTemplateIdTwice()
         {
-            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
             var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).Where(s=>!s.Contains("CiscoUmbrella")).ToList(); // Removing duplicate CiscoUmbrella detections. already present in solution folder
             yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending it to solution folder for detection validation
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
@@ -141,11 +141,11 @@ namespace Kqlvalidations.Tests
             // Get file present in detection folder or else check in solution analytics rules folder 
             try
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
             catch
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
             }
 
             return File.ReadAllText(detectionsYamlFile);
