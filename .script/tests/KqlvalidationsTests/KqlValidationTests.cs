@@ -101,7 +101,7 @@ namespace Kqlvalidations.Tests
         /// <summary>
         ///Get detection yaml file from Detection or solution analytics rule folder
         /// </summary>
-        /// <param name="detectionsYamlFileName">detections Yaml File Name</param>
+        /// <param name="detectionsYamlFileName">Detections Yaml File Name</param>
         /// <returns>detections yaml file path</returns>
         private string getDetectionsYamlFile(string detectionsYamlFileName)
         {
