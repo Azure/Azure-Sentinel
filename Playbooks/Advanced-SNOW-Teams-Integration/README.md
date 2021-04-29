@@ -40,7 +40,7 @@ Thanks the following people for contributing to my efforts in building this play
 - Jan Ignacio, Joey Cruz, Sreedhar Ande, Nicholas Dicola, Rod Trent, Nathan Swift
 
 ## Deploy the ARM template
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Advanced-SNOW-Teams-Integration/azuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAdvanced-SNOW-Teams-Integration%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Advanced-SNOW-Teams-Integration/azuredeploy.json" target="_blank">
