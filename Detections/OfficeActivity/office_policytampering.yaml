@@ -1,9 +1,9 @@
-﻿id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
+id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
 name: Office policy tampering
 description: |
   'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. 
   An adversary may use this technique to evade detection or avoid other policy based defenses.
-  References: https://docs.microsoft.com/en-us/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.'
+  References: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: Office365
@@ -20,15 +20,36 @@ relevantTechniques:
   - T1098
   - T1089
 query: |
-
-  let timeframe = 1d;
+  let opList = OfficeActivity 
+  | summarize by Operation
+  //| where Operation startswith "Remove-" or Operation startswith "Disable-"
+  | where Operation has_any ("Remove", "Disable")
+  | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+  | summarize make_set(Operation);
   OfficeActivity
-  | where TimeGenerated >= ago(timeframe)
-  | where RecordType =~ "ExchangeAdmin"
-  | where UserType in~ ("Admin","DcAdmin") 
   // Only admin or global-admin can disable/remove policy
-  | where Operation startswith "Remove-" or Operation startswith "Disable-"
-  | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" 
-    or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters
+  | where RecordType =~ "ExchangeAdmin"
+  | where UserType in~ ("Admin","DcAdmin")
+  // Pass in interesting Operation list
+  | where Operation in~ (opList)
+  | extend ClientIPOnly = case( 
+  ClientIP has ".", tostring(split(ClientIP,":")[0]), 
+  ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  ClientIP
+  )  
+  | extend Port = case(
+  ClientIP has ".", (split(ClientIP,":")[1]),
+  ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
+  ClientIP
+  )
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
   | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

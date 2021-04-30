@@ -1,0 +1,85 @@
+// Shows fail user logons divided in to account names in attempts. Shows 5 top account names and others are named 'Other'.
+// Tags: #Initial Access #LateralMovement #Persistence
+let top5 = SecurityEvent
+| where EventID == 4625 and AccountType == 'User'
+| extend Account_Name = extract(@"^(.*\\)?([^@]*)(@.*)?$", 2, tolower(Account))
+| summarize Attempts = count() by Account_Name
+| where Account_Name != ""
+| top 5 by Attempts 
+| summarize make_list(Account_Name);
+SecurityEvent
+| where EventID == 4625 and AccountType == 'User'
+| extend Name = extract(@"^(.*\\)?([^@]*)(@.*)?$", 2, tolower(Account))
+| extend Account_Name = iff(Name in (top5), Name, "Other")
+| where Account_Name != ""
+| summarize Attempts = count() by Account_Name
+
+
+// Shows 10 most suspicious IP's that attempted to logon. First summarizes amount of success and fail logons to number of unique accounts per IP. 
+// Must have at least 1 failure, If at least 1 succeeded logon - order by percent between succeeded logons to overall attempts. 
+// IF no logon has succeeded - Order by number of attempts and unique accounts.
+// Tags: #Initial Access #LateralMovement #Persistence
+SecurityEvent
+| where AccountType == "User"
+| where EventID in (4624, 4625)
+| summarize Unique_Accounts = dcount(Account), Attempts = count(), Succeeded=countif(EventID == 4624), Failed=countif(EventID == 4625)  by IpAddress
+| where Failed > 0
+| order by Succeeded>0, todouble(Succeeded)/Attempts asc, Attempts desc
+| project IP = IpAddress, Succeeded, Attempts, Unique_Accounts
+| take 10
+| order by Unique_Accounts desc 
+
+
+// Name: Summary of user logons by logon type
+// Description: Comparing succesful and nonsuccessful logon attempts can be used to identify attempts to move laterally within the environment with the intention of discovering credentials and sensitive data. 
+// Tags: #Initial Access #LateralMovement #Persistence
+SecurityEvent
+| where EventID in (4624, 4625)
+| where AccountType == "User" 
+| summarize Amount = count() by  LogonTypeName
+
+
+// Name: Summary of failed user logons by reason of failure
+// Description: A summary of failed logons can be used to infer lateral movement with the intention of discovering credentials and sensitive data. 
+// Tags: #Initial Access #LateralMovement #Persistence
+SecurityEvent
+| where AccountType == 'User' and EventID == 4625
+| extend Reason = case(
+                        SubStatus == '0xc000005e', 'No logon servers available to service the logon request',
+                        SubStatus == '0xc0000062', 'Account name is not properly formatted',
+                        SubStatus == '0xc0000064', 'Account name does not exist',
+                        SubStatus == '0xc000006a', 'Incorrect password',
+                        SubStatus == '0xc000006d', 'Bad user name or password',
+                        SubStatus == '0xc000006f', 'User logon blocked by account restriction',
+                        SubStatus == '0xc000006f', 'User logon outside of restricted logon hours',
+                        SubStatus == '0xc0000070', 'User logon blocked by workstation restriction',
+                        SubStatus == '0xc0000071', 'Password has expired',
+                        SubStatus == '0xc0000072', 'Account is disabled',
+                        SubStatus == '0xc0000133', 'Clocks between DC and other computer too far out of sync',
+                        SubStatus == '0xc000015b', 'The user has not been granted the requested logon right at this machine',
+                        SubStatus == '0xc0000193', 'Account has expirated',
+                        SubStatus == '0xc0000224', 'User is required to change password at next logon',
+                        SubStatus == '0xc0000234', 'Account is currently locked out',
+                        strcat('Unknown reason substatus: ', SubStatus))
+| summarize count() by Reason
+
+
+// List of accounts locked out (event id 4740)
+// Tags: #Initial Access #LateralMovement #Persistence
+SecurityEvent
+| where EventID == 4740
+
+
+// Attackers often move to the next step which can loosely be called network propagation stage. 
+// The goal of the Network Propagation phase is to identify and move to desired systems within the target environment with the intention of discovering credentials and sensitive data. 
+// Sometimes as part of this one might see one account being used to log in on unusually high number of machines in the environment or lot of different account authentication requests coming from one machine. 
+// Tags: #Initial Access #LateralMovement #Persistence
+SecurityEvent
+    | where EventID == 4624
+    | where AccountType == "User"
+    | where TimeGenerated >= ago(1d)
+    | summarize IndividualAccounts = dcount(Account) by Computer
+    | where IndividualAccounts > 4
+    
+    
+    

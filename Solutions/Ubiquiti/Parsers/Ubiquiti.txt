@@ -1,0 +1,177 @@
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias as UbiquitiAuditEvent.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. UbiquitiAuditEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+let EventData = Ubiquiti_CL
+| extend EventVendor = 'Ubiquiti'
+| extend EventTime = extract(@'\<\d+\>(.*)\s\w+,[A-Fa-f0-9]{12}', 1, Message)
+| extend DvcType = extract(@'\d+\:\d+\:\d+\s(\w+),[A-Fa-f0-9]{12}' , 1, Message)
+| extend DvcMacAddr = replace(@'(:)$', @'', replace(@'(\w{2})', @'\1:', extract(@',([A-Fa-f0-9]{12}),v' , 1, Message)))
+| extend FirmwareVersion = extract(@'[A-Fa-f0-9]{12},v(.*?)\:', 1, Message);
+let ubiquiti_dropbear_events =() {
+EventData
+| where Message contains 'dropbear'
+| extend EventCategory = 'dropbear'
+| extend EventMessage = extract(@' dropbear\[\d+\]\:\s(.*)', 1, Message)
+| extend SrcIpAddr = extract(@'from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\:\d{1,5}', 1, Message)
+| extend SrcPortNumber = extract(@'from \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\:(\d{1,5})', 1, Message)
+};
+let ubiquiti_hostapd_events =() {
+EventData
+| where Message contains 'hostapd'
+| extend EventCategory = 'hostapd'
+| extend WlanId = extract(@'hostapd:\s(\w+)\s', 1, Message)
+| extend SrcType = extract(@':\s(\w+)\s[A-Fa-f0-9:]{17}', 1, Message)
+| extend SrcMacAddr = extract(@':\s(\w+)\s([A-Fa-f0-9:]{17})', 2, Message)
+| extend DstMacAddr = extract(@'addr=([a-fA-F0-9:]{17})', 1, Message)
+| extend Service = extract(@'[A-Fa-f0-9:]{17}\s(.+):', 2, Message)
+| extend EventMessage = extract(@'[A-Fa-f0-9:]{17}\s(.*):\s(.*)', 2, Message)
+};
+let ubiquiti_firewall_events =() {
+EventData
+| where Message matches regex @'kernel:\s+\[\S+-\w\]'
+| extend EventCategory = 'firewall'
+| extend FlowId = extract(@'ID=(.*?)\s', 1, Message)
+| extend DvcInboundInterface = extract(@'IN=(.*?)\s', 1, Message)
+| extend DvcOutboundInterface = extract(@'OUT=(.*?)\s', 1, Message)
+| extend dvc_action = extract(@'kernel:\s+\[\S+-(\w)\]', 1, Message)
+| extend DvcAction = case(dvc_action == "A", "Accepted",
+                          dvc_action == "B", "Blocked",
+                          dvc_action == "R", "Rejected",
+                          "Other")
+| extend NetworkRuleName = extract(@'kernel:\s+\[(\S+)-\w\]', 1, Message)
+| extend DstMacAddr = extract(@'MAC=([a-fA-F0-9:]{17}):', 1, Message)
+| extend SrcMacAddr = extract(@'MAC=[a-fA-F0-9:]{17}:([a-fA-F0-9:]{17})\s', 1, Message)
+| extend SrcIpAddr = extract(@'src=(.*?)\s', 1, Message)
+| extend SrcPortNumber = extract(@'SPT=(.*?)\s', 1, Message)
+| extend DstIpAddr = extract(@'DST=(.*?)\s', 1, Message)
+| extend DstPortNumber = extract(@'DPT=(.*?)\s', 1, Message)
+| extend NetworkBytes = extract(@'LEN=(.*?)\s', 1, Message)
+| extend Tos = extract(@'TOS=(.*?)\s', 1, Message)
+| extend Prec = extract(@'PREC=(.*?)\s', 1, Message)
+| extend Ttl = extract(@'TTL=(.*?)\s', 1, Message)
+| extend NetworkProtocol = extract(@'PROTO=(.*?)\s', 1, Message)
+| extend Window = extract(@'WINDOW=(.*?)\s', 1, Message)
+| extend Res = extract(@'RES=(.*?)\s', 1, Message)
+| extend Mark = extract(@'MARK=(.*?)\s', 1, Message)
+};
+let ubiquiti_dns_timeout_events =() {
+EventData
+| where Message contains "DNS request timed out"
+| extend EventMessage = 'DNS request timed out'
+| extend SrcType = extract(@'\[(\w+):\s[a-fA-F0-9:]{17}\]', 1, Message)
+| extend DvcMacAddr = extract(@'\[\w+:\s([a-fA-F0-9:]{17})\]', 1, Message)
+| extend DnsQuery = extract(@'QUERY:(.*?)\]', 1, Message)
+| extend DnsServer = extract(@'DNS_SERVER(\s)?:(.*?)\]', 1, Message)
+};
+let ubiquiti_stahtd_events =() {
+EventData
+| where Message contains 'stahtd'
+| extend EventCategory = extract(@'\"message_type\":\"(.*?)\"', 1, Message)
+| extend SrcDvcMacAddr = extract(@'\"mac\":\"(.*?)\"', 1, Message)
+| extend WlanId = extract(@'\"vap\":\"(.*?)\"', 1, Message)
+| extend AssocStatus = extract(@'\"assoc_status\":\"(.*?)\"', 1, Message)
+| extend EventResult = extract(@'\"event_type\":\"(.*?)\"', 1, Message)
+| extend EventMessage = extract(@'\}\s-\s(.*)', 1, Message)
+};
+let ubiquiti_EVT_AP_STA_ASSOC_TRACKER_DBG =() {
+EventData
+| where Message contains 'libubnt'
+| where Message contains 'EVT_AP_STA_ASSOC_TRACKER_DBG'
+| extend EventCategory = 'libubnt'
+| extend WlanId = extract(@'vap:\s(.*?)', 1, Message)
+| extend SrcMacAddr = extract(@'sta_mac:\s(.*?)', 1, Message)
+| extend EventResult = extract(@'event_type:\s(.*)', 1, Message)
+| extend EventMessage = 'Client failed to associate with an AP'
+};
+let ubiquiti_EVENT_STA_ =() {
+EventData
+| where Message contains 'libubnt'
+| where Message contains 'EVENT_STA_'
+| extend EventCategory = 'libubnt'
+| extend WlanId = extract(@'EVENT_STA_(JOIN|LEAVE|IP)\s(\w+):', 2, Message)
+| extend DvcAction = extract(@'EVENT_STA_(JOIN|LEAVE|IP)', 1, Message)
+| extend EventMessage = case(DvcAction == 'JOIN', 'Client joined AP',
+                             DvcAction == 'LEAVE', 'Client disconnected from AP',
+                             'Client IP info')
+| extend SrcMacAddr = extract(@':\s([A-Fa-f0-9:]{17})', 1, Message)
+| extend SrcIpAddr = extract(@'\/\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, Message)
+};
+let ubiquiti_syswrapper_events =() {
+EventData
+| where Message contains 'syswrapper'
+| extend EventCategory = 'syswrapper'
+| extend EventMessage = extract(@'syswrapper:\s(.*)', 1, Message)
+};
+let ubiquiti_logread_events =() {
+EventData
+| where Message contains 'logread'
+| extend EventCategory = 'logread'
+| extend DstIpAddr = extract(@'to\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, Message)
+| extend DstPortNumber = extract(@'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:(\d{1,5})', 1, Message)
+| extend EventMessage = extract(@'logread\[\d+\]:\s(.*)', 1, Message)
+};
+let ubiquiti_stamgr_events =() {
+EventData
+| where Message contains'stamgr'
+| extend EventCategory = 'stamgr'
+| extend DstMacAddr = extract(@'\s([A-Fa-f0-9:]{17})', 1, Message)
+| extend WlanId = extract(@'\s[A-Fa-f0-9:]{17}\s(\S+)', 1, Message)
+| extend EventMessage = extract(@'stamgr:(.*?)\(', 1, Message)
+| extend EventResultDetails = extract(@'reason:(.*?)\)', 1, Message)
+};
+let ubiquiti_kernel_events =() {
+EventData
+| where Message contains 'kernel'
+| where Message contains 'FWLOG' or Message contains 'set_ratelimit'
+| extend EventCategory = 'kernel'
+| extend EventMessage = case(Message matches regex "kernel.*FWLOG", extract(@'FWLOG:\s\[\d+\]\s(.*)', 1, Message),
+                             Message matches regex "kernel.*_set_ratelimit", extract(@'_set_ratelimit:\s(.*)', 1, Message),
+                             "Check raw_message for details")
+};
+let ubiquiti_dns_events =() {
+EventData
+| where Message matches regex @'dnsmasq\[\d+\]:'
+| extend DstMacAddr = extract(@'MAC=([a-fA-F0-9:]{17}):', 1, Message)
+| extend SrcMacAddr = extract(@'MAC=[a-fA-F0-9:]{17}:([a-fA-F0-9:]{17})\s', 1, Message) 
+| extend DnsQuery = extract(@'dnsmasq\[\d+\]:\s(.*?)\[\w+\]|\s(\S+)\sfrom\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', 2, Message)
+| extend SrcIpAddr = extract(@'dnsmasq\[\d+\]:\s(.*?)\[\w+\]|\s(.*?)from\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 3, Message)
+};
+union isfuzzy=true ubiquiti_dropbear_events, ubiquiti_hostapd_events, ubiquiti_firewall_events, ubiquiti_dns_timeout_events, ubiquiti_stahtd_events, ubiquiti_EVT_AP_STA_ASSOC_TRACKER_DBG, ubiquiti_EVENT_STA_, ubiquiti_syswrapper_events, ubiquiti_logread_events, ubiquiti_stamgr_events, ubiquiti_kernel_events, ubiquiti_dns_events
+| project TimeGenerated
+        , EventVendor
+        , EventTime
+        , EventCategory
+        , DvcType
+        , DvcMacAddr
+        , FirmwareVersion
+        , EventMessage
+        , WlanId
+        , SrcType
+        , Service
+        , FlowId
+        , DvcInboundInterface
+        , DvcOutboundInterface
+        , DvcAction
+        , NetworkRuleName
+        , SrcMacAddr
+        , SrcIpAddr
+        , SrcPortNumber
+        , DstMacAddr
+        , DstIpAddr
+        , DstPortNumber
+        , NetworkBytes
+        , Tos
+        , Prec
+        , Ttl
+        , NetworkProtocol
+        , Window
+        , Res
+        , Mark
+        , DnsQuery
+        , DnsServer
+        , SrcDvcMacAddr
+        , AssocStatus
+        , EventResult
+        , EventResultDetails
+        , Message

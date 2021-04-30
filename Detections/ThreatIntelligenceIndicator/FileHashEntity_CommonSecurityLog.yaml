@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -20,16 +23,39 @@ query: |
 
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
-  ThreatIntelligenceIndicator
+  let fileHashIndicators = ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | where Active == true
-  | where isnotempty(FileHashValue)
+  | where isnotempty(FileHashValue);
+  // Handle matches against both lower case and uppercase versions of the hash:
+  ( fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
+    |union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
   |  join (
      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
      | where isnotempty(FileHash)
      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
   )
   on $left.FileHashValue == $right.FileHash
+  | where CommonSecurityLog_TimeGenerated >= TimeGenerated and CommonSecurityLog_TimeGenerated < ExpirationDateTime
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
-  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
+  RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
+  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName, URLCustomEntity = Url
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity

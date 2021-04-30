@@ -1,0 +1,52 @@
+id: 05eca115-c4b5-48e4-ba6e-07db57695be2
+name: Mass Export of Dynamics 365 Records to Excel
+description: |
+  'The query detects user exporting a large amount of records from Dynamics 365 to Excel, significantly more records exported than any other recent activity by that user.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1530
+query: |
+  let baseline_time = 7d;
+  let detection_time = 1d;
+  Dynamics365Activity
+  | where TimeGenerated between(ago(baseline_time)..ago(detection_time-1d))
+  | where OriginalObjectId contains 'ExportToExcel'
+  | extend numQueryCount = todouble(QueryResults)
+  | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
+  | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))
+  | summarize sum(QueryCount) by UserId
+  | extend HistoricalBaseline = sum_QueryCount
+  | join (Dynamics365Activity
+  | where TimeGenerated > ago(detection_time)
+  | where OriginalObjectId contains 'ExportToExcel'
+  | extend numQueryCount = todouble(QueryResults)
+  | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
+  | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))
+  | summarize sum(QueryCount) by UserId
+  | extend CurrentExportRate = sum_QueryCount) on UserId
+  | where CurrentExportRate > HistoricalBaseline
+  | project UserId, HistoricalBaseline, CurrentExportRate
+  | join kind=inner(Dynamics365Activity
+  | where TimeGenerated > ago(detection_time)
+  | where OriginalObjectId contains 'ExportToExcel'
+  | extend numQueryCount = todouble(QueryResults)
+  | extend QueryCount = iif(QueryResults contains ",", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)
+  | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))) on UserId
+  | project TimeGenerated, UserId, QueryCount, UserAgent, OriginalObjectId, ClientIP, HistoricalBaseline, CurrentExportRate, CorrelationId, CrmOrganizationUniqueName
+  | summarize QuerySizes = make_set(QueryCount), MostRecentQuery = max(TimeGenerated), IPs = make_set(ClientIP), UserAgents = make_set(UserAgent) by UserId, CrmOrganizationUniqueName, HistoricalBaseline, CurrentExportRate
+  | extend timestamp = MostRecentQuery, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

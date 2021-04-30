@@ -1,0 +1,245 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Benjamin Kovacevic",
+    "comments": "This playbook will close Sentinel Incident and will dismiss the corresponding Microsoft Cloud App Security Alert"
+  },
+  "parameters": {
+    "AzureSentinelLogAnalyticsWorkspaceResourceGroupName": {
+      "defaultValue": "yourAzureSentinelWorkspaceRG-Name",
+      "type": "String"
+    },
+    "AzureSentinelLogAnalyticsWorkspaceName": {
+      "defaultValue": "yourAzureSentinelWorkspaceName",
+      "type": "String"
+    },
+    "MCASAPIToken": {
+      "defaultValue": "yourMCAS-API-Token",
+      "type": "String"
+    },
+    "MCASURL": {
+      "defaultValue": "yourMCAS-URL",
+      "type": "String"
+    },
+    "PlaybookName": {
+      "defaultValue": "Close-Incident-MCAS",
+      "type": "String"
+    },
+    "UserName": {
+      "defaultValue": "<username>@<domain>",
+      "type": "String"
+    }
+  },
+  "variables": {
+    "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "MCASAPIToken": "[concat('Token ', parameters('MCASAPIToken'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('UserName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureMonitorLogsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('UserName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "Alert_-_Get_incident": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+              }
+            },
+            "Change_incident_status": {
+              "runAfter": {
+                "Alert_-_Get_incident": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "CloseReasonText": "Closed via Playbook to Dismiss MCAS Alert"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/Status/@{encodeURIComponent('Closed')}"
+              }
+            },
+            "For_each": {
+              "foreach": "@body('Alert_-_Get_incident')?['properties']?['RelatedAlertIds']",
+              "actions": {
+                "HTTP": {
+                  "runAfter": {
+                    "Parse_JSON": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "headers": {
+                      "Authorization": "[variables('MCASAPIToken')]"
+                    },
+                    "method": "POST",
+                    "uri": "@{variables('MCASURL')}/api/v1/alerts/@{body('Run_query_and_list_results')['value'][0]['AlertID']}/dismiss/"
+                  }
+                },
+                "Parse_JSON": {
+                  "runAfter": {
+                    "Run_query_and_list_results": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Run_query_and_list_results')?['value']",
+                    "schema": {
+                      "items": {
+                        "properties": {
+                          "AlertID": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "AlertID"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  }
+                },
+                "Run_query_and_list_results": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": "SecurityAlert\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\n| where SystemAlertId in(\"@{items('For_each')}\") and TimeGenerated > ago(30d)\n| extend AlertURL = tostring(parse_json(ExtendedLinks)[1].Href)\n| extend AlertID = split (AlertURL, \"/\", 5)\n| extend AlertID = tostring(AlertID[0])\n| project AlertID",
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/queryData",
+                    "queries": {
+                      "resourcegroups": "[parameters('AzureSentinelLogAnalyticsWorkspaceResourceGroupName')]",
+                      "resourcename": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                      "resourcetype": "Log Analytics Workspace",
+                      "subscriptions": "[subscription().subscriptionId]",
+                      "timerange": "Set in query"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Change_incident_status": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Initialize_variable": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "MCASURL",
+                    "type": "string",
+                    "value": "[parameters('MCASURL')]"
+                  }
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              },
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

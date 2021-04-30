@@ -1,0 +1,26 @@
+// KQL CommonSecurityLogs AdditionalExtensions Parser
+// Last Updated Date: Aug 14, 2020
+//
+// Parser Notes: 
+// 1. The AdditionalExtensions field generally captures additional fields which are not parsed/mapped to fields by respective vendor CEF configurations
+// 2. The field will have dynamic set of key value pairs separated by ; in the format of the key=value;key=value;key=value
+// e.g. AdditionalExtensions = deviceTranslatedPort=60095;tunnelType=IPSEC;dnat=No
+// 3. The function takes these dynamic key value pairs and converts them into json.
+// 4. Regular expression in this parser assumes field names in alphanumeric format (a-zA-Z0-9) and values in alphanumeric 
+// and some special characters format (a-zA-Z0-9-_:/@.) which covers most cases including IP, hostnames, web urls and string values. 
+// To include any additional special chars modify regex accordingly.
+// 
+// Reference/Credits: https://stackoverflow.com/questions/60260030/how-to-parse-a-custom-key-value-pair-string-into-a-json-object-in-azure-data-exp
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. CommonSecurityLogs_Parsed).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. CommonSecurityLogs_Parsed | take 10).
+// Reference :
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+CommonSecurityLog
+| extend AdditionalExtensions = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9-_:/@. ]+)", dynamic(["key","value"]), AdditionalExtensions)
+| mv-apply AdditionalExtensions on (
+    summarize AdditionalExtensionsParsed = make_bag(pack(tostring(AdditionalExtensions[0]), AdditionalExtensions[1]))
+)
