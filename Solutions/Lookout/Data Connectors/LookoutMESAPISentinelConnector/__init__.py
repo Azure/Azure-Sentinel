@@ -11,19 +11,25 @@ import re
 #from .state_manager import StateManager
 from .mes_request import MESRequest
 
+#Azure WorkSpace credentials, if not saved by an Keyerror Exception has been raised
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
 connection_string = os.environ['AzureWebJobsStorage']
 
-log_type = 'LookoutMES'
+#RISK MES API credentials
 lookout_mes_uri = "https://api.lesstage0.flexilis.org"
-
-client_id = os.environ['ClientId']
-client_secret = os.environ['ClientSecret']
+ent_name = os.environ.get('EnterpriseName')
+api_key = os.environ.get('ApiKey')
 access_token = os.environ.get('AccessToken')
 refresh_token = os.environ.get('RefreshToken')
 stream_position = os.environ.get('StreamPosition')
 
+#Cipher API credentials
+lookout_cipher_uri = os.environ.get('CipherBaseURL')
+client_id = os.environ.get('ClientId')
+client_secret = os.environ.get('ClientSecret')
+
+log_type = 'LookoutMES'
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
@@ -68,8 +74,8 @@ def post_data(body):
 
 
 def single_ent_events(params):
-    logging.info("Events fetching for client_id %s..." % str(params["client_id"]))
-    mes = MESRequest(params["lookout_mes_uri"], params["client_id"], params["client_secret"], params["access_token"], params["refresh_token"], params["stream_position"])
+    logging.info("Events fetching for ent_name %s..." % str(params["ent_name"]))
+    mes = MESRequest(params["lookout_mes_uri"], params["ent_name"], params["api_key"], params["access_token"], params["refresh_token"], params["stream_position"])
     
     #mes.get_oauth()
     
@@ -80,31 +86,43 @@ def single_ent_events(params):
         #process_events(events)
         post_status_code = post_data(json.dumps(events))
         if post_status_code is not None:
-            print("Posted to Sentinel")
-
-    # for event in events:
-    #     event['entName'] = params["client_id"]
-    #     print(json.dumps(event) + "\r\n")
-
-
+            logging.info("Events processed to Sentinel successfully")
+        else:
+            logging.info("Failed to Post Events to Sentinel")
+            
 def main(mytimer: func.TimerRequest)  -> None:
-    # logging.basicConfig(level=logging.INFO,
-    #     format='%(asctime)s %(levelname)-8s %(threadName)s %(message)s',
-    #     datefmt='%m-%d %H:%M')
-    print("************Great************")
+    logging.basicConfig(level=logging.INFO,
+        format='%(asctime)s %(levelname)-8s %(threadName)s %(message)s',
+        datefmt='%m-%d %H:%M')
+
     if mytimer.past_due:
         logging.info('The timer is past due!')
     
-    logging.info("Application starting")
-    params = {
-        "client_id" : client_id,
-        "client_secret" : client_secret,
-        "connection_string" : connection_string,
-        "lookout_mes_uri" : lookout_mes_uri,
-        "access_token" : access_token,
-        "refresh_token" : refresh_token,
-        "stream_position" : stream_position
-    }
+    threads = []
 
-    single_ent_events(params)
-    
+    logging.info("Application starting")
+
+    #Check for MES credentials and fetch events using RISK API
+    if api_key != None and ent_name != None:
+        logging.info("Fetching RISK API Events")
+        params = {
+            "ent_name" : ent_name,
+            "api_key" : api_key,
+            "connection_string" : connection_string,
+            "lookout_mes_uri" : lookout_mes_uri,
+            "access_token" : access_token,
+            "refresh_token" : refresh_token,
+            "stream_position" : stream_position
+        }
+
+        thread = threading.Thread(target=single_ent_events, kwargs=params, args=())
+        thread.start()
+        threads.append(thread)
+
+    #Check for Cipher credentials and fetch events using Cipher Cloud API
+    if client_id != None and client_secret != None:
+        logging.info("Fetching Cipher API Events")
+
+    # clean up threads
+    for thread in threads:
+        thread.join()

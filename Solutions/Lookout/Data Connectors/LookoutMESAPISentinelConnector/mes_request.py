@@ -1,5 +1,5 @@
 '''
-Module MESRequest to authenticate the Splunk plug-in and collect threat events
+Module MESRequest to authenticate the Connector plug-in and collect threat events
 from the Lookout RISK API.
 '''
 import json
@@ -13,11 +13,11 @@ class MESRequest:
     Class MESRequest to authenticate the plug-in and collect threat events
     from the Lookout RISK API.
     '''
-    def __init__(self, api_domain, client_id, client_secret, access_token=None, refresh_token=None, stream_position=0):
+    def __init__(self, api_domain, ent_name, api_key, access_token=None, refresh_token=None, stream_position=0):
         # static fields
         self.api_domain = api_domain
-        self.client_id = client_id
-        self.api_key = client_secret
+        self.ent_name = ent_name
+        self.api_key = api_key
         
         # populate dynamic variables from the Azure Key Vault
 
@@ -74,7 +74,7 @@ class MESRequest:
                     
                 else:
                     logging.error("Your Lookout application key has expired. " +
-                                "Please get a new key and set up this Splunk app again.\n" +
+                                "Please get a new key and set up this connector app again.\n" +
                                 "Go to https://mtp.lookout.com and generate a new key by " +
                                 "navigating to System => Application Keys.")
                     logging.error("Exiting...")
