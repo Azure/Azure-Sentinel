@@ -18,7 +18,7 @@ Go to the community page: https://github.com/Azure/Azure-Sentinel
 
 Make sure you are on the master branch
 
-Click Fork
+Click "Fork"
 
 ![](.github/Media/AzureSentinelCommunityFork.png)
 
@@ -32,21 +32,21 @@ Create a directory on your local machine where you will pull down the repository
 
 Cd into that directory
 
-Run : Git init
+Run : `Git init`
 
-Run : Git clone <url of your fork> example: Git clone “https://github.com/(username)/Azure-Sentinel”
+Run : `Git clone <url of your fork>` *example*: `Git clone “https://github.com/(username)/Azure-Sentinel”`
 
 Cd into the new directory that is created ie cd Azure-Sentinel
 
 You now need to set the upstream which is the original repo that you forked from ie the Sentinel community repo
 
-Run : Git remote add upstream https://github.com/Azure/Azure-Sentinel
+Run : `Git remote add upstream https://github.com/Azure/Azure-Sentinel`
 
-Run : Git remote -v
+Run : `Git remote -v`
 
 And you should see something like this:
 
-PS C:\Users\(username)\Documents\GitForks\Azure-Sentinel> git remote -v
+PS C:\Users\\(username)\Documents\GitForks\Azure-Sentinel> git remote -v
 
 origin https://github.com/(username)/Azure-Sentinel.git (fetch)
 
@@ -62,13 +62,13 @@ You can work with the local master but it is recommended to work with a branch s
 
 First you want to sync your local repository to the upstream master (the Azure community itself – not your fork)
 
-Run : git pull upstream master
+Run : `git pull upstream master`
 
 You should see a list of updates that are processed or a message saying you are up to date
 
 Now that you are in sync create your new branch
 
-Run : Git checkout -b <branch name> Ex Git checkout -b MyNewContribution
+Run : `Git checkout -b <branch name>` *example* `Git checkout -b MyNewContribution`
 
 **Install VS Code:**
 
@@ -86,7 +86,7 @@ This should show as the branch you created. If not, you want to switch to that b
 
 ![](.github/Media/AzureSentinelCommunityOpen2.png)
 
-And it should now show the correct branch.
+And it should now show the correct branch in the bottom left.
 
 **Stage, Commit and Publish your changes**
 
@@ -102,7 +102,7 @@ When you are ready to commit your changes click on the Source Control icon on th
 
 ![](.github/Media/AzureSentinelCommunityStage3.png)
 
-You then publish this work off to your personal GitHub by Clicking the icon next to the branch name (if it throws up a list up top of repositories pick yours <youraccount>/Azure-Sentinel NOT Azure/Azure-Sentinel).
+You then publish this work off to your personal GitHub by clicking the icon next to the branch name (if it throws up a list up top of repositories pick yours <youraccount>/Azure-Sentinel *NOT* Azure/Azure-Sentinel).
 
 ![](.github/Media/AzureSentinelCommunityStage4.png)
 
@@ -134,22 +134,22 @@ You can then check the status of your Pull Request in Azure/Azure-Sentinel by cl
 
 **Clean-up**
 
-After your Pull Request has been merged, you will want to check to make sure it got into the main repository. I recommend checking both in the GitHub website and by doing a sync to my local repo and verifying it there.  You want to be certain that everything looks right before you delete anything. 
+After your Pull Request has been merged, you will want to check to make sure it got into the main repository. I recommend checking both in the GitHub website as well as by doing a sync to my local repo and verifying it there.  You want to be certain that everything looks right before you delete anything. 
 
 In the website you just go to the Azure/Azure-Sentinel repository under the master branch and make sure you see your new code there.
 
-In your local repository, make sure you cd to your repository directory (for me it is cd C:\Users\(username)\Documents\GitForks\Azure-Sentinel) and then sync to the upstream master:
+In your local repository, make sure you `cd` to your repository directory (for me it is `cd C:\Users\(username)\Documents\GitForks\Azure-Sentinel`) and then sync to the upstream master:
 
-Run : git pull upstream master
+Run : `git pull upstream master`
 
-You should see your content in an update and then in VS Code change to the *master* branch and you should see the updates there.  Again, you need to see your new content in the master branch, not the seperate branch you created.
+You should see your content in an update and then in VS Code change to the *master* branch and you should see the updates there.  Again, you need to see your new content in the master branch, not the seperate branch you have been working on.
 
 If you see those update (don’t delete the branch if you don’t!!!), then you can delete the branch you were working on.
 
-Run : "git branch" to see all your branches
+Run : `git branch` to see all your branches
 
-Run : “Git checkout master” to switch to your master branch
+Run : `Git checkout master` to switch to your master branch
 
-Run : “Git branch -d <name of branch>” to delete the branch you no longer need
+Run : `Git branch -d <name of branch>` to delete the branch you no longer need
 
 **Good Luck and get contributing to the Community!!!**
