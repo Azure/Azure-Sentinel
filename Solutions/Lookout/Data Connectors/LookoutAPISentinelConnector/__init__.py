@@ -2,14 +2,42 @@ import requests
 import json
 import datetime
 import azure.functions as func
+from azure.keyvault.secrets import SecretClient
+from azure.identity import DefaultAzureCredential
 import base64
 import hmac
 import hashlib
 import os
 import logging
 import re
+import threading
+
 #from .state_manager import StateManager
 from .mes_request import MESRequest
+
+keyVaultName = "LookoutVault"
+KVUri = "https://lookoutvault.vault.azure.net/"
+
+credential = DefaultAzureCredential()
+print(credential)
+client = SecretClient(vault_url=KVUri, credential=credential)
+
+secretName = "keyName"
+secretValue = "value for your secret"
+
+print("Creating a secret in...")
+
+client.set_secret(secretName, secretValue)
+
+print(" done.")
+
+print("Retrieving your secret from")
+
+retrieved_secret = client.get_secret(secretName)
+
+print("Your secret is '{retrieved_secret.value}'.")
+print("Deleting your secret from {keyVaultName} ...")
+
 
 #Azure WorkSpace credentials, if not saved by an Keyerror Exception has been raised
 customer_id = os.environ['WorkspaceID'] 
@@ -72,10 +100,10 @@ def post_data(body):
         logging.warn("Events are not processed into Azure. Response code: {}".format(response.status_code))
         return None
 
-
-def single_ent_events(params):
-    logging.info("Events fetching for ent_name %s..." % str(params["ent_name"]))
-    mes = MESRequest(params["lookout_mes_uri"], params["ent_name"], params["api_key"], params["access_token"], params["refresh_token"], params["stream_position"])
+def single_ent_events(ent_name= None, api_key= None, connection_string= None, lookout_mes_uri= None, access_token= None, refresh_token= None, stream_position= None):
+    
+    logging.info("Events fetching for ent_name %s..." % str(ent_name))
+    mes = MESRequest(lookout_mes_uri, ent_name, api_key, access_token, refresh_token, stream_position)
     
     #mes.get_oauth()
     
