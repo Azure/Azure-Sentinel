@@ -1,0 +1,40 @@
+id: 3d6d0c04-7337-40cf-ace6-c471d442356d
+name: User added to Team and immediately uploads file
+description: |
+  'This hunting queries identifies users who are added to a Team or Teams chat
+  and within 1 minute of being added upload a file via the chat. This might be
+  an indicator of suspicious activity.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+
+  let timeframe = 7d;
+  let threshold = 1m;
+  OfficeActivity
+  | where TimeGenerated > ago(timeframe)
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation == "MemberAdded"
+  | extend TeamName = iff(isempty(TeamName), Members[0].UPN, TeamName)
+  | project TimeGenerated, UploaderID=UserId, TeamName
+  | join (
+    OfficeActivity
+    | where TimeGenerated > ago(timeframe)
+    | where RecordType == "SharePointFileOperation"
+    | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+    | where Operation == "FileUploaded"
+    | project UploadTime=TimeGenerated, UploaderID=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName
+    ) on UploaderID
+  | where UploadTime > TimeGenerated and UploadTime < TimeGenerated+threshold
+  | project-away UploaderID1
+  | extend timestamp=TimeGenerated, AccountCustomEntity = UploaderID 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

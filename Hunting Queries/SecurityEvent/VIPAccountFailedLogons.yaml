@@ -1,0 +1,28 @@
+id: e8d36582-c403-4466-bd44-ebede5b6fa6e
+name: VIP account more than 6 failed logons in 10
+description: |
+  'VIP Account with more than 6 failed logon attempts in 10 minutes, include your own VIP list in the table below'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+
+  // Create DataTable with your own values, example below shows dummy usernames that are authorized and for what domain
+  let List = datatable(VIPUser:string, Domain:string)["Bob", "Domain", "joe", "domain", "MATT", "DOMAIN"];
+  let timeframe = 10m;
+  List | extend Account = strcat(Domain,"\\",VIPUser) | join kind= inner (
+  SecurityEvent 
+  | where TimeGenerated > ago(timeframe) 
+  | where EventID == "4625"
+  | where AccountType == "User"
+  | where LogonType == "2" or LogonType == "3"
+  ) on Account 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FailedVIPLogons = count() by LogonType, Account
+  | where FailedVIPLogons >= 6
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account
+  

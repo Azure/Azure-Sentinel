@@ -1,0 +1,71 @@
+id: e10e1d2f-265d-4d90-9037-7f3a6ed8a91e
+name: Potential Microsoft security services tampering
+description: |
+  'Identifies potential tampering related to Microsoft security related products and services.'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+
+  let includeProc = dynamic(["sc.exe","net1.exe","net.exe", "taskkill.exe", "cmd.exe", "powershell.exe"]);
+  let action = dynamic(["stop","disable", "delete"]);
+  let service1 = dynamic(['sense', 'windefend', 'mssecflt']);
+  let service2 = dynamic(['sense', 'windefend', 'mssecflt', 'healthservice']);
+  let params1 = dynamic(["-DisableRealtimeMonitoring", "-DisableBehaviorMonitoring" ,"-DisableIOAVProtection"]);
+  let params2 = dynamic(["sgrmbroker.exe", "mssense.exe"]);
+  let regparams1 = dynamic(['reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender"', 'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Advanced Threat Protection"']);
+  let regparams2 = dynamic(['ForceDefenderPassiveMode', 'DisableAntiSpyware']);
+  let regparams3 = dynamic(['sense', 'windefend']);
+  let regparams4 = dynamic(['demand', 'disabled']);
+  let regparams5 = dynamic(['reg add "HKLM\\SYSTEM\\CurrentControlSet\\services\\HealthService"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Sense"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\WinDefend"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\MsSecFlt"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DiagTrack"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SgrmBroker"', 'reg add "HKLMSYSTEM\\CurrentControlSet\\Services\\SgrmAgent"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AATPSensorUpdater"' , 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AATPSensor"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\mpssvc"']);
+  let regparams6 = dynamic(['/d 4','/d "4"','/d 0x00000004']);
+  let regparams7 = dynamic(['/d 1','/d "1"','/d 0x00000001']);
+  let timeframe = 1d;
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688
+  | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
+  | where ProcessName in~ (includeProc)
+  | where (CommandLine has_any (action) and CommandLine has_any (service1)) 
+  or (CommandLine has_any (params1) and CommandLine has 'Set-MpPreference' and CommandLine has '$true')
+  or (CommandLine has_any (params2) and CommandLine has "/IM") 
+  or (CommandLine has_any (regparams5) and CommandLine has 'Start' and CommandLine has_any (regparams6))
+  or (CommandLine has_any (regparams1) and CommandLine has_any (regparams2) and CommandLine has_any (regparams7)) 
+  or (CommandLine has "start" and CommandLine has "config" and CommandLine has_any (regparams3) and CommandLine has_any (regparams4))
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (
+  Event
+  | where TimeGenerated >= ago(timeframe)
+  | where Source =~ "Microsoft-Windows-SENSE"
+  | where EventID == 87 and ParameterXml in ("<Param>sgrmbroker</Param>", "<Param>WinDefend</Param>")
+  | project TimeGenerated, Computer, Account = UserName, EventID, Activity = RenderedDescription, EventSourceName = Source, Type
+  ),
+  (
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where InitiatingProcessFileName in~ (includeProc)
+  | where (InitiatingProcessCommandLine has_any(action) and InitiatingProcessCommandLine has_any (service2) and InitiatingProcessParentFileName != 'cscript.exe')
+  or (InitiatingProcessCommandLine has_any (params1) and InitiatingProcessCommandLine has 'Set-MpPreference' and InitiatingProcessCommandLine has '$true') 
+  or (InitiatingProcessCommandLine has_any (params2) and InitiatingProcessCommandLine has "/IM") 
+  or ( InitiatingProcessCommandLine has_any (regparams5) and  InitiatingProcessCommandLine has 'Start' and  InitiatingProcessCommandLine has_any (regparams6))
+  or (InitiatingProcessCommandLine has_any (regparams1) and InitiatingProcessCommandLine has_any (regparams2) and InitiatingProcessCommandLine has_any (regparams7)) 
+  or (InitiatingProcessCommandLine has_any("start") and InitiatingProcessCommandLine has "config" and InitiatingProcessCommandLine has_any (regparams3) and InitiatingProcessCommandLine has_any (regparams4))
+  | extend Account = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName), Computer = DeviceName
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName = InitiatingProcessFileName, ProcessNameFullPath = FolderPath, Activity = ActionType, CommandLine = InitiatingProcessCommandLine, Type, InitiatingProcessParentFileName
+  )
+  )
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
