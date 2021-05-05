@@ -40,6 +40,7 @@ def main(mytimer: func.TimerRequest) -> None:
         time.sleep(120)
     api = Proofpoint_api()
     for evt_type in event_types:
+        logging.info('************ Event Type : {}  *****************'.format(evt_type))
         api.get_data(event_type=evt_type)
 
 class Proofpoint_api:
@@ -54,7 +55,7 @@ class Proofpoint_api:
         before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
-
+        logging.info('TimeFrame : before time : {} and after time {}'.format(self.before_time,self.after_time))
     def set_websocket_conn(self, event_type):
         url = f"wss://logstream.proofpoint.com:443/v1/stream?cid={self.cluster_id}&type={event_type}&sinceTime={self.after_time}&toTime={self.before_time}"
         logging.info('Opening Websocket logstream {}'.format(url))
@@ -96,6 +97,7 @@ class Proofpoint_api:
 
     def gen_chunks(self,data,event_type):
         for chunk in self.gen_chunks_to_object(data, chunksize=10000):
+            logging.log("chunk length : {}".format(len(chunk)))
             print(len(chunk))
             obj_array = []
             for row in chunk:
@@ -122,11 +124,12 @@ class Proofpoint_api:
         resource = '/api/logs'
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
+        logging.info('Sending {} content length data to log analytics workspace)'.format(content_length))
         signature = self.build_signature(rfc1123date, content_length, method, content_type,
                                     resource)
         
         uri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
-
+        logging.log('log Analytics URI : {}'.format(uri))
         headers = {
             'content-type': content_type,
             'Authorization': signature,
