@@ -445,7 +445,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if($foundConnection) {
-                                        $playbookResource.properties.api.id = "[variables('$foundConnection')]"
+                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
                                     } else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $connectionVar
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
