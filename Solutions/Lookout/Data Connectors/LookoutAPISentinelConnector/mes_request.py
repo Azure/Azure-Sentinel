@@ -7,23 +7,26 @@ import sys
 import logging
 import requests
 import os
+from .azuresecret_handler import AzureSecretHandler
 
 class MESRequest:
     '''
     Class MESRequest to authenticate the plug-in and collect threat events
     from the Lookout RISK API.
     '''
-    def __init__(self, api_domain, ent_name, api_key, access_token=None, refresh_token=None, stream_position=0):
+    def __init__(self, api_domain, ent_name, api_key, vault_uri, key_index=0):
         # static fields
         self.api_domain = api_domain
         self.ent_name = ent_name
         self.api_key = api_key
         
         # populate dynamic variables from the Azure Key Vault
-
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        self.stream_position = stream_position
+        self.az_kv = AzureSecretHandler(vault_uri)
+        # key_obj = self.az_kv.get_secret("key_obj_"+str(key_index))
+        
+        self.access_token = self.az_kv.get_secret("access_token").value
+        self.refresh_token = self.az_kv.get_secret("refresh_token").value
+        self.stream_position = self.az_kv.get_secret("stream_position").value
         self.stale_token_errors = ["REVOKED_REFRESH_TOKEN", "EXPIRED_TOKEN"]
 
     def refresh_header(self):
@@ -60,6 +63,7 @@ class MESRequest:
             if 'access_token' in response_content:
                 self.access_token = response_content['access_token']
                 os.environ['AccessToken'] = self.access_token
+                self.az_kv.set_secret("access_token", self.access_token)
             else:
                 # if the refresh failed, request brand new API credentials
                 response = requests.post(self.api_domain + "/oauth/token",
@@ -71,7 +75,8 @@ class MESRequest:
                     self.refresh_token = response_content['refresh_token']
                     os.environ['AccessToken'] = self.access_token
                     os.environ['RefreshToken'] = self.refresh_token
-                    
+                    self.az_kv.set_secret("access_token", self.access_token) 
+                    self.az_kv.set_secret("refresh_token", self.refresh_token)
                 else:
                     logging.error("Your Lookout application key has expired. " +
                                 "Please get a new key and set up this connector app again.\n" +
@@ -116,7 +121,8 @@ class MESRequest:
                 self.refresh_token = token_json['refresh_token']
                 os.environ['AccessToken'] = self.access_token
                 os.environ['RefreshToken'] = self.refresh_token
-
+                self.az_kv.set_secret("access_token", self.access_token)
+                self.az_kv.set_secret("refresh_token", self.refresh_token)
                 logging.info("Got authenticated")
                 return self.access_token, self.refresh_token
             else: 
@@ -171,6 +177,7 @@ class MESRequest:
                 
                 #update stream position in Azure Vault
                 os.environ['StreamPosition'] = self.stream_position
+                self.az_kv.set_secret("stream_position", self.stream_position)
 
                 more_events = response.json()['moreEvents']
                 logging.info("Fetched Event Count {}".format(len(events)))

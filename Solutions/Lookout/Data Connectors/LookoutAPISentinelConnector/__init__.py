@@ -2,8 +2,6 @@ import requests
 import json
 import datetime
 import azure.functions as func
-from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
 import base64
 import hmac
 import hashlib
@@ -11,38 +9,31 @@ import os
 import logging
 import re
 import threading
-
-#from .state_manager import StateManager
 from .mes_request import MESRequest
-
-keyVaultName = "LookoutVault"
-KVUri = "https://lookoutvault.vault.azure.net/"
-
-credential = DefaultAzureCredential()
-print(credential)
-client = SecretClient(vault_url=KVUri, credential=credential)
-
-secretName = "keyName"
-secretValue = "value for your secret"
-
-print("Creating a secret in...")
-
-client.set_secret(secretName, secretValue)
-
-print(" done.")
-
-print("Retrieving your secret from")
-
-retrieved_secret = client.get_secret(secretName)
-
-print("Your secret is '{retrieved_secret.value}'.")
-print("Deleting your secret from {keyVaultName} ...")
-
 
 #Azure WorkSpace credentials, if not saved by an Keyerror Exception has been raised
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
 connection_string = os.environ['AzureWebJobsStorage']
+
+#Azure Secret client setting
+keyVaultName = os.environ.get("KeyVaultName") #"LookoutVault"
+KVUri = "https://"+ KeyVaultName + ".vault.azure.net/"
+
+credential = DefaultAzureCredential()
+client = SecretClient(vault_url=KVUri, credential=credential)
+
+secretName = "keyName"
+secretValue = "value for your secret"
+client.set_secret(secretName, secretValue)
+retrieved_secret = client.get_secret(secretName)
+print(retrieved_secret)
+print(retrieved_secret.name)
+print(retrieved_secret.value)
+
+retrieved_secret_a = client.get_secret("teststs")
+print(retrieved_secret_a)
+print(retrieved_secret_a.value)
 
 #RISK MES API credentials
 lookout_mes_uri = "https://api.lesstage0.flexilis.org"
@@ -100,10 +91,10 @@ def post_data(body):
         logging.warn("Events are not processed into Azure. Response code: {}".format(response.status_code))
         return None
 
-def single_ent_events(ent_name= None, api_key= None, connection_string= None, lookout_mes_uri= None, access_token= None, refresh_token= None, stream_position= None):
+def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_uri= None, ent_index= 0):
     
     logging.info("Events fetching for ent_name %s..." % str(ent_name))
-    mes = MESRequest(lookout_mes_uri, ent_name, api_key, access_token, refresh_token, stream_position)
+    mes = MESRequest(lookout_mes_uri, ent_name, api_key, KVUri, ent_index)
     
     #mes.get_oauth()
     
@@ -133,14 +124,14 @@ def main(mytimer: func.TimerRequest)  -> None:
     #Check for MES credentials and fetch events using RISK API
     if api_key != None and ent_name != None:
         logging.info("Fetching RISK API Events")
+        # For now we are passing hardcoded ent index which will be dynamic once 
+        # we finalize multiple tenant process
         params = {
+            "KVUri" : KVUri,
             "ent_name" : ent_name,
             "api_key" : api_key,
-            "connection_string" : connection_string,
             "lookout_mes_uri" : lookout_mes_uri,
-            "access_token" : access_token,
-            "refresh_token" : refresh_token,
-            "stream_position" : stream_position
+            "ent_index" : 0            
         }
 
         thread = threading.Thread(target=single_ent_events, kwargs=params, args=())
