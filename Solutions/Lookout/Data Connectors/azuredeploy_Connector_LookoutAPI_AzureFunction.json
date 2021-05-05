@@ -39,6 +39,9 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "KeyVaultName": "[concat(substring(variables('FunctionName'), 0, 20), 'kv')]",
+        "EnterpriseName" : "EnterpriseName",
+        "ApiKey" : "ApiKey",
         "StorageSuffix": "[environment().suffixes.storage]",
         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
     },
@@ -153,7 +156,10 @@
                     "type": "config",
                     "name": "appsettings",
                     "dependsOn": [
-                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('EnterpriseName'))]",            
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('ApiKey'))]"
                     ],
                     "properties": {
                         "FUNCTIONS_EXTENSION_VERSION": "~3",
@@ -163,8 +169,9 @@
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                         "WorkspaceID": "[parameters('WorkspaceID')]",
                         "WorkspaceKey": "[parameters('WorkspaceKey')]",
-                        "EnterpriseName": "[parameters('EnterpriseName')]",
-                        "ApiKey": "[parameters('ApiKey')]",
+                        "KeyVaultName" :"[parameters('KeyVaultName')]",
+                        "EnterpriseName": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('EnterpriseName')).secretUriWithVersion, ')')]",
+			            "ApiKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('ApiKey')).secretUriWithVersion, ')')]",
                         "CipherBaseURL": "[parameters('CipherBaseURL')]",                        
                         "ClientId": "[parameters('ClientId')]",
                         "ClientSecret": "[parameters('ClientSecret')]",
@@ -174,6 +181,69 @@
                 }
             ]
         },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2016-10-01",
+            "name": "[variables('KeyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+              "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ],
+            "properties": {
+              "sku": {
+                "family": "A",
+                "name": "Standard"
+              },
+              "tenantId": "[subscription().tenantId]",
+              "accessPolicies": [
+                {
+                  "tenantId": "[subscription().tenantId]",
+                  "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')),'2019-08-01', 'full').identity.principalId]",
+                  "permissions": {
+                    "secrets": [ "get",
+                                 "list"
+                    ]
+                  }
+                }
+              ],
+              "enabledForDeployment": false,
+              "enabledForDiskEncryption": false,
+              "enabledForTemplateDeployment": true,
+              "enableSoftDelete": true
+            },
+            "resources": [
+                {
+                    "type": "secrets",
+                    "apiVersion": "2016-10-01",
+                    "name": "[variables('EnterpriseName')]",
+                    "dependsOn": [
+                    "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+                    ],
+                    "properties": {
+                    "value": "[parameters('EnterpriseName')]",
+                    "contentType": "string",
+                    "attributes": {
+                        "enabled": true
+                    }
+                    }
+                },
+                {
+                    "type": "secrets",
+                    "apiVersion": "2016-10-01",
+                    "name": "[variables('ApiKey')]",
+                    "dependsOn": [
+                    "[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+                    ],
+                    "properties": {
+                    "value": "[parameters('ApiKey')]",
+                    "contentType": "string",
+                    "attributes": {
+                        "enabled": true
+                    }
+                    }
+                }
+            ]
+        },   
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
             "apiVersion": "2019-06-01",
