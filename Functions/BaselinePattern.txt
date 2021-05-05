@@ -1,0 +1,33 @@
+// Baseline a pattern of interest 
+// Identify new occurrences of a pattern of interest versus history of occurrences of these patterns in a baseline period
+// newInstances(timeRange:timespan, historicalBaselineTimerange:timespan)
+// Parameters:
+//    timeRange                  : the timespan over which to return results.
+//    historicalBaselineTimerange: the baseline period timespan - instances of the pattern of interest that occur within this baseline period will not be included in the result set.
+//
+// This function assumes a prior step that defines an 'instanceSet' of patterns of interest, and the 'historicalFeature' ie the column over which the baselining is performed.
+//
+// Usage:
+// 	newInstances(1d, 7d) | take 10
+//      Return new instances of the pattern in 'instanceSet' that occurred in the last day, and did not occur in the prior 7 days.
+//
+// Example - assume wanting to surface new encoded powershell commands (ie the historical feature here is the encoded powershell command)
+// Define your own instanceSet table and / historicalFeature column before calling this function.
+//let instanceSet = SecurityEvent 
+//| where TimeGenerated >= ago(8d)
+//| where NewProcessName endswith "powershell.exe"
+//| where CommandLine contains "-encodedCommand"
+//| parse CommandLine with * "-EncodedCommand " encodedCommand
+//| project TimeGenerated, decodedCommand=base64_decodestring(substring(encodedCommand, 0, 
+// strlen(encodedCommand) - (strlen(encodedCommand) %8))), encodedCommand,
+// historicalFeature=encodedCommand;
+//
+// This saved function does the join against the specified baseline period.
+let newInstances = view (ResultRecentTimeSpan:timespan, BaselineWindow:timespan) {
+let baselineStart = ago(ResultRecentTimeSpan) - BaselineWindow;
+let baselineEnd = ago(ResultRecentTimeSpan); 
+instanceSet | where TimeGenerated >= ago(ResultRecentTimeSpan) 
+| join kind = anti (instanceSet | where TimeGenerated between(baselineStart..baselineEnd)) on historicalFeature
+};
+//newInstances(1d, 7d) | take 10;
+

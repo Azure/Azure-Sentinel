@@ -1,0 +1,54 @@
+// Zoom Data Parser
+// Last Updated Date: April 24, 2020
+//
+// This parser takes raw Zoom events provider by the Zoom API and parses them into a standarized schema.
+//
+// Parser Notes:
+// 1. This parser assumes logs are collected into a custom log table entitled Zoom_CL.
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias. To work with pre-built Teams queries this Function should be given the alias of TeamsData.
+// Functions usually take 10-15 minutes to activate. You can then use function alias from any other queries (e.g. TeamsData | take 10).
+//
+// References : 
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+// Tech Community Blog on Zoom data: https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-zoom-with-azure-sentinel/ba-p/1341516
+//
+//
+let chatbot_events = dynamic(['bot_notification','interactive_message_editable','interactive_message_fields_editable','interactive_message_select', 'interactive_message_actions']); 
+let account_events = dynamic(['account.created','account.updated','account_disassociated']); 
+let chat_events = dynamic(['chat_message.sent','chat_message.updated','chat_message.updated']); 
+let channel_events = dynamic(["chat_channel.created", "chat_channel.updated","chat_channel.deleted","chat_channel.member_invited","chat_channel.member_joined","chat_channel.member_left"]); 
+let meeting_events = dynamic(["meeting.alert","meeting.created","meeting.updated","meeting.deleted","meeting.started","meeting.ended","meeting.registration_created","meeting.registration_approved","meeting.registration_cancelled","meeting.sharing_started","meeting.sharing_ended","meeting.participant_jbh_waiting","meeting.participant_jbh_joined","meeting.participant_joined","meeting.participant_left"]); 
+let recording_events = dynamic(["recording.started","recording.paused","recording.resumed","recording.stopped","recording.completed","recording.renamed","recording.trashed","recording.deleted","recording.recovered","recording.transcript_completed","recording.registration_created","recording.registration_approved","recording.registration_denied"]); 
+let user_events = dynamic(["user.created","user.invitation_accepted","user.updated","user.settings_updated","user.deactivated","user.activated","user.disassociated","user.deleted","user.personal_notes_updated"]); 
+let signin_events = dynamic(["user.signed_in","user.signed_out"]); 
+let webinar_events = dynamic(["webinar.created", "webinar.updated","webinar.started","webinar.ended","webinar.alert","webinar.sharing_started","webinar.sharing_ended","webinar.registration_created","webinar.registration_approved","webinar.registration_denied", "webinar.registration_cancelled", "webinar.participant_joined", "webinar.participant_left"]); 
+let room_events = dynamic(["zoomroom.alert", "zoomroom.delayed_alert"]); 
+Zoom_CL  
+| extend Event = event_s,  
+    EventTime = iif(event_s in (chatbot_events), columnifexists('payload_timestamp_d', ""), columnifexists('payload_object_data_time_d', tostring(TimeGenerated))), 
+    User = case(event_s in (account_events), columnifexists("payload_operator_s",""), 
+            event_s in (chatbot_events), columnifexists("payload_userJid_s",""), 
+            event_s in (user_events), columnifexists("payload_operator_s", ""), 
+            event_s in (signin_events), columnifexists("payload_object_email_s", ""), 
+            event_s == "user.presence_status_updated",columnifexists("payload_object_email_s",""), 
+            event_s in (recording_events), columnifexists("payload_object_registrant_email_s", "") ,columnifexists("payload_operator_s","" 
+            )), 
+    UserId = case(event_s in (account_events), columnifexists("payload_operator_id_s",""), 
+             event_s in (chat_events) or event_s in (channel_events), columnifexists("payload_operator_id_s",""), 
+             event_s in (webinar_events), columnifexists("payload_object_registrant_id_s",""), 
+             event_s in (chatbot_events), columnifexists("payload_userId_s",""),  
+             event_s in (signin_events) or event_s == "user.presence_status_updated", columnifexists("payload_object_id_s", ""), 
+             event_s in (meeting_events), columnifexists("payload_operator_id_s", ""), 
+             "" 
+             )
+| extend MeetingEvents = iif(event_s in (meeting_events), pack("MeetingName", columnifexists("payload_object_topic_s",""), "MeetingId", columnifexists("payload_object_uuid_s",""), "Timezone", columnifexists("payload_object_timezone_s",""), "Start",columnifexists("payload_object_start_time_t","") ,"End", columnifexists("payload_object_end_time_t",""), "Participant", columnifexists("payload_object_participant_user_name_s","")) , "") 
+| extend WebinarEvents = iif(event_s in (webinar_events), pack("WebinarName", columnifexists("payload_object_topic_s",""), "WebinarId", columnifexists("payload_object_uuid_s",""), "Timezone", columnifexists("payload_object_timezone_s",""), "Start", columnifexists("payload_object_start_time_t","") ,"End", columnifexists("payload_object_end_time_t",""), "Participant", columnifexists("payload_object_participant_user_name_s","")), "") 
+| extend ChannelEvents = iif(event_s in (channel_events), pack("Channel", columnifexists("payload_object_name_s",""), "ChannelId", columnifexists("payload_object_id_s",""), "Member", columnifexists("payload_object_members_display_name_s","")) , "") 
+| extend ChatEvents = iif(event_s in (chat_events), pack("Channel", columnifexists("payload_object_channel_name_s",""), "ChannelId", columnifexists("payload_object_channel_id_s",""),"Type", columnifexists("payload_object_type_s",""), "Message", columnifexists("payload_object_message_s","")),"") 
+| extend UserEvents = iif(event_s in (user_events), pack("UserId", columnifexists("payload_object_id",""), "UserEmail", columnifexists("payload_object_email",""),"UserFirstName", columnifexists("payload_object_first_name_s", ""), "UserLastName", columnifexists("payload_object_last_name_s",""), "UserType", columnifexists("payload_object_type_s", "")), "") 
+| extend RecordingEvents = iif(event_s in (recording_events), pack("RecordingName",columnifexists("payload_object_topic_s",""),"RecordingURL",columnifexists("payload_object_share_url_s",""),"RecordingSize",columnifexists("payload_object_total_size_d","")),"") 
+| extend RoomEvents = iif(event_s in (room_events), pack("RoomName", columnifexists("payload_objsct_room_name_s", ""), "RoomEmail", columnifexists("payload_object_email_s", ""), "RoomEvent", columnifexists("payload_object_issue_s", ""), "AlertType", columnifexists("payload_object_alert_type_d", ""), "AlertKind", columnifexists("payload_object_alert_kind_d","")), "") 
+| project-reorder TimeGenerated, Event, EventTime, User, UserId, MeetingEvents, WebinarEvents, ChannelEvents,UserEvents, RecordingEvents, RoomEvents, * 

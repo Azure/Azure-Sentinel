@@ -1,0 +1,38 @@
+id: 2c7bbbe1-17cb-44ec-be63-fbb37b609403
+name: OracleDBAudit - Inactive Users
+description: |
+  'Query for searching user accounts which last activity was more than 30 days ago.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let lbtime_30d = 30d;
+  let lbtime_1d = 1d;
+  let known_users_gt_30d = OracleDatabaseAuditEvent
+  | where TimeGenerated < ago(lbtime_30d)
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  let known_users_ls_30d = OracleDatabaseAuditEvent
+  | where TimeGenerated between (ago(lbtime_30d) .. ago(lbtime_1d))
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | summarize makeset(DstUserName);
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime_1d)
+  | where isnotempty(DstUserName)
+  | where DbAction =~ 'CONNECT'
+  | where DstUserName in (known_users_gt_30d)
+  | where DstUserName !in (known_users_ls_30d)
+  | project DstUserName
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

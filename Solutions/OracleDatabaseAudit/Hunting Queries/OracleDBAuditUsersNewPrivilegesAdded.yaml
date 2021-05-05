@@ -1,0 +1,31 @@
+id: 6be9634e-6661-4bff-98f1-4a743d7231a5
+name: OracleDBAudit - Users with new privileges
+description: |
+  'Query for searching user accounts whith new privileges.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let lbtime_30d = 30d;
+  let lbtime_1d = 1d;
+  | where TimeGenerated between (ago(lbtime_30d) .. ago(lbtime_1d))
+  | where isnotempty(Privilege) and isnotempty(DstUserName)
+  | summarize Privileges = makeset(Privilege) by DstUserName;
+  | join (OracleDatabaseAuditEvent
+        | where TimeGenerated > ago(lbtime_1d)
+        | where isnotempty(DstUserName) and isnotempty(Privilege)
+        | project DstUserName, Privilege
+        ) on DstUserName
+  | where Privilege !in (Privileges)
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

@@ -1,0 +1,53 @@
+id: 18e6a87e-9d06-4a4e-8b59-3469cd49552d
+name: ADFS DKM Master Key Export
+description: | 
+  'Identifies an export of the ADFS DKM Master Key from Active Directory.
+  References: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/, 
+  https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html?1
+  To understand further the details behind this detection, please review the details in the original PR and subequent PR update to this:
+  https://github.com/Azure/Azure-Sentinel/pull/1562#issue-551542469
+  https://github.com/Azure/Azure-Sentinel/pull/1512#issue-543053339
+  '
+severity: Medium 
+requiredDataConnectors: 
+  - connectorId: SecurityEvents 
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: MicrosoftThreatProtection 
+    dataTypes: 
+      - DeviceEvents 
+queryFrequency: 1d 
+queryPeriod: 1d
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Collection
+relevantTechniques:
+  - T1005
+tags:
+  - Solorigate
+  - NOBELIUM
+query:  |
+  (union isfuzzy=true (SecurityEvent 
+  | where EventID == 4662 // You need to create a SACL on the ADFS Policy Store DKM group for this event to be created. 
+  | where ObjectServer == 'DS'
+  | where OperationType == 'Object Access'
+  //| where ObjectName contains '<GUID of ADFS Policy Store DKM Group object' This is unique to the domain. Check description for more details.
+  | where ObjectType contains '5cb41ed0-0e4c-11d0-a286-00aa003049e2' // Contact Class
+  | where Properties contains '8d3bca50-1d7e-11d0-a081-00aa006c33ed' // Picture Attribute - Ldap-Display-Name: thumbnailPhoto
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = SubjectAccount),
+  (DeviceEvents
+  | where ActionType =~ "LdapSearch"
+  | where AdditionalFields.AttributeList contains "thumbnailPhoto"
+  | where AdditionalFields.DistinguishedName contains "CN=ADFS,CN=Microsoft,CN=Program Data" // Filter results to show only hits related to the ADFS AD container
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName, AccountCustomEntity = InitiatingProcessAccountName)
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

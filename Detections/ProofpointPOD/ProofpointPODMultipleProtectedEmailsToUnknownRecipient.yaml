@@ -1,0 +1,44 @@
+id: f8127962-7739-4211-a4a9-390a7a00e91f
+name: ProofpointPOD - Multiple protected emails to unknown recipient
+description: |
+  'Detects when multiple protected messages where sent to early not seen recipient.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_message_CL
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+query: |
+  let lbtime = 30m;
+  let lbperiod = 30d;
+  let knownrecipients = ProofpointPOD
+  | where TimeGenerated > ago(lbperiod)
+  | where EventType == 'message'
+  | where NetworkDirection == 'outbound'
+  | where SrcUserUpn != ''
+  | where array_length(todynamic(DstUserUpn)) == 1
+  | summarize recipients = make_set(tostring(todynamic(DstUserUpn)[0])) by SrcUserUpn
+  | extend commcol = SrcUserUpn;
+  ProofpointPOD
+  | where TimeGenerated between (ago(lbtime) .. now())
+  | where EventType == 'message'
+  | where NetworkDirection == 'outbound'
+  | extend isProtected = todynamic(MsgParts)[0]['isProtected']
+  | extend mimePgp = todynamic(MsgParts)[0]['detectedMime']
+  | where isProtected == 'true' or mimePgp == 'application/pgp-encrypted'
+  | extend DstUserMail = tostring(todynamic(DstUserUpn)[0])
+  | extend commcol = tostring(todynamic(DstUserUpn)[0])
+  | join knownrecipients on commcol
+  | where recipients !contains DstUserMail
+  | project SrcUserUpn, DstUserMail
+  | extend AccountCustomEntity = SrcUserUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

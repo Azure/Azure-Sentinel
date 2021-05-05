@@ -1,0 +1,29 @@
+Id: 1f3ecde7-5c69-4d44-ac93-5feac6d1cd2f
+DisplayName: Most frequent command executions on the device
+Description: Most frequent command executions on the device
+InputEntityType: IoTDevice
+InputFields:
+  - DeviceId
+  - IoTHub
+OutputEntityTypes:
+  - Process
+QueryPeriodBefore: 30m
+QueryPeriodAfter: 30m
+DataSources: 
+  - SecurityIoTRawEvent
+query: |
+
+  let Process_byIoTDevice = (v_IotDevice_DeviceId:string, v_IoTDevice_IoTHub:string){
+  SecurityIoTRawEvent 
+  | where RawEventName =~ 'ProcessCreate'
+  | where AssociatedResourceId =~ parse_json(v_IoTDevice_IoTHub)['ResourceId'] and DeviceId =~ v_IotDevice_DeviceId
+  | extend Process_CommandLine = tostring(parse_json(EventDetails)['CommandLine'])
+  | extend Process_ProcessId = tostring(parse_json(EventDetails)['ProcessId'])
+  | extend Process_ParentProcess_ProcessId = tostring(parse_json(EventDetails)['ParentProcessId'])
+  | extend Process_CreationTimeUtc = TimeStamp
+  | summarize procCount = count() by Process_CommandLine, Process_ProcessId, Process_ParentProcess_ProcessId, Process_CreationTimeUtc
+  | top 10 by procCount
+  | extend Process_Aux_Count = procCount
+  | project-away procCount
+  };
+  Process_byIoTDevice('<DeviceId>', '<IoTHub>')

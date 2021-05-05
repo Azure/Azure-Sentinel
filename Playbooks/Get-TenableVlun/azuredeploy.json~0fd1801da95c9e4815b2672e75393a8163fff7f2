@@ -1,0 +1,449 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+        "metadata":{
+        "comments":"This playbook will get vulnerability data from tenanble.io instance and send it to log analytics workspace.",
+        "author": "Younes Khaldi"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-TenableVlun",
+            "type": "string"
+        },
+        "APIkey": {
+            "defaultValue": "<Your-tenable-ApiKey>",
+            "type": "string"
+        }
+    },
+    "variables": {
+      "azureloganalyticsdatacollector_1": "[concat('azureloganalyticsdatacollector_1-', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureloganalyticsdatacollector_1')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector_1'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')?['assets']",
+                            "actions": {
+                                "For_each_2": {
+                                    "foreach": "@body('Parse_JSON_2')?['vulnerabilities']",
+                                    "actions": {
+                                        "Send_Data": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "{\n\"VulnID\":\"@{items('For_each_2')?['plugin_id']}\",\n\"AssetID\":\"@{items('For_each')?['id']}\",\n\"VulnName\":\"@{items('For_each_2')?['plugin_name']}\",\n \"plugin_family\":\"@{items('For_each_2')?['plugin_family']}\",\n\"severity\":\"@{items('For_each_2')?['severity']}\",\n\"IP\":\"@{items('For_each')?['ipv4']?[0]}\",\n\"fqdn\":\"@{items('For_each')?['fqdn']?[0]}\",\n\"State\": \"@{items('For_each_2')['vulnerability_state']}\"\n}",
+                                                "headers": {
+                                                    "Log-Type": "Vulns_AssetID_List",
+                                                    "time-generated-field": "@{utcNow()}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP_2": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "x-apikeys": "@variables('APIkey')"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://cloud.tenable.com/workbenches/assets/@{items('For_each')?['id']}/vulnerabilities"
+                                    }
+                                },
+                                "Parse_JSON_2": {
+                                    "runAfter": {
+                                        "HTTP_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_2')",
+                                        "schema": {
+                                            "properties": {
+                                                "body": {
+                                                    "properties": {
+                                                        "total_asset_count": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total_vulnerability_count": {
+                                                            "type": "integer"
+                                                        },
+                                                        "vulnerabilities": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "accepted_count": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "count": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "counts_by_severity": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "count": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "value": {
+                                                                                    "type": "integer"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "count",
+                                                                                "value"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "plugin_family": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "plugin_id": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "plugin_name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "recasted_count": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "severity": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "vpr_score": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "vulnerability_state": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "count",
+                                                                    "plugin_family",
+                                                                    "plugin_id",
+                                                                    "plugin_name",
+                                                                    "vulnerability_state",
+                                                                    "accepted_count",
+                                                                    "recasted_count",
+                                                                    "counts_by_severity",
+                                                                    "severity"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "accept": "application/json",
+                                    "x-apikeys": "@variables('APIkey')"
+                                },
+                                "method": "GET",
+                                "uri": "https://cloud.tenable.com/workbenches/assets/vulnerabilities"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "APIkey",
+                                        "type": "string",
+                                        "value": "[parameters('APIkey')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "array",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "body": {
+                                            "properties": {
+                                                "assets": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "acr_drivers": {},
+                                                            "acr_score": {},
+                                                            "agent_name": {
+                                                                "type": "array"
+                                                            },
+                                                            "aws_ec2_name": {
+                                                                "type": "array"
+                                                            },
+                                                            "exposure_score": {},
+                                                            "fqdn": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "has_agent": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "ipv4": {
+                                                                "type": "array"
+                                                            },
+                                                            "ipv6": {
+                                                                "type": "array"
+                                                            },
+                                                            "last_scan_target": {},
+                                                            "last_seen": {
+                                                                "type": "string"
+                                                            },
+                                                            "mac_address": {
+                                                                "type": "array"
+                                                            },
+                                                            "netbios_name": {
+                                                                "type": "array"
+                                                            },
+                                                            "operating_system": {
+                                                                "type": "array"
+                                                            },
+                                                            "scan_frequency": {},
+                                                            "security_protection_level": {},
+                                                            "security_protections": {
+                                                                "type": "array"
+                                                            },
+                                                            "sources": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "first_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "last_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "first_seen",
+                                                                        "last_seen"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "has_agent",
+                                                            "last_seen",
+                                                            "last_scan_target",
+                                                            "sources",
+                                                            "acr_score",
+                                                            "acr_drivers",
+                                                            "exposure_score",
+                                                            "scan_frequency",
+                                                            "ipv4",
+                                                            "ipv6",
+                                                            "fqdn",
+                                                            "netbios_name",
+                                                            "operating_system",
+                                                            "agent_name",
+                                                            "aws_ec2_name",
+                                                            "security_protection_level",
+                                                            "security_protections",
+                                                            "mac_address"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "headers": {
+                                            "properties": {
+                                                "Accept-Ranges": {
+                                                    "type": "string"
+                                                },
+                                                "Cache-Control": {
+                                                    "type": "string"
+                                                },
+                                                "Connection": {
+                                                    "type": "string"
+                                                },
+                                                "Content-Length": {
+                                                    "type": "string"
+                                                },
+                                                "Content-Type": {
+                                                    "type": "string"
+                                                },
+                                                "Date": {
+                                                    "type": "string"
+                                                },
+                                                "Expect-CT": {
+                                                    "type": "string"
+                                                },
+                                                "Pragma": {
+                                                    "type": "string"
+                                                },
+                                                "Server": {
+                                                    "type": "string"
+                                                },
+                                                "Set-Cookie": {
+                                                    "type": "string"
+                                                },
+                                                "Strict-Transport-Security": {
+                                                    "type": "string"
+                                                },
+                                                "Transfer-Encoding": {
+                                                    "type": "string"
+                                                },
+                                                "Vary": {
+                                                    "type": "string"
+                                                },
+                                                "X-Content-Type-Options": {
+                                                    "type": "string"
+                                                },
+                                                "X-Gateway-Site-ID": {
+                                                    "type": "string"
+                                                },
+                                                "X-Request-Uuid": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "statusCode": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector_1": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector_1'))]",
+                                "connectionName": "[variables('azureloganalyticsdatacollector_1')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
+

@@ -1,0 +1,45 @@
+Id: 82cdcee5-cc2e-4e9f-a235-357159c60c8c
+DisplayName: User account access to new resources
+Description: Hosts a given user performed resource access to for the first time in the last 30 days
+InputEntityType: Account
+InputFields:
+  - Name
+  - Sid
+  - AadUserId
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+  - BehaviorAnalytics
+Tactics:
+  - Collection
+  - LateralMovement
+query: |
+
+  let GetAllNewResourceAccessForUser = (v_Account_Name:string, v_Account_Sid:string, v_Account_AadUserId:string)
+  {
+    BehaviorAnalytics
+    | extend v_Account_Name = case(
+        v_Account_Name has '@' and v_Account_Name has '\\', tostring(split(tostring(split(v_Account_Name, '\\')[1]),'@')[0]),
+        v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+        v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+        v_Account_Name)
+    | where ActionType == "ResourceAccess" and 
+            tobool(ActivityInsights.FirstTimeUserLoggedOnToDevice) and 
+            (
+                (isnotempty(UserName) and UserName =~ v_Account_Name) or                                                  
+                (isnotempty(UsersInsights.AccountObjectID) and UsersInsights.AccountObjectID == v_Account_AadUserId) or
+                (isnotempty(UsersInsights.OnPremisesSID) and UsersInsights.OnPremisesSID =~ v_Account_Sid)
+            )
+    | extend device_info = pack('DevicesInsights', DevicesInsights, 'ActivityInsights', ActivityInsights)
+    | project Host_Aux_TimeGenerated = TimeGenerated,
+              Host_UnstructuredName = DestinationDevice,
+              Host_Aux_Insights = device_info,
+              Account_Name = UserName,
+              Account_Sid = v_Account_Sid,
+              Account_AadUserId = UsersInsights.AccountObjectID,
+              Account_Aux_Insights = UsersInsights
+    | top 10 by Host_Aux_TimeGenerated asc nulls last
+  };
+  GetAllNewResourceAccessForUser('<Name>', '<Sid>', '<AadUserId>')

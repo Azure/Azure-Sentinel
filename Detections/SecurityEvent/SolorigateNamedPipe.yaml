@@ -1,0 +1,49 @@
+id: 11b4c19d-2a79-4da3-af38-b067e1273dee
+name: Solorigate Named Pipe 
+description: |
+  'Identifies a match across various data feeds for named pipe IOCs related to the Solorigate incident.'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+
+  (union isfuzzy=true
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID in (17,18)
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend NamedPipe = EventDetail.[5].["#text"]
+  | extend ProcessDetail = EventDetail.[6].["#text"]
+  | where NamedPipe contains '583da945-62af-10e8-4902-a8f205c72b2e'
+  | extend Account = UserName
+  | project-away EventDetail, EvData
+  ),
+  (
+   SecurityEvent
+  | where EventID == '5145'
+  | where AccessList has '%%4418'     // presence of CreatePipeInstance value 
+  | where RelativeTargetName contains '583da945-62af-10e8-4902-a8f205c72b2e'
+  )
+  )
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

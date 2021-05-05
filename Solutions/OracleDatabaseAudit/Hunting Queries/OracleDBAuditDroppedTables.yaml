@@ -1,0 +1,27 @@
+id: e74b944a-c438-4949-b4d0-cdfe3a9354c9
+name: OracleDBAudit - Dropped Tables
+description: |
+  'Query searches for dropped tables.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  let lbtime = 24h;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime)
+  | where DbAction =~ 'DROP'
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where TableName !~ 'select'
+  | project TimeGenerated, DstUserName, TableName
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

@@ -1,0 +1,41 @@
+id: ca67c83e-7fff-4127-a3e3-1af66d6d4cad
+name: Base64 encoded Windows process command-lines
+description: |
+  'Identifies instances of a base64 encoded PE file header seen in the process command line parameter.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - DefenseEvasion
+relevantTechniques:
+  - T1059
+  - T1027
+  - T1140
+query: |
+
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  | where isnotempty(CommandLine)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,
+  FileName = Process, CommandLine, ParentProcessName;
+  processEvents};
+  ProcessCreationEvents
+  | where CommandLine contains "TVqQAAMAAAAEAAA"
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
