@@ -1,1 +1,0 @@
-Guidelines (coming soon)
