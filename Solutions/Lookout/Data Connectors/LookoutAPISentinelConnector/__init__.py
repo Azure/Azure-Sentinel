@@ -2,6 +2,8 @@ import requests
 import json
 import datetime
 import azure.functions as func
+from azure.keyvault.secrets import SecretClient
+from azure.identity import DefaultAzureCredential
 import base64
 import hmac
 import hashlib
