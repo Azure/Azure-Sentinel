@@ -1,1 +1,0 @@
-az deployment group create --resource-group eco-connector-test --template-file .\mainTemplate.json --parameters .\parameters.json
