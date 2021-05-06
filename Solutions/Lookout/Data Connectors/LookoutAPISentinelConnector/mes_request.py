@@ -24,9 +24,14 @@ class MESRequest:
         self.az_kv = AzureSecretHandler(vault_uri)
         # key_obj = self.az_kv.get_secret("key_obj_"+str(key_index))
         
-        self.access_token = self.az_kv.get_secret("access_token").value
-        self.refresh_token = self.az_kv.get_secret("refresh_token").value
-        self.stream_position = self.az_kv.get_secret("stream_position").value
+        self.access_token = self.az_kv.get_secret("AccessToken")
+        self.refresh_token = self.az_kv.get_secret("RefreshToken")
+        self.stream_position = self.az_kv.get_secret("StreamPosition")
+        
+        #For very first time, vault doesn't have any stream position saved, so start from 0
+        if not self.stream_position:
+            self.stream_position = "now"
+
         self.stale_token_errors = ["REVOKED_REFRESH_TOKEN", "EXPIRED_TOKEN"]
 
     def refresh_header(self):
@@ -62,8 +67,8 @@ class MESRequest:
             response_content = json.loads(response.text)
             if 'access_token' in response_content:
                 self.access_token = response_content['access_token']
-                os.environ['AccessToken'] = self.access_token
-                self.az_kv.set_secret("access_token", self.access_token)
+                # os.environ['AccessToken'] = self.access_token
+                self.az_kv.set_secret("AccessToken", self.access_token)
             else:
                 # if the refresh failed, request brand new API credentials
                 response = requests.post(self.api_domain + "/oauth/token",
@@ -73,10 +78,10 @@ class MESRequest:
                 if 'access_token' in response_content:
                     self.access_token = response_content['access_token']
                     self.refresh_token = response_content['refresh_token']
-                    os.environ['AccessToken'] = self.access_token
-                    os.environ['RefreshToken'] = self.refresh_token
-                    self.az_kv.set_secret("access_token", self.access_token) 
-                    self.az_kv.set_secret("refresh_token", self.refresh_token)
+                    # os.environ['AccessToken'] = self.access_token
+                    # os.environ['RefreshToken'] = self.refresh_token
+                    self.az_kv.set_secret("AccessToken", self.access_token) 
+                    self.az_kv.set_secret("RefreshToken", self.refresh_token)
                 else:
                     logging.error("Your Lookout application key has expired. " +
                                 "Please get a new key and set up this connector app again.\n" +
@@ -119,10 +124,10 @@ class MESRequest:
                 logging.info("Storing creds in Azure Vault")
                 self.access_token = token_json['access_token']
                 self.refresh_token = token_json['refresh_token']
-                os.environ['AccessToken'] = self.access_token
-                os.environ['RefreshToken'] = self.refresh_token
-                self.az_kv.set_secret("access_token", self.access_token)
-                self.az_kv.set_secret("refresh_token", self.refresh_token)
+                # os.environ['AccessToken'] = self.access_token
+                # os.environ['RefreshToken'] = self.refresh_token
+                self.az_kv.set_secret("AccessToken", self.access_token)
+                self.az_kv.set_secret("RefreshToken", self.refresh_token)
                 logging.info("Got authenticated")
                 return self.access_token, self.refresh_token
             else: 
@@ -176,8 +181,8 @@ class MESRequest:
                 self.stream_position = response.json()['streamPosition']
                 
                 #update stream position in Azure Vault
-                os.environ['StreamPosition'] = self.stream_position
-                self.az_kv.set_secret("stream_position", self.stream_position)
+                # os.environ['StreamPosition'] = self.stream_position
+                self.az_kv.set_secret("StreamPosition", self.stream_position)
 
                 more_events = response.json()['moreEvents']
                 logging.info("Fetched Event Count {}".format(len(events)))

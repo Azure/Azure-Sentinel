@@ -2,8 +2,6 @@ import requests
 import json
 import datetime
 import azure.functions as func
-from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
 import base64
 import hmac
 import hashlib
@@ -16,41 +14,22 @@ from .mes_request import MESRequest
 #Azure WorkSpace credentials, if not saved by an Keyerror Exception has been raised
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
-connection_string = os.environ['AzureWebJobsStorage']
 
 #Azure Secret client setting
-keyVaultName = os.environ.get("KeyVaultName") #"LookoutVault"
-KVUri = "https://"+ KeyVaultName + ".vault.azure.net/"
-
-credential = DefaultAzureCredential()
-client = SecretClient(vault_url=KVUri, credential=credential)
-
-secretName = "keyName"
-secretValue = "value for your secret"
-client.set_secret(secretName, secretValue)
-retrieved_secret = client.get_secret(secretName)
-print(retrieved_secret)
-print(retrieved_secret.name)
-print(retrieved_secret.value)
-
-retrieved_secret_a = client.get_secret("teststs")
-print(retrieved_secret_a)
-print(retrieved_secret_a.value)
+keyVaultName = str(os.environ['KeyVaultName'])
+KVUri = "https://" + keyVaultName + ".vault.azure.net/"
 
 #RISK MES API credentials
 lookout_mes_uri = "https://api.lesstage0.flexilis.org"
 ent_name = os.environ.get('EnterpriseName')
 api_key = os.environ.get('ApiKey')
-access_token = os.environ.get('AccessToken')
-refresh_token = os.environ.get('RefreshToken')
-stream_position = os.environ.get('StreamPosition')
 
 #Cipher API credentials
 lookout_cipher_uri = os.environ.get('CipherBaseURL')
 client_id = os.environ.get('ClientId')
 client_secret = os.environ.get('ClientSecret')
 
-log_type = 'LookoutMES'
+log_type = 'Lookout'
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
@@ -112,9 +91,9 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
             logging.info("Failed to Post Events to Sentinel")
             
 def main(mytimer: func.TimerRequest)  -> None:
-    logging.basicConfig(level=logging.INFO,
-        format='%(asctime)s %(levelname)-8s %(threadName)s %(message)s',
-        datefmt='%m-%d %H:%M')
+    # logging.basicConfig(level=logging.INFO,
+    #     format='%(asctime)s %(levelname)-8s %(threadName)s %(message)s',
+    #     datefmt='%m-%d %H:%M')
 
     if mytimer.past_due:
         logging.info('The timer is past due!')
@@ -124,26 +103,29 @@ def main(mytimer: func.TimerRequest)  -> None:
     logging.info("Application starting")
 
     #Check for MES credentials and fetch events using RISK API
-    if api_key != None and ent_name != None:
+    if api_key and ent_name:
         logging.info("Fetching RISK API Events")
         # For now we are passing hardcoded ent index which will be dynamic once 
         # we finalize multiple tenant process
-        params = {
-            "KVUri" : KVUri,
-            "ent_name" : ent_name,
-            "api_key" : api_key,
-            "lookout_mes_uri" : lookout_mes_uri,
-            "ent_index" : 0            
-        }
+        
+        single_ent_events(KVUri, ent_name, api_key, lookout_mes_uri, 0)
+        
+        # params = {
+        #     "KVUri" : KVUri,
+        #     "ent_name" : ent_name,
+        #     "api_key" : api_key,
+        #     "lookout_mes_uri" : lookout_mes_uri,
+        #     "ent_index" : 0            
+        # }
 
-        thread = threading.Thread(target=single_ent_events, kwargs=params, args=())
-        thread.start()
-        threads.append(thread)
+        # thread = threading.Thread(target=single_ent_events, kwargs=params, args=())
+        # thread.start()
+        # threads.append(thread)
 
     #Check for Cipher credentials and fetch events using Cipher Cloud API
-    if client_id != None and client_secret != None:
+    if client_id and client_secret:
         logging.info("Fetching Cipher API Events")
 
     # clean up threads
-    for thread in threads:
-        thread.join()
+    # for thread in threads:
+    #     thread.join()
