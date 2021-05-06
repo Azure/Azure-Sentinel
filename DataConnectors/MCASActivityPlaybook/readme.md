@@ -1,12 +1,12 @@
 # Ingest MCAS (Microsoft Cloud App Security) Activities
 Author: Nicholas DiCola
 
-Get-MCASActivity playbook ingests MCAS Activities via (API)[https://docs.microsoft.com/en-us/cloud-app-security/api-activities-list] and writes them to a custom log table called MCASActivity_CL.
+Get-MCASActivity playbook ingests MCAS Activities via (API)[https://docs.microsoft.com/cloud-app-security/api-activities-list] and writes them to a custom log table called MCASActivity_CL.
 
 There are a number of configuration steps required to deploy the Logic App playbooks.
 
 ## Configuration Steps
-1. Generate a MCAS (API Token)[https://docs.microsoft.com/en-us/cloud-app-security/api-authentication].  Settings -> Security Extensions -> API tokens.
+1. Generate a MCAS (API Token)[https://docs.microsoft.com/cloud-app-security/api-authentication].  Settings -> Security Extensions -> API tokens.
 2. Deploy the ARM template and fill in the parameters.
 ```
 "APIToken": This is the MCAS API Token​
