@@ -26,22 +26,22 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  *  the various fields the input file can have.
  */
 {
-  "Name": "{SolutionName}",                                             //Solution Name      - Ex. "Symantec Endpoint Protection
-  "Author": "{AuthorName - id}",                                        //Author of Solution - Ex. "Amarnath Pamidi - v-ampami@microsoft.com"
-  "Logo": "{<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">}",  //Link to the Logo used in the CreateUiDefinition.json
-  "Description": "{Solution Description}",                              //Solution Description used in the CreateUiDefinition.json
-  //Workbook description(s) from ASI-Portal Workbooks Metadata, this field can be a string if 1 description is used, and an array if multiple
+  "Name": "{SolutionName}",                                             /*Solution Name      - Ex. "Symantec Endpoint Protection */
+  "Author": "{AuthorName - id}",                                        /*Author of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com" */
+  "Logo": "{<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">}",  /*Link to the Logo used in the CreateUiDefinition.json */
+  "Description": "{Solution Description}",                              /*Solution Description used in the CreateUiDefinition.json*/
+  /*Workbook description(s) from ASI-Portal Workbooks Metadata, this field can be a string if 1 description is used, and an array if multiple */
   "WorkbookDescription": ["{Description of workbook}"],
-  "Version": "1.0.0",                                                   //Package version to be created
-  //The following fields take arrays of paths relative to the solutions folder.
-  //Ex. Workbooks: ["Workbooks/SymantecEndpointProtection.json"]
+  "Version": "1.0.0",                                                   /*Package version to be created*/
+  /*The following fields take arrays of paths relative to the solutions folder.*/
+  /*Ex. Workbooks: ["Workbooks/SymantecEndpointProtection.json"]*/
   "Workbooks": [],
   "Analytic Rules": [],
   "Playbooks": [],
   "Parsers": [],
   "Hunting Queries": [],
   "Data Connectors": [],
-  "BasePath": "{Path to Solution Content}" //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
+  "BasePath": "{Path to Solution Content}" /*Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/"*/
 }
 
 ```
