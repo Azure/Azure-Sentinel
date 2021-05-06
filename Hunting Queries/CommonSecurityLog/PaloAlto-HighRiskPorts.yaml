@@ -79,20 +79,22 @@ query: |
   26379,"tcp","Data Access/Mgmt","Redis",
   27017,"tcp","Data Access/Mgmt","MongoDB",
   ];
-  CommonSecurityLog
-  | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC" and DeviceAction != "deny"
-  | where SentBytes > 0 and ReceivedBytes > 0
-  | summarize
-      Count = count(),
-      StartTime = min(TimeGenerated),
-      EndTime = max(TimeGenerated)
-      by 
-      DeviceName,
-      SourceIP,
-      DestinationIP,
-      DestinationPort,
-      Protocol
-  | join kind=inner (HighRiskPorts) on $left.DestinationPort == $right.Port and $left.Protocol == $right.Protocol
+  HighRiskPorts
+  | join kind=inner (
+    CommonSecurityLog
+    | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC" and DeviceAction != "deny"
+    | where SentBytes > 0 and ReceivedBytes > 0
+    | summarize
+        Count = count(),
+        StartTime = min(TimeGenerated),
+        EndTime = max(TimeGenerated)
+        by 
+        DeviceName,
+        SourceIP,
+        DestinationIP,
+        DestinationPort,
+        Protocol
+  ) on $left.Port == $right.DestinationPort and $left.Protocol == $right.Protocol
   | project-away Protocol1, Port
   | order by DeviceName asc, SourceIP asc, DestinationIP asc, DestinationPort asc
 entityMappings:
