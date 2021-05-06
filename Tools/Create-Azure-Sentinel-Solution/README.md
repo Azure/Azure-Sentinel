@@ -22,25 +22,30 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
 /**
  * Solution Automation Input File Json
  * -----------------------------------------------------
- * The purpose of this json is to provide detail on
- *  the various fields the input file can have.
+ * The purpose of this json is to provide detail on the various fields the input file can have.
+ * Name: Solution Name - Ex. "Symantec Endpoint Protection"
+ * Author: Author Name+Email of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
+ * Logo: Link to the Logo used in createUiDefinition.json
+ * Description: Solution Description used in createUiDefinition.json. Can include markdown.
+ * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
+ * Version: Version to be used during package creation
+ * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  */
 {
-  "Name": "{SolutionName}",                                             /*Solution Name      - Ex. Symantec Endpoint Protection */
-  "Author": "{AuthorName - id}",                                        /*Author of Solution - Ex. Eli Forbes - v-eliforbes@microsoft.com */
-  "Logo": "{<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">}",  /*Link to the Logo used in the CreateUiDefinition.json */
-  "Description": "{Solution Description}",                              /*Solution Description used in the CreateUiDefinition.json*/
-  /*Workbook description(s) from ASI-Portal Workbooks Metadata, this field can be a string if 1 description is used, and an array if multiple */
+  "Name": "{SolutionName}",
+  "Author": "{AuthorName - id}",
+  "Logo": "{<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">}",
+  "Description": "{Solution Description}",
   "WorkbookDescription": ["{Description of workbook}"],
-  "Version": "1.0.0",                                                   /*Package version to be created*/
-  /*The following fields take arrays of paths relative to the solutions folder.*/
+  "Version": "1.0.0",
   "Workbooks": [],
   "Analytic Rules": [],
   "Playbooks": [],
   "Parsers": [],
   "Hunting Queries": [],
   "Data Connectors": [],
-  "BasePath": "{Path to Solution Content}" /*Optional base path to use. Either Internet URL or File Path. Default is https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/*/
+  "BasePath": "{Path to Solution Content}"
 }
 
 ```
