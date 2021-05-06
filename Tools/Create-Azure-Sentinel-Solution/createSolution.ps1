@@ -953,7 +953,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
     $repoRoot = $(git rev-parse --show-toplevel)
     $solutionFolderName = $solutionName
-    $solutionFolder = "$repoRoot/Solutions/$solutionFolderName/"
+    $solutionFolder = "$repoRoot/Solutions/$solutionFolderName"
+    if (!(Test-Path -Path $solutionFolder)) {
+        New-Item -ItemType Directory $solutionFolder
+    }
+    $solutionFolder = "$solutionFolder/Package"
     if (!(Test-Path -Path $solutionFolder)) {
         New-Item -ItemType Directory $solutionFolder
     }
@@ -982,10 +986,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         break;
     }
     $zipPackageName = "$(if($contentToImport.Version){$contentToImport.Version}else{"newSolutionPackage"}).zip"
-    if(!(Test-Path "$solutionFolder/Package")){
-        New-Item -Type Directory -Name "Package" -Path $solutionFolder
-    }
-    Compress-Archive -Path $solutionFolder -DestinationPath "$solutionFolder/Package/$zipPackageName" -Force
+    Compress-Archive -Path $solutionFolder -DestinationPath "$solutionFolder/$zipPackageName" -Force
     
     #downloading and running arm-ttk on generated solution
     $armTtkFolder = "$PSScriptRoot/arm-ttk"

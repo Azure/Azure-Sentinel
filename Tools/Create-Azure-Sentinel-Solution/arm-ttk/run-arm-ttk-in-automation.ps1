@@ -16,7 +16,7 @@ if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
 # Run 'Test-AzTemplate' from the arm-ttk for given solution package
 $solutions = Get-ChildItem $root -Directory
 if($solutionName){
-    $solutions = Get-Item "$root/$solutionName"
+    $solutions = Get-Item "$root/$solutionName/Package"
 }
 $fails = @()
 $skip = "poc","template", "automation"
