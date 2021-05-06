@@ -167,3 +167,15 @@ Please ensure that resources of the following types use the corresponding versio
     "apiVersion": "2019-05-01",
 }
 ```
+
+#### Parameters Must Be Referenced
+
+It's possible some default parameters may go unused, especially if the solution consists mainly of playbooks. On failure this check will output the unused parameter(s) that exist within the `mainTemplate.json` file.
+
+To fix this, remove the unused parameter from the `parameters` section of `mainTemplate.json`, and check the following common issue "Outputs Must Be Present In Template Parameters".
+
+#### Outputs Must Be Present In Template Parameters
+
+In most cases, this error is a result of removing an unused parameter reference from `mainTemplate.json`. To fix the error in such a case, remove the problematic output variable from the `outputs` section of `createUiDefinition.json`.
+
+Otherwise, the parameter will need be added in the `parameters` section of `mainTemplate.json` and referenced as necessary.
