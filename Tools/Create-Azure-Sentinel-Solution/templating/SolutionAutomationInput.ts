@@ -10,7 +10,7 @@ interface SolutionAutomationInput {
   Logo: string;                //Link to the Logo used in the CreateUiDefinition.json
   Description: string;         //Solution Description used in the CreateUiDefinition.json
   WorkbookDescription: string|string[]; //Workbook description(s) from ASI-Portal Workbooks Metadata
-
+  Version: string;             //Package version to be created
   //The following fields take arrays of paths relative to the solutions folder.
   //Ex. Workbooks: ["Workbooks/SymantecEndpointProtection.json"]
   Workbooks?: string[];
