@@ -35,7 +35,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
 {
   "Name": "{SolutionName}",
   "Author": "{AuthorName - id}",
-  "Logo": "{<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">}",
+  "Logo": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
   "Description": "{Solution Description}",
   "WorkbookDescription": ["{Description of workbook}"],
   "Version": "1.0.0",
@@ -45,7 +45,8 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Parsers": [],
   "Hunting Queries": [],
   "Data Connectors": [],
-  "BasePath": "{Path to Solution Content}"
+  "BasePath": "{Path to Solution Content}",
+  "Version": "1.0.0"
 }
 
 ```
