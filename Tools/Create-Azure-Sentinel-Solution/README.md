@@ -34,7 +34,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  */
 {
   "Name": "{SolutionName}",
-  "Author": "{AuthorName - id}",
+  "Author": "{AuthorName - Email}",
   "Logo": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
   "Description": "{Solution Description}",
   "WorkbookDescription": ["{Description of workbook}"],
