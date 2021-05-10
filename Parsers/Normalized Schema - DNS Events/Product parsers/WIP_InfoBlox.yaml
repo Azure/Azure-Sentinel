@@ -1,0 +1,45 @@
+Parser:
+  Title: InfoBlox
+  Version: '0.0'
+  LastUpdated: May 10, 2021
+Product:
+  Name: Info Blox
+Normalization:
+  Schema: DnsEvents
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com
+- Title: Tech Community
+  Link: https://techcommunity.microsoft.com
+Description: |
+  TODO
+ParserName: Infoblox
+ParserQuery: |
+  let Infoblox=(){
+    let RawData = Syslog | where ProcessName == "named" and SyslogMessage has "client"
+      | where Computer in ("datasource") and Facility == "local6"
+      | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)
+      | mv-expand todynamic(Parser)
+      | extend ResponseTime = todatetime(Parser[0]),
+               Log_Type = tostring(Parser[1]),
+               RawData_subString = tostring(Parser[3])
+      | project-away Parser;
+    RawData 
+      | where Log_Type == "client"
+      | extend dnsclient = extract_all(@"^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\sview\s(\S+)\:\s((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)
+      | project-away RawData_subString
+      | mv-expand todynamic(dnsclient)
+      | extend 
+        SrcIpAddr = tostring(dnsclient[1]),
+        SrcPortNumber = tostring(dnsclient[2]),
+        NetworkProtocol = tostring(dnsclient[7]),
+        Query = tostring(dnsclient[8]),
+        QueryClassName = tostring(dnsclient[9]),
+        RecordType = tostring(dnsclient[10]),
+        ResponseCodeName = tostring(dnsclient[12]),
+        Flags = tostring(dnsclient[13]),
+        // 
+        EventMessage = tostring(dnsclient[14]);
+    };
+Infoblox
