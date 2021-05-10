@@ -1,12 +1,8 @@
-# Azure Sentinel Solutions
+# Azure Sentinel Solutions Packaging Tool Guidance
 
-Azure Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Azure Sentinel. This experience is powered by Azure Marketplace for Solutions' discoverability, deployment and enablement and Microsoft Partner Center for Solutions’ authoring and publishing.
+Azure Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Azure Sentinel. This experience is powered by Azure Marketplace for Solutions' discoverability, deployment and enablement and Microsoft Partner Center for Solutions’ authoring and publishing. Refer to details in [Azure Sentinel solutions documentation](https://aka.ms/azuresentinelsolutionsdoc). Detailed partner guidance for authoring and publishing solutions is covered in [building Azure Sentinel solutions guidance](https://aka.ms/sentinelsolutionsbuildguide). 
 
-## Why Azure Sentinel Solutions?
-
-* Customers can easily discover packaged content and integrations that deliver product value or for a domain or for a vertical centrally in Azure Sentinel.
-* Customers can easily deploy and optionally enable content to get started immediately.
-* Providers or partners can deliver combined product or domain or vertical value via Solutions in Azure Sentinel and be able to productize investments too.
+The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Azure Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists. 
 
 ## Creating Solution Package
 
