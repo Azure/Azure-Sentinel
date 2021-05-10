@@ -23,7 +23,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [StringLength(10000, MinimumLength = 1)]
         public string Query { get; set; }
         
-        [JsonProperty("query", Required = Required.Always)]
+        [JsonProperty("version", Required = Required.Always)]
         public string Version { get; set; }
 
         [JsonProperty("queryFrequency", Required = Required.Always)]
