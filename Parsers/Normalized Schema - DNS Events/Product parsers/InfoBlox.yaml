@@ -1,0 +1,64 @@
+Parser:
+  Title: InfoBlox
+  Version: '0.0'
+  LastUpdated: May 10, 2021
+Product:
+  Name: Info Blox
+Normalization:
+  Schema: DnsEvents
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com
+- Title: Tech Community
+  Link: https://techcommunity.microsoft.com
+Description: |
+  TODO
+ParserName: Infoblox
+ParserQuery: |
+  let Infoblox=(){
+  let RawData = Syslog 
+    | where Computer in ("datasource") and Facility == "local6"
+    | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)
+    | mv-expand todynamic(Parser)
+    | extend responseTime = todatetime(Parser[0]),
+            Log_Type = tostring(Parser[1]),
+            RawData_subString = tostring(Parser[3])
+    | project-away Parser;
+  let dnszone = RawData
+  | where ProcessName == "named" and Log_Type == "zone"
+  | extend dnszone = extract_all(@"([a-z0-9\.\-]+)\/([A-Z]+)\:(\s[A-Z]+)?\s(\w+\s\w+)\s(for\s\'(\S+)?\':)?((\d+)\.?)?(\s(\with\s|(\d+)\sIN\s)([A-Z]+)\s)?(\(?serial\s(\d+)\)?)?(.*)", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)
+  | mv-expand todynamic(dnszone)
+  | extend Zone = tostring(dnszone[0]),
+      Action = tostring(dnszone[3]),
+      Client_Hostname = tostring(dnszone[5]),
+      TransID = tostring(dnszone[7]),
+      Serial = tostring(dnszone[13]),
+      TTL = tostring(dnszone[10]),
+      RecordType = tostring(dnszone[11])
+  | extend dnszone_substring = extract_all(@"\s?([a-zA-Z0-9\.\-\_]+)\.\s(.*)", dynamic([1,2]),tostring(dnszone[14]))
+  | mv-expand todynamic(dnszone_substring)
+  | extend Host = tostring(dnszone_substring[0]),
+      Message = tostring(dnszone_substring[1])
+  | project-away RawData_subString, dnszone_substring, dnszone;
+  let dnsclient = RawData 
+  | where ProcessName == "named" and Log_Type == "client"
+  | extend dnsclient = extract_all(@"^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\sview\s(\S+)\:\s((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)
+  | mv-expand todynamic(dnsclient)
+  | extend Client_IP = tostring(dnsclient[1]),
+      Port = tostring(dnsclient[2]),
+      Protocol = tostring(dnsclient[7]),
+      QueryDomainName = tostring(dnsclient[8]),
+      ClassName = tostring(dnsclient[9]),
+      RecordType = tostring(dnsclient[10]),
+      ResponseCode = tostring(dnsclient[12]),
+      Flag = tostring(dnsclient[13]),
+      Message = tostring(dnsclient[14])
+  | project-away RawData_subString, dnsclient;
+  let dnsgss = RawData
+  | where ProcessName == "named" and Log_Type == "gss_accept_sec_context"
+  | extend dnsgss = extract_all(@":\s(.*)", dynamic([1,2]), RawData_subString)
+  | mv-expand todynamic(dnsgss)
+  | extend Message = tostring(dnsgss[0])
+  | project-away dnsgss, RawData_subString;};
+  Infoblox
