@@ -59,4 +59,4 @@ ABAP Workflow Log | S_WF_WI | TASK_CLASS | *
 ABAP Workflow Log | S_WF_WI | WFACTVT | 44 Display Log
 
 
-[PreviewTerms]: https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/
+[PreviewTerms]: https://azure.microsoft.com/support/legal/preview-supplemental-terms/
