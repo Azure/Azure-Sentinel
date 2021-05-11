@@ -1,0 +1,35 @@
+id: b19ded25-fa9d-43c6-9938-23facbba3521
+name: Excessive NXDOMAIN DNS Queries
+description: |
+  'This creates an incident in the event a client generates excessive amounts of DNS queries for non-existent domains.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Normalizers
+    dataTypes: 
+      - DnsEvents_Generic
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1483
+  - T1008
+query: |
+  let threshold = 200;
+  DnsEvents_Generic
+  | where isnotempty(ResponseCodeName)
+  | where ResponseCodeName =~ "NXDOMAIN"
+  | summarize count() by SrcIpAddr, bin(TimeGenerated,15m)
+  | where count_ > threshold
+  | join kind=inner (DnsEvents_Generic
+      | where isnotempty(ResponseCodeName)
+      | where ResponseCodeName =~ "NXDOMAIN"
+      ) on SrcIpAddr
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
