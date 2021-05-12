@@ -1,7 +1,10 @@
-﻿using Newtonsoft.Json;
+﻿using Nancy.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -11,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace SampleDataIngestTool
 {
-    class ApiExample
+    public static class ApiExample
     {
         static string customerId = "";
         static string sharedKey = "";
@@ -47,7 +50,7 @@ namespace SampleDataIngestTool
                         // Prompt user to choose to repush data
                         Console.WriteLine("{0} has been posted. Would you like to post it again?", fileName);
                         var res = Console.ReadLine();
-                        if(res.ToLower() == "y" || res.ToLower() == "yes")
+                        if (res.ToLower() == "y" || res.ToLower() == "yes")
                         {
                             PushDataToLog(file);
                         }
@@ -76,7 +79,7 @@ namespace SampleDataIngestTool
                 var path = new SampleDataPath();
                 var filePath = path.GetDirPath();
                 string[] files = System.IO.Directory.GetFiles(filePath, "*.json*", SearchOption.AllDirectories);
-                
+
                 return files;
             }
             catch (Exception excep)
@@ -138,11 +141,11 @@ namespace SampleDataIngestTool
                 string json = ReadFile(filePath);
 
                 //Updated Code to remove _s,_t,_d,_s if already there in sample data before ingest to LA.
-                var strippedData = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(StripSuffix(json)));
+                var strippedData = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(StripSuffix(json, filePath)));
                 string updatedjson = JsonConvert.SerializeObject(strippedData);
                 var jsonBytes = Encoding.UTF8.GetBytes(updatedjson);
 
-                //var jsonBytes = Encoding.UTF8.GetBytes(json);
+                ////var jsonBytes = Encoding.UTF8.GetBytes(json);
                 string stringToHash = "POST\n" + jsonBytes.Length + "\napplication/json\n" + "x-ms-date:" + datestring + "\n/api/logs";
                 string hashedString = BuildSignature(stringToHash, sharedKey);
                 string signature = "SharedKey " + customerId + ":" + hashedString;
@@ -167,7 +170,7 @@ namespace SampleDataIngestTool
                 var path = new SampleDataPath();
                 var dirPath = path.GetDirPath();
 
-                logName = filePath.Replace(dirPath,"").Replace("_CL.json", "").Replace(".json", "");
+                logName = filePath.Replace(dirPath, "").Replace("_CL.json", "").Replace(".json", "");
                 client.DefaultRequestHeaders.Add("Log-Type", logName);
                 client.DefaultRequestHeaders.Add("Authorization", signature);
                 client.DefaultRequestHeaders.Add("x-ms-date", date);
@@ -180,7 +183,7 @@ namespace SampleDataIngestTool
                 string result = responseContent.ReadAsStringAsync().Result;
 
                 var fileName = logName + "_CL.json";
-                
+
                 if (response.Result.StatusCode.ToString().Contains("OK"))
                 {
                     Console.WriteLine("{0} is successfully pushed", fileName);
@@ -197,36 +200,141 @@ namespace SampleDataIngestTool
         }
 
         // Stripsuffix _s,_t,_d,_g,_b if any for key
-        private static List<JObject> StripSuffix(string json)
+        //private static List<JObject> StripSuffix(string json)
+        //{
+        //    JToken a = JToken.Parse(json);
+        //    //var a = new JArray();
+        //    //if (json.StartsWith("["))
+        //    //    a = JArray.Parse(json);
+        //    //else
+        //    //    a = a.Add(JObject.Parse(json));
+        //   // var a = JObject.Parse(json);
+
+        //    var obj = new List<JObject>();
+        //    foreach (JObject o in a)
+        //    {
+        //        JObject addob = new JObject();
+        //        foreach (JProperty p in o.Properties())
+        //        {
+
+        //            try
+        //            {
+
+        //                string name = p.Name;
+        //                if (name.EndsWith("_s") || name.EndsWith("_t") || name.EndsWith("_d") || name.EndsWith("_g") || name.EndsWith("_b"))
+        //                {
+        //                    name = name.Substring(0, name.Length - 2);
+        //                }
+        //                if ((p.Value.Type.ToString() == "Object") && p.Value.HasValues)
+        //                {
+        //                    StripSuffix(Convert.ToString(p.Value));
+        //                }
+
+        //                if (p.Value.Type.Equals("Array") && p.Value.HasValues)
+        //                {
+        //                    foreach (var val in p.Value)
+        //                    {
+        //                        StripSuffix(Convert.ToString(val));
+        //                    }
+        //                }
+        //                addob.Add(new JProperty(name, p.Value));
+
+        //            }
+
+        //            catch (Exception ex)
+        //            {
+        //                Console.WriteLine("Issue while stripping data: ", ex);
+        //            }
+        //        }
+
+        //        obj.Add(addob);
+        //    }
+        //    return obj;
+        //}
+
+        private static List<JObject> StripSuffix(string json, string filePath)
         {
-            JArray a = JArray.Parse(json);
             var obj = new List<JObject>();
-            foreach (JObject o in a.Children<JObject>())
+            var deserializedJson = JsonConvert.DeserializeObject<dynamic>(json) as dynamic;
+            foreach (var value in deserializedJson)
             {
-                JObject addob = new JObject();
-                foreach (JProperty p in o.Properties())
+                var data = recursiveJson(value, new JObject(), filePath);
+
+                obj.Add(data);
+            }
+            
+            return obj;
+
+        }
+
+        public static JObject recursiveJson(JObject j, JObject pa, string filePath)
+        {
+            JObject addob = new JObject();
+            foreach (var p in j.Properties())
+            {
+                try
                 {
+                    string oldName = p.Name;
+                    string name = p.Name;
+                    var val = p.Value;
 
-                    try
+                    if (name.EndsWith("_s") || name.EndsWith("_t") || name.EndsWith("_d") || name.EndsWith("_g") || name.EndsWith("_b"))
                     {
-                        string name = p.Name;
-                        if (name.EndsWith("_s") || name.EndsWith("_t") || name.EndsWith("_d") || name.EndsWith("_g") || name.EndsWith("_b"))
+                        name = name.Substring(0, name.Length - 2);
+                        addob.Add(name, val);
+                        //j.Replace(name);
+
+                    }
+                    else if (val.Type.ToString().Equals("Object"))
+                    {
+                        var v = recursiveJson((JObject)val, addob, filePath);
+                        // j[name] = recursiveJson((JObject)val, pa);
+                        addob.Add(name, v);
+                    }
+
+                    else if (val.Type.ToString().Equals("Array"))
+                    {
+                        var arrayobj = new JArray();
+                        int count = 0;
+                        foreach (var v in val)
                         {
-                            name = name.Substring(0, name.Length - 2);
+                            if (v.Type.ToString().Equals("String"))
+                            {
+                                arrayobj.Add(v);
+                            }
+                            else
+                            {
+                                var index = count;
+                                arrayobj.Add(recursiveJson((JObject)val[index], addob, filePath));
+                                //j[name][index] = recursiveJson((JObject)val[index], pa);
+                                count++;
+                            }
+
                         }
+                        //for (int i=0;i< arrayobj.Count;i++)
+                        //{
+                        addob.Add(name, arrayobj);
+                        //j.Property(oldName).Remove();
+                        //}
 
-                        addob.Add(new JProperty(name, p.Value));
+                        // j[name] = (dynamic)arrayobj;
                     }
-
-                    catch (Exception ex)
+                    else
                     {
-                        Console.WriteLine("Issue while stripping data: ",ex);
+                        addob.Add(name, val);
                     }
+
                 }
 
-                obj.Add(addob);
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Issue while stripping data in file: " + filePath + ex.Message);
+                }
             }
-            return obj;
+            return addob;
         }
+        
     }
 }
+
+
