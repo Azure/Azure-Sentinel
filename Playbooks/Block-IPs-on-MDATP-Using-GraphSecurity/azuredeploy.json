@@ -2,27 +2,41 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "comments": "This playbook will get the IP information from an Azure Sentinel incident when the security incident triggers in Azure Sentinel. The IP info will then be sent to a security analyst over email. The analyst will either approve or reject the blocking of the IP. If approved, the IP will then be pushed to be blocked on Microsoft Defender ATP using the Graph Security TI indicator Post method.",
-    "author": "Chi Nguyen"
+    "title": "Block IPs on MDATP",
+    "description": "This playbook will get the IP information from an Azure Sentinel incident when the security incident triggers in Azure Sentinel. The IP info will then be sent to a security analyst over email. The analyst will either approve or reject the blocking of the IP. If approved, the IP will then be pushed to be blocked on Microsoft Defender ATP using the Graph Security TI indicator Post method. NOTE: This playbook uses a managed identity to access the API. You will need to add the playbook to the subscription or management group with a Security Reader role.",
+    "lastUpdateTime": "2021-05-10T07:02:57.841Z",
+    "entities": ["IP"],
+    "tags": ["Response","Orchestration"],
+    "source": {
+        "kind": "Microsoft"
+    },
+    "author": {
+        "name": "Chi Nguyen"
+    }
   },
   "parameters": {
     "PlaybookName": {
       "defaultValue": "Block_IPs_on_MDATP_Using_GraphSecurity",
-      "type": "string"
-    },
-    "UserName": {
-      "defaultValue": "<username>@<domain>",
-      "type": "string"
+      "type": "string",
+      "metadata": {
+         "description": "Name of the playbook resource"
+      }
     },
     "EmailApprovalContact": {
-      "defaultValue": "Email address of an SOC analyst who can approve to block IP address of an incident",
-      "type": "string"
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+         "description": "Email address of an SOC analyst who can approve to block IP address of an incident"
+      }
     }
   },
   "variables": {
     "GraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
+    "GraphSecurityConnectionDisplayName": "[concat('Microsoft Graph Security - ', parameters('PlaybookName'))]",
     "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionDisplayName": "[concat('Azure Sentinel - ', parameters('PlaybookName'))]",
     "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+    "Office365ConnectionDisplayName": "[concat('Office365 - ', parameters('PlaybookName'))]"
   },
   "resources": [
     {
@@ -31,7 +45,7 @@
       "name": "[variables('GraphSecurityConnectionName')]",
       "location": "[resourceGroup().location]",
       "properties": {
-        "displayName": "[parameters('UserName')]",
+        "displayName": "[variables('GraphSecurityConnectionDisplayName')]",
         "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
@@ -44,7 +58,7 @@
       "name": "[variables('AzureSentinelConnectionName')]",
       "location": "[resourceGroup().location]",
       "properties": {
-        "displayName": "[parameters('UserName')]",
+        "displayName": "[variables('AzureSentinelConnectionDisplayName')]",
         "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
@@ -57,7 +71,7 @@
       "name": "[variables('Office365ConnectionName')]",
       "location": "[resourceGroup().location]",
       "properties": {
-        "displayName": "[parameters('UserName')]",
+        "displayName": "[variables('Office365ConnectionDisplayName')]",
         "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
@@ -70,7 +84,8 @@
       "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
       "tags": {
-        "LogicAppsCategory": "security"
+          "hidden-SentinelTemplateName": "Block-IPs-on-MDATP-Using-GraphSecurity",
+          "hidden-SentinelTemplateVersion": "1.0"
       },
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
@@ -85,16 +100,6 @@
         "definition": {
           "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
           "contentVersion": "1.0.0.0",
-          "parameters": {
-            "$connections": {
-              "defaultValue": {},
-              "type": "Object"
-            },
-            "emailcontact": {
-              "defaultValue": "[parameters('EmailApprovalContact')]",
-              "type": "String"
-            }
-          },
           "triggers": {
             "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
               "inputs": {
