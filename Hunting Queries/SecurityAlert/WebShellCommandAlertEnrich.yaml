@@ -14,12 +14,10 @@ tactics:
   - Persistence
 query: |
   let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
-  let timeRange = 3d; 
   let lookupWindow = 1m;  
   let lookupBin = lookupWindow / 2.0; 
   let distinctIpThreshold = 3; 
   let alerts = SecurityAlert  
-  | where TimeGenerated > ago(timeRange) 
   | extend alertData = parse_json(Entities), recordGuid = new_guid(); 
   let shellAlerts = alerts 
   | where ProviderName =~ "MDATP"  
@@ -53,14 +51,12 @@ query: |
   | project recordGuid, TimeGenerated, ImageName, CommandLine, TimeKey = bin(TimeGenerated, lookupBin), HostName, DnsDomain 
   | extend Start = TimeGenerated; 
   let baseline = W3CIISLog  
-  | where TimeGenerated > ago(timeRange) 
   | project-rename SourceIP=cIP, PageAccessed=csUriStem 
   | summarize dcount(SourceIP) by PageAccessed 
   | where dcount_SourceIP <= distinctIpThreshold; 
   commandKeyedData 
   | join kind=inner ( 
-  W3CIISLog  
-  | where TimeGenerated > ago(timeRange) 
+  W3CIISLog   
   | where csUriStem has_any(scriptExtensions)  
   | extend splitUriStem = split(csUriStem, "/")  
   | extend FileName = splitUriStem[-1] | extend firstDir = splitUriStem[-2] | extend TimeKey = range(bin(TimeGenerated-lookupWindow, lookupBin), bin(TimeGenerated, lookupBin),lookupBin)  
