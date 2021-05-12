@@ -51,7 +51,7 @@ If you/your company are a first-time app publisher on Azure Marketplace, [follow
 For the following steps we’ll rely on Partner Center’s detailed documentation. 
 1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details per guidance. 
 2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
-3.	[Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-listing) – this includes the title, description, pictures, videos, support information, etc. aspects. Enter one of the search keywords value as f1de974b-f438-4719-b423-8bf704ba2aef – to display your Solution in the Azure Sentinel Solutions gallery. 
+3.	Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-listing) – this includes the title, description, pictures, videos, support information, etc. aspects. Enter one of the search keywords value as f1de974b-f438-4719-b423-8bf704ba2aef – to display your Solution in the Azure Sentinel Solutions gallery. 
 4.	[Add a preview audience](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-preview) (including test subscriptions for your validation) as needed.
 5.	[Create a plan](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-plans) and select plan type as Solution Template.
 6.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-solution) the Solutions template plan. This is where you’ll upload the Solutions zip created in Step 2 and set a version for the package. Folow versioning guidance mentioned in Step 2.
