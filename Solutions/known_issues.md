@@ -24,4 +24,4 @@ Workbooks and Hunting queries deployed by Solutions may miss correct metadata in
 ![Azure Sentinel solutions missing metadata hunting](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions-missing-metadata-hunting.png)
 
 ## Known Issue #5 
-A central option to uninstall all content associated with an Azure Sentinel Solution is not available. Content associated with a Solution can be deleted by exercising the delete option available in the respective galleries for each content type. 
+A central option to uninstall all content associated with an Azure Sentinel Solution is not available. Content associated with a Solution can be deleted by exercising the delete option available in the respective galleries for each content type in alignment with the feature gallery UX support (some feature galleries may not provide a content delete option by design). 
