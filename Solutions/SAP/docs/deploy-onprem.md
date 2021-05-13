@@ -218,7 +218,7 @@ timechunk = 60
 
 [initsetup.sh]: ../initsetup.sh
 <!-- [configgen]: ./ConfigGen.md -->
-[previewterms]: https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/
+[previewterms]: https://azure.microsoft.com/support/legal/preview-supplemental-terms/
 [SAPNWRFCSDK]: https://launchpad.support.sap.com/#/softwarecenter/template/products/_APP=00200682500000001943&_EVENT=DISPHIER&HEADER=Y&FUNCTIONBAR=N&EVENT=TREE&NE=NAVIGATE&ENR=01200314690100002214&V=MAINT
 
 <!-- ## Next steps
