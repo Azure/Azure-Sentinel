@@ -24,11 +24,6 @@ lookout_mes_uri = "https://api.lesstage0.flexilis.org"
 ent_name = os.environ.get('EnterpriseName')
 api_key = os.environ.get('ApiKey')
 
-#Cipher API credentials
-lookout_cipher_uri = os.environ.get('CipherBaseURL')
-client_id = os.environ.get('ClientId')
-client_secret = os.environ.get('ClientSecret')
-
 log_type = 'Lookout'
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
@@ -77,8 +72,6 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
     logging.info("Events fetching for ent_name %s..." % str(ent_name))
     mes = MESRequest(lookout_mes_uri, ent_name, api_key, KVUri, ent_index)
     
-    #mes.get_oauth()
-    
     events = mes.get_events()
     if events and len(events) > 0:
         logging.info("Got events")        
@@ -91,15 +84,9 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
             logging.info("Failed to Post Events to Sentinel")
             
 def main(mytimer: func.TimerRequest)  -> None:
-    # logging.basicConfig(level=logging.INFO,
-    #     format='%(asctime)s %(levelname)-8s %(threadName)s %(message)s',
-    #     datefmt='%m-%d %H:%M')
-
     if mytimer.past_due:
         logging.info('The timer is past due!')
     
-    threads = []
-
     logging.info("Application starting")
 
     #Check for MES credentials and fetch events using RISK API
@@ -109,23 +96,3 @@ def main(mytimer: func.TimerRequest)  -> None:
         # we finalize multiple tenant process
         
         single_ent_events(KVUri, ent_name, api_key, lookout_mes_uri, 0)
-        
-        # params = {
-        #     "KVUri" : KVUri,
-        #     "ent_name" : ent_name,
-        #     "api_key" : api_key,
-        #     "lookout_mes_uri" : lookout_mes_uri,
-        #     "ent_index" : 0            
-        # }
-
-        # thread = threading.Thread(target=single_ent_events, kwargs=params, args=())
-        # thread.start()
-        # threads.append(thread)
-
-    #Check for Cipher credentials and fetch events using Cipher Cloud API
-    if client_id and client_secret:
-        logging.info("Fetching Cipher API Events")
-
-    # clean up threads
-    # for thread in threads:
-    #     thread.join()
