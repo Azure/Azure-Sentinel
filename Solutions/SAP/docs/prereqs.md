@@ -13,7 +13,7 @@ We also recommend that you use Azure Key Vault to store your credential secrets.
 For more information, see:
 
 - [Azure Sentinel documentation](https://docs.microsoft.com/azure/sentinel/)
-- [Azure Key Vault documentation](https://docs.microsoft.com/en-us/azure/key-vault/)
+- [Azure Key Vault documentation](https://docs.microsoft.com/azure/key-vault/)
 
 ## Supported deployments
 
@@ -21,7 +21,7 @@ The Azure Sentinel SAP Logs connector supports the following deployments:
 
 |Deployment  |Requirements  |
 |---------|---------|
-|**Azure Ubuntu Virtual Machine**     | - [Managed identity](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/) turned on <br>- [Azure Key Vault](https://docs.microsoft.com/en-us/azure/key-vault/) to store your credential secrets <br>- [Venv with Python version 3.8 or higher](https://docs.python.org/3.8/library/venv.html) <br>   - The [Azure CLI](https://docs.microsoft.com/cli/azure/), version 2.8.0 or higher <br><br>For more information, see [Deploy the Azure Sentinel SAP logs connector on Azure](deploy-azure.md).        |
+|**Azure Ubuntu Virtual Machine**     | - [Managed identity](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/) turned on <br>- [Azure Key Vault](https://docs.microsoft.com/azure/key-vault/) to store your credential secrets <br>- [Venv with Python version 3.8 or higher](https://docs.python.org/3.8/library/venv.html) <br>   - The [Azure CLI](https://docs.microsoft.com/cli/azure/), version 2.8.0 or higher <br><br>For more information, see [Deploy the Azure Sentinel SAP logs connector on Azure](deploy-azure.md).        |
 |**Azure Container Instance**     |    - [Azure Container Registry](https://docs.microsoft.com/azure/container-registry) <br>- [Azure Key Vault](https://docs.microsoft.com/azure/key-vault/)<br>    - [Venv with Python version 3.8 or higher](https://docs.python.org/3.8/library/venv.html) <br>    - The [Azure CLI](https://docs.microsoft.com/cli/azure/), version 2.8.0 or higher <br><br>For more information, see [Deploy the Azure Sentinel SAP logs connector on Azure](deploy-azure.md).     |
 |**On-premises machine**     | - Ubuntu latest <br>- [Python version 3.7 or higher](https://www.python.org/downloads/release/python-370/)      <br><br>    For more information, see [Deploy the Azure Sentinel SAP logs connector on Azure](deploy-onprem.md). |
 |     |         |
