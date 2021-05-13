@@ -142,7 +142,7 @@ echo 'Starting Docker image pull'
 sudo docker pull $dockerimage$tagver
 if [ $? -eq 1 ];
 then 
-	echo 'Error downloading the Azure Sentinel SAP data connector. Contact Microsoft support.'
+	echo 'Error downloading the Azure Sentinel SAP data connector.'
 	exit 1
 fi
 pause 'Latest Azure Sentinel data connector downloaded successfully. Press ENTER to continue.
@@ -356,7 +356,7 @@ if [ $? -eq 0 ];
 then 
 	echo 'SDK archive was successfully updated'
 else  
-	echo 'Azure Sentinel data connector upgrade failed. The NetWeaver SDK could not be added to the image. Contact Microsoft support.'
+	echo 'Azure Sentinel data connector upgrade failed. The NetWeaver SDK could not be added to the image.'
 	exit 1
 fi
 
