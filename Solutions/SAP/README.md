@@ -59,4 +59,4 @@ The SAP logs connector provides both stateless and stateful connections for logs
 [OnPremDep]: ./docs/OnPrem_Deployment.md
 [AzureDep]: ./docs/Azure_Deployment_Support.md
 [ConfigGen]: ./docs/ConfigGen.md
-[PreviewTerms]: https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/
+[PreviewTerms]: https://azure.microsoft.com/support/legal/preview-supplemental-terms/
