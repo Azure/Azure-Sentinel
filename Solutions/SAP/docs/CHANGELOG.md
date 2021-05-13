@@ -154,4 +154,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.0.2]: ./
 [0.0.1]: ./
 
-[PreviewTerms]: https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/
+[PreviewTerms]: https://azure.microsoft.com/support/legal/preview-supplemental-terms/
