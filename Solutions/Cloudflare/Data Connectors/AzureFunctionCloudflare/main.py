@@ -12,6 +12,9 @@ from .sentinel_connector_async import AzureSentinelMultiConnectorAsync
 from .state_manager import StateManagerAsync
 
 
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
+
+
 # interval of script execution
 SCRIPT_EXECUTION_INTERVAL_MINUTES = 2
 # if ts of last processed file is older than now - MAX_PERIOD_MINUTES -> script will get events from now - SCRIPT_EXECUTION_INTERVAL_MINUTES
@@ -77,6 +80,8 @@ async def main(mytimer: func.TimerRequest):
     if conn.has_errors():
         raise Exception('Program finished with errors')
 
+    await conn.save_checkpoint()
+
     await conn.delete_old_blobs()
 
     await checkpoint_manager.mark_script_as_inactive()
@@ -91,13 +96,8 @@ class AzureBlobStorageConnector:
         self.log_type = LOG_TYPE
         self.sentinel = AzureSentinelMultiConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
         self._processed_blobs = []
-        self._processed_blob_names = set()
         self._blobs_to_delete = []
         self.checkpoint_manager = CheckpointManager(conn_string=os.environ['AzureWebJobsStorage'])
-        self.checkpoint_lock = asyncio.Lock()
-        self.last_saved_date = None
-        self.last_saved_exclude_files = None
-        self.last_saved_include_files = set()
 
     def _create_container_client(self):
         return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False)
@@ -159,35 +159,28 @@ class AzureBlobStorageConnector:
             if s:
                 event = json.loads(s)
                 await self.sentinel.send(event, log_type=self.log_type)
+            self._processed_blobs.append(blob)
             print("Finish processing {}".format(blob['name']))
             logging.info("Finish processing {}".format(blob['name']))
-            await self.save_checkpoint(blob)
             
     def has_errors(self):
         return len(self._processed_blobs) != len(self.blobs)
 
-    async def save_checkpoint(self, blob):
-        async with self.checkpoint_lock:
-            self._processed_blobs.append(blob)
-            self._processed_blob_names.add(blob['name'])
-            include_files = self.get_not_processed_files_names()
-            last_date = self.get_last_blob_date()
-            exlude_files = self.get_last_date_blob_names()
-            cors = []
-            if not self.last_saved_date or self.last_saved_date <= last_date:
-                cors.append(self.checkpoint_manager.post_last_date(last_date))
-            if self.last_saved_exclude_files != exlude_files:
-                cors.append(self.checkpoint_manager.post_exclude_files(exlude_files))
-            if self.last_saved_include_files != include_files:
-                cors.append(self.checkpoint_manager.post_include_files(include_files))
+    @property
+    def _processed_blob_names(self):
+        return set([x['name'] for x in self._processed_blobs])
 
-            if cors:
-                await asyncio.wait(cors)
-                self.last_saved_date = last_date
-                self.last_saved_exclude_files = exlude_files
-                self.last_saved_include_files = include_files
-                print('Checkpoint {} saved'.format(last_date))
-                logging.info('Checkpoint {} saved'.format(last_date))
+    async def save_checkpoint(self):
+        include_files = self.get_not_processed_files_names()
+        last_date = self.get_last_blob_date()
+        exlude_files = self.get_last_date_blob_names()
+        cors = []
+        cors.append(self.checkpoint_manager.post_last_date(last_date))
+        cors.append(self.checkpoint_manager.post_exclude_files(exlude_files))
+        cors.append(self.checkpoint_manager.post_include_files(include_files))
+
+        if cors:
+            await asyncio.wait(cors)
 
     def get_last_blob_date(self):
         if self._processed_blobs:
@@ -215,15 +208,18 @@ class CheckpointManager:
         self.include_files_state_manager = StateManagerAsync(connection_string=conn_string, file_path='include_files')
 
     async def get_last_date(self):
+        logging.info('Checkpoint Manager - getting last_date')
         res = await self.last_date_state_manager.get()
         if res:
             return parse_date(res)
 
     async def post_last_date(self, date: datetime.datetime):
+        logging.info(f'Checkpoint Manager - saving last_date: {date}')
         if date:
             await self.last_date_state_manager.post(date.isoformat())
 
     async def get_exclude_files(self):
+        logging.info('Checkpoint Manager - getting exclude_files')
         res = await self.exclude_files_state_manager.get()
         if res:
             return [row.strip() for row in res.split('\n') if row.strip()]
@@ -231,11 +227,13 @@ class CheckpointManager:
             return []
 
     async def post_exclude_files(self, exclude_files: list):
+        logging.info(f'Checkpoint Manager - saving exclude_files')
         if exclude_files:
             data = '\n'.join(exclude_files)
             await self.exclude_files_state_manager.post(data)
 
     async def script_is_active(self):
+        logging.info('Checkpoint Manager - getting is_active marker')
         res = await self.exec_marker_state_manager.get()
         if res == '1':
             return True
@@ -243,12 +241,15 @@ class CheckpointManager:
             return False
 
     async def mark_script_as_inactive(self):
+        logging.info('Checkpoint Manager - marking script as inactive')
         await self.exec_marker_state_manager.post('0')
 
     async def mark_script_as_active(self):
+        logging.info('Checkpoint Manager - marking script as active')
         await self.exec_marker_state_manager.post('1')
 
     async def get_include_files(self):
+        logging.info('Checkpoint Manager - getting include_files')
         res = await self.include_files_state_manager.get()
         if res:
             return set([row.strip() for row in res.split('\n') if row.strip()])
@@ -256,6 +257,7 @@ class CheckpointManager:
             return set()
 
     async def post_include_files(self, include_files: list):
+        logging.info(f'Checkpoint Manager - saving include_files')
         if include_files:
             data = '\n'.join(include_files)
         else:
