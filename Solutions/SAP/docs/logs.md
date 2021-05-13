@@ -52,4 +52,4 @@ To "release" these services, implement the following SAP note in the backend: [S
 [sapdocxbp3]: https://archive.sap.com/documents/docs/DOC-14201
 [xbp3note]: https://launchpad.support.sap.com/#/notes/2910263
 [sapctlws]: https://www.sap.com/documents/2016/09/0a40e60d-8b7c-0010-82c7-eda71af511fa.html
-[PreviewTerms]: https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/
+[PreviewTerms]: https://azure.microsoft.com/support/legal/preview-supplemental-terms/
