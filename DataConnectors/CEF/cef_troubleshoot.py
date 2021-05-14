@@ -27,9 +27,13 @@
 #   Syslog-ng: 2.1 - 3.22.1
 #   Rsyslog: v8
 import sys
+import os.path
 import select
 import subprocess
 import time
+
+# TODO: Stop using subprocesses, please.
+# TODO: Simplify logic so syslog type is detected at begining, populate statics accordingly. Avoid need for so many if-then checks
 
 daemon_port = "514"
 agent_port = "25226"
@@ -213,26 +217,21 @@ def security_enhanced_linux():
 
 def rsyslog_get_cef_log_counter():
     '''
-    Count using tac and wc -l the amount of CEF messages arrived and see it is in increasing
-    count
+    Count (using grep) the amount of CEF messages arrived and see it is in increasing count
     :return:
     '''
     print("Validating the CEF\\ASA logs are received and are in the correct format when received by syslog daemon")
-    print_notice("sudo tac /var/log/syslog")
-    tac = subprocess.Popen(["sudo", "tac", syslog_log_dir[0]], stdout=subprocess.PIPE)
-    grep = subprocess.Popen(["grep", "-E", "CEF\|ASA"], stdin=tac.stdout, stdout=subprocess.PIPE)
-    count_lines = subprocess.Popen(["wc", "-l"], stdin=grep.stdout, stdout=subprocess.PIPE)
+    print_notice("sudo grep -cE \"CEF|ASA\" /var/log/syslog")
+    count_lines = subprocess.Popen(["sudo", "grep", "-cE", "CEF|ASA", syslog_log_dir[0]], stdout=subprocess.PIPE)
     o, e = count_lines.communicate()
-    output = o.decode(encoding='UTF-8')
+    output = o.decode(encoding='UTF-8').rstrip('\n')
     if e is None:
         print("Located " + str(output) + " CEF\\ASA messages")
         return int(output)
     elif "No such file or directory" in output:
         print("Validating the CEF\\ASA logs are received and are in the correct format when received by syslog daemon")
-        print_notice("sudo tac /var/log/messages")
-        tac = subprocess.Popen(["sudo", "tac", syslog_log_dir[1]], stdout=subprocess.PIPE)
-        grep = subprocess.Popen(["grep", "-E", "CEF\|ASA"], stdin=tac.stdout, stdout=subprocess.PIPE)
-        count_lines = subprocess.Popen(["wc", "-l"], stdin=grep.stdout, stdout=subprocess.PIPE)
+        print_notice("sudo grep -cE \"CEF|ASA\" /var/log/messages")
+        count_lines = subprocess.Popen(["sudo", "grep", "-cE", "CEF|ASA", syslog_log_dir[1]], stdout=subprocess.PIPE)
         o, e = count_lines.communicate()
         output = o.decode(encoding='UTF-8')
         if e is None:
@@ -329,13 +328,22 @@ def check_file_in_directory(file_name, path):
     :param file_name:
     :return: return True if it is found elsewhere False
     '''
-    current_dir = subprocess.Popen(["ls", "-ltrh", path], stdout=subprocess.PIPE)
-    grep = subprocess.Popen(["grep", "-i", file_name], stdin=current_dir.stdout, stdout=subprocess.PIPE)
-    o, e = grep.communicate()
-    output = o.decode(encoding='UTF-8')
-    if e is None and file_name in output:
+
+    # OMG No. Just NO. ***DON'T DO THIS!***
+    # >_<
+#    current_dir = subprocess.Popen(["ls", "-ltrh", path], stdout=subprocess.PIPE)
+#    grep = subprocess.Popen(["grep", "-i", file_name], stdin=current_dir.stdout, stdout=subprocess.PIPE)
+#    o, e = grep.communicate()
+#    output = o.decode(encoding='UTF-8')
+#    if e is None and file_name in output:
+#        return True
+#    return False
+
+    # It's Python, all you need is built-in, :)
+    if os.path.exists(path+"/"+file_name):
         return True
-    return False
+    else:
+        return False
 
 
 def locate_check(process_name):
@@ -519,6 +527,9 @@ def validate_daemon_configuration_content(daemon_name, valid_content_tokens_arr)
         "For extra verification please make sure the configuration content is as defined in the documentation.")
     # set path according to the daemon
     path = rsyslog_daemon_forwarding_configuration_path if daemon_name == rsyslog_daemon_name else syslog_ng_daemon_forwarding_configuration_path
+
+    # TODO: Validate the file exists before trying to analyze contents
+    
     if not file_contains_string(valid_content_tokens_arr, path):
         return False
     else:
