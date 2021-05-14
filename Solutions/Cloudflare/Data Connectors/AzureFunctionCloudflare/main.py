@@ -17,11 +17,11 @@ logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(l
 
 
 # interval of script execution
-SCRIPT_EXECUTION_INTERVAL_MINUTES = 2
+SCRIPT_EXECUTION_INTERVAL_MINUTES = 5
 # if ts of last processed file is older than "now - MAX_PERIOD_MINUTES" then script will get events from "now - MAX_PERIOD_MINUTES"
 MAX_PERIOD_MINUTES = 60 * 24 * 7
 
-MAX_SCRIPT_EXEC_TIME_MINUTES = 35
+MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 
 
 AZURE_STORAGE_CONNECTION_STRING = os.environ['AZURE_STORAGE_CONNECTION_STRING']
@@ -139,13 +139,16 @@ class AzureBlobStorageConnector:
     def check_if_script_runs_too_long(self):
         now = int(time.time())
         duration = now - self.script_start_time
-        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.9)
+        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
         return duration > max_duration
 
     async def delete_old_blobs(self):
         if self._blobs_to_delete:
-            all_blobs = list(divide_chunks(self._blobs_to_delete, 100))
+            all_blobs = list(divide_chunks(self._blobs_to_delete, 50))
             for blobs in all_blobs:
+                if self.check_if_script_runs_too_long():
+                    logging.info('Script is running too long. Saving progress and exit.')
+                    return
                 container_client = self._create_container_client()
                 async with container_client:
                     await asyncio.wait([self._delete_blob(blob, container_client) for blob in blobs])
