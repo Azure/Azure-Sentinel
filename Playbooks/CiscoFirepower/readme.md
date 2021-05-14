@@ -62,11 +62,14 @@ Custom connector should be deployed in the Resource Group where the playbooks th
     * Connector name: Please enter the custom connector(ex:Cisco Firepower connector)
     * Service Endpoint: The URL to the Cisco Firepower REST API
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flaurens1984%2FAzure-Sentinel%2Ffeature%2FCiscoFirepowerConnector%2FPlaybooks%2FCiscoFirepowerConnector%2FCustomConnector%2Fazuredeploy.json" target="_blank">
+
+
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flaurens1984%2FAzure-Sentinel%2Ffeature%2FCiscoFirepowerConnector%2FPlaybooks%2FCiscoFirepowerConnector%2FCustomConnector%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy.json" target="_blank">
    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
 </a>
 
@@ -76,18 +79,18 @@ Custom connector should be deployed in the Resource Group where the playbooks th
     * Connector name: Please enter the custom connector(ex:Cisco Firepower connector)
     * Service Endpoint: The URL to the Cisco Firepower REST API
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flaurens1984%2FAzure-Sentinel%2Ffeature%2FCiscoFirepowerConnector%2FPlaybooks%2FCiscoFirepowerConnector%2FCustomConnector%2Fazuredeploy-gateway.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy-gateway.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flaurens1984%2FAzure-Sentinel%2Ffeature%2FCiscoFirepowerConnector%2FPlaybooks%2FCiscoFirepowerConnector%2FCustomConnector%2Fazuredeploy-gateway.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy-gateway.json" target="_blank">
    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
 </a>
 
 <br><br>
 
 ## 2. Deploy the required playbook template (or create your own playbook from scratch)
-This integration offers 3 playbook templates that blocks IP in 3 different methods. Each one has it's own documentation an quick deployment button:
+This integration offers 3 playbook templates that blocks IP in 3 different methods. Each one has it's own documentation and quick deployment button:
 * [Cisco Firepower - Add FQDN to a Network Group object](./CiscoFirepower-BlockFQDN-NetworkGroup#deployment-instructions)
 * [Cisco Firepower - Add IP Addresses to a Network Group object](./CiscoFirepower-BlockIP-NetworkGroup#deployment-instructions)
 * [Cisco Firepower - Add IP Addresses to a Network Group object with Teams](./CiscoFirepower-BlockIP-Teams#deployment-instructions)
