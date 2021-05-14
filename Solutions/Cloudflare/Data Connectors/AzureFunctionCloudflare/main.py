@@ -144,9 +144,11 @@ class AzureBlobStorageConnector:
 
     async def delete_old_blobs(self):
         if self._blobs_to_delete:
-            container_client = self._create_container_client()
-            async with container_client:
-                await asyncio.wait([self._delete_blob(blob, container_client) for blob in self._blobs_to_delete])
+            all_blobs = list(divide_chunks(self._blobs_to_delete, 100))
+            for blobs in all_blobs:
+                container_client = self._create_container_client()
+                async with container_client:
+                    await asyncio.wait([self._delete_blob(blob, container_client) for blob in blobs])
 
     async def _delete_blob(self, blob, container_client):
         logging.info("Deleting blob {}".format(blob['name']))
