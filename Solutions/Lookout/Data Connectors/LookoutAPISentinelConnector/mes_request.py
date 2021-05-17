@@ -30,7 +30,7 @@ class MESRequest:
         
         #For very first time, vault doesn't have any stream position saved, so start from 0
         if not self.stream_position:
-            self.stream_position = "now"
+            self.stream_position = 0
 
         self.stale_token_errors = ["REVOKED_REFRESH_TOKEN", "EXPIRED_TOKEN"]
 

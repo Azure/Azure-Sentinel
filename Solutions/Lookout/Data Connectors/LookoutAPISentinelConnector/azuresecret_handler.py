@@ -42,7 +42,8 @@ class AzureSecretHandler:
         except Exception as e:
             # Anything else that is not Azure related (network, stdlib, etc.), possible to raise if needed
             logging.error("Exception during get value from Azure Vault %s" % str(e))
-            return None
+            raise
+            #return None
 
     def set_secret(self, key, value):
         #As per the Azure Vault rules, Key will be strictly follow the format '^[0-9a-zA-Z-]+$'.

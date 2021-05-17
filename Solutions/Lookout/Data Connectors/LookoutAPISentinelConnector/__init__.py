@@ -37,6 +37,10 @@ if(not match):
 
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
+    '''
+    Build API Signature required to send events to Sentinel
+    - Returns auth signature
+    '''
     x_headers = 'x-ms-date:' + date
     string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
     bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
@@ -47,6 +51,9 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 
 
 def post_data(body):
+    '''
+    Method to send data to sentinel via POST HTTP Request
+    '''
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
@@ -68,7 +75,9 @@ def post_data(body):
         return None
 
 def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_uri= None, ent_index= 0):
-    
+    '''
+    Fetching events for an ENT and syncing fetched events into sentinel
+    '''
     logging.info("Events fetching for ent_name %s..." % str(ent_name))
     mes = MESRequest(lookout_mes_uri, ent_name, api_key, KVUri, ent_index)
     
@@ -92,7 +101,7 @@ def main(mytimer: func.TimerRequest)  -> None:
     #Check for MES credentials and fetch events using RISK API
     if api_key and ent_name:
         logging.info("Fetching RISK API Events")
-        # For now we are passing hardcoded ent index which will be dynamic once 
-        # we finalize multiple tenant process
+        # For now we are passing hardcoded ent index to 0 
+        #threading mechanism is not supported in Azure function
         
         single_ent_events(KVUri, ent_name, api_key, lookout_mes_uri, 0)
