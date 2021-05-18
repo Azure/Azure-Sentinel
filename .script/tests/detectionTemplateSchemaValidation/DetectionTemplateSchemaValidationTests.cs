@@ -40,8 +40,12 @@ namespace Kqlvalidations.Tests
                 var validationContext = new ValidationContext(templateObject);
                 Validator.ValidateObject(templateObject, validationContext, true);
             });
-
-            exception.Should().BeNull();
+            string exceptionToDisplay = string.Empty;
+            if (exception != null)
+            {
+                exceptionToDisplay = $"In template {detectionsYamlFileName} there was an error while parsing: {exception.Message}";
+            }
+            exception.Should().BeNull(exceptionToDisplay);
         }
 
         [Theory]

@@ -43,7 +43,10 @@ requiredDataConnectors:
       - AWSCloudTrail 
   - connectorId: MicrosoftThreatProtection
     dataTypes: 
-      - DeviceNetworkEvents 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics  
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -133,7 +136,27 @@ query:  |
   | where isnotempty(RemoteIP)  
   | where RemoteIP in (IPList)  
   | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName  
-  ) 
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = SourceHost
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallNetworkRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = SourceHost
+  )
   ) 
 entityMappings:
   - entityType: Account
@@ -148,3 +171,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
