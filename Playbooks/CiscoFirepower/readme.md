@@ -37,7 +37,7 @@ addresses' contains the IP addresses Azure uses for your Logic App to call the c
 able to validate the SSL certificate used.
 
 #### Using Logic Apps gateway
-On a server in your network install the on-premises data gateway, see [Install on-premises data gateway for Azure Logic Apps](https://docs.microsoft.com/en-us/azure/logic-apps/logic-apps-gateway-install).
+On a server in your network install the on-premises data gateway, see [Install on-premises data gateway for Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-install).
 The server on which the data gateway is installed needs to be able to reach the Cisco Firepower REST API. Also the SSL
 certificate used by the Cisco Firepower REST API needs to be able to be validated on the server, including the
 certificate chain.
@@ -45,7 +45,7 @@ When deploying the Cisco Firepower connector choose the option via on-premises d
 When using the connector you will be asked to select the data gateway you want to use.
 
 #### Secure tunnel between your network and Azure
-Create an Azure Virtual Network and connect it to your on-premise network using Azure VPN, for information see [Overview of partner VPN device configurations](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-3rdparty-device-config-overview). When creating the Logic App make sure to select the option 'Associate with integration service environment'. When the Logic App is created you can connect it to the Azure Virtual Network. See (Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment [Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment (ISE)](https://docs.microsoft.com/en-us/azure/logic-apps/connect-virtual-network-vnet-isolated-environment)] and [Access to Azure Virtual Network resources from Azure Logic Apps by using integration service environments (ISEs)](https://docs.microsoft.com/en-us/azure/logic-apps/connect-virtual-network-vnet-isolated-environment-overview) for documentation.
+Create an Azure Virtual Network and connect it to your on-premise network using Azure VPN, for information see [Overview of partner VPN device configurations](https://docs.microsoft.com/azure/vpn-gateway/vpn-gateway-3rdparty-device-config-overview). When creating the Logic App make sure to select the option 'Associate with integration service environment'. When the Logic App is created you can connect it to the Azure Virtual Network. See (Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment [Connect to Azure virtual networks from Azure Logic Apps by using an integration service environment (ISE)](https://docs.microsoft.com/azure/logic-apps/connect-virtual-network-vnet-isolated-environment)] and [Access to Azure Virtual Network resources from Azure Logic Apps by using integration service environments (ISEs)](https://docs.microsoft.com/azure/logic-apps/connect-virtual-network-vnet-isolated-environment-overview) for documentation.
 
 <a name="deployment"></a>
 
