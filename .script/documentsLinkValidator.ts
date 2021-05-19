@@ -4,7 +4,7 @@ import fs from "fs";
 import * as logger from "./utils/logger";
 
 export async function IsFileContainsLinkWithLocale(filePath: string): Promise<ExitCode> {
-  if (filePath.endsWithAny("csv")) { 
+  if (filePath.endsWithAny(["csv"])) { 
     return ExitCode.SUCCESS;
   }
 
