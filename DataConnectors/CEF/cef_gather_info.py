@@ -64,6 +64,8 @@ command_dict = {
     "agent_log_snip": ["sudo tail -15 /var/opt/microsoft/omsagent/log/omsagent.log"],
     "agent_config_dir": ["sudo ls -lR /etc/opt/microsoft/omsagent/"],
     "agent_cef_config": ["sudo cat /etc/opt/microsoft/omsagent/conf/omsagent.d/security_events.conf"],
+    "messages_log_snip": ["sudo tail -15 /var/log/messages"],
+    "syslog_log_snip": ["sudo tail -15 /var/log/syslog"],
     "tcpdump": ["sudo timeout 2 tcpdump -A -ni any port 25226 -vv"],
     "top_processes": ["sudo top -bcn1 -w512", "head -n 20"],
     "omsagent_process": ["sudo ps -aux", "grep omsagent"]
