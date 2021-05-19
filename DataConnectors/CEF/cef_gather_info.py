@@ -37,7 +37,7 @@ class SystemInfo:
                                                                                                                   '%%')
 
 
-script_version = '1.0'
+script_version = '1.1'
 output_file_path = '/tmp/cef_get_info'
 
 command_dict = {
