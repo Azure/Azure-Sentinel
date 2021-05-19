@@ -4,10 +4,6 @@ import fs from "fs";
 import * as logger from "./utils/logger";
 
 export async function IsFileContainsLinkWithLocale(filePath: string): Promise<ExitCode> {
-  if (filePath.endsWithAny(["csv"])) { 
-    return ExitCode.SUCCESS;
-  }
-
   const content = fs.readFileSync(filePath, "utf8");
   if (/(https:\/\/docs.microsoft.com|https:\/\/azure.microsoft.com)(\/[a-z]{2}-[a-z]{2})/i.test(content)) {
       throw new Error();
