@@ -16,7 +16,7 @@ requiredDataConnectors:
     dataTypes:
       - SecurityEvent
 queryFrequency: 1d
-queryPeriod: 7d
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -25,20 +25,20 @@ relevantTechniques:
   - T1005
 query: |
   // Adjust this to use a longer timeframe to identify ADFS servers
-  let lookback = 6d;
+  //let lookback = 0d;
   // Adjust this to adjust detection timeframe
-  let timeframe = 1d;
+  //let timeframe = 1d;
   // SamAccountName of AD FS Service Account. Filter on the use of a specific AD FS user account
   //let adfsuser = 'adfsadmin';
   // Identify ADFS Servers
   let ADFS_Servers = (
       SecurityEvent
-      | where TimeGenerated > ago(timeframe+lookback)
+      //| where TimeGenerated > ago(timeframe+lookback)
       | where EventSourceName == 'AD FS Auditing'
       | distinct Computer
   );
   SecurityEvent
-      | where TimeGenerated > ago(timeframe)
+      //| where TimeGenerated > ago(timeframe)
       | where Computer in~ (ADFS_Servers)
       // A token of type 'http://schemas.microsoft.com/ws/2006/05/servicemodel/tokens/SecureConversation'
       // for relying party '-' was successfully authenticated.
@@ -48,7 +48,7 @@ query: |
   | join kind=inner
   (
       SecurityEvent
-      | where TimeGenerated > ago(timeframe)
+      //| where TimeGenerated > ago(timeframe)
       | where Computer in~ (ADFS_Servers)
       // Events to identify caller identity from event 412
       | where EventID == 501
@@ -68,19 +68,31 @@ query: |
       | extend EventData = parse_xml(EventData).EventData.Data
       | mv-expand bagexpansion=array EventData
       | evaluate bag_unpack(EventData)
-      | extend Key=tostring(['@Name']), Value=['#text']
+      | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
       | evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)
+      | extend DestPort = column_ifexists("DestPort", ""),
+            Direction = column_ifexists("Direction", ""),
+            Application = column_ifexists("Application", ""),
+            DestAddress = column_ifexists("DestAddress", ""),
+            SourceAddress = column_ifexists("SourceAddress", ""),
+            SourcePort = column_ifexists("SourcePort", "")
       // Look for inbound connections from endpoints on port 80
-      | where DestPort == 80 and Direction == '%%14592' and DestAddress != '::1' and Application == 'System'
+      | where DestPort == 80 and Direction == '%%14592' and Application == 'System'
+      | where DestAddress !in ('::1','0:0:0:0:0:0:0:1') 
   )
   on $left.Computer == $right.Computer
   | project TimeGenerated, Computer, ClaimsName, SourceAddress, SourcePort
+  | extend HostCustomEntity = Computer, AccountCustomEntity = ClaimsName, IPCustomEntity = SourceAddress
 entityMappings:
+- entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: Computer
+        columnName: HostCustomEntity
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceAddress
+        columnName: IPCustomEntity
