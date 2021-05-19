@@ -99,6 +99,7 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
     return authorization
 
 # Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
+
 def post_data(customer_id, shared_key, body, log_type, workbencheIds):
     method = 'POST'
     content_type = 'application/json'
