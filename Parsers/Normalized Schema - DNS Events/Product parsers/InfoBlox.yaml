@@ -24,22 +24,45 @@ ParserQuery: |
       | extend ResponseTime = todatetime(Parser[0]),
                Log_Type = tostring(Parser[1]),
                RawData_subString = tostring(Parser[3])
+      | where Log_Type == "client"
       | project-away Parser;
     RawData 
-      | where Log_Type == "client"
-      | extend dnsclient = extract_all(@"^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\sview\s(\S+)\:\s((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)
-      | project-away RawData_subString
-      | mv-expand todynamic(dnsclient)
-      | extend 
-        SrcIpAddr = tostring(dnsclient[1]),
-        SrcPortNumber = tostring(dnsclient[2]),
-        NetworkProtocol = tostring(dnsclient[7]),
-        Query = tostring(dnsclient[8]),
-        QueryClassName = tostring(dnsclient[9]),
-        RecordType = tostring(dnsclient[10]),
-        ResponseCodeName = tostring(dnsclient[12]),
-        Flags = tostring(dnsclient[13]),
+    | extend dnsdata=tostring(extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0][3])
+    | extend NetworkDirection=iff(dnsdata has "response:", "response", "request")
+    | extend dnsclient=iff(NetworkDirection=='response'
+                //<client ip>#port <UDP or TCP>: [view: DNS view] query: <queried domain name> <class name> <type name> response: <rcode> <flags> [<RR in text format>; [<RR in text format>;] ...]
+                , extract_all(@'^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+):? (UDP|TCP):? (view: DNS view)?query: (\S+) ([A-Z]+) (\S+) response:? ([A-Z]+) (\S+)(([^;]+;\s*)*)',dnsdata)[0]
+                //<client IP>#<port> query: <query_Domain name> <class name> <type name> <- or +>[SETDC] <(name server ip)>
+                , extract_all(@'^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+):? query: (\S+) (\S+) (\S+) ([+-]) \(([0-9.]+)\)',dnsdata)[0])
+    | extend
+    // ******************* Mandatory
+         EventCount=int(1),
+         EventStartTime=todatetime(TimeGenerated),
+         EventProduct="Infoblox DNS",
+         EventVendor="Infoblox",
+         EventSchemaVersion="0.0.1",
+         Dvc=Computer,
+         EventType="lookup", /// ???
+        EventResult=iff(NetworkDirection=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),
+         EventResultDetails=iff (NetworkDirection=='response',tostring(dnsclient[8]),""), // => ResponseCodeNames
+         // TimeGenerated, // not handled by schema, but we need to preserve it
+         SrcIpAddr = tostring(dnsclient[1]),
+         NetworkDirection=iff(dnsclient has "response:", "response","request"), ///????
         // 
-        EventMessage = tostring(dnsclient[14]);
-    };
-Infoblox
+        SrcPortNumber = toint(dnsclient[2]),
+        NetworkProtocol = iff (NetworkDirection=='reaponse', tostring(dnsclient[3]),""),        
+        Query = iff (NetworkDirection=='response',tostring(dnsclient[5]), tostring(dnsclient[3])),
+        QueryClassName = iff (NetworkDirection=='response',tostring(dnsclient[6]),tostring(dnsclient[4])),
+        QueryTypeName = iff (NetworkDirection=='response',tostring(dnsclient[7]),tostring(dnsclient[5])),
+        ResponseCodeName = iff (NetworkDirection=='response',tostring(dnsclient[8]),""),
+        Flags =iff (NetworkDirection=='response', tostring(dnsclient[9]),tostring(dnsclient[6])),
+        // 
+        EventMessage = iff (NetworkDirection=='response',tostring(dnsclient[-2]),""),
+        DstIpAddr=iff(NetworkDirection=='response','',dnsclient[-1])
+       // **************Aliases
+    | extend 
+        ResponseCodeName=EventResultDetails, 
+        //DomainCategory=UrlCategory,
+        Domain=Query,
+        IpAddr=SrcIpAddr;
+    };'''

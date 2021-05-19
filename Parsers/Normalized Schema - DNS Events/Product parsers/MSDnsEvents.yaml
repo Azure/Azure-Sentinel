@@ -16,26 +16,71 @@ Description: |
   TODO
 ParserName: MSDnsEvents_DnsEvents_Normalized
 ParserQuery: |
-  let MSDNSEvents=(){
-  DnsEvents
+  let RCodes=(s:int){
+    case(s==0, "NoError"
+    , isnull(s),'-'
+    , s==1, "FormErr"
+    , s==2,"ServFail"
+    , s==3,'NXDomain'
+    , s==4,'NotImp'
+    , s==5,'Refused'
+    , s==6,'YXDomain'
+    , s==7,'YXRRSet'
+    , s==8,'NXRRSet'
+    , s==9,'NotAuth'
+    , s==10,'NotZone'
+    , s==11,'DSOTYPENI'
+    , s==12-15,'Unassigned'
+    , s==16,'BADVERS'
+    , s==16,'BADSIG'
+    , s==17,'BADKEY'
+    , s==18,'BADTIME'
+    , s==19,'BADMODE'
+    , s==20,'BADNAME'
+    , s==21,'BADALG'
+    , s==22,'BADTRUNC'
+    , s==23,'BADCOOKIE'
+    , s < 3840,'Unassigned'
+    , s < 4095,'Reserved for Private Use'
+    , s < 65534,'Unassigned'
+    , s < 65535,'Reserved'
+    , 'Unkown')
+  };
+  let DNSQuery_MS=(){
+    DnsEvents
   | extend 
-  EventMessage = Message
-  ,EventSeverity = Severity
-  ,EventType = TaskCategory
-  ,EventResult = Result
-  ,EventResultDetails = ResultCode
+  // ******************* Mandatory
+        Type,
+         EventCount=int(1),
+         EventStartTime=TimeGenerated,
+         EventVendor = "Microsoft",
+         EventProduct = "Microsoft DNS Server",
+         EventSchemaVersion="0.0.1",
+         Dvc=Computer ,
+         EventResult = Result, 
+         EventResultDetails = RCodes(ResultCode), // int 
+         //
+         TimeGenerated, // not handled by schema, but we need to preserve it
+         EventEndTime=TimeGenerated,
+         _ResourceId,
+         SrcIpAddr = ClientIP,
+         NetworkDirection='response', //////////////
+         QueryTypeName=QueryType             
+  ,EventMessage = Message
+  ,EventSeverity = tostring(Severity)
   ,EventReportUrl = ReportReferenceLink
-  ,SrcIpAddr = ClientIP
-  ,DnsResponseName = IPAddresses
-  ,DnsResponseCount = iff( isempty (IPAddresses) ,0, array_length(split(IPAddresses,',')))
-  ,MessageType = QueryType
-  ,DnsQuery = Name
-  ,DnsMultipleResponses = split(IPAddresses,',')
-  ,DnsQueryType = QueryType
-  ,DnsResponseCode = ResultCode
-  ,EventSubType = SubType
-  ,EventVendor = "Microsoft"
-  ,EventProduct = "Microsoft DNS Server"
+  ,ResponseNames = split(IPAddresses, ",")
+  ,ResponseCount = iff( isempty (IPAddresses) ,0, array_length(split(IPAddresses,',')))
+  ,Query = Name
+  ,ResponseCode = ResultCode
+  ,EventType = SubType
   ,DvcHostname = Computer
-  ,EventResourceId = _ResourceId};
+      // **************Aliases
+    | extend 
+        ResponseCodeName=EventResultDetails, 
+        //DomainCategory=UrlCategory,
+        Domain=Query,
+        IpAddr=SrcIpAddr
+    | project-away
+        QueryType}; // called "QueryTypeName"};;
   MSDNSEvents
