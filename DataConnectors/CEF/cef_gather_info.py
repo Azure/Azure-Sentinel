@@ -112,7 +112,8 @@ def run_command(command):
         o, e = command_to_run.communicate()
     except Exception:
         pass
-    o = o.decode(encoding='UTF-8')
+    if not isinstance(o, str):
+        o = o.decode(encoding='UTF-8')
     command_object = SystemInfo(command, o)
     return command_object
 
