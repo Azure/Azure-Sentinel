@@ -341,7 +341,7 @@ do
 		sdkok=$?
 		sdknum=$(unzip -Z1 $sdkfileloc |  wc -l)
 	else 
-		if [ $(du "$sdkfileloc" | awk '{print $1+0}') -ge 16000 ] 
+		if [ $(du "$sdkfileloc" | awk '{print $1+0}') -ge 13000 ] 
 		then 
 			sdkok=0 
 			sdknum=34 
