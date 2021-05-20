@@ -198,7 +198,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     elseif ($objectKeyLowercase -eq "playbooks") {
                         Write-Host "Generating Playbook using $file"
                         $playbookData = $json
-                        $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name" })
+                        $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
                         if ($playbookCounter -eq 1) {
                             # If a playbook exists, add CreateUIDefinition step before playbook elements while handling first playbook.
                             $playbookStep = [PSCustomObject] @{
