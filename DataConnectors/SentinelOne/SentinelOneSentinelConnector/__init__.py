@@ -11,8 +11,7 @@ import logging
 from .state_manager import StateManager
 
 
-user = os.environ['SentinelOneUser']
-passwd = os.environ['SentinelOnePassword']
+token = os.environ['SentinelOneAPIToken']
 domain = os.environ['SentinelOneUrl']
 table_name = "SentinelOne"
 chunksize = 10000
@@ -32,29 +31,13 @@ if(not match):
 class SOne():
 
     def __init__(self):
-        self.user = user
-        self.passwd = passwd
         self.domain = domain
-        self.token = self.auth()
+        self.header = {
+            'Authorization': 'ApiToken {}'.format(token),
+            'Content-Type': 'application/json',
+            }
         self.from_date, self.to_date = self.generate_date()
         self.results_array = []
-
-    def auth(self):
-        endpoint = '/web/api/v2.0/users/login'
-        auth_header = {
-            'username': self.user,
-            'password': self.passwd
-            }
-        r = requests.post(self.domain + endpoint, json=auth_header)
-        if (r.status_code >= 200 and r.status_code <= 299):
-            self.token = (r.json().get("data")).get("token")
-            self.header =   {
-                                'Authorization': 'Token {}'.format(self.token),
-                                'Content-Type': 'application/json'
-                            }               
-            return self.header
-        else:
-            logging.error("Login to SentinelOne failed. Pls check credentials. Error code: {}".format(r.status_code))
 
     def generate_date(self):
         current_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=10)
@@ -67,14 +50,14 @@ class SOne():
             past_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         state.post(current_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
         return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
-
-    def get_report(self, report_type_suffix, next_page_token = None, params = None):
-        if next_page_token:
-            params.update({"cursor": next_page_token})
+    
+    def get_report(self, report_type_suffix, report_type_name, params = None):
         try:
-            r = requests.get(self.domain + report_type_suffix, headers=self.header, params=params)
+            r = requests.get(self.domain + report_type_suffix, headers = self.header, params = params)
             if r.status_code == 200:
-                return r.json()
+                self.results_array_join(r.json(), report_type_name)
+                next_page_token = (r.json().get('pagination')).get('nextCursor')
+                return next_page_token
             elif r.status_code == 400:
                 logging.error("Invalid user input received. See error details for further information."
                       " Error code: {}".format(r.status_code))
@@ -91,57 +74,37 @@ class SOne():
             self.results_array.append(element)
 
     def reports_list(self):
-        params_created_events = {
-            "limit": 1000,
-            "createdAt__gt": self.from_date,
-            "createdAt__lt": self.to_date
-        }
-        params_updated_events = {
-            "limit": 200,
-            "updatedAt__gt": self.from_date,
-            "updatedAt__lt": self.to_date
-        }
         reports_api_requests_dict = \
             {
-                "activities_created_events": {"api_req": "/web/api/v2.1/activities", "name": "Activities.",
-                               "params": params_created_events },
-                "agents_created_events": {"api_req": "/web/api/v2.1/agents", "name": "Agents.",
-                               "params": params_created_events},
-                "agents_updated_events": {"api_req": "/web/api/v2.1/agents", "name": "Agents.",
-                               "params": params_updated_events},
-                "groups_updated_events": {"api_req": "/web/api/v2.1/groups", "name": "Groups.",
-                               "params": params_updated_events},
-                "threats_created_events": {"api_req": "/web/api/v2.1/threats", "name": "Threats.",
-                               "params": params_created_events},
-                "threats_updated_events": {"api_req": "/web/api/v2.1/threats", "name": "Threats.",
-                               "params": params_updated_events},
-                "alerts_created_events": {"api_req": "/web/api/v2.1/cloud-detection/alerts", "name": "Alerts.",
-                               "params": params_created_events},
+                "activities_created_events": {"api_req": "/web/api/v2.1/activities", "name": "Activities."},
+                "agents_created_events": {"api_req": "/web/api/v2.1/agents", "name": "Agents."},
+                "agents_updated_events": {"api_req": "/web/api/v2.1/agents", "name": "Agents."},
+                "groups_updated_events": {"api_req": "/web/api/v2.1/groups", "name": "Groups."},
+                "threats_created_events": {"api_req": "/web/api/v2.1/threats", "name": "Threats."},
+                "threats_updated_events": {"api_req": "/web/api/v2.1/threats", "name": "Threats."},
+                "alerts_created_events": {"api_req": "/web/api/v2.1/cloud-detection/alerts", "name": "Alerts."}
             }
         for api_req_id, api_req_info in reports_api_requests_dict.items():
-            api_req = api_req_info["api_req"]
-            api_req_name = api_req_info["name"]
-            api_req_params = api_req_info["params"]
+            api_req = api_req_info['api_req']
+            api_req_name = api_req_info['name']
+            if "created_events" in api_req_id:
+                api_req_params = {
+                    "limit": 1000,
+                    "createdAt__gt": self.from_date,
+                    "createdAt__lt": self.to_date
+                }
+            elif "updated_events" in api_req_id:
+                api_req_params = {
+                    "limit": 200,
+                    "updatedAt__gt": self.from_date,
+                    "updatedAt__lt": self.to_date
+                }
             logging.info("Getting report: {}".format(api_req_id))
-            result = self.get_report(report_type_suffix=api_req,params = api_req_params)
-            if result is not None:
-                try:
-                    next_page_token = (result.get("pagination")).get("nextCursor")
-                except:
-                    next_page_token = None
-                self.results_array_join(result, api_req_name)
-            else:
-                next_page_token = None
+            next_page_token = self.get_report(report_type_suffix = api_req, report_type_name = api_req_name, params = api_req_params)
             while next_page_token:
-                result = self.get_report(report_type_suffix=api_req, next_page_token=next_page_token, params = api_req_params)
-                if result is not None:
-                    try:
-                        next_page_token = (result.get("pagination")).get("nextCursor")
-                    except:
-                        next_page_token = None
-                    self.results_array_join(result, api_req_name)
-                else:
-                    next_page_token = None
+                api_req_params.update({"cursor": next_page_token})
+                next_page_token = self.get_report(report_type_suffix=api_req, report_type_name=api_req_name,
+                                                  params = api_req_params)
 
 class Sentinel:
 
@@ -214,7 +177,6 @@ def main(mytimer: func.TimerRequest) -> None:
     SO.reports_list()
     SOne_class_vars = vars(SO)
     from_date, to_date = SOne_class_vars["from_date"], SOne_class_vars["to_date"]
-    logging.info("Trying to get events for period: {} - {}".format(from_date, to_date))
     results_array = SOne_class_vars["results_array"]
     sentinel.gen_chunks(results_array)
     sentinel_class_vars = vars(sentinel)
