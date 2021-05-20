@@ -42,7 +42,9 @@ Image has been downloaded - Press <Enter> key to continue with the Update'
 contlist=$(docker container ls -a | grep ".*sentinel.*sapcon" | awk '{print $1}')
 
 while IFS= read -r contname
-do
+do	
+	echo Updating $cont....
+	cont=$(docker ps -a --filter id=$contname --format '{{.Names}}')
 	if [  ! -z $contname ]
 	then
 		sysfileloc=$(docker inspect -f '{{ .Mounts }}' $contname | awk 'NR==1 {print $2}')
@@ -57,45 +59,28 @@ do
 			fi
 			
 			contstate=$(docker inspect --format='{{.State.Running}}' $contname )
-			echo $contstate 
-			pause 'press enter'
+			
+			# pause 'press enter'
 			if [ $contstate == "false" ]
 			then
-				echo 'This container is stopped, enter "yes" to update or "skip" to continue without updating'
-				echo 'Your Answer: ' 
-				read update
-				while [ "$update" != "yes" ] || [ "$update" != "skip" ]
-				do
-					echo 'This container is stopped, enter "yes" to update or "skip" to continue without updating'
-					echo 'Your Answer: ' 
-					read update
-				done
-				if [ "$update" == "yes" ]
-				then
 					docker cp $contname:$sdkfileloc $(pwd)
 					docker container rm $contname >/dev/null
-					docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
+					docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $cont $dockerimage >/dev/null
 					docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
 					echo ''
-					echo 'Container "'"$contname"'" was updated - plase start the app by running "docker start '"$contname"'"'
-
-
-				else 
-					echo ''
-					echo 'Container "'"$contname"'" was not updated"'
-				fi
+					echo 'Container "'"$cont"'" was updated - please start the app by running "docker start '"$cont"'"'
 			else
 				docker cp $contname:$sdkfileloc $(pwd)
 				docker stop $contname >/dev/null
 				docker container rm $contname >/dev/null
-				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
+				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $cont $dockerimage >/dev/null
 				docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
 				docker start $contname >/dev/null
 				echo ''
-				echo 'Container "'"$contname"'" was updated'
+				echo 'Container "'"$cont"'" was updated'
 			fi
 		else
-			echo 'Container "'"$contname"'" cannot be updated - The mount point is empty'
+			echo 'Container "'"$cont"'" cannot be updated - The mount point is empty'
 		fi
 	else
 		echo ''
