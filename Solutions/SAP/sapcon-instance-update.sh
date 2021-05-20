@@ -4,7 +4,7 @@ echo 'Microsoft Azure Sentinel SAP Continuous Threat Monitoring.
 SAP ABAP Logs Connector - Limited Private Preview
 
 Copyright (c) Microsoft Corporation. This preview software is Microsoft Confidential, and is subject to your Non-Disclosure Agreement with Microsoft. 
-You may use this preview software internally and only in accordance with the Azure preview terms, located at https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/  
+You may use this preview software internally and only in accordance with the Azure preview terms, located at https://azure.microsoft.com/support/legal/preview-supplemental-terms/  
 
 Microsoft reserves all other rights
 ****'
