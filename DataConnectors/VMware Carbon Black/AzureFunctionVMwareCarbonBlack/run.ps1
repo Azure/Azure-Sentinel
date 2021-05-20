@@ -61,7 +61,10 @@ function CarbonBlackAPI()
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
     $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-    $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"))
+    $eventURI = "$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"
+    $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)"))
+    
+    #$eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"))
 
     if ($auditLogsResult.success -eq $true)
     {
@@ -84,16 +87,53 @@ function CarbonBlackAPI()
 
     if ($eventsResult.success -eq $true)
     {
-        $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
-        if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
+        $totalResult = $eventsResult.totalResults
+        if($totalResult -lt 100)
         {
-            $responseObj = (ConvertFrom-Json $EventLogsJSON)
-            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
-            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+            $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
+            if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
+            {
+                $responseObj = (ConvertFrom-Json $EventLogsJSON)
+                $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
+                Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+            }
+            else
+            {
+                Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
+            }
         }
-        else
-        {
-            Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
+        else {
+            while($eventsResult.results.Count -le 100 -and $eventsResult.results.Count -ne 0)
+            {
+                if($eventsResult.results.Count -eq 0)
+                {
+                    Write-Host("No new result avaliable , hence out of the pagination while loop block")
+                    break;
+                }
+                
+                $eventURIPagination = "&start=$($start)&rows=$($rows)"    
+                $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)$($eventURIPagination)"))
+                $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
+                if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
+                {
+                    $responseObj = (ConvertFrom-Json $EventLogsJSON)
+                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
+                    Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+                }
+                else
+                {
+                    Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
+                }
+                Write-Host("Total Events result count $($eventsResult.totalResults) `n Events result count : $($eventsResult.results.Count)")
+                if($eventsResult.results.Count -eq 0)
+                {
+                    Write-Host("No result avialible , hence out of the events result pagination block")
+                    break;
+                }
+
+                Write-Host("Pagniation starts from $($start) upto maximum next 100 events result")
+                $start +=100
+            }
         }
     }
     else
