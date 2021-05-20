@@ -114,7 +114,8 @@ function CarbonBlackAPI()
                     break;
                 }
 
-                $eventURIPagination = "&start=$($start)&rows=$($rows)"    
+                $eventURIPagination = "&start=$($start)&rows=$($rows)"
+                Write-Host("Pagination URI : $($eventURI)$($eventURIPagination)")  
                 $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)$($eventURIPagination)"))
                 $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
                 if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
