@@ -293,7 +293,7 @@ Enter the full file location path of your downloaded SAP NetWeaver SDK zip. To d
 
 Select SAP NW RFC SDK 7.50 -> Linux on X86_64 64BIT -> Download the latest version
 
-Example: /home/user/nwrfc750P_7-70002752.zip'
+Example: /home/user/nwrfc750P_x-70002752.zip'
 
 	read -p 'SDK file location: ' sdkfileloc 
 	
@@ -306,7 +306,7 @@ Enter the full file location path of your downloaded SAP NetWeaver SDK zip. To d
 
 Select SAP NW RFC SDK 7.50 -> Linux on X86_64 64BIT -> Download the latest version
 
-Example: /home/user/nwrfc750P_7-70002752.zip'
+Example: /home/user/nwrfc750P_x-70002752.zip'
 
 		read -p 'SDK file location: ' sdkfileloc 
 	done
@@ -322,16 +322,16 @@ then
 	sdkok=$?
 	sdknum=$(unzip -Z1 $sdkfileloc |  wc -l)
 else 
-	if [ $(du "$sdkfileloc" | awk '{print $1+0}') -ge 16000 ] 
+	if [ $(du "$sdkfileloc" | awk '{print $1+0}') -ge 13000 ] 
 	then 
 		sdkok=0 
-		sdknum=34 
+		sdknum=35
 	else 
 		sdkok=1
 	fi
 fi
 
-while [ $? -eq 1 ] || [ $sdkok -eq 1 ] || [ ! $sdknum -ge 34 ] ;
+while [ $? -eq 1 ] || [ $sdkok -eq 1 ] || [ ! $sdknum -ge 20 ] ;
 do
 	echo 'Invalid NetWeaver SDK, possibly an incorrect or corrupt file. Download the SDK and try again.'
 	read -p 'SDK file location: ' sdkfileloc
@@ -341,7 +341,7 @@ do
 		sdkok=$?
 		sdknum=$(unzip -Z1 $sdkfileloc |  wc -l)
 	else 
-		if [ $(du "$sdkfileloc" | awk '{print $1+0}') -ge 16000 ] 
+		if [ $(du "$sdkfileloc" | awk '{print $1+0}') -ge 13000 ] 
 		then 
 			sdkok=0 
 			sdknum=34 
@@ -356,7 +356,7 @@ if [ $? -eq 0 ];
 then 
 	echo 'SDK archive was successfully updated'
 else  
-	echo 'Azure Sentinel data connector upgrade failed. The NetWeaver SDK could not be added to the image.'
+	echo 'Azure Sentinel data connector upgrade failed. The NetWeaver SDK could not be added to the image'
 	exit 1
 fi
 
@@ -372,7 +372,7 @@ Stop the connector: docker stop '"$containername"'
 Start the connector: docker start '"$containername"'
 The process has been successfully completed, thank you!'
 else
-	echo 'Azure Sentinel Connector upgrade failed – the NetWeaver SDK could not be added to the image. Please contact Microsoft for support'
+	echo 'Azure Sentinel Connector upgrade failed – the NetWeaver SDK could not be added to the image'
 	exit 1
 fi
 # Docker Configurations
