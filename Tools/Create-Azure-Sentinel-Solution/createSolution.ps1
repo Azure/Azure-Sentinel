@@ -390,6 +390,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         $resourceObj.$key = $resourceObj.$key.Replace($azureManagementUrl, "@{variables('azureManagementUrl')}")
                                         $azureManagementUrlExists = $true
                                     }
+                                    if ($key -eq "operationId") {
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "operationId-$($resourceobj.$key)" -NotePropertyValue $($resourceobj.$key)
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
+                                        $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
+                                    }
                                 }
                                 elseif ($prop.Value -is [System.Array]) {
                                     foreach ($item in $prop.Value) {
