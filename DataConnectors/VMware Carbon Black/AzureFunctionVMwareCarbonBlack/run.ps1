@@ -105,7 +105,8 @@ function CarbonBlackAPI()
         }
         else {
             Write-Host("Total result $($totalResult) count is greater than 100 so pagination applicable here")
-            $start = 1
+            $start= 1
+            $rows=100
             while($eventsResult.results.Count -le 100 -and $eventsResult.results.Count -ne 0)
             {
                 if($eventsResult.results.Count -eq 0)
