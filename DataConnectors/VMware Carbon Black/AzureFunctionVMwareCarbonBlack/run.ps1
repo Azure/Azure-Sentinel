@@ -90,6 +90,7 @@ function CarbonBlackAPI()
         $totalResult = $eventsResult.totalResults
         if($totalResult -lt 100)
         {
+            Write-Host("Total result $($totalResult) count is less than 100 so no pagination applicable here")
             $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
             if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
             {
@@ -103,6 +104,7 @@ function CarbonBlackAPI()
             }
         }
         else {
+            Write-Host("Total result $($totalResult) count is greater than 100 so pagination applicable here")
             while($eventsResult.results.Count -le 100 -and $eventsResult.results.Count -ne 0)
             {
                 if($eventsResult.results.Count -eq 0)
@@ -110,7 +112,7 @@ function CarbonBlackAPI()
                     Write-Host("No new result avaliable , hence out of the pagination while loop block")
                     break;
                 }
-                
+
                 $eventURIPagination = "&start=$($start)&rows=$($rows)"    
                 $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)$($eventURIPagination)"))
                 $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
