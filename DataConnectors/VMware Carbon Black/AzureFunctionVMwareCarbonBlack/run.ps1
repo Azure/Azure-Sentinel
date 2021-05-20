@@ -130,13 +130,7 @@ function CarbonBlackAPI()
                     Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
                 }
                 Write-Host("Total Events result count $($eventsResult.totalResults) `n Events result count : $($eventsResult.results.Count)")
-                if($eventsResult.results.Count -eq 0)
-                {
-                    Write-Host("No result avialible , hence out of the events result pagination block")
-                    break;
-                }
 
-                Write-Host("Pagniation starts from $($start) upto maximum next 100 events result")
                 $start +=100
             }
         }
