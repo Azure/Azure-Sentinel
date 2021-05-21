@@ -62,8 +62,6 @@ Create a new PowerShell Runbook with the below script, save and publish it. In c
 		} 
 		Write-Output "Remote Server Administration Tools installed"
 	}
-
-
     if (Get-Module -ListAvailable -Name ActiveDirectory) {
     Write-Output "ActiveDirectory PowerShell module already exists on host."
     } 
@@ -188,7 +186,8 @@ To ensure the Runbook is working ok before integrating with a Logic App, execute
 ### Steps to orchestrate from Azure Sentinel/Logic Apps
 Below is the structure of the orchestration Logic App that triggers the runbook to disable qualifying accounts from the On-Prem AD. With this action the next on-prem to cloud AD sync will maintain the state on the account – in this case disabled, until the setting is reversed from the on-prem Active Directory.
 
-## High-Level structure of the Playbook
+### High-Level structure of the Playbook
+
 ![structre](../Block-OnPremADUser/images/hlstructre.png)
 
 
@@ -202,12 +201,12 @@ Parse the JSON output from the Entities-Get Actions step above in order to extra
 ![11-ParseJson](../Block-OnPremADUser/images/parsejson.png)
 
 
-## Disable Account in Azure AD
+### Disable Account in Azure AD
 
 ![DisableAD](../Block-OnPremADUser/images/DisableonAzureAD.png)
 
 
-## Create Hybrid Automation Job 
+### Create Hybrid Automation Job 
 ![Createjob](../Block-OnPremADUser/images/Createjob.png)
 
 The string function below is contained in the 'Runbook Parameter SamAccountName' above and is needed to extract the SAMAccount from the UPN of the user as the On-Prem AD can only act on the User ID when specified in this format:
