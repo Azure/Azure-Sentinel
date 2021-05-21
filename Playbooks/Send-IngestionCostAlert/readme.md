@@ -48,17 +48,24 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 ![06-O365api](../Send-IngestionCostAlert/images/06-O365api.png)
 
+
 11.	Click Test connection failed.
 ![07-testconnection](../Send-IngestionCostAlert/images/07-testconnection.png)
+
 
 12.	Click Authorize
 ![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI1.png)
 
+
+
 13.	Login into portal again
 ![09-portalauth](../Send-IngestionCostAlert/images/09-portalauth.png)
 
+
+
 14.	Click Save
 ![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess.png)
+
 
 15.	Click the resource group again
 ![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg2.png)
@@ -69,20 +76,26 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 17.	Click Test connection failed.
 ![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.png)
 
+
 18.	Click Authorize
 ![14-teamsauthorize](../Send-IngestionCostAlert/images/14-teamsauthorize.png)
+
 
 19.	Login into portal again
 ![15-teamslogin](../Send-IngestionCostAlert/images/15-teamslogin.png)
 
+
 20.	Click Save
 ![16-teamsapisave](../Send-IngestionCostAlert/images/16-teamsapisave.png)
+
 
 21.	In the Azure search box type Logic App  Logic app
 ![17-logicappsearch](../Send-IngestionCostAlert/images/17-logicappsearch.png)
 
+
 22.	Select the newly created logic app
 ![18-logicappfind](../Send-IngestionCostAlert/images/18-logicappfind.png)
+
 
 23.	Click Logic app designer
 ![19-LAdesigner](../Send-IngestionCostAlert/images/19-ladesigner.png)
@@ -133,11 +146,14 @@ These 3 costs should be added together.
 41.	Select the Teams group that will receive the message
 42.	Select the Team Channel within that teams group
 ![30-teamsaddress](../Send-IngestionCostAlert/images/30-teamsaddress.png)
+
 43.	In the message box type You have exceeded your daily budget of 
 44.	Click the Dynamic content -> Threshold_per_day
 ![31-teamsdynamic](../Send-IngestionCostAlert/images/31-teamsdynamic.png)
+
 When complete this section should look as follows:
 ![32-teamsthresh](../Send-IngestionCostAlert/images/32-teamsthresh.png)
+
 45.	Click Save -> Run
 ![33-saveapp](../Send-IngestionCostAlert/images/33-saveapp.png)
 
@@ -158,9 +174,11 @@ Usage
 
 ### In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
 
+
    ![34-computation](../Send-IngestionCostAlert/images/34-computation.png)
 
 ### In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel that you selected earlier
+
 
   ![35-sendmessage](../Send-IngestionCostAlert/images/35-sendmessage.png)
 
