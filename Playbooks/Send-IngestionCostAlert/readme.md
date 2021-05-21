@@ -12,7 +12,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 3. Select the Azure Sentinel workspace
 
-![02-LAWorkspaces](../Send-IngestionCostAlert/images/02-laworkspaces.png)
+![02-laworkspaces](../Send-IngestionCostAlert/images/02-laworkspaces.png)
 
 4.	Copy the Subscription ID, Resource group and the Workspace name
 
