@@ -4,12 +4,12 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ### Deployment steps
 1.	Log into the Azure Portal
 2.	In the Azure search box type Log Analytics Workspaces
-![01-LAAzureportal](../Send-IngestionCostAlert/images/01-LAAzureportal.png)
+![01-laazureportal](../Send-IngestionCostAlert/images/01-laazureportal.png)
 
 
 3. Select the Azure Sentinel workspace
 
-![02-LAWorkspaces](../Send-IngestionCostAlert/images/02-LAWorkspaces.png)
+![02-LAWorkspaces](../Send-IngestionCostAlert/images/02-laworkspaces.png)
 
 4.	Copy the Subscription ID, Resource group and the Workspace name
 
@@ -81,7 +81,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![18-logicappfind](../Send-IngestionCostAlert/images/18-logicappfind.png)
 
 23.	Click Logic app designer
-![19-LAdesigner](../Send-IngestionCostAlert/images/19-LAdesigner.png)
+![19-LAdesigner](../Send-IngestionCostAlert/images/19-ladesigner.png)
 
 24.	Select Price Per GB
 25.	Change the Type to Float
@@ -104,7 +104,7 @@ These 3 costs should be added together.
 ![24-connection1](../Send-IngestionCostAlert/images/24-connection1.png)
 
 32.	Click Sign-in and log into the account
-![25-AMconnection](../Send-IngestionCostAlert/images/25-AMconnection.png)
+![25-AMconnection](../Send-IngestionCostAlert/images/25-amconnection.png)
 
 33.	Click For Each -> Condition
 34.	Enter the email address of the user(s) that will receive the notification. (secops@yourdomain.onmicrosoft.com)
