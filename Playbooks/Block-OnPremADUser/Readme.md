@@ -11,13 +11,13 @@ Many organizations have an on-premises Active Directory infrastructure that is s
 Create an Automation Account 
 
 
-i. Create an Automation Account from the Azure Portal
+Create an Automation Account from the Azure Portal
 
 ![0-automation](../Block-OnPremADUser/images/02-Automationacc.png)
 
 
 
-ii. Deploy the Automation Hybrid Worker solution from the Azure Market place
+Deploy the Automation Hybrid Worker solution from the Azure Market place
 
 ![03-marketplace](../Block-OnPremADUser/images/03-marketplace.png)
 
