@@ -156,15 +156,15 @@ When complete this section should look as follows:
 <em>Below is the query being executed in the step above in text format which you can use for validation directly in the Log Analytics query window. Ensure to replace the variables below with actual numbers if running the query within the Log Analytics query window.</em>
 
 ```
-let price_per_GB = price_per_GB;
-let how_many_days = how_many_days;
-let total_funding = total_funding;
-let threshold_per_day = toreal(total_funding) / toreal(how_many_days);
-Usage
-| where TimeGenerated > startofday(ago(1d))
-| where IsBillable == true
-| summarize AggregatedValue= sum(Quantity) * price_per_GB / 1000 by bin(TimeGenerated, 1d)
-| where AggregatedValue > threshold_per_day
+  let price_per_GB = price_per_GB;
+  let how_many_days = how_many_days;
+  let total_funding = total_funding;
+  let threshold_per_day = toreal(total_funding) / toreal(how_many_days);
+  Usage
+  | where TimeGenerated > startofday(ago(1d))
+  | where IsBillable == true
+  | summarize AggregatedValue= sum(Quantity) * price_per_GB / 1000 by bin(TimeGenerated, 1d)
+  | where AggregatedValue > threshold_per_day
 ```
 
 ## In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
