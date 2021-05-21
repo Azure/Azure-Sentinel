@@ -45,7 +45,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 9. Click Go to resource group
 10. Click o365-IngestionCostAlert
 
-![06-O365api](../Send-IngestionCostAlert/images/06-O365api.png)
+![06-o365api](../Send-IngestionCostAlert/images/06-o365api.png)
 
 
 11. Click Test connection failed.
