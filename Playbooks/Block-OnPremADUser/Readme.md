@@ -194,7 +194,6 @@ To simulate the block orchestration from Azure Sentinel, you may use the below s
 
 
 
-
 [Troubleshooting guide for Hybrid Runbook Workers can be found here](https://docs.microsoft.com/azure/automation/troubleshoot/hybrid-runbook-worker)
 
 

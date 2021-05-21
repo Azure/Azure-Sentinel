@@ -154,11 +154,11 @@ Usage
 
 ### In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
 
-   ![7-computation](../Send-IngestionCostAlert/images/07-computation.png)
+   ![34-computation](../Send-IngestionCostAlert/images/34-computation.png)
 
-### In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel of your choice
+### In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel that you selected earlier
 
-  ![8-sendmessage](../Send-IngestionCostAlert/images/08-sendmessage.png)
+  ![35-sendmessage](../Send-IngestionCostAlert/images/35-sendmessage.png)
 
   <em>Additional information on cost management can be found in this document: [https://docs.microsoft.com/en-us/azure/azure-monitor/platform/manage-cost-storage]</em>
  
