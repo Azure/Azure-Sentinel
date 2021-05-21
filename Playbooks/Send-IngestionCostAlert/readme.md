@@ -9,14 +9,13 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 ![01-laazureportal](../Send-IngestionCostAlert/images/01-laazureportal.png)
 
-
 3. Select the Azure Sentinel workspace
 
 ![02-laworkspaces](../Send-IngestionCostAlert/images/02-laworkspaces.png)
 
 4. Copy the Subscription ID, Resource group and the Workspace name
 
-## The Logic App is activated by a Recurrence trigger whose frequency of execution can be adjusted to your requirements
+# The Logic App is activated by a Recurrence trigger whose frequency of execution can be adjusted to your requirements
 
 ![03-Rgselection](../Send-IngestionCostAlert/images/03-rgselection.png)
 
@@ -25,9 +24,9 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![04-Azuredeploy](../Send-IngestionCostAlert/images/04-azuredeploy.png)
 
 
-6. Log into the Azure portal 
+6. Log into the Azure portal
 
-7. Enter the following information:
+7. Enter the following information
 
 -	Subscription: Select the Subscription
 -	Resource Group: Select the RG
@@ -44,8 +43,6 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 9. Click Go to resource group
 10. Click o365-IngestionCostAlert
 
-
-
 ![06-O365api](../Send-IngestionCostAlert/images/06-O365api.png)
 
 
@@ -57,10 +54,8 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI1.png)
 
 
-
 13. Login into portal again
 ![09-portalauth](../Send-IngestionCostAlert/images/09-portalauth.png)
-
 
 
 14. Click Save
@@ -192,5 +187,4 @@ Usage
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2Send-IngestionCostAlert%2Fazuredeploy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
-
 
