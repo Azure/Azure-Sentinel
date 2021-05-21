@@ -1,7 +1,9 @@
 # Ingestion Cost Alert Playbook
+
 Managing cost for cloud services is an essential part of ensuring that you get maximum value for your investment in solutions running on this computing platform. Azure Sentinel is no different. To help you exercise greater control over your budget for Azure Sentinel  this playbook will send you an alert should you exceed a budget that you define for your Azure Sentinel Workspace within a given time-frame. 
 
 ### Deployment steps
+
 1.	Log into the Azure Portal
 2.	In the Azure search box type Log Analytics Workspaces
 
@@ -24,7 +26,9 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 
 6.	Log into the Azure portal 
+
 7.	Enter the following information:
+
 -	Subscription: Select the Subscription
 -	Resource Group: Select the RG
 -	Playbook Name: Enter playbook name
@@ -86,6 +90,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 24.	Select Price Per GB
 25.	Change the Type to Float
 26.	For the value, enter the total cost of Sentinel. This value will consist of the cost of:
+
 -	[Azure Sentinel  Pricing](https://azure.microsoft.com/pricing/details/azure-sentinel/#:~:text=%20Azure%20Sentinel%20pricing%20%201%20Capacity%20Reservations.,an%20Azure%20Monitor%20Log%20Analytics%20workspace...%20More%20)
 -	[Azure Monitor- ingestion and retention](https://azure.microsoft.com/pricing/details/monitor/)
 
@@ -94,9 +99,12 @@ These 3 costs should be added together.
 
 27.	Select How name days and change the days to 31
 ![21-daysvar](../Send-IngestionCostAlert/images/21-daysvar.png)
+
 28.	Select Total funding and enter the total monthly budget
 ![22-totfund](../Send-IngestionCostAlert/images/22-totfund.png)
+
 29.	Select Threshold per day and enter the daily limit. To get this value simply divide the total budget from step 29 above by the number of days per month (31) in step 28
+
 ![23-daythresh](../Send-IngestionCostAlert/images/23-dailythresh.png)
 
 30.	Select Connection
@@ -146,9 +154,7 @@ Usage
 | where IsBillable == true
 | summarize AggregatedValue= sum(Quantity) * price_per_GB / 1000 by bin(TimeGenerated, 1d)
 | where AggregatedValue > threshold_per_day
-
 ```
- 
 
 ### In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
 
