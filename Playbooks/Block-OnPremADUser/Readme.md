@@ -8,7 +8,7 @@ Many organizations have an on-premises Active Directory infrastructure that is s
 
 ## Deployment Steps
 
-<em> Before you begin review the pre-requisites of deploying a Hybrid Runbook Worker here: [ https://docs.microsoft.com/azure/automation/automation-windows-hrw-install ] </em>
+<em> [Before you begin review the pre-requisites of deploying a Hybrid Runbook Worker here:](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install) </em>
 
 Create an Automation Account 
 
@@ -25,7 +25,7 @@ ii.	Deploy the Automation Hybrid Worker solution from the Azure Market place
 
 From the same Automation Account menu, create a Hybrid Worker Group
 
-![06-HybridWorker](../Block-OnPremADUser/images/06-Hybridworkergroup.png)
+![06-HybridWorker](../Block-OnPremADUser/images/06-hybridworkergroup.png)
 
 
 
@@ -164,7 +164,7 @@ Set-ExecutionPolicy RemoteSigned
 You may still have to unblock the file in case changing the execution policy alone does not work. The command to do this is from a PowerShell prompt is: 
 Unblock-File -Path .\New-OmPremiseHybridWorker.ps1
 
-More details here: Set-ExecutionPolicy (Microsoft.PowerShell.Security) [https://docs.microsoft.com/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.1] 
+More details here: [Set-ExecutionPolicy (Microsoft.PowerShell.Security](https://docs.microsoft.com/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.1) 
 
 It is also recommended that you use TLS versions more recent than 1.0 and 1.1. For this reason you may be required to run the below command as well:
 

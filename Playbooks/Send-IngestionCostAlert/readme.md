@@ -4,6 +4,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ### Deployment steps
 1.	Log into the Azure Portal
 2.	In the Azure search box type Log Analytics Workspaces
+
 ![01-laazureportal](../Send-IngestionCostAlert/images/01-laazureportal.png)
 
 
@@ -20,7 +21,6 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 5. Scroll to the bottom of this document and select Deploy to Azure
 
 ![04-Azuredeploy](../Send-IngestionCostAlert/images/04-azuredeploy.png)
-
 
 
 6.	Log into the Azure portal 
@@ -86,8 +86,8 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 24.	Select Price Per GB
 25.	Change the Type to Float
 26.	For the value, enter the total cost of Sentinel. This value will consist of the cost of:
--	Azure Sentinel  Pricing [https://azure.microsoft.com/pricing/details/azure-sentinel/#:~:text=%20Azure%20Sentinel%20pricing%20%201%20Capacity%20Reservations.,an%20Azure%20Monitor%20Log%20Analytics%20workspace...%20More%20] 
--	Azure Monitor- ingestion and retention [https://azure.microsoft.com/pricing/details/monitor/]
+-	[Azure Sentinel  Pricing](https://azure.microsoft.com/pricing/details/azure-sentinel/#:~:text=%20Azure%20Sentinel%20pricing%20%201%20Capacity%20Reservations.,an%20Azure%20Monitor%20Log%20Analytics%20workspace...%20More%20)
+-	[Azure Monitor- ingestion and retention](https://azure.microsoft.com/pricing/details/monitor/)
 
 These 3 costs should be added together.
 ![20-recurrence](../Send-IngestionCostAlert/images/20-recurrence.png)
@@ -158,7 +158,7 @@ Usage
 
   ![35-sendmessage](../Send-IngestionCostAlert/images/35-sendmessage.png)
 
-  <em>Additional information on cost management can be found in this document: [https://docs.microsoft.com/en-us/azure/azure-monitor/platform/manage-cost-storage]</em>
+  <em>[Additional information on cost management can be found in this document:](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/manage-cost-storage)</em>
  
 
 
