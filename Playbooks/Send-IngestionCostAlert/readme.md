@@ -7,7 +7,9 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 1. Log into the Azure Portal
 2. In the Azure search box type Log Analytics Workspaces
 
+
 ![01-laazureportal](../Send-IngestionCostAlert/images/01-laazureportal.png)
+
 
 3. Select the Azure Sentinel workspace
 
@@ -15,7 +17,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 4. Copy the Subscription ID, Resource group and the Workspace name
 
-# The Logic App is activated by a Recurrence trigger whose frequency of execution can be adjusted to your requirements
+## The Logic App is activated by a Recurrence trigger whose frequency of execution can be adjusted to your requirements
 
 ![03-Rgselection](../Send-IngestionCostAlert/images/03-rgselection.png)
 
@@ -39,7 +41,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 ![05-deploymentscope](../Send-IngestionCostAlert/images/05-deploymentscope.png)
 
-8. Select Review + create  Create
+8. Select Review + create + Create
 9. Click Go to resource group
 10. Click o365-IngestionCostAlert
 
@@ -47,14 +49,17 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 
 11. Click Test connection failed.
+
 ![07-testconnection](../Send-IngestionCostAlert/images/07-testconnection.png)
 
 
 12. Click Authorize
+
 ![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI1.png)
 
 
 13. Login into portal again
+
 ![09-portalauth](../Send-IngestionCostAlert/images/09-portalauth.png)
 
 
@@ -100,6 +105,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 26. For the value, enter the total cost of Sentinel. This value will consist of the cost of:
 
 -	[Azure Sentinel  Pricing](https://azure.microsoft.com/pricing/details/azure-sentinel/#:~:text=%20Azure%20Sentinel%20pricing%20%201%20Capacity%20Reservations.,an%20Azure%20Monitor%20Log%20Analytics%20workspace...%20More%20)
+
 -	[Azure Monitor- ingestion and retention](https://azure.microsoft.com/pricing/details/monitor/)
 
 These 3 costs should be added together.
@@ -116,6 +122,7 @@ These 3 costs should be added together.
 ![23-daythresh](../Send-IngestionCostAlert/images/23-dailythresh.png)
 
 30. Select Connection
+
 31. Select the account to log in with or add a new connection
 ![24-connection1](../Send-IngestionCostAlert/images/24-connection1.png)
 
@@ -139,10 +146,12 @@ These 3 costs should be added together.
 ![29-teamspost](../Send-IngestionCostAlert/images/29-teamspost.png)
 
 41. Select the Teams group that will receive the message
+
 42. Select the Team Channel within that teams group
 ![30-teamsaddress](../Send-IngestionCostAlert/images/30-teamsaddress.png)
 
-43. In the message box type You have exceeded your daily budget of 
+43. In the message box type You have exceeded your daily budget 
+
 44. Click the Dynamic content -> Threshold_per_day
 ![31-teamsdynamic](../Send-IngestionCostAlert/images/31-teamsdynamic.png)
 
@@ -150,6 +159,7 @@ When complete this section should look as follows:
 ![32-teamsthresh](../Send-IngestionCostAlert/images/32-teamsthresh.png)
 
 45. Click Save -> Run
+
 ![33-saveapp](../Send-IngestionCostAlert/images/33-saveapp.png)
 
 
@@ -167,12 +177,12 @@ When complete this section should look as follows:
   | where AggregatedValue > threshold_per_day
 ```
 
-## In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
+In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
 
 
    ![34-computation](../Send-IngestionCostAlert/images/34-computation.png)
 
-## In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel that you selected earlier
+In the final step below sends out an e-mail to the specified recipient list and a message is posted in a Microsoft Teams channel that you selected earlier
 
 
   ![35-sendmessage](../Send-IngestionCostAlert/images/35-sendmessage.png)
