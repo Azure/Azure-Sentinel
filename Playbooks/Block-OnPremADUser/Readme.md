@@ -49,35 +49,68 @@ Create a new PowerShell Runbook with the below script, save and publish it. In c
 
     Param (
     [string] $SAMAccountName
-    )
+)
+
+        if (Get-WindowsFeature  -Name rsat) {
+	    Write-Output "Remote Server Tools already installed on host"
+    }
+    else {
+	 Write-Output "Remote Server Tools module does not exist on host. Installing..."
+	 try {
+	 Install-WindowsFeature -IncludeAllSubFeature RSAT -WhatIf
+	 } 
+	 catch{ 
+		 Write-Error "Error installing Remote Server Administration Tools"
+		 throw $_
+		 break
+		} 
+		Write-Output "Remote Server Administration Tools installed"
+	}
+
 
     if (Get-Module -ListAvailable -Name ActiveDirectory) {
-        Write-Output "ActiveDirectory PowerShell module already exists on host."
+    Write-Output "ActiveDirectory PowerShell module already exists on host."
     } 
     else {
-        Write-Output "ActiveDirectory PowerShell module does not exist on host. Installing..."
-        try {
-            Import-Module ActiveDirectory
-        }
-        catch{
-            Write-Error "Error installing ActiveDirectory PowerShell module."
-            throw $_
-            break
-        }
-
-        Write-Output "ActiveDirectory PowerShell module installed."
-    }
-    Write-Output "Finding and disabling user $SAMAccountName"
+    Write-Output "ActiveDirectory PowerShell module does not exist on host. Installing..."
     try {
-        Get-ADUser -Identity $SAMAccountName | Disable-ADAccount
+        Import-Module ActiveDirectory
     }
-    catch {
-        Write-Error "Error disabling user account $SAMAccountName"
+    catch{
+        Write-Error "Error installing ActiveDirectory PowerShell module."
         throw $_
         break
     }
-    Write-Output "Successfully disabled user account $SAMAccountName"
 
+    Write-Output "ActiveDirectory PowerShell module installed."
+}
+
+    if (Get-Module -ListAvailable -Name ActiveDirectory) {
+    Write-Output "ActiveDirectory PowerShell module already exists on host."
+    } 
+    else {
+    Write-Output "ActiveDirectory PowerShell module does not exist on host. Installing..."
+    try {
+        Import-Module ActiveDirectory
+    }
+    catch{
+        Write-Error "Error installing ActiveDirectory PowerShell module."
+        throw $_
+        break
+    }
+
+    Write-Output "ActiveDirectory PowerShell module installed."
+    }
+    Write-Output "Finding and disabling user $SAMAccountName"
+    try {
+    Get-ADUser -Identity $SAMAccountName | Disable-ADAccount
+    }
+    catch {
+    Write-Error "Error disabling user account $SAMAccountName"
+    throw $_
+    break
+    }
+    Write-Output "Successfully disabled user account $SAMAccountName"
 
 The script takes in a SAMAccountName parameter which it uses to find the appropriate user and disable the account. This script can be modified to do a variety of other tasks, such as password resets, adding/removing users to/from groups, etc.
 
