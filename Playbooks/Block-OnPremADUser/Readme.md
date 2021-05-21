@@ -49,7 +49,7 @@ Create a new PowerShell Runbook with the below script, save and publish it. In c
 
     Param (
     [string] $SAMAccountName
-)
+        )
 
         if (Get-WindowsFeature  -Name rsat) {
 	    Write-Output "Remote Server Tools already installed on host"
