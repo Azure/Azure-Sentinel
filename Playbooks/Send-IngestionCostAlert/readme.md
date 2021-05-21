@@ -8,7 +8,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 2. In the Azure search box type Log Analytics Workspaces
 
 
-![01-laazureportal](../Send-IngestionCostAlert/images/01-laazureportal.png)
+![01-laazureportal](../Send-IngestionCostAlert/images/01-LAAzurePortal.png)
 
 
 3. Select the Azure Sentinel workspace
