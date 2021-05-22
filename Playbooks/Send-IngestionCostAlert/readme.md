@@ -88,7 +88,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 17. Click Test connection failed.
 
-![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.1png)
+![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.png)
 
 
 
