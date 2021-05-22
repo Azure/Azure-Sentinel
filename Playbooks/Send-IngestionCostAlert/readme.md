@@ -200,7 +200,7 @@ When complete this section should look as follows:
 
 ![32-teamsthresh](../Send-IngestionCostAlert/images/32-teamsthresh.png)
 
-45. Click Save -> Run
+45. Click Save 
 
 ![33-saveapp](../Send-IngestionCostAlert/images/33-saveapp.png)
 
