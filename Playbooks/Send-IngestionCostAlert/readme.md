@@ -65,25 +65,29 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 
 14. Click Save
-![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess1.png)
+
+![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess.png)
 
 
 
 
 15. Click the resource group again
-![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg23.png)
+
+![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg2.png)
 
 
 
 
 16. Click teams-IngestionCostAlert
-![12-teamsapi](../Send-IngestionCostAlert/images/12-teamsapi1.png)
+
+![12-teamsapi](../Send-IngestionCostAlert/images/12-teamsapi.png)
 
 
 
 
 
 17. Click Test connection failed.
+
 ![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.1png)
 
 
@@ -92,13 +96,12 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 
 18. Click Authorize
+
 ![14-teamsauthorize](../Send-IngestionCostAlert/images/14-teamsauthorize.png)
 
 
-
-
-
 19. Login into portal again
+
 ![15-teamslogin](../Send-IngestionCostAlert/images/15-teamslogin.png)
 
 
@@ -106,23 +109,23 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 
 20. Click Save
+
 ![16-teamsapisave](../Send-IngestionCostAlert/images/16-teamsapisave.png)
 
 
-
-
-
-
 21. In the Azure search box type Logic App 
+
 ![17-logicappsearch](../Send-IngestionCostAlert/images/17-logicappsearch.png)
 
 
 
 22. Select the newly created logic app
+
 ![18-logicappfind](../Send-IngestionCostAlert/images/18-logicappfind.png)
 
 
 23. Click Logic app designer
+
 ![19-LAdesigner](../Send-IngestionCostAlert/images/19-ladesigner.png)
 
 24. Select Price Per GB
@@ -133,13 +136,16 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 -	[Azure Monitor- ingestion and retention](https://azure.microsoft.com/pricing/details/monitor/)
 
-These 3 costs should be added together.
+These 3 costs should be added together
+
 ![20-recurrence](../Send-IngestionCostAlert/images/20-recurrence.png)
 
 27. Select How name days and change the days to 31
+
 ![21-daysvar](../Send-IngestionCostAlert/images/21-daysvar.png)
 
 28. Select Total funding and enter the total monthly budget
+
 ![22-totfund](../Send-IngestionCostAlert/images/22-totfund.png)
 
 29. Select Threshold per day and enter the daily limit. To get this value simply divide the total budget from step 29 above by the number of days per month (31) in step 28
@@ -149,35 +155,45 @@ These 3 costs should be added together.
 30. Select Connection
 
 31. Select the account to log in with or add a new connection
+
 ![24-connection1](../Send-IngestionCostAlert/images/24-connection1.png)
 
 32. Click Sign-in and log into the account
+
 ![25-AMconnection](../Send-IngestionCostAlert/images/25-amconnection.png)
 
 33. Click For Each -> Condition
-34. Enter the email address of the user(s) that will receive the notification. (secops@yourdomain.onmicrosoft.com)
+
+35. Enter the email address of the user(s) that will receive the notification. (secops@yourdomain.onmicrosoft.com)
 ![25-foreach](../Send-IngestionCostAlert/images/25-foreach.png)
 
 35. Click Add an Action
-36. Search for “Office365 Outlook”
-37. Select “Send an e-mail”
+
+37. Search for “Office365 Outlook”
+
+39. Select “Send an e-mail”
+
 ![27-sendmail](../Send-IngestionCostAlert/images/27-sendmail.png)
+
 38. Select “Add an action”
 39. In the search box type Teams -> Microsoft Teams
 
 ![28-searchteams](../Send-IngestionCostAlert/images/28-searchteams.png)
 
 40. In the search box type Post a message -> Post a message (V3) (preview)
+
 ![29-teamspost](../Send-IngestionCostAlert/images/29-teamspost.png)
 
 41. Select the Teams group that will receive the message
 
 42. Select the Team Channel within that teams group
+
 ![30-teamsaddress](../Send-IngestionCostAlert/images/30-teamsaddress.png)
 
 43. In the message box type You have exceeded your daily budget 
 
 44. Click the Dynamic content -> Threshold_per_day
+
 ![31-teamsdynamic](../Send-IngestionCostAlert/images/31-teamsdynamic.png)
 
 When complete this section should look as follows:
