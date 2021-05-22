@@ -150,7 +150,7 @@ The command will open a log on screen in Azure Portal to register the Hybrid Wor
 
 To confirm successful registration, navigate to your automation account then select Hybrid worker groups. You should see the recently registered Hybrid Worker group in the list per below screen shot.
 
-![08-hybridconfirm](../Block-OnPremADUser/images/08-hybridworker.png)
+![08-hybridconfirm](../Block-OnPremADUser/images/08-HybridWorker.png)
 
 <em> If you get the error indicating that the PowerShell file is not digitally signed, then you will need to execute the command below:
 
