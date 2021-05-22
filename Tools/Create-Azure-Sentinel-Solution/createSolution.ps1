@@ -198,7 +198,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     elseif ($objectKeyLowercase -eq "playbooks") {
                         Write-Host "Generating Playbook using $file"
                         $playbookData = $json
-                        $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name" })
+                        $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
                         if ($playbookCounter -eq 1) {
                             # If a playbook exists, add CreateUIDefinition step before playbook elements while handling first playbook.
                             $playbookStep = [PSCustomObject] @{
@@ -390,6 +390,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         $resourceObj.$key = $resourceObj.$key.Replace($azureManagementUrl, "@{variables('azureManagementUrl')}")
                                         $azureManagementUrlExists = $true
                                     }
+                                    if ($key -eq "operationId") {
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "operationId-$($resourceobj.$key)" -NotePropertyValue $($resourceobj.$key)
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
+                                        $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
+                                    }
                                 }
                                 elseif ($prop.Value -is [System.Array]) {
                                     foreach ($item in $prop.Value) {
@@ -447,7 +452,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     if($foundConnection) {
                                         $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
                                     } else {
-                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $connectionVar
+                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
                                         $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
                                     }
