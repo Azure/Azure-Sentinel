@@ -55,17 +55,17 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 12. Click Authorize
 
-![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI.png)
+![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI1.png)
 
 
 13. Login into portal again
 
-![09-portalauth](../Send-IngestionCostAlert/images/09-portalaut.png)
+![09-portalauth](../Send-IngestionCostAlert/images/09-portalauth.png)
 
 
 
 14. Click Save
-![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess.png)
+![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess1.png)
 
 
 
