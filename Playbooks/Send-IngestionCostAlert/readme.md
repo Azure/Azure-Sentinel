@@ -17,7 +17,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 4. Copy the Subscription ID, Resource group and the Workspace name
 
-## The Logic App is activated by a Recurrence trigger whose frequency of execution can be adjusted to your requirements
+### The Logic App is activated by a Recurrence trigger whose frequency of execution can be adjusted to your requirements
 
 ![03-Rgselection](../Send-IngestionCostAlert/images/03-rgselection.png)
 
@@ -55,12 +55,12 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 12. Click Authorize
 
-![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI1.png)
+![08-authorizeAPI1](../Send-IngestionCostAlert/images/08-authorizeAPI.png)
 
 
 13. Login into portal again
 
-![09-portalauth](../Send-IngestionCostAlert/images/09-portalauth.png)
+![09-portalauth](../Send-IngestionCostAlert/images/09-portalaut.png)
 
 
 
