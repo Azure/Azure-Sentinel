@@ -71,20 +71,20 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 
 15. Click the resource group again
-![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg2.png)
+![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg23.png)
 
 
 
 
 16. Click teams-IngestionCostAlert
-![12-teamsapi](../Send-IngestionCostAlert/images/12-teamsapi.png)
+![12-teamsapi](../Send-IngestionCostAlert/images/12-teamsapi1.png)
 
 
 
 
 
 17. Click Test connection failed.
-![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.png)
+![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.1png)
 
 
 
