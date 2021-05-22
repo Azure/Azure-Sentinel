@@ -23,7 +23,7 @@ Deploy the Automation Hybrid Worker solution from the Azure Market place
 
 From the same Automation Account menu, create a Hybrid Worker Group
 
-![06-hybridWorkergroup](../Block-OnPremADUser/images/06-hybridworkergroup.png)
+![06-hybridWorkergroup](../Block-OnPremADUser/images/06-HybridWorkerGroup.png)
 
 
 ![05-credentials](../Block-OnPremADUser/images/05-credentials.png)
