@@ -160,7 +160,7 @@ These 3 costs should be added together
 
 32. Click Sign-in and log into the account
 
-![25-AMconnection](../Send-IngestionCostAlert/images/25-amconnection.png)
+![25-AMconnection](../Send-IngestionCostAlert/images/25-AMconnection.png)
 
 33. Click For Each -> Condition
 
@@ -197,6 +197,7 @@ These 3 costs should be added together
 ![31-teamsdynamic](../Send-IngestionCostAlert/images/31-teamsdynamic.png)
 
 When complete this section should look as follows:
+
 ![32-teamsthresh](../Send-IngestionCostAlert/images/32-teamsthresh.png)
 
 45. Click Save -> Run
