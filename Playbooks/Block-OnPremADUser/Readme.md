@@ -188,7 +188,7 @@ Below is the structure of the orchestration Logic App that triggers the runbook 
 
 ### High-Level structure of the Playbook
 
-![structre](../Block-OnPremADUser/images/hlstructre.png)
+![structre](../Block-OnPremADUser/images/HLstructre.png)
 
 
 ## Detailed structure of the Playbook:
@@ -198,7 +198,7 @@ Below is the structure of the orchestration Logic App that triggers the runbook 
 
 Parse the JSON output from the Entities-Get Actions step above in order to extract the Azure User ID and SAM Account name needed to perform disable operations-first on Azure then on the On-Prem Active directory.
 
-![11-ParseJson](../Block-OnPremADUser/images/parsejson.png)
+![11-ParseJson](../Block-OnPremADUser/images/ParseJSON.png)
 
 
 ### Disable Account in Azure AD
