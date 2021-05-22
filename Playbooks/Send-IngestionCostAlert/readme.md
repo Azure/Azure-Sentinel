@@ -126,7 +126,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 
 23. Click Logic app designer
 
-![19-LAdesigner](../Send-IngestionCostAlert/images/19-ladesigner.png)
+![19-LAdesigner](../Send-IngestionCostAlert/images/19-LAdesigner.png)
 
 24. Select Price Per GB
 25. Change the Type to Float
