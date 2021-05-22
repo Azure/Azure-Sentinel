@@ -231,7 +231,7 @@ In the final step below sends out an e-mail to the specified recipient list and 
 
   <em>Additional information on cost management can be found in [this document](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/manage-cost-storage)</em>
   
-  <em>Special tanks to Damon Neal for his documentation template</em>
+  <em>Special thanks to Damon Neal for his documentation template</em>
  
 
 
