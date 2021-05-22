@@ -63,6 +63,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![09-portalauth](../Send-IngestionCostAlert/images/09-portalauth.png)
 
 
+
 14. Click Save
 ![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess.png)
 
@@ -72,27 +73,49 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 15. Click the resource group again
 ![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg2.png)
 
+
+
+
 16. Click teams-IngestionCostAlert
 ![12-teamsapi](../Send-IngestionCostAlert/images/12-teamsapi.png)
 
+
+
+
+
 17. Click Test connection failed.
 ![13-teamstestapi](../Send-IngestionCostAlert/images/13-teamstestapi.png)
+
+
+
+
 
 
 18. Click Authorize
 ![14-teamsauthorize](../Send-IngestionCostAlert/images/14-teamsauthorize.png)
 
 
+
+
+
 19. Login into portal again
 ![15-teamslogin](../Send-IngestionCostAlert/images/15-teamslogin.png)
+
+
+
 
 
 20. Click Save
 ![16-teamsapisave](../Send-IngestionCostAlert/images/16-teamsapisave.png)
 
 
-21. In the Azure search box type Logic App  Logic app
+
+
+
+
+21. In the Azure search box type Logic App 
 ![17-logicappsearch](../Send-IngestionCostAlert/images/17-logicappsearch.png)
+
 
 
 22. Select the newly created logic app
