@@ -67,6 +67,8 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![10-authapisuccess](../Send-IngestionCostAlert/images/10-authapisuccess.png)
 
 
+
+
 15. Click the resource group again
 ![11-clickrg2](../Send-IngestionCostAlert/images/11-clickrg2.png)
 
