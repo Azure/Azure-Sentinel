@@ -11,7 +11,7 @@ describe("Playbooks validator", () => {
   });
 
   it(`Should throw an exception when template is missing 'PlaybookName' parameter`, async () => {
-    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/workbooksTemplateFiles/invalidValueForFromTemplateId.json");
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithNoPlaybookNameParameter.json");
   });
 
   async function checkInvalid(filePath: string): Promise<Chai.PromisedAssertion> {
