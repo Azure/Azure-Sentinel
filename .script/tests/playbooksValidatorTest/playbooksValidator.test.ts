@@ -14,6 +14,10 @@ describe("Playbooks validator", () => {
     await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithNoPlaybookNameParameter.json");
   });
 
+  it(`Should throw an exception when playbook resource location isn't taken from resource group location`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithHardcodedPlaybookLocation.json");
+  });
+
   async function checkInvalid(filePath: string): Promise<Chai.PromisedAssertion> {
     await expect(IsValidTemplate(filePath)).eventually.rejectedWith(Error).and.have.property("name", "PlaybookValidationError");
   }

@@ -7,6 +7,7 @@ import { ArmTemplate, ArmTemplateResource } from "./utils/playbookCheckers/Model
 import { PlaybookTemplateMetadata } from "./utils/playbookCheckers/Models/playbookTemplateMetadata";
 import { validateTemplateParameters } from "./utils/playbookCheckers/playbookArmTemplateParametersChecker";
 import { getTemplatePlaybookResources } from "./utils/playbookCheckers/playbookARMTemplateUtils";
+import { validatePlaybookResource } from "./utils/playbookCheckers/playbookResourceChecker";
 
 export async function IsValidTemplate(filePath: string): Promise<ExitCode> {
   let playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata> = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -30,6 +31,7 @@ function validateARMTemplateSchema(playbookARMTemplate: ArmTemplate<PlaybookTemp
 
 function validateARMTemplateWithPlaybookResource(filePath: string, playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata>): void {
     validateTemplateParameters(filePath, playbookARMTemplate);
+    validatePlaybookResource(filePath, playbookARMTemplate);
 }
 
 let fileTypeSuffixes = ["azuredeploy.json"];
