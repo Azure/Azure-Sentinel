@@ -1,17 +1,67 @@
+Parser:
+  Title: M365D Process Events
+  Version: '0.1'
+  LastUpdated: May 23, 2021
+Product:
+  Name: M365D
+Normalization:
+  Schema: ProcessEvents
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com
+- Title: Tech Community
+  Link: https://techcommunity.microsoft.com
+Description: Parser for M365 Defender for endpoint, into "Process" Normalized Schema
+ParserName: M365D_ProcessEvents_Normalized
 ParserQuery: |
     let ProcessEvents_M365D=(){
-    DeviceProcessEvents
-    |
-    project
-    //***** Creating new fields & projecting existing fields ******
-        TimeGenerated,
-        EventCount=int(1),
-        EventProduct="M365 Defender for Endpoint",
-        EventVendor="Microsoft",
-        EventSchemaVersion="0.0.1",
-    //***** Renaming Fields ****** 
-        EventOriginalUid = ReportId,
-        EventType = ActionType
-    //TODO: review all missing fields and add to query
-    };
-    ProcessEvents_M365D
+        DeviceProcessEvents
+        | extend 
+            TargetUserUpn = iff(AccountDomain!="",strcat(AccountDomain,"\\" , AccountName),""), // creating Domain\user structure if domain is not empty
+            ActorUserUpn = iff(InitiatingProcessAccountDomain!="",strcat(InitiatingProcessAccountDomain,"\\" , InitiatingProcessAccountName),"") // creating Domain\user structure if domain is not empty
+        | project
+        //***** Mandatory Fields - to be changed ******
+            TimeGenerated,
+            EventCount=int(1),
+            EventProduct="M365 Defender for Endpoint",
+            EventVendor="Microsoft",
+            EventSchemaVersion="0.0.1",
+            EventOriginalUid = ReportId,
+            EventType = ActionType,
+            DvcId=DeviceId,
+            DvcHostName=DeviceName,
+            DvcOs = "Windows",
+            DvcMachineGroup=MachineGroup,
+            TargetUserUpn,
+            TargetUserName = AccountName,
+            TargetUserId = AccountSid,
+            TargetUserIdType = "SID",
+            TargetProcessFileName = FileName,
+            TargetProcessFilePath = FolderPath,
+            //***** Optional Fields - to be changed ******
+            TargetProcessMD5 = MD5,
+            TargetProcessSHA1 = SHA1 ,
+            TargetProcessSHA256 = SHA256,
+            TargetProcessCommandLine = ProcessCommandLine,
+            TargetProcessId = ProcessId,
+            TargetProcessIntegrityLevel = ProcessIntegrityLevel,
+            TargetProcessTokenElevation = ProcessTokenElevation,
+            ActorUserName = InitiatingProcessAccountName , 
+            ActorUserId = InitiatingProcessAccountSid , 
+            ActorUserIdType = "SID", 
+            ActorUserUpn, 
+            ActingProcessCommandLine = InitiatingProcessCommandLine , 
+            ActingProcessFileName = InitiatingProcessFileName , 
+            ActingProcessFilePath = InitiatingProcessFolderPath , 
+            ActingProcessId = InitiatingProcessId  ,  
+            ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel , 
+            ActingProcessMD5 = InitiatingProcessMD5 , 
+            ActingProcessSHA1 = InitiatingProcessSHA1 , 
+            ActingProcessSHA256 = InitiatingProcessSHA256 , 
+            ParentProcessFileName = InitiatingProcessParentFileName , 
+            ParentProcessId = InitiatingProcessParentId,
+            ActingProcessCreationTime = InitiatingProcessCreationTime , 
+            ParentProcessCreationTime = InitiatingProcessParentCreationTime  
+        };
+        ProcessEvents_M365D
