@@ -28,8 +28,8 @@ ParserQuery: |
       | project-away Parser;
     RawData 
     | extend dnsdata=tostring(extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0][3])
-    | extend NetworkDirection=iff(dnsdata has "response:", "response", "request")
-    | extend dnsclient=iff(NetworkDirection=='response'
+    | extend EventSubType=iff(dnsdata has "response:", "response", "request")
+    | extend dnsclient=iff(EventSubType=='response'
                 //<client ip>#port <UDP or TCP>: [view: DNS view] query: <queried domain name> <class name> <type name> response: <rcode> <flags> [<RR in text format>; [<RR in text format>;] ...]
                 , extract_all(@'^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+):? (UDP|TCP):? (view: DNS view)?query: (\S+) ([A-Z]+) (\S+) response:? ([A-Z]+) (\S+)(([^;]+;\s*)*)',dnsdata)[0]
                 //<client IP>#<port> query: <query_Domain name> <class name> <type name> <- or +>[SETDC] <(name server ip)>
@@ -43,22 +43,22 @@ ParserQuery: |
          EventSchemaVersion="0.0.1",
          Dvc=Computer,
          EventType="lookup", /// ???
-        EventResult=iff(NetworkDirection=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),
-         EventResultDetails=iff (NetworkDirection=='response',tostring(dnsclient[8]),""), // => ResponseCodeNames
+        EventResult=iff(EventSubType=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),
+         EventResultDetails=iff (EventSubType=='response',tostring(dnsclient[8]),""), // => ResponseCodeNames
          // TimeGenerated, // not handled by schema, but we need to preserve it
          SrcIpAddr = tostring(dnsclient[1]),
-         NetworkDirection=iff(dnsclient has "response:", "response","request"), ///????
+         EventSubType=iff(dnsclient has "response:", "response","request"), ///????
         // 
         SrcPortNumber = toint(dnsclient[2]),
-        NetworkProtocol = iff (NetworkDirection=='reaponse', tostring(dnsclient[3]),""),        
-        Query = iff (NetworkDirection=='response',tostring(dnsclient[5]), tostring(dnsclient[3])),
-        QueryClassName = iff (NetworkDirection=='response',tostring(dnsclient[6]),tostring(dnsclient[4])),
-        QueryTypeName = iff (NetworkDirection=='response',tostring(dnsclient[7]),tostring(dnsclient[5])),
-        ResponseCodeName = iff (NetworkDirection=='response',tostring(dnsclient[8]),""),
-        Flags =iff (NetworkDirection=='response', tostring(dnsclient[9]),tostring(dnsclient[6])),
+        NetworkProtocol = iff (EventSubType=='reaponse', tostring(dnsclient[3]),""),        
+        Query = iff (EventSubType=='response',tostring(dnsclient[5]), tostring(dnsclient[3])),
+        QueryClassName = iff (EventSubType=='response',tostring(dnsclient[6]),tostring(dnsclient[4])),
+        QueryTypeName = iff (EventSubType=='response',tostring(dnsclient[7]),tostring(dnsclient[5])),
+        ResponseCodeName = iff (EventSubType=='response',tostring(dnsclient[8]),""),
+        Flags =iff (EventSubType=='response', tostring(dnsclient[9]),tostring(dnsclient[6])),
         // 
-        EventMessage = iff (NetworkDirection=='response',tostring(dnsclient[-2]),""),
-        DstIpAddr=iff(NetworkDirection=='response','',dnsclient[-1])
+        EventMessage = iff (EventSubType=='response',tostring(dnsclient[-2]),""),
+        DstIpAddr=iff(EventSubType=='response','',dnsclient[-1])
        // **************Aliases
     | extend 
         ResponseCodeName=EventResultDetails, 
