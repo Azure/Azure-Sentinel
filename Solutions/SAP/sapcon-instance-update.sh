@@ -43,9 +43,13 @@ contlist=$(docker container ls -a | grep ".*sentinel.*sapcon" | awk '{print $1}'
 
 while IFS= read -r contname
 <<<<<<< HEAD
+<<<<<<< HEAD
 do	
 	echo Updating $cont....
 	cont=$(docker ps -a --filter id=$contname --format '{{.Names}}')
+=======
+do
+>>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
 =======
 do
 >>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
@@ -64,6 +68,7 @@ do
 			
 			contstate=$(docker inspect --format='{{.State.Running}}' $contname )
 <<<<<<< HEAD
+<<<<<<< HEAD
 			
 			# pause 'press enter'
 			if [ $contstate == "false" ]
@@ -75,6 +80,8 @@ do
 					echo ''
 					echo 'Container "'"$cont"'" was updated - please start the app by running "docker start '"$cont"'"'
 =======
+=======
+>>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
 			echo $contstate 
 			pause 'press enter'
 			if [ $contstate == "false" ]
@@ -102,11 +109,15 @@ do
 					echo ''
 					echo 'Container "'"$contname"'" was not updated"'
 				fi
+<<<<<<< HEAD
+>>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
+=======
 >>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
 			else
 				docker cp $contname:$sdkfileloc $(pwd)
 				docker stop $contname >/dev/null
 				docker container rm $contname >/dev/null
+<<<<<<< HEAD
 <<<<<<< HEAD
 				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $cont $dockerimage >/dev/null
 				docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
@@ -117,6 +128,8 @@ do
 		else
 			echo 'Container "'"$cont"'" cannot be updated - The mount point is empty'
 =======
+=======
+>>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
 				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
 				docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
 				docker start $contname >/dev/null
@@ -125,6 +138,9 @@ do
 			fi
 		else
 			echo 'Container "'"$contname"'" cannot be updated - The mount point is empty'
+<<<<<<< HEAD
+>>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
+=======
 >>>>>>> 47b4dd341dec2294cc89b7e79bd9f3e3c2f92af4
 		fi
 	else
