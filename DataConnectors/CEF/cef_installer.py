@@ -11,7 +11,7 @@
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
 #       SUSE Linux Enterprise Server 12, 15
 #   32-bit
 #       CentOS 7 and 8
@@ -39,6 +39,8 @@ omsagent_default_incoming_port = "25226"
 daemon_default_incoming_port = "514"
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
+oms_agent_extract_ws_id_url = "/etc/opt/microsoft/omsagent/"
+oms_agent_purge_command = "wget -O onboard_agent.sh https://raw.githubusercontent.com/Microsoft/OMS-Agent-for-Linux/master/installer/scripts/onboard_agent.sh && sudo sh onboard_agent.sh --purge"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 syslog_ng_source_content = "source s_src { udp( port(514)); tcp( port(514));};"
@@ -50,6 +52,7 @@ rsyslog_old_config_udp_content = "# provides UDP syslog reception\n$ModLoad imud
 rsyslog_old_config_tcp_content = "# provides TCP syslog reception\n$ModLoad imtcp\n$InputTCPServerRun " + daemon_default_incoming_port + "\n"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+oms_agent_documentation = "https://docs.microsoft.com/azure/azure-monitor/platform/log-analytics-agent"
 log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 oms_agent_configuration_url = "https://raw.githubusercontent.com/microsoft/OMS-Agent-for-Linux/master/installer/conf/omsagent.d/security_events.conf"
 portal_auto_sync_disable_file = "omshelper_disable"
@@ -118,6 +121,29 @@ def handle_error(e, error_response_str):
     print_error(error_response_str)
     print_error(error_output)
     return False
+
+
+def check_multi_homing(workspace_id):
+    """
+    Check if there is already an agent install and connected to a different worksapce
+    """
+
+    grep1 = subprocess.Popen(["grep", "-ri", "WORKSPACE_ID=", oms_agent_extract_ws_id_url], stdout=subprocess.PIPE)
+    grep2 = subprocess.Popen(["grep", "-v", "%"], stdin=grep1.stdout, stdout=subprocess.PIPE)
+    o, e = grep2.communicate()
+    output_decoded = o.decode(encoding='UTF-8')
+    if e is not None:
+        print_error("Failed to check potential multi homing issue")
+    elif output_decoded is not None and output_decoded != "":
+        # Extract the workspace id from the agent configuration
+        current_ws_id = re.search("(?<=WORKSPACE_ID=).*", output_decoded).group(0)
+        if current_ws_id != workspace_id:
+            print_error("This server already has an omsagent installed and connected to a different workspace- {}. \nThe omsagent"
+                        " does not currently support sending data to multiple workspaces (multi-homing).\nIf you wish to overeide this workspace connection"
+                        " please remove the existing omsagent using the command: \"{}\" \nand rerun this installation script"
+                        .format(current_ws_id, oms_agent_purge_command))
+            print_error("For more on this issue please visit " + oms_agent_documentation)
+            sys.exit()
 
 
 def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
@@ -623,6 +649,7 @@ def main():
                 elif "-help" in sys.argv[index]:
                     print(help_text)
                     return
+    check_multi_homing(workspace_id=workspace_id)
     if download_omsagent() and install_omsagent(workspace_id=workspace_id, primary_key=primary_key, oms_agent_install_url=oms_agent_install_url):
         # if setting oms agent configuration has failed we need to stop the script
         if not set_omsagent_configuration(workspace_id=workspace_id, omsagent_incoming_port=omsagent_incoming_port):

@@ -13,7 +13,7 @@
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
 #       SUSE Linux Enterprise Server 12, 15
 #   32-bit
 #       CentOS 7 and 8
@@ -58,6 +58,8 @@ syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/do
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
+file_read_permissions_octal_representation = 4
+mock_message_max = 5
 portal_auto_sync_disable_file = "omshelper_disable"
 
 def print_error(input_str):
@@ -279,6 +281,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     '''
     start_seconds = int(round(time.time()))
     end_seconds = int(round(time.time()))
+    mock_message_counter = 0
     print("This will take " + str(tcpdump_time_restriction) + " seconds.")
     command_tokens = ["sudo", "tcpdump", "-A", "-ni", "any", "port", incoming_port, "-vv"]
     print_notice(" ".join(command_tokens))
@@ -291,8 +294,9 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
     while (end_seconds - start_seconds) < tcpdump_time_restriction:
-        if mock_message is True:
+        if mock_message is True and mock_message_counter < mock_message_max:
             # Sending mock messages
+            mock_message_counter += 1
             send_cef_message_local(daemon_port, 1)
         poll_result = poll_obj.poll(0)
         if poll_result:
@@ -452,6 +456,23 @@ def file_contains_string(file_tokens, file_path):
     return all(check_token(token, content) for token in file_tokens)
 
 
+def check_file_read_permissions(file_path, workspace_id):
+    # get the octal representation of the file permissions
+    get_permissions = subprocess.Popen(["stat", "-c", "'%a'", file_path], stdout=subprocess.PIPE)
+    o, e = get_permissions.communicate()
+    if e is not None:
+        print_warning("Unable to verify file permissions for path:" + file_path)
+        return False
+    octal_permissions = o.decode('UTF-8').strip("\'\n")
+    other_permissions = octal_permissions[-1]
+    if int(other_permissions) < file_read_permissions_octal_representation:
+        # prompt the user to change the file permissions to default file permissions in consts
+        print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
+                    " \"chmod o+r {} && sudo /opt/microsoft/omsagent/bin/service_control restart {}\"".format(file_path, file_path, workspace_id))
+        return False
+    print_ok("File permissions valid")
+
+
 def sudo_read_file_contains_string(file_tokens, file_path):
     restart = subprocess.Popen(["sudo", "cat", file_path], stdout=subprocess.PIPE)
     o, e = restart.communicate()
@@ -523,6 +544,7 @@ def omsagent_security_event_conf_validation(workspace_id):
         print_error("Could not locate necessary port and ip in the agent's configuration.\npath:" + path)
     else:
         print_ok("Omsagent event configuration content is valid")
+    check_file_read_permissions(path, workspace_id)
 
 
 def check_daemon(daemon_name):

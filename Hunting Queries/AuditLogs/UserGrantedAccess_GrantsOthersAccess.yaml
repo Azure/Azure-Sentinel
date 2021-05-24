@@ -3,9 +3,9 @@ name: User Granted Access and Grants others Access
 description: |
   'Identifies when a new user is granted access and starts granting access to other users.  This can help you identify rogue or malicious user behavior.'
 requiredDataConnectors:
-  - connectorId: AzureActivity
+  - connectorId: AzureActiveDirectory
     dataTypes:
-      - AzureActivity
+      - AuditLogs
 tactics:
   - Persistence
   - PrivilegeEscalation
@@ -35,7 +35,7 @@ query: |
       | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
       | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName ) 
       | mvexpand ModProps
-      | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue));
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"','',tostring(ModProps.newValue));
   };
   // Assigning time for First TargetUserName that was added
   let FirstAdd = auditLogEvents(auditLookback, opName)  
@@ -57,3 +57,13 @@ query: |
   | summarize PropertyUpdateSet = make_bag(PropertyUpdate) by FirstAddTimeUtc, FirstInitiatedBy, FirstTargetUserName, SecondAddTimeUtc, SecondInitiatedBy, SecondTargetUserName, 
   IpAddress, FirstTargetResourceName, SecondTargetResourceName, FirstOperationName, SecondOperationName
   | extend timestamp = FirstAddTimeUtc, AccountCustomEntity = FirstInitiatedBy, HostCustomEntity = FirstTargetResourceName, IPCustomEntity = IpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

@@ -17,9 +17,12 @@ requiredDataConnectors:
   - connectorId: PaloAltoNetworks 
     dataTypes: 
       - CommonSecurityLog 
-  - connectorId: Microsoft 365 Defender 
+  - connectorId: MicrosoftThreatProtection
     dataTypes: 
-      - DeviceNetworkEvents 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics 
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -28,7 +31,6 @@ tactics:
   - CommandAndControl 
 query:  |  
  
- let timeframe = 1d; 
  let DomainNames = dynamic(["0.ns1.dns-info.gq", "1.ns1.dns-info.gq", "10.ns1.dns-info.gq", "102.ns1.dns-info.gq", 
     "104.ns1.dns-info.gq", "11.ns1.dns-info.gq", "110.ns1.dns-info.gq", "115.ns1.dns-info.gq", "116.ns1.dns-info.gq", 
     "117.ns1.dns-info.gq", "118.ns1.dns-info.gq", "12.ns1.dns-info.gq", "120.ns1.dns-info.gq", "122.ns1.dns-info.gq", 
@@ -95,20 +97,17 @@ query:  |
     "youtube.dns05.com", "z1.zalofilescdn.com", "z2.zalofilescdn.com", "zalofilescdn.com"]); 
  (union isfuzzy=true 
   (CommonSecurityLog  
-  | where TimeGenerated >= ago(timeframe)  
   | parse Message with * '(' DNSName ')' *  
   | where DNSName in~ (DomainNames) 
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP 
   ), 
   (DnsEvents  
-  | where TimeGenerated >= ago(timeframe)  
   | extend DNSName = Name 
   | where isnotempty(DNSName) 
   | where DNSName  in~ (DomainNames) 
   | extend IPAddress =  ClientIP 
   ), 
   (VMConnection  
-  | where TimeGenerated >= ago(timeframe)  
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' * 
   | where isnotempty(DNSName) 
   | where DNSName  in~ (DomainNames) 
@@ -120,6 +119,37 @@ query:  |
   | where RemoteUrl  in~ (DomainNames)  
   | extend IPAddress = RemoteIP 
   | extend Computer = DeviceName 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   ) 
   ) 
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
