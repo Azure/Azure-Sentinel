@@ -19,6 +19,8 @@ param($Timer)
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
 
+Write-Verbose("Verbose : Log Analytics URI : $($logAnalyticsUri)") -Verbose
+
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
@@ -45,6 +47,8 @@ function CarbonBlackAPI()
     # Remove if addition slash or space added in hostName
     $hostName = $hostName.Trim() -replace "[.*/]$",""
 
+    Write-Verbose("Verbose : HostName : $($hostName)")
+
     if ([string]::IsNullOrEmpty($logAnalyticsUri))
     {
         $logAnalyticsUri = "https://" + $workspaceId + ".ods.opinsights.azure.com"
@@ -63,10 +67,12 @@ function CarbonBlackAPI()
 
     $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
     $eventURI = "$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"
+    Write-Verbose("Verbose logging : Event URI : $($eventURI)") -Verbose
     $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)"))
 
     if ($auditLogsResult.success -eq $true)
     {
+        Write-Verbose("Verbose logging : Audit log result status : $($auditLogsResult.success)") -Verbose
         $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
         {
@@ -87,6 +93,7 @@ function CarbonBlackAPI()
     if ($eventsResult.success -eq $true)
     {
         $totalResult = $eventsResult.totalResults
+        Write-Verbose("Verbose logging : Total result : $($totalResult)") -Verbose
         $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
         {
@@ -96,7 +103,8 @@ function CarbonBlackAPI()
 			for ($start; $start -le $totalResult; $start+=$rows)
 			{
 				$eventPaginationURI = "&start=$($start)&rows=$($rows)"
-				Write-Host("Pagination URI : $($eventURI)$($eventPaginationURI)")  
+				Write-Host("Pagination URI : $($eventURI)$($eventPaginationURI)")
+                Write-Verbose("Verbose logging : Pagination URI : $($eventPaginationURI)") -Verbose
 				$eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)$($eventPaginationURI)"))
 				$EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
 				if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
@@ -106,7 +114,9 @@ function CarbonBlackAPI()
 					Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
 				}
 				Write-Host("Total Events result count $($eventsResult.totalResults) `n Events result count : $($eventsResult.results.Count) starting from : $($start)")
-			}
+                Write-Verbose("Total Events result count $($eventsResult.totalResults) `n Events result count : $($eventsResult.results.Count) starting from : $($start)") -Verbose
+
+            }
         }
         else
         {
@@ -120,7 +130,8 @@ function CarbonBlackAPI()
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
     {   
-         Write-Host "No SIEM API ID and/or Key value was defined."   
+        Write-Verbose "No SIEM API ID and/or Key value was defined." -Verbose
+         Write-Host "No SIEM API ID and/or Key value was defined."
     }
     else
     {                
