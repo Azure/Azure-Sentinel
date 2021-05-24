@@ -9,7 +9,7 @@ Ingest all the SecurityHub findings returned by SecurityHub API, ingests only fr
 ## Deploy AWS SecurityHub Data connector
 
 1. Click  "Deploy To Azure" (For both Commercial & Azure GOV) 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fandedevsecops%2FAWS-Security-Hub-Data-Connector%2Fmain%2Fazuredeploy_awssecurityhub.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-SecurityHubFindings%2Fazuredeploy_awssecurityhub.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
