@@ -16,41 +16,32 @@ Description: |
   TODO
 ParserName: vimDnsMicrosoft
 ParserQuery: |
-  let RCodes=(s:int){
-    case(s==0, "NoError"
-    , isnull(s),'-'
-    , s==1, "FormErr"
-    , s==2,"ServFail"
-    , s==3,'NXDomain'
-    , s==4,'NotImp'
-    , s==5,'Refused'
-    , s==6,'YXDomain'
-    , s==7,'YXRRSet'
-    , s==8,'NXRRSet'
-    , s==9,'NotAuth'
-    , s==10,'NotZone'
-    , s==11,'DSOTYPENI'
-    , s==12-15,'Unassigned'
-    , s==16,'BADVERS'
-    , s==16,'BADSIG'
-    , s==17,'BADKEY'
-    , s==18,'BADTIME'
-    , s==19,'BADMODE'
-    , s==20,'BADNAME'
-    , s==21,'BADALG'
-    , s==22,'BADTRUNC'
-    , s==23,'BADCOOKIE'
-    , s < 3840,'Unassigned'
-    , s < 4095,'Reserved for Private Use'
-    , s < 65534,'Unassigned'
-    , s < 65535,'Reserved'
-    , 'Unkown')
-  };
+  let RCodeTable=datatable(ResponseCode:int,ResponseCodeName:string)[
+     0, 'NoError'
+   , 1, "FormErr"
+   , 2,"ServFail"
+   , 3,'NXDomain'
+   , 4,'NotImp'
+   , 5,'Refused'
+   , 6,'YXDomain'
+   , 7,'YXRRSet'
+   , 8,'NXRRSet'
+   , 9,'NotAuth'
+   , 10,'NotZone'
+   , 11,'DSOTYPENI'
+   , 16,'BADVERS'
+   , 16,'BADSIG'
+   , 17,'BADKEY'
+   , 18,'BADTIME'
+   , 19,'BADMODE'
+   , 20,'BADNAME'
+   , 21,'BADALG'
+   , 22,'BADTRUNC'
+   , 23,'BADCOOKIE'];
   let DNSQuery_MS=(){
     DnsEvents
   | project-rename
          Dvc=Computer ,
-         EventResult = Result, 
          SrcIpAddr = ClientIP,
          QueryTypeName=QueryType,
          EventMessage = Message,
@@ -58,24 +49,28 @@ ParserQuery: |
          ResponseName = IPAddresses,
          Query = Name,
          ResponseCode = ResultCode
-  | extend 
+  | extend
   // ******************* Mandatory
          EventCount=int(1),
          EventStartTime=TimeGenerated,
          EventVendor = "Microsoft",
          EventProduct = "Microsoft DNS Server",
          EventSchemaVersion="0.0.1",
-         EventResultDetails = RCodes(ResponseCode),  
          //
          EventEndTime=TimeGenerated,
-         EventSubType='response', 
+         EventSubType='response',
          EventSeverity = tostring(Severity),
          EventType = case(SubType=='LookupQuery','lookup','other'),
-         DvcHostname = Dvc
-      // **************Aliases
-    | extend 
-        ResponseCodeName=EventResultDetails, 
+         DvcHostname = Dvc,
+         EventResult = iff(EventId==257,'Success','Failure')
+     | lookup RCodeTable on ResponseCode
+     | extend EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
+                                    , ResponseCode between (3841 .. 4095), 'Reserved for Private Use'
+                                    , 'Unassigned')
+    // **************Aliases
+    | extend
+        ResponseCodeName=EventResultDetails,
         Domain=Query,
         IpAddr=SrcIpAddr
         };
-  MSDNSEvents
+  DNSQuery_MS
