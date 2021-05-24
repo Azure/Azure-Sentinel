@@ -1,4 +1,4 @@
-# Ingest and Reference Auzre Global IP's
+# Ingest and Reference Azure Global IP's
 Author: Julian Gonzalez
 
 The Azure IP Watchlist template provides a compiled list of IP's that are used by Azure Services. This template is meant to be used in conjunction with Azure Sentinel Analytic Rules in order to decrease false positive alerts for services and activities that come from Azure based IP addresses.
@@ -10,15 +10,15 @@ To deploy, users will need:
 2. An Azure Sentinel workspace and instance
 3. A user that has Azure Sentinel Contirbutor permissions on the Resource Group that Azure Sentinel is located in
 
-## **Deployment Porcess**
+## **Deployment Process**
+## Option 1
 1. Click on the "Deploy to Azure" button.
 2. Once in the Azure Portal, select the Subscription and Resource Group that Azure Sentinel is under.
 3. Click "Review and Create".
 4. Click "Create".
 5. Within a minute or two, the template should deploy and the Watchlist should appear within the Azure Sentinel environment. 
 
-or
-
+## Option 2
 1. Enter the template within the GitHub folder.
 2. In the top right corner, select Raw.
 3. Copy the raw text within the template.
