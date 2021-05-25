@@ -17,23 +17,22 @@ Once you have created a playbook that you want to export to share, please follow
 
 ## Playbook conventions and guidlines
 
-* **Storing parameters:** Pre-configured parameters that user should enter during deployment should be stored in [Initialize Variable](https://docs.microsoft.com/azure/logic-apps/logic-apps-create-variables-store-values#initialize-variable) actions, located in the beginning of the playbook. When [templatizing](#Create-ARM-Template) the playbook, the ARM Template parameters will be sent there.
+* **Use parameters and store them in "Initialize Variable" steps**<br> For example, if playbook sends an email to the SOC shared inbox, this field should be supplied as a parameter to the playbook. Pre-configured parameters that user should enter during deployment should be stored in [Initialize Variable](https://docs.microsoft.com/azure/logic-apps/logic-apps-create-variables-store-values#initialize-variable) actions, located in the beginning of the playbook. When [templatizing](#Create-ARM-Template) the playbook, you can add the parameters to the deployment steps.
 * **Trigger choice:** please use Incident trigger, unless there is a strong use case for the alert trigger.
 * **Azure Sentinel connector:** Use [most updated actions](https://docs.microsoft.com/connectors/azuresentinel/#azure-sentinel-actions-summary) in Azure Sentinel connector.
 * **Testing** Please test your playbook end to end with variety of scenarios.
-* **Create screenshots** as mentioned in the [metadata section](#Add-Metadata)
+
 
 ## Create screenshots
 Meant to help the user understand the playbook functionality and value. 
-The playbooks folder should contain an "images" folder with screenshots of:
-* Logic Apps designer (main steps, expand only interesting steps). <br>
+The* playbook folder should contain an "images" folder with screenshots of:
+* **Logic Apps designer** (main steps, expand only interesting steps). <br>
 Please take screenshots of dark and light Azure theme (can be configured from settings button in the top right Azure toolbar).
     <br>Example:<br>![screenshotexample1](./ImageDark1.png)![screenshotexample1](./ImageLight1.png)
-* Comments this playbook posts on Azure Sentinel incident (optional)
-    <br>Example:<br>![](./commentDark.png))<br>![](./commentLight.png)
-* Changes on the other product (optional)
-    <br>Example:<br>![screenshotexample1](./AADIPuser.png)
-* Artifacts collected (optional)
+* **Comments** this playbook posts on Azure Sentinel incident (optional)
+    <br>Example:<br>![](./commentDark.png)<br>![](./commentLight.png)
+* **Changes on the other product** (optional)
+* **Artifacts collected** (optional)
 
 
 ## Create ARM Template
@@ -55,16 +54,34 @@ In the parameters section, remove all and add the following minimum fields. User
                 "description": "Name of the Logic Apps resource to be created"
             }
         },
-        "ExampleParameter": {
-            "defaultValue": "text that will be seen in the textbox",
-            "type": "String",
-            "metadata": {
-                "description": "explanation text that will be seen in the tip hover button"
-            }
+
+        // For example:
+        "SocEmailAddress": {
+            "defaultValue": "Email will be sent to this address by this playbook.",
+            "type": "string"
+            },
         
         ... // more parameters required to this playbook
     },
 ```
+<br>
+To locate the parameters given in deployment in your playbook, go to Workflow resource section, and find the relevant Initiazile Variable action:
+
+```json
+    "Initialize_variable_-_SOC_email_address": {
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "SocEmailAddress",
+                    "type": "string",
+                    "value": "[parameters('SocEmailAddress')]"
+                }
+            ]
+        }
+    }
+```
+
 
 
 6. **Variables**<br>Create 2 variables for each connection the playbook is using: connection name, and display name (to be presented as a choice in future playbooks that uses this connector). 
@@ -131,7 +148,8 @@ Next, you will need to add resources to be created for each connection.
 
 8. **Microsoft.Logic/workflows resource (playbook content)**<br>
 This section stores the logic you created.<br>
-Please include the hiddent tags for versioning:<br>
+    * **Please remove any personal data** (most of it should have been moved to parameters). For example, erase Teams channel Id or Excel files path.
+    * Please include the hiddent tags for versioning:<br>
 ```Json
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
@@ -178,7 +196,8 @@ In the `Microsoft.Logic/workflows` resource, you will also need the `dependsOn` 
     ]
 ```
 
-11. **Test deployment of your template** following [Instructions for deploying a custom template](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks#instructions-for-deploying-a-custom-template). Make sure the deployment succeeds.
+11. **Test deployment of your template** following [Instructions for deploying a custom template](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks#instructions-for-deploying-a-custom-template). <br>
+**Make sure the deployment succeeds.**
 
 
 ## Add Metadata
@@ -272,3 +291,5 @@ Please locate the following files under a folder named by PlaybookName, which in
     * ImageDark1.png
     * ImageLight.png
     * ...
+
+Please make sure ARM template is tested before submitting.
