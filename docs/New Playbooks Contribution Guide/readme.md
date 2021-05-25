@@ -25,7 +25,7 @@ Once you have created a playbook that you want to export to share, please follow
 
 ## Create screenshots
 Meant to help the user understand the playbook functionality and value. 
-The playbooks folder should contain an "imanges" folder with screenshots of:
+The playbooks folder should contain an "images" folder with screenshots of:
 * Logic Apps designer (main steps, expand only interesting steps). <br>
 Please take screenshots of dark and light Azure theme (can be configured from settings button in the top right Azure toolbar).
     <br>Example:<br>![screenshotexample1](./ImageDark1.png)![screenshotexample1](./ImageLight1.png)
