@@ -12,7 +12,7 @@ Once you have created a playbook that you want to export to share, please follow
 1. [Create ARM Template](#Create-ARM-Template)
 1. [Add metadata to the ARM Template](#Add-Metadata)
 1. [Create Readme file](#Create-Readme-file)
-1. [Create a Pull Request](#prerequisites)
+1. [Create a Pull Request](#Create-a-pull-request)
 
 
 ## Playbook conventions and guidlines
@@ -38,9 +38,8 @@ Please take screenshots of dark and light Azure theme (can be configured from se
 
 ## Create ARM Template
 
-In most cases, the final ARM template will look [like this](./simpletemplateexample.json).
-To generate most of it, please go to the Logic Apps resource in Azure.
-1. Click **Export Template** from the resource menu in Azure Portal.
+The core of part of the ARM template is generated from the Logic Apps resource. After generating it, additional updates are required, explained in this section.
+1. To generate the core part of the ARM template, please go to the Logic Apps resource in Azure. Click **Export Template** from the resource menu in Azure Portal.
 1. Copy the contents of the template.
 1. Using VS code, create a JSON file with the name "azuredeploy.json".
 1. Paste the code into the new file.
@@ -69,16 +68,14 @@ In the parameters section, remove all and add the following minimum fields. User
 
 
 6. **Variables**<br>Create 2 variables for each connection the playbook is using: connection name, and display name (to be presented as a choice in future playbooks that uses this connector). 
-* To construct a string variable, use this following snippet. Make sure to replace the `connectorname` with actual name of the connector.
-For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
+To construct a string variable, use this following snippet. Make sure to replace the `connectorname` with actual name of the connector.
+For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create a variable for each with actual connection name. Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
     For example:
 
 ```json
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "AzureSentinelConnectionDisplayName": "[concat('Azure Sentinel - ', parameters('PlaybookName'))]",
         "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
-        "AzureADConnectionDisplayName": "[concat('Azure AD -', parameters('PlaybookName'))]",
         ... // other connections
     },
     
@@ -152,13 +149,13 @@ In the `Microsoft.Logic/workflows` resource under `parameters / $connections`, t
                     "$connections": {
                         "value": {
                             "azuread": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
-                                "connectionName": "[variables('AzureADConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",  //using the variable we created 
+                                "connectionName": "[variables('AzureADConnectionName')]",  //using the variable we created 
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]" // same string we used to create the resource
                             },
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]", //using the variable we created 
-                                "connectionName": "[variables('AzureSentinelConnectionName')]", //using the variable we created 
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",  //using the variable we created 
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]" // same string we used to create the resource
                             }
                         }
@@ -267,9 +264,9 @@ locate here the deployment buttons (replace PlaybookFolderName)
 [Extended guidance for creating Azure Deploy button can be found here.](https://docs.microsoft.com/azure/azure-resource-manager/templates/deploy-to-azure-button)
 
 
-## Create a Pull request
+## Create a pull request
 Please locate the following files under a folder named by PlaybookName, which includes:
-* azuredeploy.json ([ARM Template](#templatize))
+* azuredeploy.json ([ARM Template](#Create-ARM-Template))
 * readme.md ([Readme file](#Create-Readme-file))
 * images folder ([screenshots](#Create-screenshots) folder)
     * ImageDark1.png
