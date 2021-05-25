@@ -16,16 +16,16 @@ For each Ip address included in the alert (entities of type IP):
 * The watchlist used in this example has at list one column named **ipaddress** which stores the safe address. See the csv file attached in this folder as an example.
 <br><br>
 Overall:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/designerView.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/Images/designerView.png"/><br><br>
 For each IP:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/ForEach.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/Images/ForEach.png"/><br><br>
 Update incident by the results:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/end.png"/><br><br>
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/Images/end.png"/><br><br>
 
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-CloseIncidentKnownIPs%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-CloseIncidentKnownIPs%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/Images/deploytoazuregov.png"/>
 </a>
