@@ -134,7 +134,7 @@ Once deployment is complete, you will need to authorize each connection.
 ##  Reference to the playbook templates and the connector
 
  Connector
-* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewallConnector)
+* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewallConnector)
 
 Playbooks
 * [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addToIPGroup)
