@@ -9,13 +9,13 @@ Run this playbook on incidents which contains suspiciouse AAD identities. When a
  3. (optional) Create policies in Azure AD Identity protection to run when users are confirmed as compromised. [Learn more](https://docs.microsoft.com/azure/active-directory/identity-protection/concept-identity-protection-policies)
 
 Overall:<br>
-!['LogicApps Designer view']('./images/ImageLight1.png')
+![](./images/ImageLight1.png)
 
-Card to be sent by Microsoft Teams bot:
-!['LogicApps Designer view']('./images/msg.png')
+Card to be sent by Microsoft Teams bot: <br>
+![](./images/TeamsCard.png)
 
-Response Part:
-!['LogicApps Designer view']('./images/responsePart.png')
+Response Part:<br>
+![](./images/commmentLight.png)
 
 Documentation references:
 
