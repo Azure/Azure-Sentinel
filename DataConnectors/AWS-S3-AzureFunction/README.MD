@@ -1,5 +1,6 @@
 # Azure Sentinel Data connector to ingest AWS S3 Files
-Author: Sreedhar Ande
+Author: Sreedhar Ande  
+
 Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. This Data connector currently support the following file types from AWS S3  
 
  - .json.gz    
