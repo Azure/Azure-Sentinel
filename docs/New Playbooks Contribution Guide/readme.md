@@ -245,14 +245,14 @@ Fields marked with * are mandatory. Others can be left empty.
 ```
 
 ## Create Readme file
-Readme file is meant to be used by sers who deploy templates from GitHub. Should contain the details from the ARM template metadata:
+Readme file is meant to be used by users who deploy templates from GitHub. Should contain the details from the ARM template metadata:
 * Title
 * Description
 * Prerequisites
 * Author
 * Screenshots
 
-Additionally, should containt **Deploy To Azure** Button.
+Additionally, should contain **Deploy To Azure** Button.
 
 ```markdown
 # Playbook title
