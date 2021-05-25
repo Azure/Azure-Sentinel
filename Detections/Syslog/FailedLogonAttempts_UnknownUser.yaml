@@ -1,4 +1,4 @@
-﻿id: e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
+id: e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6
 name: Failed logon attempts in authpriv
 description: |
   'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in 
@@ -20,20 +20,17 @@ relevantTechniques:
   - T1110
 query: |
 
-  let startdate = 1d;
   let threshold = 15;
   // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.
   // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages
   // are aggregated.
   let authfail = Syslog
-  | where TimeGenerated >= ago(startdate)     
   | where Facility =~ "authpriv"   // looks at authpriv messages
   | where SyslogMessage contains "authentication failure" and SyslogMessage contains " uid=0"
   | parse SyslogMessage with * "rhost=" ExternalIP
   | project TimeGenerated, Computer, ProcessName, HostIP, ExternalIP, ProcessID;  
   // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. 
   let userfail = Syslog 
-  | where TimeGenerated >= ago(startdate)
   | where Facility =~ "authpriv" 
   | where SyslogMessage contains "user unknown"
   | project TimeGenerated, Computer, HostIP, ProcessID;
@@ -62,3 +59,13 @@ query: |
   finalfails 
   | where TotalLogonAttempts >= threshold
   | extend timestamp = StartTimeUtc, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationIP
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0

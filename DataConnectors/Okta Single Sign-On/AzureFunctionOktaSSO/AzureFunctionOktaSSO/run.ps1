@@ -89,9 +89,8 @@ $recordCount = $response.Count
 if ($recordCount -gt 0) {
     Write-Output "$recordCount record(s) are avaliable as of $startDate"
     $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
-    $responseObj = $response | ConvertFrom-Json
-    $responseObj | Add-Member -MemberType NoteProperty -Name "Domain" -Value $domain
-    $json = $responseObj | ConvertTo-Json -Depth 5
+    $response | Add-Member -MemberType NoteProperty -Name "Domain" -Value $domain
+    $json = $response | ConvertTo-Json -Depth 5
     Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType  
 }
 else{

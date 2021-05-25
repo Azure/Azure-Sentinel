@@ -20,22 +20,36 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-  let timeframe = 1h;
   let OperationList = dynamic(["Add member to role","Add member to role in PIM requested (permanent)"]);
   let PrivilegedGroups = dynamic(["UserAccountAdmins","PrivilegedRoleAdmins","TenantAdmins"]);
   AuditLogs
-  | where TimeGenerated >= ago(timeframe)
   | where LoggedByService =~ "Core Directory"
   | where Category =~ "RoleManagement"
   | where OperationName in~ (OperationList)
   | mv-expand TargetResources
-  | extend modifiedProperties = parse_json(TargetResources).modifiedProperties
-  | mv-expand modifiedProperties
-  | extend DisplayName = tostring(parse_json(modifiedProperties).displayName), GroupName =  trim(@'"',tostring(parse_json(modifiedProperties).newValue))
-  | extend AppId = tostring(parse_json(parse_json(InitiatedBy).app).appId), InitiatedByDisplayName = tostring(parse_json(parse_json(InitiatedBy).app).displayName), ServicePrincipalId = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalId), ServicePrincipalName = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalName)
-  | where DisplayName =~ "Role.WellKnownObjectName"
-  | where GroupName in~ (PrivilegedGroups)
+  | extend modProps = parse_json(TargetResources).modifiedProperties
+  | mv-expand bagexpansion=array modProps
+  | evaluate bag_unpack(modProps)
+  | extend displayName = column_ifexists("displayName", "NotAvailable"), newValue = column_ifexists("newValue", "NotAvailable")
+  | where displayName =~ "Role.WellKnownObjectName"
+  | extend DisplayName = displayName, GroupName = replace('"','',newValue)
+  | extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user
+  | extend AppId = initByApp.appId, 
+  InitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, "not available"),
+  ServicePrincipalId = tostring(initByApp.servicePrincipalId),
+  ServicePrincipalName = tostring(initByApp.servicePrincipalName),
+  UserId = initByUser.id,
+  UserIPAddress = initByUser.ipAddress,
+  UserRoles = initByUser.roles,
+  UserPrincipalName = tostring(initByUser.userPrincipalName)
+  //| where GroupName in~ (PrivilegedGroups)
   // If you want to still alert for operations from PIM, remove below filtering for MS-PIM.
-  | where InitiatedByDisplayName != "MS-PIM"
-  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName
-  | extend timestamp = TimeGenerated, AccountCustomEntity = ServicePrincipalName
+  //| where InitiatedByDisplayName != "MS-PIM"
+  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, "not available")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0

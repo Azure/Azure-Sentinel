@@ -8,17 +8,17 @@
 # We send mock data to validate correctness of the pipeline
 # Supported OS:
 #   64-bit
-#       CentOS 6 and 7
+#       CentOS 7 and 8
 #       Amazon Linux 2017.09
-#       Oracle Linux 6 and 7
-#       Red Hat Enterprise Linux Server 6 and 7
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
-#       SUSE Linux Enterprise Server 12
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
+#       SUSE Linux Enterprise Server 12, 15
 #   32-bit
-#       CentOS 6
-#       Oracle Linux 6
-#       Red Hat Enterprise Linux Server 6
+#       CentOS 7 and 8
+#       Oracle Linux 7
+#       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the OMS-Agent-for-Linux documentation.
@@ -41,8 +41,11 @@ oms_agent_configuration_content_tokens = [daemon_port, "127.0.0.1"]
 oms_agent_process_name = "opt/microsoft/omsagent"
 oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.rb'
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
+oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
+oms_agent_selinux_documentation = "https://docs.microsoft.com/azure/azure-monitor/platform/agent-linux"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
-red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/deployment_guide/s1-configuring_rsyslog_on_a_logging_server"
+red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
+red_hat_security_enhanced_permanent_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
 rsyslog_daemon_forwarding_configuration_path = "/etc/rsyslog.d/security-config-omsagent.conf"
 syslog_ng_daemon_forwarding_configuration_path = "/etc/syslog-ng/conf.d/security-config-omsagent.conf"
 rsyslog_daemon_forwarding_configuration_dir_path = "/etc/rsyslog.d/"
@@ -53,8 +56,11 @@ syslog_ng_process_name = "syslog-ng"
 syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
+log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
 tcpdump_time_restriction = 60
-
+file_read_permissions_octal_representation = 4
+mock_message_max = 5
+portal_auto_sync_disable_file = "omshelper_disable"
 
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
@@ -177,15 +183,15 @@ def restart_red_hat_firewall_d():
 
 def security_enhanced_linux_enabled():
     print("Checking if security enhanced linux is enabled")
-    print_notice("sestatus")
-    command_tokens = ["sudo", "sestatus"]
-    sestatus_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
-    o, e = sestatus_command.communicate()
-    if e is not None:
-        print_error("Could not execute \'sestatus\' to check if security enhanced linux is enabled")
+    print_notice("getenforce")
+    command_tokens = ["sudo", "getenforce"]
+    getenforce_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+    o, e = getenforce_command.communicate()
+    if e is not None or getenforce_command.returncode != 0:
+        print_error("Could not execute \'getenforce\' to check if security enhanced linux is enabled")
+        print_notice("please install \'policycoreutils\' package and run the troubleshoot script again")
     else:
-        for line in o.decode('ascii').split('\n'):
-            if "SELinux status" in line and "enabled" in line:
+        if o == 'Enforcing\n':
                 return True
         return False
 
@@ -193,15 +199,16 @@ def security_enhanced_linux_enabled():
 def security_enhanced_linux():
     if security_enhanced_linux_enabled() is True:
         print_warning(
-            "Security enhanced linux is enabled.\nTo use TCP with syslog daemon the omsagent incoming port should be inserted")
-        print("Use elevated privileges to perform the following:")
-        print("\tTo enable the port")
-        print_notice("\tsemanage port -a -t syslogd_port_t -p tcp " + agent_port)
-        print("\tTo validate enabled port")
-        print_notice("\tsemanage port -l | grep " + agent_port)
-        print("\tTo install the policy editor")
-        print_notice("\tyum install policycoreutils-python")
-        print("For more information: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+            "Security enhanced linux is in Enforcing mode.\n"
+            "This is not supported by the OMS Agent and can harm the communication with it.\n"
+            "For more information: " + oms_agent_selinux_documentation)
+        print_notice("To set SELinux to Permissive mode use elevated privileges to perform the following:")
+        print_notice("Run the following command to temporarily change SELinux to permissive mode: \"setenforce 0\"")
+        print_notice("Please restart the syslog daemon running on your machine")
+        print_notice("In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
+        print_notice("For more information on SELinux: " + red_hat_rsyslog_security_enhanced_linux_documentation)
+    else:
+        pass
 
 
 def rsyslog_get_cef_log_counter():
@@ -257,11 +264,6 @@ def handle_tcpdump_line(line, incoming_port, ok_message):
             "Notice: To tcp dump manually execute the following command - \'tcpdump -A -ni any port " + incoming_port + " -vv\'")
         time.sleep(1)
         return True
-    # Handle command not found
-    elif "command not found" in line:
-        print_error(
-            "Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
-        return False
     else:
         # print the output
         print_command_response(line.rstrip())
@@ -279,15 +281,22 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     '''
     start_seconds = int(round(time.time()))
     end_seconds = int(round(time.time()))
+    mock_message_counter = 0
     print("This will take " + str(tcpdump_time_restriction) + " seconds.")
     command_tokens = ["sudo", "tcpdump", "-A", "-ni", "any", "port", incoming_port, "-vv"]
     print_notice(" ".join(command_tokens))
     tcp_dump = subprocess.Popen(command_tokens, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    line = str(tcp_dump.stdout.readline())
+    # Handle command not found
+    if "command not found" in line:
+        print_error("Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
+        return False
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
     while (end_seconds - start_seconds) < tcpdump_time_restriction:
-        if mock_message is True:
+        if mock_message is True and mock_message_counter < mock_message_max:
             # Sending mock messages
+            mock_message_counter += 1
             send_cef_message_local(daemon_port, 1)
         poll_result = poll_obj.poll(0)
         if poll_result:
@@ -447,6 +456,23 @@ def file_contains_string(file_tokens, file_path):
     return all(check_token(token, content) for token in file_tokens)
 
 
+def check_file_read_permissions(file_path, workspace_id):
+    # get the octal representation of the file permissions
+    get_permissions = subprocess.Popen(["stat", "-c", "'%a'", file_path], stdout=subprocess.PIPE)
+    o, e = get_permissions.communicate()
+    if e is not None:
+        print_warning("Unable to verify file permissions for path:" + file_path)
+        return False
+    octal_permissions = o.decode('UTF-8').strip("\'\n")
+    other_permissions = octal_permissions[-1]
+    if int(other_permissions) < file_read_permissions_octal_representation:
+        # prompt the user to change the file permissions to default file permissions in consts
+        print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
+                    " \"chmod o+r {} && sudo /opt/microsoft/omsagent/bin/service_control restart {}\"".format(file_path, file_path, workspace_id))
+        return False
+    print_ok("File permissions valid")
+
+
 def sudo_read_file_contains_string(file_tokens, file_path):
     restart = subprocess.Popen(["sudo", "cat", file_path], stdout=subprocess.PIPE)
     o, e = restart.communicate()
@@ -518,6 +544,7 @@ def omsagent_security_event_conf_validation(workspace_id):
         print_error("Could not locate necessary port and ip in the agent's configuration.\npath:" + path)
     else:
         print_ok("Omsagent event configuration content is valid")
+    check_file_read_permissions(path, workspace_id)
 
 
 def check_daemon(daemon_name):
@@ -650,6 +677,18 @@ def handle_rsyslog(workspace_id):
             time.sleep(1)
 
 
+def check_portal_auto_sync():
+    if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
+        print_ok("No auto sync with the portal")
+        return False
+    print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
+                  "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal. Otherwise all changes will be overwritten. ")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    return True
+
+
 def print_full_disk_warning():
     warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
@@ -684,7 +723,7 @@ def main():
     check_syslog_computer_field_mapping(workspace_id=workspace_id)
     # validate firewalld
     check_red_hat_firewall_issue()
-    # Check issue regarding security enhanced linux blocking tcp ports
+    # Check issue regarding security enhanced linux
     security_enhanced_linux()
     # testing that the daemon is running
     if check_daemon("rsyslog"):
@@ -693,7 +732,9 @@ def main():
         handle_syslog_ng(workspace_id)
     print("Simulating mock data which you can find in your workspace")
     # we always simulate to the daemon port
-    incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True)
+    if not incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True):
+        print_error("Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
+    check_portal_auto_sync()
     print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(
