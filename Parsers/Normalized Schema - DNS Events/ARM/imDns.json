@@ -1,0 +1,103 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+      "workspaceName": {
+          "type": "string"
+      },
+      "location": {
+        "type": "string"
+      }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Vendor Information Model Dns - Cisco Umbrella",
+            "dependsOn": [
+              "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            ],
+            "properties": {
+              "etag": "*",
+              "displayName": "Vendor Information Model Dns - Cisco Umbrella",
+              "category": "Security",
+              "FunctionAlias": "vimDnsCisco",
+              "query": "let DNSQuery_CiscoUmbrella=(){ \n Cisco_Umbrella_dns_CL\n | parse QueryType_s with QueryType:int ' ('QueryTypeName:string ')'\n | project \n   Type,\n    EventCount=int(1),\n   EventStartTime=todatetime(Timestamp_s),\n    EventProduct='Umbrella',\n    EventVendor='Cisco Systems',\n    EventSchemaVersion='0.0.1',\n    Dvc='Unknown' ,\n    EventType='lookup',\n   EventResult=iff(ResponseCode_s=~'NOERROR','Success','Failure'),\n    EventResultDetails=ResponseCode_s,\n    TimeGenerated,\n    SrcIpAddr=column_ifexists('InternalIp_s', ''),\n   EventSubType='response',\n    UrlCategory=column_ifexists('Categories_s', ''),\n    Query=column_ifexists('Domain_s', '') , \n    ThreatCategory=column_ifexists('Blocked_Categories_s', ''),\n    SrcNatIpAddr=column_ifexists('ExternalIp_s', ''),\n    DvcAction=column_ifexists('Action_s', ''),\n    EventEndTime=todatetime(column_ifexists('Timestamp_t', '')), \n    QueryType,QueryTypeName, \n    Identities=column_ifexists('Identities_s', ''), \n    IdentityTypes=column_ifexists('Identity_Types_s', ''),\n   PolicyIdentity=column_ifexists('Policy_Identity_s', ''),\n    PolicyIdentityType=column_ifexists('Policy_Identity_Type_s', '')\n    | extend \n   ResponseCodeName=EventResultDetails, \n  DomainCategory=UrlCategory,\n   Domain=Query,\n   IpAddr=SrcIpAddr\n   }; DNSQuery_CiscoUmbrella",
+              "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Vendor Information Model Dns - Infoblox",
+            "dependsOn": [
+              "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            ],
+            "properties": {
+              "etag": "*",
+              "displayName": "Vendor Information Model Dns - Infoblox",
+              "category": "Security",
+              "FunctionAlias": "vimDnsInfoblox",
+              "query": "let Infoblox=(){let RawData = Syslog | where ProcessName == 'named' and SyslogMessage has 'client'\n  | where Computer in ('datasource') and Facility == 'local6'\n  | extendParser = extract_all(@'^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)', dynamic([1,2,3,4]), SyslogMessage)\n  | mv-expand todynamic(Parser)\n  |extend ResponseTime = todatetime(Parser[0]),\n           Log_Type = tostring(Parser[1]),\n           RawData_subString = tostring(Parser[3])\n  | where Log_Type == 'client'\n  |project-away Parser;\nRawData \n| extend dnsdata=tostring(extract_all(@'^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)', dynamic([1,2,3,4]),SyslogMessage)[0][3])\n| extend EventSubType=iff(dnsdata has 'response:', 'response', 'request')\n| extend dnsclient=iff(EventSubType=='response'\n            //<clientip>#port <UDP or TCP>: [view: DNS view] query: <queried domain name> <class name> <type name> response: <rcode> <flags> [<RR in text format>; [<RR in text format>;] ...]\n            , extract_all(@'^(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+):? (UDP|TCP):? (view: DNS view)?query: (\\S+) ([A-Z]+) (\\S+) response:? ([A-Z]+) (\\S+)(([^;]+;\\s*)*)',dnsdata)[0]\n            //<client IP>#<port> query: <query_Domain name> <class name> <type name> <- or +>[SETDC] <(name server ip)>\n            ,extract_all(@'^(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+):? query: (\\S+) (\\S+) (\\S+) ([+-]) \\(([0-9.]+)\\)',dnsdata)[0])\n| extend\n// ******************* Mandatory\n     EventCount=int(1),\n     EventStartTime=todatetime(TimeGenerated),\n     EventProduct='Infoblox DNS',\n     EventVendor='Infoblox',\n     EventSchemaVersion='0.0.1',\n     Dvc=Computer,\n     EventType='lookup', /// ???\n    EventResult=iff(EventSubType=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),\n     EventResultDetails=iff(EventSubType=='response',tostring(dnsclient[8]),''), // => ResponseCodeNames\n     // TimeGenerated, // not handled by schema, but we need to preserve it\n    SrcIpAddr = tostring(dnsclient[1]),\n     EventSubType=iff(dnsclient has 'response:', 'response','request'), ///????\n    // \n    SrcPortNumber = toint(dnsclient[2]),\n    NetworkProtocol= iff (EventSubType=='reaponse', tostring(dnsclient[3]),''),        \n    Query = iff (EventSubType=='response',tostring(dnsclient[5]), tostring(dnsclient[3])),\n   QueryClassName = iff (EventSubType=='response',tostring(dnsclient[6]),tostring(dnsclient[4])),\n    QueryTypeName = iff(EventSubType=='response',tostring(dnsclient[7]),tostring(dnsclient[5])),\n    ResponseCodeName = iff (EventSubType=='response',tostring(dnsclient[8]),''),\n    Flags =iff(EventSubType=='response', tostring(dnsclient[9]),tostring(dnsclient[6])),\n    // \n    EventMessage = iff (EventSubType=='response',tostring(dnsclient[-2]),''),\n   DstIpAddr=iff(EventSubType=='response','',dnsclient[-1])\n   // **************Aliases\n| extend \n    ResponseCodeName=EventResultDetails, \n    //DomainCategory=UrlCategory,\n   Domain=Query,\n    IpAddr=SrcIpAddr;\n};\nInfoblox",
+              "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Vendor Information Model Dns - Cisco Umbrella",
+            "dependsOn": [
+              "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            ],
+            "properties": {
+              "etag": "*",
+              "displayName": "Vendor Information Model Dns - Cisco Umbrella",
+              "category": "Security",
+              "FunctionAlias": "vimDnsCisco",
+              "query": "let DNSQuery_CiscoUmbrella=(){ \n Cisco_Umbrella_dns_CL\n | parse QueryType_s with QueryType:int ' ('QueryTypeName:string ')'\n | project \n   Type,\n    EventCount=int(1),\n   EventStartTime=todatetime(Timestamp_s),\n    EventProduct='Umbrella',\n    EventVendor='Cisco Systems',\n    EventSchemaVersion='0.0.1',\n    Dvc='Unknown' ,\n    EventType='lookup',\n   EventResult=iff(ResponseCode_s=~'NOERROR','Success','Failure'),\n    EventResultDetails=ResponseCode_s,\n    TimeGenerated,\n    SrcIpAddr=column_ifexists('InternalIp_s', ''),\n   EventSubType='response',\n    UrlCategory=column_ifexists('Categories_s', ''),\n    Query=column_ifexists('Domain_s', '') , \n    ThreatCategory=column_ifexists('Blocked_Categories_s', ''),\n    SrcNatIpAddr=column_ifexists('ExternalIp_s', ''),\n    DvcAction=column_ifexists('Action_s', ''),\n    EventEndTime=todatetime(column_ifexists('Timestamp_t', '')), \n    QueryType,QueryTypeName, \n    Identities=column_ifexists('Identities_s', ''), \n    IdentityTypes=column_ifexists('Identity_Types_s', ''),\n   PolicyIdentity=column_ifexists('Policy_Identity_s', ''),\n    PolicyIdentityType=column_ifexists('Policy_Identity_Type_s', '')\n    | extend \n   ResponseCodeName=EventResultDetails, \n  DomainCategory=UrlCategory,\n   Domain=Query,\n   IpAddr=SrcIpAddr\n   }; DNSQuery_CiscoUmbrella",
+              "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Information Model - Dns",
+            "dependsOn": [
+              "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            ],
+            "properties": {
+              "etag": "*",
+              "displayName": "Information Model - Dns",
+              "category": "Security",
+              "FunctionAlias": "imDns",
+              "query": "union isfuzzy=true vimDnsEmpty, vimDnsCisco , vimDnsInfoblox , vimDnsMicrosoft", 
+              "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Dns",
+            "dependsOn": [
+              "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            ],
+            "properties": {
+              "etag": "*",
+              "displayName": "Dns",
+              "category": "Security",
+              "FunctionAlias": "vimDnsEmpty",
+              "query": "let EmptyNewDnsEvents=datatable(TimeGenerated:datetime , _ResourceId:string , Type:string , EventCount:int  , EventStartTime:datetime , EventType:string , EventResult:string , EventResultDetails:string , EventProduct:string , EventVendor:string  , EventSchemaVersion:string , Dvc:string, EventMessage:string, EventSeverity:string, EventOriginalUid:string, EventReportUrl:string, TenantId:string, DvcHostname:string  , EventProductVersion:string  , DvcIpAddr:string  , DvcAction:string  , SrcIpAddr:string  , SrcPortNumber:int  , DstIpAddr:string  , DstPortNumber:int  , ResponseName:dynamic  , EventSubType:string  , Query:string  , QueryType:int  , QueryTypeName:string  , ResponseCode:int  , NetworkProtocol:string  , Flags:dynamic   , QueryClass:string  , QueryClassName:string  , SrcUserAadId:string  , SrcUserDomain:string  , SrcUserName:string  , SrcUserSid:string  , SrcUserUpn:string  , UrlCategory:string   , ThreatCategory:string  , EventEndTime:datetime   , ResponseCodeName:string   , DomainCategory:string   , IpAddr:string  , Domain:string  , TransactionIdHex:string  )[];  EmptyNewDnsEvents ", 
+              "version": 1
+          }
+        }
+      ]
+    }
+
+  ]
+}
