@@ -1,0 +1,34 @@
+Parser:
+  Title: Sysmon event no. 1 - Process Events
+  Version: '0.1'
+  LastUpdated: May 26, 2021
+Product:
+  Name: System Monitor
+Normalization:
+  Schema: ProcessEvents
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com
+- Title: Tech Community
+  Link: https://techcommunity.microsoft.com
+Description: Parser for M365 Defender for endpoint, into "Process" Normalized Schema
+ParserName: vimProcessEventsMicrosftSysmon
+ParserQuery: |
+              let ParsedProcessEvent=(){
+              // Create the raw table from the raw XML file structure
+              Event
+              | where Source == "Microsoft-Windows-Sysmon" and EventID ==1
+              | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+              | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+              | mv-expand bagexpansion=array EventData
+              | evaluate bag_unpack(EventData)
+              | extend Key=tostring(["@Name"]), Value=["#text"]
+              | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+              | extend SHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
+                      SHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
+                      SHA512=extract(@'SHA512=(\w+)',1,tostring(Hashes)),
+                      MD5=extract(@'SHA512=(\w+)',1, tostring(Hashes))
+              | parse RuleName with * "technique_id=" TechniqueId "," * "technique_name=" TechniqueName
+              }; ParsedProcessEvent
+              
