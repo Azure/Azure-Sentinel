@@ -13,7 +13,7 @@ namespace Kqlvalidations.Tests
     public class KqlValidationTests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
-        private static readonly string DetectionPath = DetectionsYamlFilesTestData.GetDetectionPath();
+        private static readonly List<string> DetectionPaths = DetectionsYamlFilesTestData.GetDetectionPaths();
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
@@ -26,15 +26,15 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_HaveValidKql(string detectionsYamlFileName)
         {
-            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            var detectionsYamlFile = getDetectionsYamlFile(detectionsYamlFileName);
             var yaml = File.ReadAllText(detectionsYamlFile);
             var deserializer = new DeserializerBuilder().Build();
             var res = deserializer.Deserialize<dynamic>(yaml);
             string queryStr = res["query"];
             string id = res["id"];
 
-            //we ignore known issues (in progress)
-            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
             {
                 return;
             }
@@ -43,16 +43,17 @@ namespace Kqlvalidations.Tests
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationRes.IsValid)
             {
-                firstErrorLocation =  GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
+                firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
             }
             Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid in Line:{firstErrorLocation.Line} col:{firstErrorLocation.Col} Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
-        
+
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string detectionsYamlFileName)
         {
-            var detectionsYamlFile = Directory.GetFiles(DetectionPath, detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            var detectionsYamlFile = getDetectionsYamlFile(detectionsYamlFileName);
+
             var yaml = File.ReadAllText(detectionsYamlFile);
             var deserializer = new DeserializerBuilder().Build();
             var res = deserializer.Deserialize<dynamic>(yaml);
@@ -60,14 +61,9 @@ namespace Kqlvalidations.Tests
             string id = res["id"];
 
             //Templates that are in the skipped templates should not pass the validateion (if they pass, why skip?)
-            if (TemplatesToSkipValidationReader.WhiteListTemplateIds.Contains(id))
+            if (ShouldSkipTemplateValidation(id))
             {
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                var firstErrorLocation = (Line: 0, Col: 0);
-                if (!validationRes.IsValid)
-                {
-                    firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
-                }
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
 
@@ -75,7 +71,16 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
-            
+
+        }
+
+        private bool ShouldSkipTemplateValidation(string templateId)
+        {
+            return TemplatesToSkipValidationReader.WhiteListTemplates
+                .Where(template => template.id == templateId)
+                .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))
+                .Where(template => !string.IsNullOrWhiteSpace(template.templateName))
+                .Any();
         }
 
         private (int Line, int Col) GetLocationInQuery(string queryStr, int pos)
@@ -91,6 +96,23 @@ namespace Kqlvalidations.Tests
             }
             var col = (pos - curPos + 1);
             return (curlineIndex + 1, col);
+        }
+
+        /// <summary>
+        ///Get detection yaml file from Detection or solution analytics rule folder
+        /// </summary>
+        /// <param name="detectionsYamlFileName">Detections Yaml File Name</param>
+        /// <returns>detections yaml file path</returns>
+        private string getDetectionsYamlFile(string detectionsYamlFileName)
+        {
+            try
+            {
+                return Directory.GetFiles(DetectionPaths[0], detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            }
+            catch
+            {
+                return  Directory.GetFiles(DetectionPaths[1], detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+            }
         }
     }
 
