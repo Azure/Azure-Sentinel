@@ -118,7 +118,9 @@ SplitAWSResourceTypeTables --> Boolean
 
 	The AWSLambdaExecute policy has the permissions that the function needs to manage objects in Amazon S3 and write logs to CloudWatch Logs. Copy the arn of the role created as you will need it for the next step. 
 
-6. Your lambda function is ready to send data to Log Analytics.
+6. Your lambda function is ready to send data to Log Analytics.  
+7. Update Lambda Memory and TimeOut  
+![Picture12](./Graphics/Picture12.png)  
 
 ### **Test the function**
 1. To test your function, Perform some actions like Start EC2, Stop EC2, Login into EC2, etc.,. 

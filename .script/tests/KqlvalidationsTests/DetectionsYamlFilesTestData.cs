@@ -11,21 +11,27 @@ namespace Kqlvalidations.Tests
     {
         public DetectionsYamlFilesTestData()
         {
-            string detectionPath = GetDetectionPath();
-            var files = Directory.GetFiles(detectionPath, "*.yaml", SearchOption.AllDirectories).ToList();
+            List<string> detectionPaths = GetDetectionPaths();
+            var files = GetDetectionFiles(detectionPaths);
             files.ForEach(f => AddData(Path.GetFileName(f)));
         }
 
-        public static string GetDetectionPath()
+        public static List<string> GetDetectionPaths()
         {
+            List<string> dirPaths = new List<string>() { "Detections", "Solutions"};
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
             var testFolderDepth = 6;
+            List<string> detectionPaths = new List<string>();
             for (int i = 0; i < testFolderDepth; i++)
             {
                 rootDir = rootDir.Parent;
             }
-            var detectionPath = Path.Combine(rootDir.FullName, "Detections");
-            return detectionPath;
+            foreach (var dirName in dirPaths)
+            {
+                detectionPaths.Add(Path.Combine(rootDir.FullName, dirName));
+            }
+
+            return detectionPaths;
         }
 
         public static string GetCustomTablesPath()
@@ -57,6 +63,14 @@ namespace Kqlvalidations.Tests
             UriBuilder uri = new UriBuilder(codeBase);
             string path = Uri.UnescapeDataString(uri.Path);
             return Path.GetDirectoryName(path);
+        }
+
+        private static List<string> GetDetectionFiles(List<string> detectionPaths)
+        {
+            var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories).ToList();
+            files.AddRange(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+
+            return files;
         }
     }
 }

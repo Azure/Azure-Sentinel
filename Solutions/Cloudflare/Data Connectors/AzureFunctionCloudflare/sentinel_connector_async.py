@@ -52,7 +52,6 @@ class AzureSentinelConnectorAsync:
 
     async def _post_data(self, session: aiohttp.ClientSession, workspace_id, shared_key, body, log_type):
         logging.info('Start sending data to sentinel')
-        print('Start sending data to sentinel')
         events_number = len(body)
         body = json.dumps(body)
         method = 'POST'
@@ -73,11 +72,9 @@ class AzureSentinelConnectorAsync:
         async with session.post(uri, data=body, headers=headers) as response:
             if (response.status >= 200 and response.status <= 299):
                 logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
-                print('{} events have been successfully sent to Azure Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
             else:
                 logging.error("Error during sending events to Azure Sentinel. Response code: {}".format(response.status))
-                print("Error during sending events to Azure Sentinel. Response code: {}".format(response.status))
                 self.failed_sent_events_number += events_number
 
     def _check_size(self, queue):
@@ -109,7 +106,8 @@ class AzureSentinelMultiConnectorAsync:
         await conn.send(event)
 
     async def flush(self):
-        await asyncio.wait([conn.flush() for conn in self.connectors.values()])
+        if self.connectors:
+            await asyncio.wait([conn.flush() for conn in self.connectors.values()])
 
     @property
     def successfull_sent_events_number(self):

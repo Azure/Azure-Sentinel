@@ -32,7 +32,7 @@ You can choose to deploy the whole package (Four playbook templates) from the De
 * [Enrichment playbook](./Playbooks/CrowdStrike_Enrichment_GetDeviceInformation) will post a comment to the incident with device information and related detections found in CrowdStrike.
 * [Response from Teams playbook](./Playbooks/CrowdStrike_ResponsefromTeams) will send the SOC Channel interactive cards with host information, allowing taking action on the host: Running a script or contain the host in CrowdStrike.
 
-  ![Crowdstrike-ResponsefromTeams](./Playbooks/Crowdstrike_ResponsefromTeams/adaptivecardcrowdstrike.png)
+  ![Crowdstrike-ResponsefromTeams](./Playbooks/CrowdStrike_ResponsefromTeams/adaptivecardcrowdstrike.png)
 
 
 
