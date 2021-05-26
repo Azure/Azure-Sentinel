@@ -24,11 +24,22 @@ ParserQuery: |
               | mv-expand bagexpansion=array EventData
               | evaluate bag_unpack(EventData)
               | extend Key=tostring(["@Name"]), Value=["#text"]
-              | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
-              | extend SHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
-                      SHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
-                      SHA512=extract(@'SHA512=(\w+)',1,tostring(Hashes)),
-                      MD5=extract(@'SHA512=(\w+)',1, tostring(Hashes))
+              | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName,
+                                   EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+              | extend TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
+                      TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
+                      TargetProcessSHA512=extract(@'SHA512=(\w+)',1,tostring(Hashes)),
+                      TargetProcessMD5=extract(@'SHA512=(\w+)',1, tostring(Hashes))
               | parse RuleName with * "technique_id=" TechniqueId "," * "technique_name=" TechniqueName
-              }; ParsedProcessEvent
-              
+              // table is ready, pending renaming and some cosmetics  
+              | extend 
+                      EventType = "ProcessCreated",
+                      EventStartTime = todatetime(UtcTime),
+                      ActingProcessGuid = extract(@"\{(.*?)\}",1,ParentProcessGuid),
+                      TargetProcessGuid = extract(@"\{(.*?)\}",1,ProcessGuid)
+              | project // TODO: change to "project-rename" after everything works
+                      ActorUserName = User,
+                      ActingProcessCommandLine = ParentCommandLine,
+                      ActingProcessFilePath = ParentImage,
+                      ActingProcessId = ParentProcessId
+                }; ParsedProcessEvent
