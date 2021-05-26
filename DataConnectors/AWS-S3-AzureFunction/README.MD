@@ -51,8 +51,8 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
  
 2. Parameterized AWS S3 fresh event duration using environment variable "FreshEventTimeStamp". Value must be in minutes.  
    **Note**  
-   Azure Function trigger schedule and FreshEventTimeStamp  
-   Ex: If you want to trigger function every 30 min then values must be  
+   **Azure Function trigger Schedule and FreshEventTimeStamp should match to avoid duplicates**  
+   Ex: If you want to trigger function every 10 min then values must be  
    FreshEventTimeStamp=10    
    Schedule=0 */10 * * * *  
       
