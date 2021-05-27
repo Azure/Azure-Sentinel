@@ -1,0 +1,76 @@
+Parser:
+  Title: Microsoft DNS
+  Version: '0.0'
+  LastUpdated: May 10, 2021
+Product:
+  Name: MS DNS Events
+Normalization:
+  Schema: DnsEvents
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com
+- Title: Tech Community
+  Link: https://techcommunity.microsoft.com
+Description: |
+  TODO
+ParserName: vimDnsMicrosoft
+ParserQuery: |
+  let RCodeTable=datatable(ResponseCode:int,ResponseCodeName:string)[
+     0, 'NoError'
+   , 1, "FormErr"
+   , 2,"ServFail"
+   , 3,'NXDomain'
+   , 4,'NotImp'
+   , 5,'Refused'
+   , 6,'YXDomain'
+   , 7,'YXRRSet'
+   , 8,'NXRRSet'
+   , 9,'NotAuth'
+   , 10,'NotZone'
+   , 11,'DSOTYPENI'
+   , 16,'BADVERS'
+   , 16,'BADSIG'
+   , 17,'BADKEY'
+   , 18,'BADTIME'
+   , 19,'BADMODE'
+   , 20,'BADNAME'
+   , 21,'BADALG'
+   , 22,'BADTRUNC'
+   , 23,'BADCOOKIE'];
+  let DNSQuery_MS=(){
+    DnsEvents |  where EventId in (257,258)
+  | project-rename
+         Dvc=Computer ,
+         SrcIpAddr = ClientIP,
+         QueryTypeName=QueryType,
+         EventMessage = Message,
+         EventReportUrl = ReportReferenceLink,
+         ResponseName = IPAddresses,
+         Query = Name,
+         ResponseCode = ResultCode
+  | extend
+  // ******************* Mandatory
+         EventCount=int(1),
+         EventStartTime=TimeGenerated,
+         EventVendor = "Microsoft",
+         EventProduct = "Microsoft DNS Server",
+         EventSchemaVersion="0.0.1",
+         //
+         EventEndTime=TimeGenerated,
+         EventSubType='response',
+         EventSeverity = tostring(Severity),
+         EventType = lookup,
+         DvcHostname = Dvc,
+         EventResult = iff(EventId==257 and ResponseCode==0 ,'Success','Failure')
+     | lookup RCodeTable on ResponseCode
+     | extend EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
+                                    , ResponseCode between (3841 .. 4095), 'Reserved for Private Use'
+                                    , 'Unassigned')
+    // **************Aliases
+    | extend
+        ResponseCodeName=EventResultDetails,
+        Domain=Query,
+        IpAddr=SrcIpAddr
+        };
+  DNSQuery_MS
