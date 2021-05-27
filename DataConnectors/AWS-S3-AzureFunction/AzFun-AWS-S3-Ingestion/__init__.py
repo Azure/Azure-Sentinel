@@ -38,7 +38,7 @@ if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
-    raise Exception("AWS GuardDuty: Invalid Log Analytics Uri.")
+    raise Exception("Invalid Log Analytics Uri.")
 
 # Boolean Values
 isCoreFieldsAllTable = os.environ.get('CoreFieldsAllTable')
@@ -85,13 +85,13 @@ def main(mytimer: func.TimerRequest) -> None:
         successfull_sent_events_number += sentinel.successfull_sent_events_number
         
     if failed_sent_events_number:
-        logging.info('{} GuardDuty Findings have not been sent'.format(failed_sent_events_number))
+        logging.info('{} AWS S3 files have not been sent'.format(failed_sent_events_number))
 
     if successfull_sent_events_number:
-        logging.info('Program finished. {} GuardDuty Findings have been sent.'.format(successfull_sent_events_number))
+        logging.info('Program finished. {} AWS S3 files have been sent.'.format(successfull_sent_events_number))
 
     if successfull_sent_events_number == 0 and failed_sent_events_number == 0:
-        logging.info('No Fresh AWS GuardDuty Findings')
+        logging.info('No Fresh AWS S3 files')
 
 def convert_list_to_csv_line(ls):
     line = StringIO()

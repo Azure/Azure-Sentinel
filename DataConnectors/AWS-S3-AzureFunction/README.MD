@@ -9,7 +9,8 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
  - .csv.gz
 
 ## **Function Flow process**
-** .json.gz/.jsonl.gz/.json/.csv.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**
+**.json.gz/.jsonl.gz/.json/.csv.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
+![AWS-S3-Ingestion.png](./Images/AWS-S3-Ingestion.png)  
 
 ## Installation / Setup Guide
 
@@ -50,8 +51,8 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
  
 2. Parameterized AWS S3 fresh event duration using environment variable "FreshEventTimeStamp". Value must be in minutes.  
    **Note**  
-   Azure Function trigger schedule and FreshEventTimeStamp  
-   Ex: If you want to trigger function every 30 min then values must be  
+   **Azure Function trigger Schedule and FreshEventTimeStamp should match to avoid duplicates**  
+   Ex: If you want to trigger function every 10 min then values must be  
    FreshEventTimeStamp=10    
    Schedule=0 */10 * * * *  
       
