@@ -1,17 +1,13 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
+    "metadata": {
         "comments": "This playbook will change Incident Severity based on specific username that is part of the Incident user entity.",
         "author": "Yaniv Shasha"
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Change-Incident-Severity",
-            "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
             "type": "string"
         }
     },
@@ -24,9 +20,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[parameters('PlaybookName')]",
                 "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -40,6 +38,9 @@
             "tags": {
                 "LogicAppsCategory": "security"
             },
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
@@ -47,37 +48,21 @@
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
+                    "actions": {
+                        "Alert_-_Get_incident": {
                             "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
-                    "actions": {
-                        "Alert_-_Get_accounts": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                             },
-                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_Accounts": {
                             "inputs": {
                                 "body": "@triggerBody()?['Entities']",
                                 "host": {
@@ -87,41 +72,36 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/account"
-                            }
-                        },
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
                         },
                         "For_each": {
-                            "foreach": "@body('Alert_-_Get_accounts')?['Accounts']",
                             "actions": {
                                 "Condition": {
                                     "actions": {
-                                        "Change_incident_severity": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
+                                        "Update_incident": {
                                             "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "severity": "High"
+                                                },
                                                 "host": {
                                                     "connection": {
                                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                                     }
                                                 },
                                                 "method": "put",
-                                                "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}/Severity/@{encodeURIComponent('Critical')}"
-                                            }
+                                                "path": "/Incidents"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
                                         }
                                     },
-                                    "runAfter": {},
                                     "expression": {
                                         "or": [
                                             {
@@ -132,18 +112,43 @@
                                             }
                                         ]
                                     },
+                                    "runAfter": {},
                                     "type": "If"
                                 }
                             },
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "runAfter": {
-                                "Alert_-_Get_accounts": [
+                                "Entities_-_Get_Accounts": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Foreach"
                         }
                     },
-                    "outputs": {}
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
                 },
                 "parameters": {
                     "$connections": {
@@ -151,7 +156,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     }
