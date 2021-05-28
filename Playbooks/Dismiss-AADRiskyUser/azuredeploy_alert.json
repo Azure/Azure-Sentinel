@@ -9,10 +9,6 @@
         "PlaybookName": {
             "defaultValue": "Dismiss-AADRiskyUser",
             "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
-            "type": "string"
         }
     },
     "variables": {
@@ -24,10 +20,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {
-                },
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -41,6 +38,9 @@
             "identity": {
                 "type": "SystemAssigned"
             },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -72,13 +72,34 @@
                                     }
                                 },
                                 "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                             },
                             "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
                             "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>User [@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}] was dismissed as a risky user via playbook.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "HTTP_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
                                 "HTTP": {
                                     "inputs": {
                                         "authentication": {
@@ -86,7 +107,7 @@
                                             "type": "ManagedServiceIdentity"
                                         },
                                         "method": "GET",
-                                        "uri": "https://graph.microsoft.com/beta/users/@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}"
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}"
                                     },
                                     "runAfter": {},
                                     "type": "Http"
@@ -103,7 +124,7 @@
                                             ]
                                         },
                                         "method": "POST",
-                                        "uri": "https://graph.microsoft.com/beta/riskyUsers/dismiss"
+                                        "uri": "https://graph.microsoft.com/v1.0/riskyUsers/dismiss"
                                     },
                                     "runAfter": {
                                         "Parse_JSON": [
@@ -172,7 +193,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     }

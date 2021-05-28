@@ -1,7 +1,7 @@
 # Confirm-AADRiskyUser
 author: Nicholas DiCola
 
-This playbook will set the Risky User property in AAD using Graph API using a Beta API.
+This playbook will set the Risky User property in AAD using Graph API.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
