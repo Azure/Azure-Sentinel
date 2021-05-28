@@ -12,6 +12,8 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
 **.json.gz/.jsonl.gz/.json/.csv.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
 ![AWS-S3-Ingestion.png](./Images/AWS-S3-Ingestion.png)  
 
+**Ingesting AWS GuardDuty Findings steps are [here](https://www.linkedin.com/pulse/ingesting-aws-guard-duty-findings-azure-sentinel-marko-lauren/?trackingId=JATgHPaTpKHk07Z5%2BHhnFw%3D%3D)**    
+
 ## Installation / Setup Guide
 
 1. Click  "Deploy To Azure" (For both Commercial & Azure GOV)  
