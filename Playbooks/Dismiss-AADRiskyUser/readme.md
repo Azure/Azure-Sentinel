@@ -4,11 +4,6 @@ author: Nicholas DiCola
 
 This playbook will dismiss the Risky User property in AAD using Graph API.
 
-# Confirm-AADRiskyUser
-author: Nicholas DiCola
-
-This playbook will set the Risky User property in AAD using Graph API.
-
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
 

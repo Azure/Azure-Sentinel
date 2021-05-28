@@ -9,10 +9,6 @@
         "PlaybookName": {
             "defaultValue": "Get-ASCRecommendations",
             "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
-            "type": "string"
         }
     },
     "variables": {
@@ -25,10 +21,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {
-                },
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -42,44 +39,17 @@
             "identity": {
                 "type": "SystemAssigned"
             },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {
-                            },
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
                     "actions": {
-                        "Alert_-_Get_hosts": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
+                        "Entities_-_Get_Hosts": {
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -87,39 +57,48 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/host"
-                            }
-                        },
-                        "Alert_-_Get_incident": {
+                            },
                             "runAfter": {
                                 "Initialize_variable": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
+                            "type": "ApiConnection"
                         },
                         "For_each": {
-                            "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
                             "actions": {
                                 "Condition": {
                                     "actions": {
                                         "Condition_3": {
                                             "actions": {
-                                                "Add_comment_to_incident_(V2)": {
-                                                    "runAfter": {
-                                                    },
-                                                    "type": "ApiConnection",
+                                                "Add_comment_to_incident_(V3)": {
                                                     "inputs": {
                                                         "body": {
-                                                            "Value": "ASC Recommedations found for Host: @{items('For_each')?['HostName']} / AzureID: @{items('For_each')?['AzureID']} - \n@{variables('RecommendationsList')}"
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>ASC Recommedations found for Host: @{items('For_each')?['HostName']} / AzureID: @{items('For_each')?['AzureID']} -<br>\n @{variables('RecommendationsList')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection"
+                                                },
+                                                "Update_incident": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "tagsToAdd": {
+                                                                "TagsToAdd": [
+                                                                    {
+                                                                        "Tag": "HasASCUnhealthyRecommendations"
+                                                                    }
+                                                                ]
+                                                            }
                                                         },
                                                         "host": {
                                                             "connection": {
@@ -127,38 +106,15 @@
                                                             }
                                                         },
                                                         "method": "put",
-                                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}"
-                                                    }
-                                                },
-                                                "Add_labels_to_incident": {
+                                                        "path": "/Incidents"
+                                                    },
                                                     "runAfter": {
-                                                        "Add_comment_to_incident_(V2)": [
+                                                        "Add_comment_to_incident_(V3)": [
                                                             "Succeeded"
                                                         ]
                                                     },
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "body": {
-                                                            "Labels": [
-                                                                {
-                                                                    "Label": "HasASCUnhealthyRecommendations"
-                                                                }
-                                                            ]
-                                                        },
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "put",
-                                                        "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(body('Alert_-_Get_incident')?['properties']?['CaseNumber'])}/AddLabels"
-                                                    }
+                                                    "type": "ApiConnection"
                                                 }
-                                            },
-                                            "runAfter": {
-                                                "For_each_3": [
-                                                    "Succeeded"
-                                                ]
                                             },
                                             "expression": {
                                                 "and": [
@@ -172,24 +128,25 @@
                                                     }
                                                 ]
                                             },
+                                            "runAfter": {
+                                                "For_each_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "type": "If"
                                         },
                                         "For_each_3": {
-                                            "foreach": "@body('Parse_JSON')?['value']",
                                             "actions": {
                                                 "Condition_2": {
                                                     "actions": {
                                                         "Append_to_array_variable": {
-                                                            "runAfter": {
-                                                            },
-                                                            "type": "AppendToArrayVariable",
                                                             "inputs": {
                                                                 "name": "RecommendationsList",
                                                                 "value": "@items('For_each_3')?['properties']?['displayName']"
-                                                            }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable"
                                                         }
-                                                    },
-                                                    "runAfter": {
                                                     },
                                                     "expression": {
                                                         "and": [
@@ -201,9 +158,11 @@
                                                             }
                                                         ]
                                                     },
+                                                    "runAfter": {},
                                                     "type": "If"
                                                 }
                                             },
+                                            "foreach": "@body('Parse_JSON')?['value']",
                                             "runAfter": {
                                                 "Parse_JSON": [
                                                     "Succeeded"
@@ -212,24 +171,17 @@
                                             "type": "Foreach"
                                         },
                                         "HTTP": {
-                                            "runAfter": {
-                                            },
-                                            "type": "Http",
                                             "inputs": {
                                                 "authentication": {
                                                     "type": "ManagedServiceIdentity"
                                                 },
                                                 "method": "GET",
                                                 "uri": "https://management.azure.com/@{items('For_each')?['AzureID']}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
-                                            }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Http"
                                         },
                                         "Parse_JSON": {
-                                            "runAfter": {
-                                                "HTTP": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ParseJson",
                                             "inputs": {
                                                 "content": "@body('HTTP')",
                                                 "schema": {
@@ -296,10 +248,14 @@
                                                     },
                                                     "type": "object"
                                                 }
-                                            }
+                                            },
+                                            "runAfter": {
+                                                "HTTP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson"
                                         }
-                                    },
-                                    "runAfter": {
                                     },
                                     "expression": {
                                         "and": [
@@ -313,20 +269,19 @@
                                             }
                                         ]
                                     },
+                                    "runAfter": {},
                                     "type": "If"
                                 }
                             },
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
                             "runAfter": {
-                                "Alert_-_Get_hosts": [
+                                "Entities_-_Get_Hosts": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Foreach"
                         },
                         "Initialize_variable": {
-                            "runAfter": {
-                            },
-                            "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
@@ -335,10 +290,34 @@
                                         "value": "@null"
                                     }
                                 ]
-                            }
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
                         }
                     },
-                    "outputs": {
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
                     }
                 },
                 "parameters": {
@@ -347,7 +326,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     }
