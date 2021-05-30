@@ -1,5 +1,5 @@
 Parser:
-  Title: Sysmon event no. 1 - Process Events
+  Title: Sysmon event no. 1 - Process Creation
   Version: '0.1'
   LastUpdated: May 26, 2021
 Product:
@@ -16,30 +16,64 @@ Description: Parser for M365 Defender for endpoint, into "Process" Normalized Sc
 ParserName: vimProcessEventsMicrosftSysmon
 ParserQuery: |
               let ParsedProcessEvent=(){
-              // Create the raw table from the raw XML file structure
-              Event
-              | where Source == "Microsoft-Windows-Sysmon" and EventID ==1
-              | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
-              | extend EventData = parse_xml(EventData).DataItem.EventData.Data
-              | mv-expand bagexpansion=array EventData
-              | evaluate bag_unpack(EventData)
-              | extend Key=tostring(["@Name"]), Value=["#text"]
-              | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName,
-                                   EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
-              | extend TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
-                      TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
-                      TargetProcessSHA512=extract(@'SHA512=(\w+)',1,tostring(Hashes)),
-                      TargetProcessMD5=extract(@'SHA512=(\w+)',1, tostring(Hashes))
-              | parse RuleName with * "technique_id=" TechniqueId "," * "technique_name=" TechniqueName
-              // table is ready, pending renaming and some cosmetics  
-              | extend 
-                      EventType = "ProcessCreated",
-                      EventStartTime = todatetime(UtcTime),
-                      ActingProcessGuid = extract(@"\{(.*?)\}",1,ParentProcessGuid),
-                      TargetProcessGuid = extract(@"\{(.*?)\}",1,ProcessGuid)
-              | project // TODO: change to "project-rename" after everything works
-                      ActorUserName = User,
-                      ActingProcessCommandLine = ParentCommandLine,
-                      ActingProcessFilePath = ParentImage,
-                      ActingProcessId = ParentProcessId
-                }; ParsedProcessEvent
+                  // Create the raw table from the raw XML file structure
+                  Event 
+                  | where Source == "Microsoft-Windows-Sysmon" and EventID ==1
+                  | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+                  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+                  | mv-expand bagexpansion=array EventData
+                  | evaluate bag_unpack(EventData)
+                  | extend Key=tostring(["@Name"]), Value=["#text"]
+                  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName,
+                                                                              RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+                  | extend TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
+                          TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
+                          TargetProcessSHA512=extract(@'SHA512=(\w+)',1,tostring(Hashes)),
+                          TargetProcessMD5=extract(@'SHA512=(\w+)',1, tostring(Hashes))
+                  // End of XML parse 
+                  | extend 
+                          EventType = "ProcessCreated",
+                          EventStartTime = todatetime(TimeGenerated),
+                          EventEndTime = todatetime(TimeGenerated),
+                          ActingProcessGuid = extract(@"\{(.*?)\}",1,tostring(ParentProcessGuid)),
+                          TargetProcessGuid = extract(@"\{(.*?)\}",1,tostring(ProcessGuid)),
+                          EventCount = int(1),
+                          EventVendor = "Microsoft Corporation",
+                          EventSchemaVersion = "0.0.1",
+                          DvcOs = "Windows"
+                  | project-rename 
+                          //***** Mandatory Fields - name change ******
+                          EventOriginalUid = EventID,
+                          DvcHostName = Computer,
+                          TargetProcessFileName = OriginalFileName,
+                          TargetProcessFilePath = Image,
+                          //***** Optional Fields - name change ******
+                          ActorUserName = UserName,
+                          EventProduct = Source,
+                          TargetProcessCommandLine = CommandLine,
+                          TargetProcessCompany = Company,
+                          TargetProcessFileDescription = Description,
+                          TargetProcessFileVersion = FileVersion,
+                          TargetProcessIntegrityLevel = IntegrityLevel,
+                          TargetProcessId = ProcessId,
+                          TargetProcessFileProduct = Product,
+                          TargetProcessSessionId = TerminalSessionId,
+                          ActingProcessCommandLine = ParentCommandLine,
+                          ActingProcessFilePath = ParentImage,
+                          ActingProcessId = ParentProcessId
+                  | project-away 
+                          EventLog, 
+                          RenderedDescription,
+                          CurrentDirectory,
+                          Hashes, LogonGuid,
+                          LogonId,
+                          ProcessGuid,
+                          ParentProcessGuid,
+                          RuleName,
+                          UtcTime,
+                          EventLevel,
+                          EventLevelName,
+                          MG,
+                          ManagementGroupName,
+                          User
+              }; ParsedProcessEvent
