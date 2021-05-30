@@ -19,6 +19,5 @@ function validateParametersHaveDescription(filePath: string, playbookARMTemplate
         if (isNullOrUndefined(playbookARMTemplate.parameters[parameterName].metadata?.description)) {
             throw new PlaybookValidationError(`Playbook template '${filePath}' missing required description for parameter '${parameterName}'.`);
         }
-    
     });
 }
