@@ -14,4 +14,44 @@ References:
   Link: https://techcommunity.microsoft.com
 Description: Parser for Sysmon windows logs - event number 5; event Termination
 ParserName: vimProcessEventsMicrosftSysmon5
-ParserQuery: |
+ParserQuery: | 
+                let ParsedProcessEvent=(){
+                // Create the raw table from the raw XML file structure
+                Event 
+                | where Source == "Microsoft-Windows-Sysmon" and EventID == 5
+                | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+                | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+                | mv-expand bagexpansion=array EventData
+                | evaluate bag_unpack(EventData)
+                | extend Key=tostring(["@Name"]), Value=["#text"]
+                | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+                // End of XML parse 
+                | extend 
+                        TargetProcessGuid = extract(@"\{(.*?)\}",1,tostring(ProcessGuid)),
+                        EventType = "ProcessTerminated",
+                        EventStartTime = todatetime(TimeGenerated),
+                        EventEndTime = todatetime(TimeGenerated),
+                        EventCount = int(1),
+                        EventVendor = "Microsoft Corporation",
+                        EventSchemaVersion = "0.0.1",
+                        EventProduct = Source,
+                        DvcOs = "Windows"
+                | project-rename
+                        //***** Mandatory Fields - name change ******
+                        DvcHostName = Computer,
+                        //***** Optional Fields - name change ******
+                        TargetUserName = UserName,
+                        TargetProcessFilePath = Image,
+                        TargetProcessId = ProcessId
+                | project-away
+                        EventLog,
+                        EventLevel,
+                        EventLevelName,
+                        EventID,
+                        RenderedDescription,
+                        MG,
+                        ManagementGroupName,
+                        RuleName,
+                        UtcTime,
+                        ProcessGuid
+                }; ParsedProcessEvent
