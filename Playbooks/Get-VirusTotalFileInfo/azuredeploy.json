@@ -1,0 +1,2118 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).",
+        "author": "Nicholas DiCola"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-VirusTotalFileInfo",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "VirusTotalAPIKey": {
+            "defaultValue": "<APIKey>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "VirusTotalConnectionName": "[concat('virustotal-', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('VirusTotalConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {
+                    "api_key": "[parameters('VirusTotalAPIKey')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_FileHashes": {
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "message": "<p>@{items('For_each')?['Value']} might be harmful.<br>\nMore details: @{body('Parse_JSON')?['data']?['links']?['self']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_JSON')?['data']?['attributes']?['last_analysis_stats']?['malicious']",
+                                                        0
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_JSON')?['data']?['attributes']?['last_analysis_stats']?['suspicious']",
+                                                        0
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON": {
+                                    "inputs": {
+                                        "content": "@body('Retrieve_information_about_a_file')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "attributes": {
+                                                            "properties": {
+                                                                "authentihash": {
+                                                                    "type": "string"
+                                                                },
+                                                                "creation_date": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "first_seen_itw_date": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "first_submission_date": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_analysis_date": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_analysis_results": {
+                                                                    "properties": {
+                                                                        "ALYac": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "APEX": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Acronis": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Ad-Aware": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "AegisLab": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "AhnLab-V3": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Alibaba": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Antiy-AVL": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Arcabit": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Avast": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Avast-Mobile": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Avira": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Baidu": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "BitDefender": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "BitDefenderFalx": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "BitDefenderTheta": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Bkav": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "CAT-QuickHeal": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "CMC": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "ClamAV": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Comodo": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "CrowdStrike": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Cybereason": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Cylance": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Cynet": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Cyren": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "DrWeb": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "ESET-NOD32": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Elastic": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Emsisoft": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "F-Secure": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "FireEye": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Fortinet": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "GData": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Gridinsoft": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Ikarus": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Jiangmin": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "K7AntiVirus": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "K7GW": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Kaspersky": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Kingsoft": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "MAX": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Malwarebytes": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "MaxSecure": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "McAfee": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "McAfee-GW-Edition": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "MicroWorld-eScan": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Microsoft": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "NANO-Antivirus": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Paloalto": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Panda": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Qihoo-360": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Rising": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "SUPERAntiSpyware": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Sangfor": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "SentinelOne": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Sophos": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Symantec": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "SymantecMobileInsight": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "TACHYON": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Tencent": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "TotalDefense": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Trapmine": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "TrendMicro": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "TrendMicro-HouseCall": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Trustlook": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "VBA32": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "VIPRE": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "ViRobot": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Webroot": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Yandex": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Zillya": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "ZoneAlarm": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "Zoner": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "eGambit": {
+                                                                            "properties": {
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_update": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "engine_version": {},
+                                                                                "method": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "result": {}
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "last_analysis_stats": {
+                                                                    "properties": {
+                                                                        "confirmed-timeout": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "failure": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "harmless": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "malicious": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "suspicious": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "timeout": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "type-unsupported": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "undetected": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "last_modification_date": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "last_submission_date": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "magic": {
+                                                                    "type": "string"
+                                                                },
+                                                                "md5": {
+                                                                    "type": "string"
+                                                                },
+                                                                "meaningful_name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "names": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "pe_info": {
+                                                                    "properties": {
+                                                                        "compiler_product_versions": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "entry_point": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "imphash": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "import_list": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "imported_functions": {
+                                                                                        "items": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "library_name": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "machine_type": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "resource_details": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "chi2": {
+                                                                                        "type": "number"
+                                                                                    },
+                                                                                    "entropy": {
+                                                                                        "type": "number"
+                                                                                    },
+                                                                                    "filetype": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "lang": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sha256": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "resource_langs": {
+                                                                            "properties": {
+                                                                                "ENGLISH US": {
+                                                                                    "type": "integer"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "resource_types": {
+                                                                            "properties": {
+                                                                                "RT_GROUP_ICON": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "RT_ICON": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "RT_MANIFEST": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "RT_VERSION": {
+                                                                                    "type": "integer"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "rich_pe_header_hash": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sections": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "chi2": {
+                                                                                        "type": "number"
+                                                                                    },
+                                                                                    "entropy": {
+                                                                                        "type": "number"
+                                                                                    },
+                                                                                    "flags": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "md5": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "name": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "raw_size": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "virtual_address": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "virtual_size": {
+                                                                                        "type": "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "timestamp": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "reputation": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "sha1": {
+                                                                    "type": "string"
+                                                                },
+                                                                "sha256": {
+                                                                    "type": "string"
+                                                                },
+                                                                "signature_info": {
+                                                                    "properties": {
+                                                                        "copyright": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "description": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "file version": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "internal name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "original name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "product": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "size": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "ssdeep": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tags": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "times_submitted": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "tlsh": {
+                                                                    "type": "string"
+                                                                },
+                                                                "total_votes": {
+                                                                    "properties": {
+                                                                        "harmless": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "malicious": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "trid": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "file_type": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "probability": {
+                                                                                "type": "number"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "type_description": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type_extension": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type_tag": {
+                                                                    "type": "string"
+                                                                },
+                                                                "unique_sources": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "vhash": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "links": {
+                                                            "properties": {
+                                                                "self": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Retrieve_information_about_a_file": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                },
+                                "Retrieve_information_about_a_file": {
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/v3/files/@{encodeURIComponent(items('For_each')?['Value'])}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "virustotal": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                                "connectionName": "[variables('VirusTotalConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
