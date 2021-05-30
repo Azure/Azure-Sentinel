@@ -18,6 +18,10 @@ describe("Playbooks validator", () => {
     await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithHardcodedPlaybookLocation.json");
   });
 
+  it(`Should throw an exception when playbook parameter has no description`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithNoParameterDescription.json");
+  });
+  
   async function checkInvalid(filePath: string): Promise<Chai.PromisedAssertion> {
     await expect(IsValidTemplate(filePath)).eventually.rejectedWith(Error).and.have.property("name", "PlaybookValidationError");
   }

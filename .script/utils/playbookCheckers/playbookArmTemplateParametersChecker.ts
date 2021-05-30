@@ -4,6 +4,7 @@ import { isNullOrUndefined, PlaybookNameParameter } from "./playbookARMTemplateU
 
 export function validateTemplateParameters(filePath: string, playbookARMTemplate: ArmTemplate<any>): void {
     validateTemplateHasPlaybookNameParameter(filePath, playbookARMTemplate);
+    validateParametersHaveDescription(filePath, playbookARMTemplate);
 }
 
 function validateTemplateHasPlaybookNameParameter(filePath: string, playbookARMTemplate: ArmTemplate<any>): void {
@@ -11,4 +12,13 @@ function validateTemplateHasPlaybookNameParameter(filePath: string, playbookARMT
     if (isNullOrUndefined(playbookNameParameter)) {
         throw new PlaybookValidationError(`Playbook template '${filePath}' missing required parameter '${PlaybookNameParameter}'.`);
     }
+}
+
+function validateParametersHaveDescription(filePath: string, playbookARMTemplate: ArmTemplate<any>): void {
+    Object.keys(playbookARMTemplate.parameters).forEach((parameterName: string) => {
+        if (isNullOrUndefined(playbookARMTemplate.parameters[parameterName].metadata?.description)) {
+            throw new PlaybookValidationError(`Playbook template '${filePath}' missing required description for parameter '${parameterName}'.`);
+        }
+    
+    });
 }
