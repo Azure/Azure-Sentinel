@@ -22,8 +22,16 @@ describe("Playbooks validator", () => {
     await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithNoParameterDescription.json");
   });
 
+  it(`Should throw an exception when API connection resource name references a variable that doesn't exist`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/PlaybookTemplateWithAPIConnectionWithNameVariableThatDoesntExist.json");
+  });
+
   it(`Should throw an exception when API connection resource has resource name not taken from template variables`, async () => {
     await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/PlaybookTemplateWithAPIConnectionWithHardcodedName.json");
+  });
+
+  it(`Should throw an exception when API connection resource display name references a variable that doesn't exist`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/PlaybookTemplateWithAPIConnectionWithDisplayNameVariableThatDoesntExist.json");
   });
 
   it(`Should throw an exception when API connection resource has display name not taken from template variables`, async () => {
