@@ -1,0 +1,30 @@
+// Title:           Semperis Directory Services Protector (DSP) Data Parser
+// Author:          Semperis
+// Version:         1.0
+// Last Updated:    04/14/2021
+// Comment:         version 1.0
+//
+// DESCRIPTION:
+// This parser takes Semperis DSP Windows event logs from the relevant connector's data stream and parses the data into a normalized schema
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window.
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    In order for the Semperis DSP Windows Event logs to work with pre-built queries and workbooks the Function Alias must be set to - dsp_parser
+// 3. Function App usually take 5-10 minutes to activate. You can then use Function Alias for other queries
+//
+//
+// REFERENCE:
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+//
+//
+Event
+| where Source == "Semperis-DSP-Security"
+| extend EventData = parse_xml(EventData).DataItem.EventData.Data
+| mv-expand bagexpansion=array EventData
+| evaluate bag_unpack(EventData)
+| extend Key=tostring(['@Name']), Value=['#text']
+| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+| extend securityFrameworkTagsCsv = replace(@' Mitre:', @'', tostring(securityFrameworkTags))
+| extend securityFrameworkTagsCsv = replace(@'Mitre:', @'', tostring(securityFrameworkTagsCsv))
+| extend securityFrameworkTags = replace(@'Mitre:', @'', tostring(securityFrameworkTags))
