@@ -1,5 +1,5 @@
 # Azure Sentinel Data connector to ingest AWS S3 Files
-Author: Sreedhar Ande  
+**Author: Sreedhar Ande**  
 
 Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. This Data connector currently support the following file types from AWS S3  
 
@@ -12,6 +12,8 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
 ## **Function Flow process**
 **.json.gz/.jsonl.gz/.json/.csv.gz/.log.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
 ![AWS-S3-Ingestion.png](./Images/AWS-S3-Ingestion.png)  
+
+**Ingesting AWS GuardDuty Findings steps are [here](https://www.linkedin.com/pulse/ingesting-aws-guard-duty-findings-azure-sentinel-marko-lauren/?trackingId=JATgHPaTpKHk07Z5%2BHhnFw%3D%3D)**    
 
 ## Installation / Setup Guide
 

@@ -46,8 +46,63 @@ Below are details about the recent changes and links to relevant documentation f
 
 **Required change:** Playbooks which start with alert trigger (“When a response to an Azure Sentinel alert is triggered”) 
 are highly recommended to use the Incident trigger (“When Azure Sentinel incident creation rule was triggered”). 
-
 !['triggers'](./images/triggers.png)
+
+**Case playbook require both incident and alert trigger vesrion:**<br>
+Since manual trigger for incident trigger not yet available, if the playbook is relevant for manual trigger please have both versions.<br>
+Folder structure in this case:
+* incident-trigger (folder)
+   * images (folder)
+   * azuredeploy.json
+* alert-trigger (folder)
+   * images (folder)
+   * azuredeploy.json
+* readme.md 
+
+```json
+# {PLAYBOOKNAME}
+author: 
+
+description
+
+## Quick Deployment
+**Deploy with incident trigger** (recommended)
+
+After deployment, attach this playbook to an **automation rule** so it runs when the incident is created.
+
+[Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2F{PLAYBOOKNAME}%2Fincident-trigger%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2F{PLAYBOOKNAME}%2Fincident-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
+**Deploy with alert trigger**
+
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will run when an alert is created.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2F{PLAYBOOKNAME}%2Falert-trigger%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2F{PLAYBOOKNAME}%2Falert-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>
+
+## Prerequisites
+None
+
+## Screenshots
+**Incident Trigger**<br>
+![Incident Trigger](./incident-trigger/images/designerScreenshotLight.png)
+<br>
+**Alert Trigger**<br>
+![Alert Trigger](./alert-trigger/images/designerScreenshotLight.png)
+```
+
+
+
 
 **Additional value to consider when making the change:** 
 * Incident trigger recieves as an input:
