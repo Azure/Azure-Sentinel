@@ -1,0 +1,80 @@
+Parser:
+  Title: Windows event log - event id 4688
+  Version: '0.1'
+  LastUpdated: May 30, 2021
+Product:
+  Name: Windows event log 
+Normalization:
+  Schema: ProcessEvents
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com
+- Title: Tech Community
+  Link: https://techcommunity.microsoft.com
+Description: Parser for Sysmon windows logs - event number 5; event Termination
+ParserName: vimProcessEventsMicrosftWindowsEvent4688
+ParserQuery: | 
+              let ProcessEvents=(){
+                SecurityEvent   
+                | where EventID == 4688 
+                |project-rename
+                //***** Mandatory Fields - name change *****
+                    EventProduct = EventSourceName,
+                    DvcHostName = Computer,
+                    TargetProcessFileName = Process,
+                    TargetProcessFilePath = NewProcessName,
+                    TargetProcessCommandLine = CommandLine,
+                    ActorUserName = SubjectUserName,
+                //***** Optional Fields - name change ******
+                    EventOriginalUid = EventOriginId, 
+                    ActorUserDomain = SubjectDomainName,
+                    ActorUserId = SubjectUserSid,
+                    ActingProcessFilePath = ParentProcessName,
+                    DvcId = SourceComputerId,
+                    TargetUserDomain = TargetDomainName,
+                  //TargetProcessGuid = ProcessGuid,
+                    TargetProcessTokenElevation = TokenElevationType
+                    //TODO: this about TargetLogonId field    
+                | extend
+                //***** Mandatory Fields - calculating value ******
+                    EventCount = int(1),
+                    EventVendor = "Microsoft Corporation",
+                    EventSchemaVersion = "0.0.1",
+                    EventStartTime = todatetime(TimeGenerated),
+                    EventEndTime = todatetime(TimeGenerated),
+                    EventType = "ProcessCreated",
+                    DvcOs = "Windows",
+                    TargetUserIdType = "SID",
+                    ActorUserIdType = "SID",
+                //***** Optional Fields - calculating value ****** 
+                    ActingProcessId = tolong(ProcessId),
+                    TargetProcessId = tolong(NewProcessId),
+                    ActorUserSessionId = tolong(SubjectLogonId),
+                    TargetUserSessionId = tolong(TargetLogonId)
+                | project-away
+                    SourceSystem,
+                    Account,
+                    AccountType,
+                    Channel,
+                    Task,
+                    Level,
+                    Activity,
+                    EventID,
+                    MG,
+                    TimeCollected,
+                    ManagementGroupName,
+                    MandatoryLabel,
+                    ProcessId,
+                    NewProcessId,
+                    SubjectAccount,
+                    TargetUser,
+                    TargetAccount,
+                    SubjectLogonId,
+                    TargetLogonId
+                //***** Aliases ******
+                | extend
+                    TargetUser = TargetUserName,
+                    TargetProcessName = TargetProcessFilePath,
+                    Dvc = DvcHostName
+                }; ProcessEvents
