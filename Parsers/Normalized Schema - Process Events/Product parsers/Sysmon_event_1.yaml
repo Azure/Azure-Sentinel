@@ -16,68 +16,79 @@ Description: Parser for Sysmon windows logs - event number 1; event creation
 ParserName: vimProcessEventsMicrosftSysmon1
 ParserQuery: |
               let ParsedProcessEvent=(){
-              // Create the raw table from the raw XML file structure
-              Event 
-              | where Source == "Microsoft-Windows-Sysmon" and EventID ==1
-              | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
-              | extend EventData = parse_xml(EventData).DataItem.EventData.Data
-              | mv-expand bagexpansion=array EventData
-              | evaluate bag_unpack(EventData)
-              | extend Key=tostring(["@Name"]), Value=["#text"]
-              | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel,EventLevelName, EventID,
-                                                    UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
-              | extend TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
-                      TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
-                      TargetProcessSHA512=extract(@'SHA512=(\w+)',1,tostring(Hashes)),
-                      TargetProcessMD5=extract(@'SHA512=(\w+)',1, tostring(Hashes))
-              // End of XML parse 
-              | extend 
-                      EventType = "ProcessCreated",
-                      EventStartTime = todatetime(TimeGenerated),
-                      EventEndTime = todatetime(TimeGenerated),
-                      ActingProcessGuid = extract(@"\{(.*?)\}",1,tostring(ParentProcessGuid)),
-                      TargetProcessGuid = extract(@"\{(.*?)\}",1,tostring(ProcessGuid)),
-                      EventCount = int(1),
-                      EventVendor = "Microsoft Corporation",
-                      EventSchemaVersion = "0.0.1",
-                      DvcOs = "Windows"
-              | project-rename 
-                      //***** Mandatory Fields - name change ******
-                      DvcHostName = Computer,
-                      TargetProcessFileName = OriginalFileName,
-                      TargetProcessFilePath = Image,
-                      //***** Optional Fields - name change ******
-                      TargetUserName = UserName,
-                      EventProduct = Source,
-                      TargetProcessCommandLine = CommandLine,
-                      TargetProcessCompany = Company,
-                      TargetProcessFileDescription = Description,
-                      TargetProcessFileVersion = FileVersion,
-                      TargetProcessIntegrityLevel = IntegrityLevel,
-                      TargetProcessId = ProcessId,
-                      TargetProcessFileProduct = Product,
-                      ActingProcessCommandLine = ParentCommandLine,
-                      ActingProcessFilePath = ParentImage,
-                      ActingProcessId = ParentProcessId
-              | project-away 
-                      EventLog, 
-                      RenderedDescription,
-                      CurrentDirectory,
-                      Hashes, LogonGuid,
-                      LogonId,
-                      ProcessGuid,
-                      ParentProcessGuid,
-                      RuleName,
-                      UtcTime,
-                      EventLevel,
-                      EventLevelName,
-                      MG,
-                      ManagementGroupName,
-                      User,
-                      EventID
-                  | extend
-                       TargetUser = TargetUserName,
-                       TargetProcessName = TargetProcessFilePath,
-                       Dvc = DvcHostName
-          }; ParsedProcessEvent
-
+                    // Create the raw table from the raw XML file structure
+                Event
+                | where Source == "Microsoft-Windows-Sysmon" and EventID==1 and TimeGenerated > ago(1d)
+                | parse EventData with * '<Data Name="RuleName">'RuleName
+                                    '</Data><Data Name="UtcTime">'UtcTime
+                                    '</Data><Data Name="ProcessGuid">{'ProcessGuid
+                                    '}</Data><Data Name="ProcessId">'ProcessId
+                                    '</Data><Data Name="Image">'Image
+                                    '</Data><Data Name="FileVersion">'FileVersion
+                                    '</Data><Data Name="Description">'Description
+                                    '</Data><Data Name="Product">'Product
+                                    '</Data><Data Name="Company">'Company
+                                    '</Data><Data Name="OriginalFileName">'OriginalFileName
+                                    '</Data><Data Name="CommandLine">'CommandLine
+                                    '</Data><Data Name="CurrentDirectory">'CurrentDirectory
+                                    '</Data><Data Name="User">'User
+                                    '</Data><Data Name="LogonGuid">{'LogonGuid
+                                    '}</Data><Data Name="LogonId">'LogonId
+                                    '</Data><Data Name="TerminalSessionId">'TerminalSessionId
+                                    '</Data><Data Name="IntegrityLevel">'IntegrityLevel
+                                    '</Data><Data Name="Hashes">'Hashes
+                                    '</Data><Data Name="ParentProcessGuid">{'ParentProcessGuid
+                                    '}</Data><Data Name="ParentProcessId">'ParentProcessId
+                                    '</Data><Data Name="ParentImage">'ParentImage
+                                    '</Data><Data Name="ParentCommandLine">'ParentCommandLine
+                                    '</Data>' *
+                | extend     TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
+                            TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
+                            TargetProcessIMPHASH=extract(@'IMPHASH=(\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file
+                            TargetProcessMD5=extract(@'MD5=(\w+)',1, tostring(Hashes))
+                    // End of XML parse
+                | extend 
+                            EventType = "ProcessCreated",
+                            EventStartTime = todatetime(TimeGenerated),
+                            EventEndTime = todatetime(TimeGenerated),
+                            ActingProcessGuid = extract(@"\{(.*?)\}",1,tostring(ParentProcessGuid)),
+                            TargetProcessGuid = extract(@"\{(.*?)\}",1,tostring(ProcessGuid)),
+                            EventCount = int(1),
+                            EventVendor = "Microsoft Corporation",
+                            EventSchemaVersion = "0.0.1",
+                            DvcOs = "Windows",
+                            LogonId = toint(LogonId)             
+                | project-rename 
+                            //***** Mandatory Fields - name change ******
+                            DvcHostName = Computer,
+                            TargetProcessFileName = OriginalFileName,
+                            TargetProcessFilePath = Image,
+                            //***** Optional Fields - name change ******
+                            TargetUserName = UserName,
+                            EventProduct = Source,
+                            TargetProcessCommandLine = CommandLine,
+                            TargetProcessCompany = Company,
+                            TargetProcessFileDescription = Description,
+                            TargetProcessFileVersion = FileVersion,
+                            TargetProcessIntegrityLevel = IntegrityLevel,
+                            TargetProcessId = ProcessId,
+                            TargetProcessFileProduct = Product,
+                            ActingProcessCommandLine = ParentCommandLine,
+                            ActingProcessFilePath = ParentImage,
+                            ActingProcessId = ParentProcessId
+                | project-away 
+                            EventLog, 
+                            RenderedDescription,
+                            CurrentDirectory,
+                            Hashes,
+                            RuleName,
+                            UtcTime,
+                            EventLevel,
+                            EventLevelName,
+                            ParameterXml,
+                            EventData
+                | extend
+                            TargetUser = TargetUserName,
+                            TargetProcessName = TargetProcessFilePath,
+                            Dvc = DvcHostName
+                }; ParsedProcessEvent
