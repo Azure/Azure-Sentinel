@@ -6,7 +6,7 @@ import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker";
 import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
-  if(FileName.indexOf("Logos") || FileName.indexOf("Data Connectors/Logo") != -1)
+  if(FileName.indexOf("Logos") != -1 || FileName.indexOf("Data Connectors/Logo") != -1)
   {
     isValidLogoImage(FileName);
       const svgContent: string = fs.readFileSync(FileName, { encoding: "utf8", flag: "r" });
