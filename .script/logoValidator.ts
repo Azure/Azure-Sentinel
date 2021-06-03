@@ -7,7 +7,7 @@ import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChec
 import { LogoValidationError } from "./utils/validationError";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
-  if(FileName.indexOf("Logos") != -1 || FileName.indexOf("Data Connectors/Logo") != -1)
+  if(FileName.includes("Logos") || FileName.includes("Data Connectors/Logo"))
   {
     isValidLogoImage(FileName);
       const svgContent: string = fs.readFileSync(FileName, { encoding: "utf8", flag: "r" });
@@ -15,10 +15,6 @@ export async function IsValidLogo(FileName: string): Promise<ExitCode> {
       {
         isValidLogoImageSVGContent(svgContent)
       }
-  }
-  else
-  {
-    throw new LogoValidationError(`Logo must be in Logos or Logo folder ` + FileName); 
   }
   
   return ExitCode.SUCCESS;
