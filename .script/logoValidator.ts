@@ -4,7 +4,6 @@ import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker";
 import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker";
-import { LogoValidationError } from "./utils/validationError";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
   if(FileName.includes("Logos") || FileName.includes("Data Connectors/Logo"))
