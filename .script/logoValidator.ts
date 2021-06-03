@@ -6,17 +6,21 @@ import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker";
 import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
-  isValidLogoImage(FileName);
-    const svgContent: string = fs.readFileSync(FileName, { encoding: "utf8", flag: "r" });
-    if(svgContent != "undefined")
-    {
-      isValidLogoImageSVGContent(svgContent)
-    }
-    return ExitCode.SUCCESS;
+  if(FileName.indexOf("Logos") || FileName.indexOf("Data Connectors/Logo") != -1)
+  {
+    isValidLogoImage(FileName);
+      const svgContent: string = fs.readFileSync(FileName, { encoding: "utf8", flag: "r" });
+      if(svgContent != "undefined")
+      {
+        isValidLogoImageSVGContent(svgContent)
+      }
+  }
+  
+  return ExitCode.SUCCESS;
   }
  
 let fileTypeSuffixes;
-let filePathFolderPrefixes = ["Logos","Data Connectors/Logo"];
+let filePathFolderPrefixes = ["Logos","Logo"];
 let fileKinds = ["Added","Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
