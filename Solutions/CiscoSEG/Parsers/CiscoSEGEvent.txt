@@ -5,11 +5,15 @@
 // Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
 CommonSecurityLog
 | where DeviceEventClassID =~ 'ESA_CONSOLIDATED_LOG_EVENT'
-| extend MailDirection = case(CommunicationDirection == '0', 'Incoming', 'Outgoing')
+| extend EventStartTime = todatetime(extract(@"startTime=(\w{3}\s\w{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\s\d{4})", 1, AdditionalExtensions))
+| extend EventEndTime = todatetime(extract(@"endTime=(\w{3}\s\w{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\s\d{4})", 1, AdditionalExtensions))
+| extend NetworkDirection = case(CommunicationDirection == '0', 'Incoming', 'Outgoing')
 | extend EventType = Activity
 | extend FileName = extract(@"ESAAttachmentDetails=\{\'(sample.txt)\'", 1, AdditionalExtensions)
 | extend FileHashSha256 = extract(@"\'fileHash\':\s?\'(.*?)\'", 1, AdditionalExtensions)
 | extend FileSize = extract(@"\'fsize\':\s?(\d+)", 1, AdditionalExtensions)
+| extend EventStatus = extract(@"ESADaneStatus=(success|failure)", 1, AdditionalExtensions)
+| extend DvcHostname = extract(@"ESADaneHost=(\S+)", 1, AdditionalExtensions)
 | extend AdditionalFields = extract_all(@"(?P<key>[a-zA-Z0-9- ]+)=(?P<value>[a-zA-Z0-9-_:/@.#{}'' ]+)", dynamic(["key","value"]), tostring(AdditionalExtensions))
 | mv-apply AdditionalFields on (
     summarize AdditionalFields = make_list(pack(tostring(AdditionalFields[0]), AdditionalFields[1]))
@@ -29,8 +33,8 @@ CommonSecurityLog
                , SrcUserName = SourceUserName
                , MailPolicy = DeviceCustomString1
                , SrcGeoCountry = DeviceCustomString2
-               , SdrThreatCategory = DeviceCustomString3
-               , ExternalMsgID = DeviceCustomString4
+               , ThreatCategory = DeviceCustomString3
+               , EventOriginalUid = DeviceCustomString4
                , MailLanguage = DeviceCustomString5
                , SdrRepScore = DeviceCustomString6
                , SbrsScore = DeviceCustomFloatingPoint1
