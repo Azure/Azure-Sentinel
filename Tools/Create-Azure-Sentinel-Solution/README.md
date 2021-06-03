@@ -24,9 +24,10 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * Logo: Link to the Logo used in createUiDefinition.json
  * Description: Solution Description used in createUiDefinition.json. Can include markdown.
  * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
- * Version: Version to be used during package creation
  * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
+ * Version: Version to be used during package creation
  */
 {
   "Name": "{SolutionName}",
@@ -34,7 +35,6 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Logo": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
   "Description": "{Solution Description}",
   "WorkbookDescription": ["{Description of workbook}"],
-  "Version": "1.0.0",
   "Workbooks": [],
   "Analytic Rules": [],
   "Playbooks": [],

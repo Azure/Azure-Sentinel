@@ -60,8 +60,10 @@ function CarbonBlackAPI()
     $authHeaders = @{
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
+
     $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-    $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"))
+    $eventURI = "$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"
+    $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)"))
 
     if ($auditLogsResult.success -eq $true)
     {
@@ -84,12 +86,27 @@ function CarbonBlackAPI()
 
     if ($eventsResult.success -eq $true)
     {
+        $totalResult = $eventsResult.totalResults
         $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
         if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
         {
-            $responseObj = (ConvertFrom-Json $EventLogsJSON)
-            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
-            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+			$totalResult = $eventsResult.totalResults
+			$start= 1
+			$rows=100
+			for ($start; $start -le $totalResult; $start+=$rows)
+			{
+				$eventPaginationURI = "&start=$($start)&rows=$($rows)"
+				Write-Host("Pagination URI : $($eventURI)$($eventPaginationURI)")  
+				$eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)$($eventPaginationURI)"))
+				$EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
+				if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
+				{
+					$responseObj = (ConvertFrom-Json $EventLogsJSON)
+					$status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
+					Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+				}
+				Write-Host("Total Events result count $($eventsResult.totalResults) `n Events result count : $($eventsResult.results.Count) starting from : $($start)")
+			}
         }
         else
         {
