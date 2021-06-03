@@ -1,0 +1,706 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will close upstream events in MDATP, MCAS and Azure Security Center once closed in sentinel",
+        "author": "Bridewell Consulting - Robert Kitching"
+    },
+       "parameters": {
+           "PlaybookName": {
+            "defaultValue": "CDC_Dismiss_Upstream_Events",
+            "type": "String"
+        },
+        "RecurrenceFrequency": {
+            "defaultValue": "Hour",
+            "type": "string",
+            "allowedValues": [
+                "Hour",
+                "Day",
+                "Week",
+                "Month"
+            ]
+        },
+        "RecurrenceInterval": {
+            "defaultValue": 6,
+            "type": "int"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AzureSentinelLogAnalyticsWorkspaceName": {
+            "defaultValue": "yourAzureSentinelworkspacename",
+            "type": "string"
+        },
+        "AzureSentinelLogAnalyticsWorkspaceResourceGroupName": {
+            "defaultValue": "yourAzureSentinelworkspaceRGname",
+            "type": "string"
+        },
+        "McasBaseUrl" : {
+            "defaultValue": "yourMcasBaseUrl",
+            "type": "string"
+        },
+        "McasAccessToken" : {
+            "defaultValue": "yourMcasAccessToken",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "LogAnalyticConnectionName": "[concat('loganalytic-', parameters('PlaybookName'))]",
+        "WdatpConnectionName": "[concat('wdatp-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('LogAnalyticConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('WdatpConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('LogAnalyticConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('WdatpConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "[parameters('RecurrenceFrequency')]",
+                                "interval": "[parameters('RecurrenceInterval')]"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_incidents')",
+                            "actions": {
+                                "Get_incident_relation_data": {
+                                    "runAfter": {
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "api-version": "2019-01-01-preview"
+                                        },
+                                        "uri": "https://management.azure.com/subscriptions/@{variables('Settings')['subscriptionId']}/resourcegroups/@{variables('Settings')['resourceGroup']}/providers/Microsoft.OperationalInsights/workspaces/@{variables('Settings')['logWorkspace']}/providers/Microsoft.SecurityInsights/incidents/@{items('For_each')['name']}/relations"
+                                    }
+                                },
+                                "Parse_incident_relation_data": {
+                                    "runAfter": {
+                                        "Get_incident_relation_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_incident_relation_data')",
+                                        "schema": {
+                                            "properties": {
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "properties": {
+                                                                "properties": {
+                                                                    "relatedResourceId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "relatedResourceKind": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "relatedResourceName": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "relatedResourceType": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "type": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "name",
+                                                            "type",
+                                                            "properties"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Switch": {
+                                    "runAfter": {
+                                        "Parse_incident_relation_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case": {
+                                            "case": "Azure Security Center",
+                                            "actions": {
+                                                "For_each_2": {
+                                                    "foreach": "@body('Parse_incident_relation_data')?['value']",
+                                                    "actions": {
+                                                        "HTTP": {
+                                                            "runAfter": {
+                                                                "Run_query_and_list_results": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Http",
+                                                            "inputs": {
+                                                                "authentication": {
+                                                                    "type": "ManagedServiceIdentity"
+                                                                },
+                                                                "method": "POST",
+                                                                "queries": {
+                                                                    "api-version": "2019-01-01"
+                                                                },
+                                                                "uri": "https://management.azure.com/subscriptions/@{body('Run_query_and_list_results')['value'][0]['ascsubid']}/resourcegroups/@{body('Run_query_and_list_results')['value'][0]['ascrgname']}/providers/Microsoft.Security/locations/@{body('Run_query_and_list_results')['value'][0]['asclocation']}/alerts/@{body('Run_query_and_list_results')['value'][0]['ascalertname']}/dismiss"
+                                                            }
+                                                        },
+                                                        "Run_query_and_list_results": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "SecurityAlert\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\n| where SystemAlertId in (\"@{items('For_each_2')?['properties']?['relatedResourceName']}\")\n| where TimeGenerated >= ago(90d)\n| extend ascsubid = split(AlertLink,\"/\",9), ascrgname = split(AlertLink,\"/\",11), \nascalertname = split(AlertLink,\"/\",7)\n| extend ascsubid = tostring(ascsubid[0]), ascrgname = tostring(ascrgname[0]),\nascalertname = tostring(ascalertname[0]), asclocation = tostring(split(AlertLink,\"/\",15)[0])\n| project ascsubid, ascrgname, ascalertname, asclocation",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuremonitorlogs_1']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/queryData",
+                                                                "queries": {
+                                                                    "resourcegroups": "[parameters('AzureSentinelLogAnalyticsWorkspaceResourceGroupName')]",
+                                                                    "resourcename": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                                                                    "resourcetype": "Log Analytics Workspace",
+                                                                    "subscriptions": "[subscription().subscriptionId]",
+                                                                    "timerange": "Set in query"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        },
+                                        "Case_2": {
+                                            "case": "Microsoft Defender Advanced Threat Protection",
+                                            "actions": {
+                                                "For_each_3": {
+                                                    "foreach": "@body('Parse_incident_relation_data')?['value']",
+                                                    "actions": {
+                                                        "Alerts_-_Update_alert": {
+                                                            "runAfter": {
+                                                                "Run_query_and_list_results_2": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": " @{if(equals(items('For_each')?['properties']?['classification'],'BegignPostive'),'TruePostive',if(equals(items('For_each')?['properties']?['classification'],'Undetermined'),'Unknown', items('For_each')?['properties']?['classification']))}",
+                                                                    "status": "Resolved"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "patch",
+                                                                "path": "/api/alerts/@{encodeURIComponent('body(''Run_query_and_list_results_2'')[''value''][0][''VendorOriginalId'']')}"
+                                                            }
+                                                        },
+                                                        "Run_query_and_list_results_2": {
+                                                            "runAfter": {
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "SecurityAlert\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\n| where SystemAlertId in(\"@{items('For_each_3')?['properties']?['relatedResourceName']}\")\n| project VendorOriginalId\n",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/queryData",
+                                                                "queries": {
+                                                                    "resourcegroups": "[parameters('AzureSentinelLogAnalyticsWorkspaceResourceGroupName')]",
+                                                                    "resourcename": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                                                                    "resourcetype": "Log Analytics Workspace",
+                                                                    "subscriptions": "[subscription().subscriptionId]",
+                                                                    "timerange": "@items('For_each')?['properties']?['createdTimeUtc']"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        },
+                                        "Case_3": {
+                                            "case": "Microsoft Cloud App Security",
+                                            "actions": {
+                                                "For_each_4": {
+                                                    "foreach": "@body('Parse_incident_relation_data')?['value']",
+                                                    "actions": {
+                                                        "Condition": {
+                                                            "actions": {
+                                                                "Resolve_MCAS_Alert": {
+                                                                    "runAfter": {},
+                                                                    "type": "Http",
+                                                                    "inputs": {
+                                                                        "authentication": {
+                                                                            "type": "Raw",
+                                                                            "value": "[parameters('McasAccessToken')]"
+                                                                        },
+                                                                        "body": {
+                                                                            "filters": {
+                                                                                "id": {
+                                                                                    "eq": [
+                                                                                        "@{body('Run_query_and_list_results_3')['value'][0]['alertId']}"
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "method": "POST",
+                                                                        "uri": "[concat(parameters('McasBaseUrl'),'api/v1/alerts/resolve/')]"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Run_query_and_list_results_3": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Dismiss_MCAS_Alert": {
+                                                                        "runAfter": {},
+                                                                        "type": "Http",
+                                                                        "inputs": {
+                                                                            "authentication": {
+                                                                                "type": "Raw",
+                                                                                "value": "[parameters('McasAccessToken')]"
+                                                                            },
+                                                                            "method": "POST",
+                                                                            "uri": "[concat(parameters('McasBaseUrl'),'api/v1/alerts/','@{body(''Run_query_and_list_results_3'')[''value''][0][''alertId'']}','/dismiss/')]"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "or": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@items('For_each_4')?['properties']?['classification']",
+                                                                                    "BenignPositive"
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@items('For_each_4')?['properties']?['classification']",
+                                                                                    "TruePostive"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Run_query_and_list_results_3": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "let searchString = \"/alerts/\";\nSecurityAlert\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\n| where SystemAlertId in(\"@{items('For_each_4')?['properties']?['relatedResourceName']}\")\n| extend links = parse_json(ExtendedLinks)\n| mv-expand links\n| where links.Label == 'Cloud App Security alert ID'\n| extend links.Href\n| project alertId = substring(links_Href, indexof(links_Href,searchString) + strlen(searchString), strlen(links_Href))",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuremonitorlogs_1']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/queryData",
+                                                                "queries": {
+                                                                    "resourcegroups": "[parameters('AzureSentinelLogAnalyticsWorkspaceResourceGroupName')]",
+                                                                    "resourcename": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                                                                    "resourcetype": "Log Analytics Workspace",
+                                                                    "subscriptions": "[subscription().subscriptionId]",
+                                                                    "timerange": "@items('For_each')?['properties']?['createdTimeUtc']"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        }                                
+                                    },
+                                    "default": {
+                                        "actions": {
+                                        }
+                                    },
+                                    "expression": "@items('For_each')?['properties']?['additionalData']?['alertProductNames'][0]",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_incidents": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_workspace_settings": {
+                            "runAfter": {
+                                "Set_filter_datetime": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "workflow",
+                                        "type": "object",
+                                        "value": "@workflow()"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialise_incident_array": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incidents",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Get_workspace_settings": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Settings",
+                                        "type": "object",
+                                        "value": {
+                                            "logWorkspace": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                                            "resourceGroup": "@{substring(workflow()['id'],add(indexOf(workflow()['id'],'resourceGroups/'),15),sub(sub(indexOf(workflow()['id'],'/providers'),indexOf(workflow()['id'],'resourceGroups/')),15))}",
+                                            "subscriptionId": "@{substring(workflow()['id'],add(lastIndexOf(workflow()['id'],'subscriptions/'),14),sub(indexOf(workflow()['id'],'resourceGroups/'),16))}"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_incidents": {
+                            "runAfter": {
+                                "Until": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@variables('incidents')",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "etag": {
+                                                "type": "string"
+                                            },
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "additionalData": {
+                                                        "properties": {
+                                                            "alertProductNames": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "alertsCount": {
+                                                                "type": "integer"
+                                                            },
+                                                            "bookmarksCount": {
+                                                                "type": "integer"
+                                                            },
+                                                            "commentsCount": {
+                                                                "type": "integer"
+                                                            },
+                                                            "tactics": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "createdTimeUtc": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "firstActivityTimeGenerated": {
+                                                        "type": "string"
+                                                    },
+                                                    "firstActivityTimeUtc": {
+                                                        "type": "string"
+                                                    },
+                                                    "incidentNumber": {
+                                                        "type": "integer"
+                                                    },
+                                                    "incidentUrl": {
+                                                        "type": "string"
+                                                    },
+                                                    "labels": {
+                                                        "type": "array"
+                                                    },
+                                                    "lastActivityTimeGenerated": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastActivityTimeUtc": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastModifiedTimeUtc": {
+                                                        "type": "string"
+                                                    },
+                                                    "owner": {
+                                                        "properties": {
+                                                            "assignedTo": {
+                                                            },
+                                                            "email": {
+                                                            },
+                                                            "objectId": {
+                                                            },
+                                                            "userPrincipalName": {
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "relatedAnalyticRuleIds": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "severity": {
+                                                        "type": "string"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "id",
+                                            "name",
+                                            "etag",
+                                            "type",
+                                            "properties"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Set_filter_datetime": {
+                            "runAfter": {
+                            },
+                            "type": "Expression",
+                            "kind": "SubtractFromTime",
+                            "inputs": {
+                                "baseTime": "@{utcNow()}",
+                                "interval": "[parameters('RecurrenceInterval')]",
+                                "timeUnit": "[parameters('RecurrenceFrequency')]"
+                            }
+                        },
+                        "Set_request_URL": {
+                            "runAfter": {
+                                "Initialise_incident_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "requestUrl",
+                                        "type": "string",
+                                       "value": "https://management.azure.com/subscriptions/@{variables('Settings')['subscriptionId']}/resourcegroups/@{variables('Settings')['resourceGroup']}/providers/Microsoft.OperationalInsights/workspaces/@{variables('Settings')['logWorkspace']}/providers/Microsoft.SecurityInsights/incidents/?api-version=2019-01-01-preview&$filter=(properties/additionalData/alertProductNames/any(p:p eq 'Microsoft Cloud App Security') or properties/additionalData/alertProductNames/any(p:p eq 'Microsoft Defender Advanced Threat Protection') or properties/additionalData/alertProductNames/any(p:p eq 'Azure Security Center')) and properties/lastModifiedTimeUtc ge @{body('Set_filter_datetime')} and properties/status eq 'Closed'"
+                                    }
+                                ]
+                            }
+                        },
+                        "Until": {
+                            "actions": {
+                                "Compose": {
+                                    "runAfter": {
+                                        "Get_incidents": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@union(variables('incidents'),body('Get_incidents')?['value'])"
+                                },
+                                "Get_incidents": {
+                                    "runAfter": {
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "GET",
+                                        "uri": "@variables('requestUrl')"
+                                    }
+                                },
+                                "Set_next_page_url": {
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "requestUrl",
+                                        "value": "@{if(not(equals(body('Get_incidents')?['nextLink'],null)),body('Get_incidents')?['nextLink'],null)}"
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "incidents",
+                                        "value": "@outputs('Compose')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_request_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(body('Get_incidents')?['nextLink'], null)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogAnalyticConnectionName'))]",
+                                "connectionName": "azuremonitorlogs",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "wdatp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('WdatpConnectionName'))]",
+                                "connectionName": "wdatp",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

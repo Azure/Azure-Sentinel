@@ -1,0 +1,411 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This Logic App will act as listner, you can pass json object to a HTTP Endpoint to use KQL query to discover Azure Sentinel Security Incidents through the SecurityIncident table you wish to bulk change on. It includes a method to selective update by array [].",
+        "author": "Priscila Viana, Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Update-BulkIncidents",
+            "type": "String"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AzureSentinelSubscriptionID": {
+            "defaultValue": "<AZURE SENTINEL - SUBSCRIPTION ID>",
+            "type": "string"
+        },
+        "AzureSentinelResourceGroup": {
+            "defaultValue": "<AZURE SENTINEL - RESOURCEGROUP>",
+            "type": "string"
+        },
+        "AzureSentinelWorkspaceId": {
+            "defaultValue": "<AZURE SENTINEL - WORKSPACE ID>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "azuremonitorlogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "SentinelResourceGroup": {
+                            "defaultValue": "[parameters('AzureSentinelResourceGroup')]",
+                            "type": "String"
+                        },
+                        "SentinelSubId": {
+                            "defaultValue": "[parameters('AzureSentinelSubscriptionId')]",
+                            "type": "String"
+                        },
+                        "SentinelWorkspaceId": {
+                            "defaultValue": "[parameters('AzureSentinelWorkspaceId')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "request": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "bulkoperation": {
+                                            "anyOf": [
+                                                {
+                                                    "not": {
+                                                        "properties": {
+                                                            "operationtype": {
+                                                                "const": "kql"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "operationtype"
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "required": [
+                                                        "operationquery"
+                                                    ]
+                                                }
+                                            ],
+                                            "properties": {
+                                                "ids": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "operationquery": {
+                                                    "type": "string"
+                                                },
+                                                "operationstatus": {
+                                                    "type": "string"
+                                                },
+                                                "operationtype": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Current_time": {
+                            "runAfter": {},
+                            "type": "Expression",
+                            "kind": "CurrentTime",
+                            "inputs": {}
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "Current_time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 202
+                            }
+                        },
+                        "Switch": {
+                            "runAfter": {
+                                "Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Case": {
+                                    "case": "kql",
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Condition_3": {
+                                                    "actions": {
+                                                        "For_each_4": {
+                                                            "foreach": "@body('SearchSecurityIncident')?['value']",
+                                                            "actions": {
+                                                                "Change_incident_status_4": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "CloseReasonText": "Bulk Close from KQL - via Playbook"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/Case/@{encodeURIComponent(parameters('SentinelSubId'))}/@{encodeURIComponent(parameters('SentinelWorkspaceId'))}/@{encodeURIComponent(parameters('SentinelResourceGroup'))}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(items('For_each_4')?['IncidentNumber'])}/Status/@{encodeURIComponent('Closed')}"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "SearchSecurityIncident": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "For_each": {
+                                                                "foreach": "@body('SearchSecurityIncident')?['value']",
+                                                                "actions": {
+                                                                    "Change_incident_status": {
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "put",
+                                                                            "path": "/Case/@{encodeURIComponent(parameters('SentinelSubId'))}/@{encodeURIComponent(parameters('SentinelWorkspaceId'))}/@{encodeURIComponent(parameters('SentinelResourceGroup'))}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(items('For_each')?['IncidentNumber'])}/Status/@{encodeURIComponent(triggerBody()?['bulkoperation']?['operationstatus'])}"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "Foreach"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@triggerBody()?['bulkoperation']?['operationstatus']",
+                                                                    "Closed"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "SearchSecurityIncident": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": "@triggerBody()?['bulkoperation']?['operationquery']",
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/queryData",
+                                                        "queries": {
+                                                            "resourcegroups": "@parameters('SentinelResourceGroup')",
+                                                            "resourcename": "@parameters('SentinelWorkspaceName')",
+                                                            "resourcetype": "Log Analytics Workspace",
+                                                            "subscriptions": "@parameters('SentinelSubId')",
+                                                            "timerange": "Set in query"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@triggerBody()?['bulkoperation']?['operationquery']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    }
+                                },
+                                "Case_2": {
+                                    "case": "ids",
+                                    "actions": {
+                                        "Condition_2": {
+                                            "actions": {
+                                                "Condition_4": {
+                                                    "actions": {
+                                                        "For_each_5": {
+                                                            "foreach": "@triggerBody()?['bulkoperation']?['operationids']",
+                                                            "actions": {
+                                                                "Change_incident_status_5": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "CloseReasonText": "Bulk Close from IDs - via Playbook"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/Case/@{encodeURIComponent(parameters('SentinelSubId'))}/@{encodeURIComponent(parameters('SentinelWorkspaceId'))}/@{encodeURIComponent(parameters('SentinelResourceGroup'))}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(items('For_each_5'))}/Status/@{encodeURIComponent('Closed')}"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "For_each_2": {
+                                                                "foreach": "@triggerBody()?['bulkoperation']?['operationids']",
+                                                                "actions": {
+                                                                    "Change_incident_status_2": {
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "put",
+                                                                            "path": "/Case/@{encodeURIComponent(parameters('SentinelSubId'))}/@{encodeURIComponent(parameters('SentinelWorkspaceId'))}/@{encodeURIComponent(parameters('SentinelResourceGroup'))}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(items('For_each_2'))}/Status/@{encodeURIComponent(triggerBody()?['bulkoperation']?['operationstatus'])}"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "Foreach"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@triggerBody()?['bulkoperation']?['operationstatus']",
+                                                                    "Closed"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@triggerBody()?['bulkoperation']?['operationstatus']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                    "ResponseInvalid": {
+                                        "runAfter": {},
+                                        "type": "Response",
+                                        "kind": "Http",
+                                        "inputs": {
+                                            "body": "operationtype must be kql or ids",
+                                            "statusCode": 400
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": "@triggerBody()?['bulkoperation']?['operationtype']",
+                            "type": "Switch"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                                "connectionName": "[variables('azuresentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

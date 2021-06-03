@@ -1,0 +1,949 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 1,
+        "content": {
+          "json": "## Dynamics 365 Workbook\n---\n\nThis workbook brings together queries and visualizations to assist you in identifying potential threats in your Dynamics 365 audit data. This workbook is separated into 5 distinct sections and within each section there are several queries and visualizations. Many of the queries build on data from previous queries so may not appear if no data is present.\n\nTo begin select the desired TimeRange to filter the data to the timeframe you want to focus on. Note if you have a large amount of Dynamics 365 data queries may timeout with a large time range, if this is the case simply select a smaller time range.: "
+        },
+        "name": "text - 2"
+      },
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "parameters": [
+            {
+              "id": "412a09a0-64ae-4614-aec6-cbfc9273b82b",
+              "version": "KqlParameterItem/1.0",
+              "name": "TimeRange",
+              "type": 4,
+              "isRequired": true,
+              "value": {
+                "durationMs": 2592000000
+              },
+              "typeSettings": {
+                "selectableValues": [
+                  {
+                    "durationMs": 300000
+                  },
+                  {
+                    "durationMs": 900000
+                  },
+                  {
+                    "durationMs": 1800000
+                  },
+                  {
+                    "durationMs": 3600000
+                  },
+                  {
+                    "durationMs": 14400000
+                  },
+                  {
+                    "durationMs": 43200000
+                  },
+                  {
+                    "durationMs": 86400000
+                  },
+                  {
+                    "durationMs": 172800000
+                  },
+                  {
+                    "durationMs": 259200000
+                  },
+                  {
+                    "durationMs": 604800000
+                  },
+                  {
+                    "durationMs": 1209600000
+                  },
+                  {
+                    "durationMs": 2419200000
+                  },
+                  {
+                    "durationMs": 2592000000
+                  },
+                  {
+                    "durationMs": 5184000000
+                  },
+                  {
+                    "durationMs": 7776000000
+                  }
+                ],
+                "allowCustom": true
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              }
+            }
+          ],
+          "style": "pills",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces"
+        },
+        "name": "parameters - 32"
+      },
+      {
+        "type": 11,
+        "content": {
+          "version": "LinkItem/1.0",
+          "style": "tabs",
+          "links": [
+            {
+              "id": "ae90d1dc-20da-4948-80da-127b210bf152",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "Record Retrieval Events",
+              "subTarget": "1",
+              "style": "link"
+            },
+            {
+              "id": "a1862467-36e9-4191-89ee-0a7479ec6114",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "Record Deletion Events",
+              "subTarget": "2",
+              "style": "link"
+            },
+            {
+              "id": "06df36ec-4c5b-456d-b5d3-45fcd4662c6b",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "Record Export Events",
+              "subTarget": "3",
+              "style": "link"
+            },
+            {
+              "id": "5bb7d870-a9d8-4905-a7c5-41b94c89edf4",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "Email Events",
+              "subTarget": "4",
+              "style": "link"
+            },
+            {
+              "id": "fa9a364b-0ffc-4023-a7cc-087345da4ba8",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "Other Events",
+              "subTarget": "5",
+              "style": "link"
+            }
+          ]
+        },
+        "name": "links - 34"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "Record Retrieval Events",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\n| extend Message = split(OriginalObjectId, ' ')[0]\n| where Message =~ \"RetrieveMultiple\"\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| union (\n    Dynamics365Activity\n    | extend Message = split(OriginalObjectId, ' ')[0]\n    | where Message =~ \"Retrieve\" \n    | extend QueryCount = double(1))\n| make-series TotalRetrieves=sum(QueryCount) on TimeGenerated from startofday(ago(30d)) to startofday(ago(0d)) step 1h by UserId\n| extend (baseline) = series_decompose(TotalRetrieves)\n| extend (anomalies, baseline) = series_decompose_anomalies(TotalRetrieves, 3, -1, 'linefit')",
+                "size": 0,
+                "title": "Total record retrievals by users - {TimeRange:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportedParameters": [
+                  {
+                    "fieldName": "TimeGenerated",
+                    "parameterName": "RetTime"
+                  },
+                  {
+                    "parameterType": 1
+                  }
+                ],
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showLegend": true
+                }
+              },
+              "customWidth": "75",
+              "name": "query - 2"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "This timeline shows a break down of anomolies in data retrieval sizes by all users. Look for spikes that might indicate suspicious activity by users in terms of accessing records.\r\n\r\n<br>\r\nThe table below shows the 10 users with the largest number of data retrievals in the timeframe. This may help indicate which users are the cause of the anomolies. To filter subcequent views by a particular user simply select a user from the list. If no user is selected queries will show data from all users.",
+                "style": "info"
+              },
+              "customWidth": "25",
+              "name": "text - 6"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n| extend Message = split(OriginalObjectId, ' ')[0]\r\n| where Message =~ \"RetrieveMultiple\"\r\n| extend numQueryCount = todouble(QueryResults)\r\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n| union (\r\n    Dynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n    | where Message =~ \"Retrieve\" \r\n    | extend QueryCount = double(1))\r\n| summarize TotalRecords = sum(QueryCount) by UserId\r\n| sort by TotalRecords desc\r\n| take 10",
+                "size": 4,
+                "title": "Users with largest total record retrievals - {TimeRange:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "UserId",
+                "exportParameterName": "RetUser",
+                "exportDefaultValue": "all users",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "showBorder": false,
+                  "titleContent": {
+                    "columnMatch": "UserId",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "TotalRecords",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "query - 2"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "\tDynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message =~ \"RetrieveMultiple\"\r\n    | where UserId =~ '{RetUser}' or '{RetUser}' == \"all users\"\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n    | where QueryCount < 1000000\r\n\t| union (Dynamics365Activity\r\n         | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t     | where Message =~ \"Retrieve\"\r\n         | where UserId =~ '{RetUser}' \r\n      \t | extend QueryCount = double(1))\r\n\t| summarize sum(QueryCount) by bin(TimeGenerated, 1h)",
+                "size": 1,
+                "title": "Timeline of Retrievals by {RetUser:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "timeBrushParameterName": "TimeBrush",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "name": "query - 23"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n| where Message contains \"Retrieve\"\r\n| where UserId =~ '{RetUser}' or '{RetUser}' == \"all users\"\r\n",
+                "size": 1,
+                "title": "Retrievals by {RetUser}",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeBrush",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "conditionalVisibility": {
+                "parameterName": "TimeBrush",
+                "comparison": "isNotEqualTo"
+              },
+              "name": "query - 23 - Copy"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "    Dynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message =~ \"RetrieveMultiple\"\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n\t| union (Dynamics365Activity\r\n            | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t        | where Message =~ \"Retrieve\" \r\n            | extend QueryCount = double(1))\r\n| extend IPAddress = tostring(split(ClientIP, ':')[0])\r\n| summarize TotalRecords = sum(QueryCount) by IPAddress\r\n| sort by TotalRecords desc\r\n| take 10\r\n| project IPAddress, TotalRecords",
+                "size": 1,
+                "title": "Total record retrievals by IP address - {TimeRange:label} - Top 10",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "IPAddress",
+                "exportParameterName": "RetIP",
+                "exportDefaultValue": "all IP addresses",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "IPAddress",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "TotalRecords",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  },
+                  "showBorder": false
+                }
+              },
+              "customWidth": "70",
+              "name": "query - 3"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "As with the user retrieval events previously this section shows the top 10 IP addresses with the largest number of record retrievals. \r\n\r\nSelect an IP address in oder to filter subcequent fields by that IP.",
+                "style": "info"
+              },
+              "customWidth": "30",
+              "name": "text - 7"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "\tDynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message =~ \"RetrieveMultiple\"\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n\t| union (Dynamics365Activity\r\n         | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t     | where Message =~ \"Retrieve\" \r\n         | extend QueryCount = double(1))\r\n| extend IPAddress = tostring(split(ClientIP, ':')[0])\r\n| where IPAddress == '{RetIP}' or '{RetIP}' == \"all IP addresses\"\r\n| summarize sum(QueryCount) by bin(TimeGenerated, 1h)",
+                "size": 1,
+                "title": "Timeline of Retreivals by {RetIP:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "name": "query - 24"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "1"
+        },
+        "name": "Retrieval Events"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "Record Deletions",
+          "items": [
+            {
+              "type": 1,
+              "content": {
+                "json": "This section include details on users deleting records within Dynamics 365. \r\n\r\nThe first timeline show anomalies within the total number of records deleted by users. Subcequent sections highlight the User and IP addresses associated with the largest number of record deletions. Selecting records in these results will show additional results filtered to that user or IP address.",
+                "style": "info"
+              },
+              "name": "text - 5"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "\tDynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message =~ \"Delete\"\r\n\t| make-series TotalDeletes=count() on TimeGenerated from startofday(ago(30d)) to startofday(ago(0d)) step 1h by UserId\r\n\t| extend (baseline) = series_decompose(TotalDeletes)\r\n| extend (anomalies, baseline) = series_decompose_anomalies(TotalDeletes, 3, -1, 'linefit')",
+                "size": 0,
+                "title": "Record deletions - {TimeRange:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false,
+                  "showLegend": true
+                }
+              },
+              "name": "query - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message =~ \"Delete\"\r\n    | summarize count() by UserId\r\n    | sort by count_ desc\r\n    | take 10\r\n",
+                "size": 4,
+                "title": "Users with most record deletions - {TimeRange:label} - Top 10",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "UserId",
+                "exportParameterName": "DeleteUserId",
+                "exportDefaultValue": "all users",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "showBorder": false,
+                  "titleContent": {
+                    "columnMatch": "UserId",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "count_",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "query - 5"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t| where Message =~ \"Delete\"\r\n    | where UserId =~ '{DeleteUserId}'\r\n    | summarize count() by bin(TimeGenerated, 1h)",
+                "size": 1,
+                "title": "Deletes by {DeleteUserId:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "conditionalVisibility": {
+                "parameterName": "DeleteUserId",
+                "comparison": "isNotEqualTo",
+                "value": "all users"
+              },
+              "name": "query - 22"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message =~ \"Delete\"\r\n    | summarize count() by tostring(split(ClientIP, ':')[0])\r\n    | extend IPAddress = tostring(ClientIP_0)\r\n    | sort by count_ desc\r\n    | take 10\r\n    \r\n",
+                "size": 4,
+                "title": "Record deletions by IP address - {TimeRange:label} - Top 10",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "IPAddress",
+                "exportParameterName": "DeleteIP",
+                "exportDefaultValue": "all IP addresses",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "IPAddress"
+                  },
+                  "leftContent": {
+                    "columnMatch": "count_",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "categorical"
+                    }
+                  },
+                  "showBorder": false,
+                  "sortCriteriaField": "count_",
+                  "sortOrderField": 2,
+                  "size": "auto"
+                }
+              },
+              "name": "query - 6"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t| where Message =~ \"Delete\"\r\n    | extend IPAddress = tostring(split(ClientIP, ':')[0])\r\n    | where IPAddress == '{DeleteIP}' or '{DeleteIP}' == \"all IP addresses\"\r\n    | summarize count() by bin(TimeGenerated, 1h)\r\n\r\n",
+                "size": 1,
+                "title": "Deletions by {DeleteIP:label}",
+                "timeContext": {
+                  "durationMs": 2592000000
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "conditionalVisibility": {
+                "parameterName": "DeleteIP",
+                "comparison": "isNotEqualTo",
+                "value": "all IP addresses"
+              },
+              "name": "query - 22"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "2"
+        },
+        "name": "Record Deletions"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "Export Events",
+          "items": [
+            {
+              "type": 1,
+              "content": {
+                "json": "This section looks at records export from Dynamics 365. The first graph represents a timeseries of anomolies in the number of recrods being exported by all users.\r\n\r\nSubcequent sections look at the users exporting the largest number of records as well as the largest single export events.",
+                "style": "info"
+              },
+              "name": "text - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "\tDynamics365Activity\r\n\t| where TimeGenerated > ago(30d)\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message contains 'ExportToExcel'\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n    | where QueryCount < 1000000\r\n    | make-series TotalExports=sum(QueryCount) on TimeGenerated from startofday(ago(30d)) to startofday(ago(0d)) step 1h by UserId\r\n\t| extend (baseline) = series_decompose(TotalExports)\r\n\t| extend (anomalies, baseline) = series_decompose_anomalies(TotalExports, 3, -1, 'linefit')\r\n",
+                "size": 0,
+                "title": "Count of records exported to Excel - {TimeRange:label}",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart"
+              },
+              "name": "query - 10"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "\tDynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message contains 'ExportToExcel'\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n    | summarize TotalRecords = sum(QueryCount) by UserId\r\n    | sort by TotalRecords desc\r\n    | take 10\r\n",
+                "size": 1,
+                "title": "Users with most record exports - {TimeRange:label}",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "UserId",
+                "exportParameterName": "ExportUser",
+                "exportDefaultValue": "all users",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "showBorder": false,
+                  "titleContent": {
+                    "columnMatch": "UserId",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "TotalRecords",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "customWidth": "50",
+              "name": "query - 11"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "    Dynamics365Activity\r\n\t| where Message contains 'ExportToExcel'\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n    | extend IPAddress=split(ClientIP, ':')[0]\r\n    | summarize by UserId, tostring(IPAddress), QueryCount\r\n    | sort by QueryCount desc\r\n    | take 10\r\n",
+                "size": 0,
+                "title": "Largest exports - {TimeRange:label} - Top 10",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces"
+              },
+              "customWidth": "50",
+              "name": "query - 12"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "\tDynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n\t| where Message contains 'ExportToExcel'\r\n\t| extend numQueryCount = todouble(QueryResults)\r\n\t| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\r\n\t| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\r\n    | where UserId =~ '{ExportUser}'\r\n    | summarize sum(QueryCount) by bin(TimeGenerated, 1h)",
+                "size": 1,
+                "title": "Exports by {ExportUser:label}",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "conditionalVisibility": {
+                "parameterName": "ExportUser",
+                "comparison": "isNotEqualTo",
+                "value": "all users"
+              },
+              "name": "query - 25"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "3"
+        },
+        "name": "Export Events"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "Email Events",
+          "items": [
+            {
+              "type": 1,
+              "content": {
+                "json": "This section looks at emails sent by user via Dynamics 365, as with the other sections it starts be looking at anomolies in the total number of emails sent and then allows for drill downs into specific users to identify anomalous events.",
+                "style": "info"
+              },
+              "name": "text - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n  | where Message =~ \"SendEmail\"\r\n  | make-series TotalEmails=count() on TimeGenerated from startofday(ago(30d)) to startofday(ago(0d)) step 1h by UserId\r\n  | extend (baseline) = series_decompose(TotalEmails)\r\n  | extend (anomalies, baseline) = series_decompose_anomalies(TotalEmails, 3, -1, 'linefit')",
+                "size": 0,
+                "title": "Total emails sent - {TimeRange:label}",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "name": "query - 7"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "Use this graph to look for spikes in email sent activity that occur outside the regular weekly pattern or occur outside expected working hours. You can then pivot on this data using query similar to:\r\n\r\n\tDynamics365Activity\r\n  \t| where TimeGenerated between(datetime(SPIKETIME)..(datetime(SPIKETIME)+1h))\r\n  \t| where Message =~ \"SendEmail\""
+              },
+              "name": "text - 28"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n     | where Message =~ \"SendEmail\"\r\n     | summarize count() by UserId\r\n     | sort by count_ desc\r\n     | take 10",
+                "size": 4,
+                "title": "Users with most sent emails - {TimeRange:label} - Top 10",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "UserId",
+                "exportParameterName": "EmailUser",
+                "exportDefaultValue": "all users",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "showBorder": false,
+                  "titleContent": {
+                    "columnMatch": "UserId",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "count_",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "customWidth": "75",
+              "name": "query - 8"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "Select a user to see specific events related to that user.",
+                "style": "info"
+              },
+              "customWidth": "25",
+              "name": "text - 5"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t | where TimeGenerated > ago(30d)\r\n     | where Message =~ \"SendEmail\"\r\n     | where UserId =~ '{EmailUser}'\r\n     | summarize count() by bin(TimeGenerated, 1h)",
+                "size": 1,
+                "title": "Emails by {EmailUser:label}",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "linechart",
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "conditionalVisibility": {
+                "parameterName": "EmailUser",
+                "comparison": "isEqualTo"
+              },
+              "name": "query - 27"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "4"
+        },
+        "name": "Email Events"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "Other Events",
+          "items": [
+            {
+              "type": 1,
+              "content": {
+                "json": "This section contains a number of other areas of interest from a threat hunting perspective. Selecting events in the queries shows additional data of interest.",
+                "style": "info"
+              },
+              "name": "text - 7"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t| where OriginalObjectId startswith \"GrantAccess\"\r\n\t| where ClientIP != '127.0.0.1'\r\n\t| join kind=leftanti (Dynamics365Activity\r\n\t| where TimeGenerated between(ago(30d)..ago(7d))\r\n\t| where OriginalObjectId startswith \"GrantAccess\")\r\non UserId\r\n| summarize by UserId",
+                "size": 0,
+                "title": "New users observed in {TimeRange:label} - click to drill down",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "UserId",
+                "exportParameterName": "NewUser",
+                "exportDefaultValue": "all users",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "UserId",
+                    "formatter": 1
+                  },
+                  "showBorder": false,
+                  "size": "auto"
+                }
+              },
+              "customWidth": "33",
+              "name": "query - 16"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n    | summarize count() by UserAgent\r\n    | sort by count_ asc\r\n    | take 10\r\n    | project UserAgent",
+                "size": 0,
+                "title": "10 rarest user agents in the {TimeRange:label} - click to drill down",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "UserAgent",
+                "exportParameterName": "RareUA",
+                "exportDefaultValue": "all user agents",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "tileSettings": {
+                  "showBorder": false,
+                  "titleContent": {
+                    "columnMatch": "UserAgent",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "count_",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "customWidth": "33",
+              "name": "query - 17"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t| where ClientIP != '127.0.0.1'\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n    | extend Message = tostring(Message)\r\n\t| join kind=leftanti (Dynamics365Activity\r\n\t| where TimeGenerated between(ago(30d)..ago(7d))\r\n    | extend Message = split(OriginalObjectId, ' ')[0]\r\n    | extend Message = tostring(Message))\r\non Message\r\n| summarize by Message",
+                "size": 0,
+                "title": "New actions observed in {TimeRange:label} - click to drill down",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "exportFieldName": "Message",
+                "exportParameterName": "NewAction",
+                "exportDefaultValue": "All",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces"
+              },
+              "customWidth": "33",
+              "name": "query - 18"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t| where ClientIP != '127.0.0.1'\r\n    | where UserId =~ '{NewUser}'\r\n    | project TimeGenerated, Message, ClientIP, UserAgent",
+                "size": 0,
+                "title": "Activity by {NewUser:label}",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces"
+              },
+              "customWidth": "33",
+              "conditionalVisibility": {
+                "parameterName": "NewUser",
+                "comparison": "isNotEqualTo",
+                "value": "all users"
+              },
+              "showPin": false,
+              "name": "query - 29"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n    | where UserAgent =~ '{RareUA}'\r\n",
+                "size": 0,
+                "title": "Activity by {RareUA:label}",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces"
+              },
+              "customWidth": "33",
+              "conditionalVisibility": {
+                "parameterName": "RareUA",
+                "comparison": "isNotEqualTo",
+                "value": "all user agents"
+              },
+              "showPin": false,
+              "name": "query - 30"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Dynamics365Activity\r\n\t| where ClientIP != '127.0.0.1'\r\n    | where Message =~ '{NewAction}'",
+                "size": 0,
+                "title": "{NewAction:label} activities",
+                "timeContext": {
+                  "durationMs": 0
+                },
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces"
+              },
+              "customWidth": "33",
+              "conditionalVisibility": {
+                "parameterName": "NewAction",
+                "comparison": "isNotEqualTo",
+                "value": "All"
+              },
+              "name": "query - 31"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "5"
+        },
+        "name": "Other Events"
+      }
+    ],
+    "fallbackResourceIds": [
+    ],
+    "fromTemplateId": "sentinel-UserWorkbook",
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }

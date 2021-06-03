@@ -154,6 +154,7 @@ Once you have a working POC, you are ready to build, validate the data connector
    * [Connector_CEF_Template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_CEF_template.json)
    * [Connector_REST_API_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_template.json)
    * [Connector_Syslog_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json)
+   * [DataConnector_API_AzureFunctionApp_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json)
 3. **Validate the Connector UX** – Follow these steps to render and validate the connector UX you just built
     1.	The test utility can be accessed by this URL - https://portal.azure.com/?feature.BringYourOwnConnector=true
     2.  Go to Azure Sentinel -> Data Connectors 
@@ -206,6 +207,7 @@ Once the data connector is in public preview for at least a month, send an email
 *	The data connector has at least sample queries and workbooks to visualize and use the data effectively in Azure Sentinel. 
 *	The data connector has at least 10 unique customers  
 *	No major unresolved customer reported incidents with the data connector in a month after release
+*   Support for government cloud (.us in addition to .com).
 
 ## Evolve the data experience 
 ### Workbooks 

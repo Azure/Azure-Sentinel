@@ -1,0 +1,1037 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will pull domains from Sentinel Incidents and add them to a Zscaler Custom URL Category of your choice.",
+        "author": "Arbala Security"
+    },
+    "parameters": {
+        "IntegrationAccountName": {
+        "defaultValue": "Zscaler-Logicapp",
+        "type": "string"
+    },
+    "IntegrationAccountPricingTier": {
+        "type": "string",
+        "defaultValue": "Free",
+        "allowedValues": [
+            "Free",
+            "Basic",
+            "Standard"
+        ],
+        "metadata": {
+            "description": "Specify the Pricing Tier of the Integration Account."
+        }
+    },
+    "PlaybookName": {
+            "defaultValue": "Zscaler-add-Domains-to-URL-Category",
+            "type": "string"
+        },
+        "ZscalerURL": {
+            "defaultValue": "https://admin.<zscaler_instance_domain>.net",
+            "type": "string"
+        },
+        "ZscalerUsername": {
+            "defaultValue": "Enter your Zscaler API username",
+            "type": "string"
+        },
+        "ZscalerPassword": {
+            "defaultValue": "Enter your Zscaler API password",
+            "type": "string"
+        },
+        "ZscalerAPIKey": {
+            "defaultValue": "Enter your Zscaler API key",
+            "type": "string"
+        },
+        "ZscalerCustomURLCategoryName": {
+            "defaultValue": "Enter name of your Zscaler Custom URL Category",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "nestedTemplate1",
+            "properties": {
+            "mode": "Incremental",
+            "template": {
+                "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                "contentVersion": "1.0.0.0",
+                "parameters": {
+                },
+                "variables": {},
+                "resources": [
+                    {
+                        "type": "Microsoft.Logic/integrationAccounts",
+                        "apiVersion": "2016-06-01",
+                        "name": "[parameters('IntegrationAccountName')]",
+                        "location": "[resourceGroup().location]",
+                        "sku": {
+                            "name": "[parameters('IntegrationAccountPricingTier')]"
+                        },
+                        "properties": {
+                            "state": "Enabled"
+                        }
+                    }
+                ]
+            }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "nestedTemplate2",
+            "dependsOn": [
+                "nestedTemplate1"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "metadata": {
+                        "comments": "This playbook will pull domains from Sentinel Incidents and add them to a Zscaler CustomURL Category of your choice.",
+                        "author": "Arbala Security"
+                    },
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.Logic/workflows",
+                            "apiVersion": "2017-07-01",
+                            "name": "[parameters('PlaybookName')]",
+                            "location": "[resourceGroup().location]",
+                            "tags": {
+                                "LogicAppsCategory": "security"
+                            },
+                            "properties": {
+                                "state": "Enabled",
+                                "integrationAccount": {
+                                    "id": "[resourceId(subscription().subscriptionId, resourceGroup().name, 'Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+                                },
+                                "definition": {
+                                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                                    "contentVersion": "1.0.0.0",
+                                    "parameters": {
+                                        "$connections": {
+                                            "defaultValue": {},
+                                            "type": "Object"
+                                        }
+                                    },
+                                    "triggers": {
+                                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                                            "inputs": {
+                                                "body": {
+                                                    "callback_url": "@{listCallbackUrl()}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "path": "/subscribe"
+                                            },
+                                            "type": "ApiConnectionWebhook"
+                                        }
+                                    },
+                                    "actions": {
+                                        "Parse_JSON-_Sentinel_Alert": {
+                                            "inputs": {
+                                                "content": "@triggerBody()",
+                                                "schema": {
+                                                    "properties": {
+                                                        "AlertDisplayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "AlertName": {
+                                                            "type": "string"
+                                                        },
+                                                        "AlertType": {
+                                                            "type": "string"
+                                                        },
+                                                        "Description": {
+                                                            "type": "string"
+                                                        },
+                                                        "EndTimeUtc": {
+                                                            "type": "string"
+                                                        },
+                                                        "Entities": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "$id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "DnsDomain": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "HostName": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "IsDomainJoined": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "Name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "UPNSuffix": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Url": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "ExtendedLinks": {
+                                                            "type": "array"
+                                                        },
+                                                        "ExtendedProperties": {
+                                                            "properties": {
+                                                                "Analytic Rule Ids": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Event Grouping": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query End Time UTC": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query Period": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Query Start Time UTC": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Search Query Results Overall Count": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Total Account Entities": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Total Host Entities": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Total URL Entities": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Trigger Operator": {
+                                                                    "type": "string"
+                                                                },
+                                                                "Trigger Threshold": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "ProductName": {
+                                                            "type": "string"
+                                                        },
+                                                        "ProviderAlertId": {
+                                                            "type": "string"
+                                                        },
+                                                        "ProviderName": {
+                                                            "type": "string"
+                                                        },
+                                                        "RemediationSteps": {
+                                                            "type": "string"
+                                                        },
+                                                        "Severity": {
+                                                            "type": "string"
+                                                        },
+                                                        "StartTimeUtc": {
+                                                            "type": "string"
+                                                        },
+                                                        "SystemAlertId": {
+                                                            "type": "string"
+                                                        },
+                                                        "TimeGenerated": {
+                                                            "type": "string"
+                                                        },
+                                                        "WorkspaceId": {
+                                                            "type": "string"
+                                                        },
+                                                        "WorkspaceResourceGroup": {
+                                                            "type": "string"
+                                                        },
+                                                        "WorkspaceSubscriptionId": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "ParseJson"
+                                        },
+                                        "Initialize_variable-_ZscalerURL": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "ZscalerURL",
+                                                        "type": "string"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON-_Sentinel_Alert": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "Set_variable-_ZscalerURL": {
+                                            "inputs": {
+                                                "name": "ZscalerURL",
+                                                "value": "[parameters('ZscalerURL')]"
+                                            },
+                                            "runAfter": {
+                                                "Initialize_variable-_ZscalerURL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        },
+                                        "Initialize_variable-_URL": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "URLs",
+                                                        "type": "array"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Set_variable-_ZscalerURL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "For_each-_Entity": {
+                                            "actions": {
+                                                "Condition-_Null_check": {
+                                                    "actions": {
+                                                        "Append_to_array_variable-_URL": {
+                                                            "inputs": {
+                                                                "name": "URLs",
+                                                                "value": "@items('For_each-_Entity')?['Url']"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each-_Entity')?['Url']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Parse_JSON-_Sentinel_Alert')?['Entities']",
+                                            "runAfter": {
+                                                "Initialize_variable-_URL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Initialize_variable-_Domain_Names": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "Domain Names",
+                                                        "type": "array"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "For_each-_Entity": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "Initialize_variable-_Extracted_Domain_Initial": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "Extracted Domain Initial",
+                                                        "type": "string"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Initialize_variable-_Domain_Names": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "Initialize_variable-_Extracted_Domain_Middle": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "Extracted Domain Middle",
+                                                        "type": "string"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Initialize_variable-_Extracted_Domain_Initial": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "Initialize_variable-_Extracted_Domain_Final": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "Extracted Domain Final",
+                                                        "type": "string"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Initialize_variable-_Extracted_Domain_Middle": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "For_each-_URLs": {
+                                            "actions": {
+                                                "Append_to_array_variable-_Domain_Names": {
+                                                    "inputs": {
+                                                        "name": "Domain Names",
+                                                        "value": "@variables('Extracted Domain Final')"
+                                                    },
+                                                    "runAfter": {
+                                                        "Condition-_URL_parsing_end": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable"
+                                                },
+                                                "Condition-_URL_parsing_end": {
+                                                    "actions": {
+                                                        "Set_variable": {
+                                                            "inputs": {
+                                                                "name": "Extracted Domain Final",
+                                                                "value": "@{concat('.',substring(variables('Extracted Domain Middle'), 0, int(indexOf(variables('Extracted Domain Middle'), '/'))))}"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "SetVariable"
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_variable_2": {
+                                                                "inputs": {
+                                                                    "name": "Extracted Domain Final",
+                                                                    "value": "@{concat('.',variables('Extracted Domain Middle'))}"
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "SetVariable"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "contains": [
+                                                                    "@variables('Extracted Domain Middle')",
+                                                                    "/"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {
+                                                        "Condition-_URL_parsing_middle": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Condition-_URL_parsing_initial": {
+                                                    "actions": {
+                                                        "Set_variable-_Remove_https": {
+                                                            "inputs": {
+                                                                "name": "Extracted Domain Initial",
+                                                                "value": "@{replace(items('For_each-_URLs'),'https://', '')}"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "SetVariable"
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Condition": {
+                                                                "actions": {
+                                                                    "Set_variable-_Remove_http": {
+                                                                        "inputs": {
+                                                                            "name": "Extracted Domain Initial",
+                                                                            "value": "@{replace(items('For_each-_URLs'),'http://', '')}"
+                                                                        },
+                                                                        "runAfter": {},
+                                                                        "type": "SetVariable"
+                                                                    }
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Set_variable-_Default_initial": {
+                                                                            "inputs": {
+                                                                                "name": "Extracted Domain Initial",
+                                                                                "value": "@{items('For_each-_URLs')}"
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "startsWith": [
+                                                                                "@items('For_each-_URLs')",
+                                                                                "http://"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "If"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "startsWith": [
+                                                                    "@items('For_each-_URLs')",
+                                                                    "https://"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable-_Clear_final": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Condition-_URL_parsing_middle": {
+                                                    "actions": {
+                                                        "Set_variable-_remove_www._middle": {
+                                                            "inputs": {
+                                                                "name": "Extracted Domain Middle",
+                                                                "value": "@{replace(variables('Extracted Domain Initial'), 'www.', '')}"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "SetVariable"
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_variable-_Default_middle": {
+                                                                "inputs": {
+                                                                    "name": "Extracted Domain Middle",
+                                                                    "value": "@variables('Extracted Domain Initial')"
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "SetVariable"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "startsWith": [
+                                                                    "@variables('Extracted Domain Initial')",
+                                                                    "www."
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {
+                                                        "Condition-_URL_parsing_initial": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Set_variable-_Clear_final": {
+                                                    "inputs": {
+                                                        "name": "Extracted Domain Final",
+                                                        "value": "''"
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable-_Clear_middle": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                },
+                                                "Set_variable-_Clear_initial": {
+                                                    "inputs": {
+                                                        "name": "Extracted Domain Initial",
+                                                        "value": "''"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "SetVariable"
+                                                },
+                                                "Set_variable-_Clear_middle": {
+                                                    "inputs": {
+                                                        "name": "Extracted Domain Middle",
+                                                        "value": "''"
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable-_Clear_initial": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "foreach": "@variables('URLs')",
+                                            "runAfter": {
+                                                "Initialize_variable-_Extracted_Domain_Final": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Execute_JavaScript_Code_Date": {
+                                            "inputs": {
+                                                "code": "var d = new Date();\r\nvar tstamp = d.getTime().toString();\r\nreturn tstamp;"
+                                            },
+                                            "runAfter": {
+                                                "For_each-_URLs": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "JavaScriptCode"
+                                        },
+                                        "Execute_JavaScript_Code_Obfuscate": {
+                                            "inputs": {
+                                                "code":  "[concat('', 'var tstamp = workflowContext.actions.Execute_JavaScript_Code_Date.outputs.body;\r\nvar key = \"', parameters('ZscalerAPIKey'),'\";\r\nvar high = tstamp.substring(tstamp.length - 6);\r\nvar low = (parseInt(high) >> 1).toString();\r\nvar apiKey = \"\";\r\nwhile (low.length < 6) {\r\n    low = \"0\" + low;\r\n}\r\nfor (var i = 0; i < high.length; i++) {\r\n    apiKey += key.charAt(parseInt(high.charAt(i)));\r\n}\r\nfor (var j = 0; j < low.length; j++) {\r\n    apiKey += key.charAt(parseInt(low.charAt(j)) + 2);\r\n}\r\nreturn apiKey;\r\n')]"
+                                            },
+                                            "runAfter": {
+                                                "Execute_JavaScript_Code_Date": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "JavaScriptCode"
+                                        },
+                                        "HTTP-_Authenticate": {
+                                            "inputs": {
+                                                "body": {
+                                                    "apiKey": "@{outputs('Execute_JavaScript_Code_Obfuscate')?['body']}",
+                                                    "password": "[parameters('ZscalerPassword')]",
+                                                    "timestamp": "@{outputs('Execute_JavaScript_Code_Date')?['body']}",
+                                                    "username": "[parameters('ZscalerUsername')]"
+                                                },
+                                                "headers": {
+                                                    "Cache-Control": "no-cache",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "[concat('', parameters('ZscalerURL'), '/api/v1/authenticatedSession')]"
+                                            },
+                                            "runAfter": {
+                                                "Execute_JavaScript_Code_Obfuscate": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http"
+                                        },
+                                        "Parse_JSON-_Authentication_Headers": {
+                                            "inputs": {
+                                                "content": "@outputs('HTTP-_Authenticate')['headers']",
+                                                "schema": {
+                                                    "properties": {
+                                                        "Connection": {
+                                                            "type": "string"
+                                                        },
+                                                        "Content-Length": {
+                                                            "type": "string"
+                                                        },
+                                                        "Content-Type": {
+                                                            "type": "string"
+                                                        },
+                                                        "Date": {
+                                                            "type": "string"
+                                                        },
+                                                        "Keep-Alive": {
+                                                            "type": "string"
+                                                        },
+                                                        "Server": {
+                                                            "type": "string"
+                                                        },
+                                                        "Set-Cookie": {
+                                                            "type": "string"
+                                                        },
+                                                        "Strict-Transport-Security": {
+                                                            "type": "string"
+                                                        },
+                                                        "X-Content-Type-Options": {
+                                                            "type": "string"
+                                                        },
+                                                        "X-Frame-Options": {
+                                                            "type": "string"
+                                                        },
+                                                        "X-XSS-Protection": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP-_Authenticate": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson"
+                                        },
+                                        "HTTP-_Get_URLCategories": {
+                                            "inputs": {
+                                                "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                                "headers": {
+                                                    "Cache-Control": "no-cache",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "[concat('', parameters('ZscalerURL'), '/api/v1/urlCategories?customOnly=true')]"
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON-_Authentication_Headers": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http"
+                                        },
+                                        "Parse_JSON-_URL_Category": {
+                                            "inputs": {
+                                                "content": "@body('HTTP-_Get_URLCategories')",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "configuredName": {
+                                                                "type": "string"
+                                                            },
+                                                            "customCategory": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "customUrlsCount": {
+                                                                "type": "integer"
+                                                            },
+                                                            "dbCategorizedUrls": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "description": {
+                                                                "type": "string"
+                                                            },
+                                                            "editable": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "keywordsRetainingParentCategory": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "type": {
+                                                                "type": "string"
+                                                            },
+                                                            "urls": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "urlsRetainingParentCategoryCount": {
+                                                                "type": "integer"
+                                                            },
+                                                            "val": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP-_Get_URLCategories": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson"
+                                        },
+                                        "Initialize_variable-_URL_Category_Id": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "URL Category Id",
+                                                        "type": "string"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON-_URL_Category": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },     
+                                        "Initialize_variable-_Description": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "Description",
+                                                        "type": "string"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Initialize_variable-_URL_Category_Id": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "Initialize_variable-_Keywords": {
+                                            "inputs": {
+                                                "variables": [
+                                                    {
+                                                        "name": "Keywords",
+                                                        "type": "array"
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Initialize_variable-_Description": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "InitializeVariable"
+                                        },
+                                        "For_each-_URL_Category": {
+                                            "actions": {
+                                                "Condition-_Check_for_URL_Category_Match": {
+                                                    "actions": {
+                                                        "Condition-_Keyword_null_check": {
+                                                            "actions": {
+                                                                "For_each-_Keyword": {
+                                                                    "actions": {
+                                                                        "Append_to_array_variable-_Keywords": {
+                                                                            "inputs": {
+                                                                                "name": "Keywords",
+                                                                                "value": "@items('For_each-_Keyword')"
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "type": "AppendToArrayVariable"
+                                                                        }
+                                                                    },
+                                                                    "foreach": "@items('For_each-_URL_Category')?['keywordsRetainingParentCategory']",
+                                                                    "runAfter": {},
+                                                                    "type": "Foreach"
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "not": {
+                                                                            "equals": [
+                                                                                "@items('For_each-_URL_Category')?['keywordsRetainingParentCategory']",
+                                                                                "@null"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_variable-_Description": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_variable-_Description": {
+                                                            "inputs": {
+                                                                "name": "Description",
+                                                                "value": "@items('For_each-_URL_Category')?['description']"
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_variable-_URL_Category_Id": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Set_variable-_URL_Category_Id": {
+                                                            "inputs": {
+                                                                "name": "URL Category Id",
+                                                                "value": "@items('For_each-_URL_Category')['id']"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "SetVariable"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@items('For_each-_URL_Category')['configuredName']",
+                                                                    "[parameters('ZscalerCustomURLCategoryName')]"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Parse_JSON-_URL_Category')",
+                                            "runAfter": {
+                                                "Initialize_variable-_Keywords": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Condition-_Check_that_URL_Category_name_was_found": {
+                                            "actions": {
+                                                "HTTP-_Activate_Changes": {
+                                                    "inputs": {
+                                                        "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                                        "method": "POST",
+                                                        "uri": "[concat('', parameters('ZscalerURL'), '/api/v1/status/activate')]"
+                                                    },
+                                                    "runAfter": {
+                                                        "HTTP-_Update_URL_Category": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http"
+                                                },
+                                                "HTTP-_Update_URL_Category": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "configuredName": "[parameters('ZscalerCustomURLCategoryName')]",
+                                                            "description": "@{variables('Description')}",
+                                                            "id": "@{variables('URL Category Id')}",
+                                                            "keywordsRetainingParentCategory": "@variables('Keywords')",
+                                                            "urls": "@variables('Domain Names')"
+                                                        },
+                                                        "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                                        "method": "PUT",
+                                                        "uri": "@{concat('', variables('ZscalerURL'), '/api/v1/urlCategories/', variables('URL Category Id'), '?action=ADD_TO_LIST')}"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Http"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@variables('URL Category Id')",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@variables('Domain Names')",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "For_each-_URL_Category": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP-_End_Session": {
+                                            "inputs": {
+                                                "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                                "headers": {
+                                                    "Cache-Control": "no-cache",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "DELETE",
+                                                "uri": "[concat('', parameters('ZscalerURL'), '/api/v1/authenticatedSession')]"
+                                            },
+                                            "runAfter": {
+                                                "Condition-_Check_that_URL_Category_name_was_found": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http"
+                                        }        
+                                    },
+                                    "outputs": {}
+                                },
+                                "parameters": {
+                                    "$connections": {
+                                        "value": {
+                                            "azuresentinel": {
+                                                "connectionId": "[resourceId('Microsoft.Web/connection', variables('azuresentinel'))]",
+                                                "connectionName": "[variables('azuresentinel')]",
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                            }
+                                        }
+                                    }
+
+                                }
+                            }
+                        }
+                    ]
+                }
+
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

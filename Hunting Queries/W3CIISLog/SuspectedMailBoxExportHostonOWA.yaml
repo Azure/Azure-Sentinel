@@ -1,0 +1,40 @@
+id: a523786c-8382-4029-80e9-f1a7ecd067c1
+name: Suspect Mailbox Export on IIS/OWA
+description: |
+  'The hunting query looks for suspicious files accessed on a IIS server that might indicate exfiltration hosting.
+  This technique has been observed when exporting mailbox files from OWA servers.
+  Reference: https://www.volexity.com/blog/2020/12/14/dark-halo-leverages-solarwinds-compromise-to-breach-organizations/'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+
+  let excludeIps = dynamic(["127.0.0.1", "::1"]);
+  let scriptingExt = dynamic(["aspx", "ashx", "asp"]);
+  W3CIISLog
+  | where csUriStem contains "/owa/"
+  //The actor pulls a file back but won't send it any URI params
+  | where isempty(csUriQuery)
+  | extend file_ext = tostring(split(csUriStem, ".")[-1])
+  //Giving your file a known scripting extension will throw an error
+  //rather than just serving the file as it will try to interpret the script
+  | where file_ext !in~ (scriptingExt)
+  //The actor was seen using image files, but we go wider in case they change this behaviour
+  //| where file_ext in~ ("jpg", "jpeg", "png", "bmp")
+  | extend file_name = tostring(split(csUriStem, "/")[-1])
+  | where file_name != ""
+  | where cIP !in~ (excludeIps)
+  | project file_ext, csUriStem, file_name, Computer, cIP, sIP, TenantId, TimeGenerated
+  | summarize dcount(cIP), AccessingIPs=make_set(cIP), AccessTimes=make_set(TimeGenerated), Access=count() by TenantId, file_name, Computer, csUriStem
+  //Collection of the exfiltration will occur only once, lets check for 2 accesses in case they mess up
+  //Tailor this for hunting
+  | where Access <= 2 and dcount_cIP == 1
