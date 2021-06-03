@@ -16,7 +16,7 @@ export async function IsValidLogo(FileName: string): Promise<ExitCode> {
   }
  
 let fileTypeSuffixes;
-let filePathFolderPrefixes = ["Logos"];
+let filePathFolderPrefixes = ["Logos","Data Connectors/Logo"];
 let fileKinds = ["Added","Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
