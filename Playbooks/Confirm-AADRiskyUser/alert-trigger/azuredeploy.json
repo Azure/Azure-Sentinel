@@ -9,12 +9,44 @@
         "PlaybookName": {
             "defaultValue": "Confirm-AADRiskyUser",
             "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "user@domain.com",
+            "type": "string"
         }
     },
     "variables": {
+        "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
+        "AzureADIPConnectionName": "[concat('azureadip-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureADConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureADIPConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureadip')]"
+                }
+            }
+        },
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
@@ -39,6 +71,8 @@
                 "type": "SystemAssigned"
             },
             "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureADIPConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
             "properties": {
@@ -50,7 +84,7 @@
                             "inputs": {
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
                                 "method": "get",
@@ -64,7 +98,7 @@
                                 "body": "@triggerBody()?['Entities']",
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
                                 "method": "post",
@@ -87,70 +121,53 @@
                                         },
                                         "host": {
                                             "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                             }
                                         },
                                         "method": "post",
                                         "path": "/Incidents/Comment"
                                     },
                                     "runAfter": {
-                                        "HTTP_2": [
+                                        "Confirm_a_risky_user_as_compromised": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "ApiConnection"
                                 },
-                                "HTTP": {
+                                "Confirm_a_risky_user_as_compromised": {
                                     "inputs": {
-                                        "authentication": {
-                                            "audience": "https://graph.microsoft.com",
-                                            "type": "ManagedServiceIdentity"
-                                        },
-                                        "method": "GET",
-                                        "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}"
-                                    },
-                                    "runAfter": {},
-                                    "type": "Http"
-                                },
-                                "HTTP_2": {
-                                    "inputs": {
-                                        "authentication": {
-                                            "audience": "https://graph.microsoft.com",
-                                            "type": "ManagedServiceIdentity"
-                                        },
                                         "body": {
                                             "userIds": [
-                                                "@{body('Parse_JSON')?['id']}"
+                                                "@items('For_each')?['AadUserId']"
                                             ]
                                         },
-                                        "method": "POST",
-                                        "uri": "https://graph.microsoft.com/v1.0/riskyUsers/confirmCompromised"
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/riskyUsers/confirmCompromised"
                                     },
                                     "runAfter": {
-                                        "Parse_JSON": [
+                                        "Get_user": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "Http"
+                                    "type": "ApiConnection"
                                 },
-                                "Parse_JSON": {
+                                "Get_user": {
                                     "inputs": {
-                                        "content": "@body('HTTP')",
-                                        "schema": {
-                                            "properties": {
-                                                "id": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix']))}"
                                     },
-                                    "runAfter": {
-                                        "HTTP": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson"
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
                                 }
                             },
                             "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
@@ -190,6 +207,16 @@
                 "parameters": {
                     "$connections": {
                         "value": {
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+                                "connectionName": "[variables('AzureADConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
+                            },
+                            "azureadip": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADIPConnectionName'))]",
+                                "connectionName": "[variables('AzureADIPConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureadip')]"
+                            },
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
