@@ -4,6 +4,7 @@ import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker";
 import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker";
+import { LogoValidationError } from "./utils/validationError";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
   if(FileName.indexOf("Logos") != -1 || FileName.indexOf("Data Connectors/Logo") != -1)
@@ -14,6 +15,10 @@ export async function IsValidLogo(FileName: string): Promise<ExitCode> {
       {
         isValidLogoImageSVGContent(svgContent)
       }
+  }
+  else
+  {
+    throw new LogoValidationError(`Logo must be in Logos or Logo folder ` + FileName); 
   }
   
   return ExitCode.SUCCESS;
