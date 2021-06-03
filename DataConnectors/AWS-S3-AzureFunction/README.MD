@@ -1,5 +1,5 @@
 # Azure Sentinel Data connector to ingest AWS S3 Files
-Author: Sreedhar Ande  
+**Author: Sreedhar Ande**  
 
 Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. This Data connector currently support the following file types from AWS S3  
 
@@ -7,10 +7,13 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
  - .jsonl.gz  
  - .json  
  - .csv.gz
+ - .log.gz
 
 ## **Function Flow process**
-**.json.gz/.jsonl.gz/.json/.csv.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
+**.json.gz/.jsonl.gz/.json/.csv.gz/.log.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
 ![AWS-S3-Ingestion.png](./Images/AWS-S3-Ingestion.png)  
+
+**Ingesting AWS GuardDuty Findings steps are [here](https://www.linkedin.com/pulse/ingesting-aws-guard-duty-findings-azure-sentinel-marko-lauren/?trackingId=JATgHPaTpKHk07Z5%2BHhnFw%3D%3D)**    
 
 ## Installation / Setup Guide
 
@@ -32,7 +35,7 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
 	"AWS Region Name" : AWS SecurityHub Region
 	"S3 Bucket": AWS S3 Bucket URI  
 	  - Ex: s3://<<S3 Bucket Name>>/AWSLogs/
-	"S3FolderName" : Folder Name in AWS S3  
+	"S3FolderName" : Folder Name in AWS Account folder in S3
 	  - Ex: CloudTrail/GuardDuty/SecurityHub/DNSLogs  
 	"CustomLogTableName": Azure Log Analytics Custom Log Table Name		
 	```
