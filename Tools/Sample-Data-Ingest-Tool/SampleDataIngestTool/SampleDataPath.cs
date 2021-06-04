@@ -4,7 +4,7 @@ namespace SampleDataIngestTool
 {
     public class SampleDataPath
     {
-        static readonly string subDirPath = "\\Sample Data\\Custom\\";
+        static readonly string subDirPath = "C:\\Custom\\";
         public SampleDataPath()
         {
 
@@ -18,7 +18,7 @@ namespace SampleDataIngestTool
                 var basePath = currentDirectory.Split(new string[] { "\\Tools" }, StringSplitOptions.None)[0];
                 var dirPath = basePath + subDirPath;
 
-                return dirPath;
+                return subDirPath;
             }
             catch (Exception ex)
             {
