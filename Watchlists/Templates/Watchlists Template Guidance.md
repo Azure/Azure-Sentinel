@@ -31,8 +31,8 @@ When it comes to values that should be under the column, each value should be se
 
 An example of how that might look would be:
 
-    "rawContent": "[concat(parameters('searchkeyvalue'), Account, Machine\r\n123.456.789.1, Admin, ContosoMachine1\r\n
-    123.456.789.2, LocalUser, ContosoMachine2\r\n)]"
+    "rawContent": "[concat(parameters('searchkeyvalue'), ',Account, Machine\r\n123.456.789.1, Admin, ContosoMachine1\r\n
+    123.456.789.2, LocalUser, ContosoMachine2\r\n')]"
 
 This example shows that the columns with be an IP (used as the search key value), an account, and a machine. The rows below the columns will contain those types of values in the CSV file. In htis case, the CSV will only have 3 columns and 2 rows of data.
 
