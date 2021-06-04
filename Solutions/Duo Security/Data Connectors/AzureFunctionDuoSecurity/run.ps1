@@ -42,10 +42,20 @@ $maxTime = (Get-Date -AsUTC -UFormat %s).ToString() + "000"
 $minTimeSeconds = ((Get-Date -AsUTC).AddMinutes(-$time) | Get-Date -UFormat %s).ToString()
 $userAgent = "PowerShell"+$PSVersionTable.PSEdition+"/"+$PSVersionTable.PSVersion.ToString()+" ("+$PSVersionTable.OS+"; "+$PSVersionTable.Platform+"; "+"en-US) AzureSentinelDataConnector/1.0"
 
+
 # Define the Log Analytics Workspace ID and Key
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
+$logAnalyticsUri = $env:logAnalyticsUri
 $TimeStampField = "DateValue"
+
+if (-Not [string]::IsNullOrEmpty($logAnalyticsUri)){
+	if($logAnalyticsUri.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "DuoSecurity: Invalid Log Analytics Uri." -ErrorAction Stop
+		Exit
+	}
+}
 
 #Function to build Duo Security API Request
 #Pulled from https://github.com/PWSHNinja/PSDuo/blob/master/PSDuo/private/Convertto-DUORequest.ps1
@@ -134,7 +144,15 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+    
+        # Compatible with previous version
+		if ([string]::IsNullOrEmpty($logAnalyticsUri)){
+			$logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		}
+		else
+		{
+			$logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
+		}
 
     $headers = @{
         "Authorization"        = $signature;
@@ -143,7 +161,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
         "time-generated-field" = $TimeStampField;
     }
 
-    $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     return $response.StatusCode
 
 }
