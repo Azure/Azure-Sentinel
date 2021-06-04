@@ -9,7 +9,7 @@ namespace NonAsciiValidations.Tests
 {
 	public class ParsersYamlFilesTestData : FilesTestData
 	{
-		protected override string[] FolderName => new string[2] { "Parsers", " Solutions" };
+		protected override string[] FolderName => new string[1] { "Parsers" };
 		protected override string FileExtension => "*.*";
 	}
 }
