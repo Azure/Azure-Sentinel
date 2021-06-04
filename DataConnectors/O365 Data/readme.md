@@ -134,7 +134,7 @@ The used credentials, Client Secret and Workspace Key within the Function App is
 ![Policy](./images/Picture14.png)<br>
 5. From the Access policies page review the generated Secrets by the ARM template. 
 6. And now make a note of both Secret Identifiers later for the Azure Function App post configuration. <br>
-![Secrets](./images/picture15.png)<br>
+![Secrets](./images/Picture15.png)<br>
 
 ### Post Configuration Steps for the Azure Function App 
 1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.  <br>
@@ -161,8 +161,10 @@ An example results for the Defender for Office Safe Attachment block detection a
 O365_CL 
 | where RecordType_d == "28" 
 ```
+
 <br>
 ![Query](./images/Picture20.png)<br>
+
 ### Summary 
 In this document I have shown how you can onboard Office 365 Management Activity API General.Audit and DLP.All activity logs, and some basics queries for you to start to build out your use cases with Defender for Office and Security and Compliance Center alerts. This solution helps you extend, correlate and enrich the data you have with the existing O365 connector, giving you more insights. 
   
