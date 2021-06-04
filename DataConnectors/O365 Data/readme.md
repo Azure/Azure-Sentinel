@@ -119,23 +119,6 @@ Thanks to the published ARM template the deployment of the [Azure Funtion App](h
 4. Now the deployment of ARM template is completed. 
 ![Complete](./images/picture10.png)
 
-### Post Configuration Steps for the Azure Key Vault  
-The used credentials, Client Secret and Workspace Key within the Function App is secured in Azure Key Vault, in final stage and operations. Follow the configuration steps to finalize the post configurations steps for the Key Vault.  
-1. Click to **Deploy the template / Deploy to Azure** below. 
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy2.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-
-2. Select the right **Subscription**, **Resource Group** and fill the **Function App Name**. Click to **Review + create**, review the configuration and click **Create**. <br>
-![Deployment](./images/Picture12.png)<br>
-3. Once the configuration is done, review the configuration. 
-4. To validate the configuration open the **Azure Portal** and navigate to **Azure Key Vault** > The name of the Function App > **Access Policy**. In the **Access Policy** blade, you should see the Function App name **O365APItoAS** as an application and with required access policies to work with the Azure Key Vault. <br>
-![Policy](./images/Picture14.png)<br>
-5. From the Access policies page review the generated Secrets by the ARM template. 
-6. And now make a note of both Secret Identifiers later for the Azure Function App post configuration. <br>
-![Secrets](./images/Picture15.png)<br>
-
 ### Post Configuration Steps for the Azure Function App 
 1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.  <br>
 ![configuration](./images/Picture17.png)<br>
