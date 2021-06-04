@@ -48,7 +48,15 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+    
+        # Compatible with previous version
+		if ([string]::IsNullOrEmpty($logAnalyticsUri)){
+			$logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		}
+		else
+		{
+			$logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
+		}
 
     $headers = @{
         "Authorization" = $signature;
@@ -56,19 +64,24 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "x-ms-date" = $rfc1123date;
     }
 
-    $response = Invoke-RestMethod -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body
+    $response = Invoke-RestMethod -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body
     #$response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     return $response.StatusCode
 
 }
 
-# Get Managed Service Identity info from Azure Functions Application Settings
-$msiEndpoint = $env:MSI_ENDPOINT
-$msiSecret = $env:MSI_SECRET
-
 # Define the Log Analytics Workspace ID and Key
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
+$logAnalyticsUri = $env:logAnalyticsUri
+
+if (-Not [string]::IsNullOrEmpty($logAnalyticsUri)){
+	if($logAnalyticsUri.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "AADUserInfo: Invalid Log Analytics Uri." -ErrorAction Stop
+		Exit
+	}
+}
 
 connect-azaccount -identity
 $context = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile.DefaultContext

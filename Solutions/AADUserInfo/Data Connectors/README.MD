@@ -1,27 +1,22 @@
 # Deploy a Function App for collecting Azure AD User Information data into Azure Sentinel
-This function app run daily, query Azure AD for all users and write the information to Log Analyitcs.
+This function app run daily, query Azure AD for all users and write the information to Log Analytics.
 
-Note:  There is a parser avaialbe [here](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/AADUserInfo/AADUserInfo.txt)
+Note:  There is a parser available [here](https://github.com/Azure/Azure-Sentinel/blob/master/solutions/AADUserInfo/Parsers/AADUserInfo.txt)
+
 ### Deploy the Function App
 The easiest way is via the provided ARM templates:
 
 #### 1: Deploy via Azure ARM Template
 1.  Deploy the template.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAADUserInfo%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-
-2. Deploy permissions for the function to the Key Vault.
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAADUserInfo%2Fazuredeploy_kv.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAADUserInfo%2FData%20Conectors%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Alternatively you can deploy the elements manually.
 #### 2: Deploy via VS Code
 Note: You will need to prepare VS code for Azure function development.  See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
-1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AADUserInfo/AADUserInfo_template.zip?raw=true) file of the Azure Funciton app from Github.
+1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/Soltuions/AADUserInfo/Data Connectors/AADUserInfo_template.zip?raw=true) file of the Azure Funciton app from Github.
 2. Extract to a location on your local host.
 3. Open VS Code.
 4. Click File -> Open Folder.
@@ -84,5 +79,5 @@ Note: You will need to prepare VS code for Azure function development.  See http
 9. Click Ok.
 11. Click Save.
 
-If sucessfully deployed you should start to see events appear in your Azure Sentinel workpsace as soon as they are generated.
+If successfully deployed you should start to see events appear in your Azure Sentinel workspace as soon as they are generated.
 If you run into issues there are a number of options for [monitoring](https://docs.microsoft.com/en-us/azure/azure-functions/functions-monitoring?tabs=cmd) and [deugging](https://docs.microsoft.com/en-us/azure/azure-functions/functions-debug-powershell-local) your Function App.

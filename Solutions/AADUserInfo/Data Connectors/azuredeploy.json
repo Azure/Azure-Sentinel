@@ -4,7 +4,9 @@
     "parameters": {
         "FunctionName": {
             "defaultValue": "AADUserInfo",
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 11
         },
         "workspaceID": {
             "type": "string",
@@ -16,6 +18,7 @@
         }
     },
     "variables": {
+            "LogAnaltyicsUri":"[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
     },
     "resources": [
         {
@@ -193,23 +196,12 @@
                         "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('FunctionName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
                         "WEBSITE_CONTENTSHARE": "[toLower(parameters('FunctionName'))]",
                         "workspaceID": "[parameters('workspaceID')]",
+                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
                         "workspaceKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', parameters('FunctionName'), 'workspaceKey')).SecretUriWithVersion, ')')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AADUserInfo/AADUserInfo_template.zip?raw=true"                    }
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-aaduserinfo-functionapp"
+                    }
                 }
             ]
-        },
-        {
-            "type": "Microsoft.Web/sites/hostNameBindings",
-            "apiVersion": "2018-11-01",
-            "name": "[concat(parameters('FunctionName'), '/', parameters('FunctionName'), '.azurewebsites.net')]",
-            "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('FunctionName'))]"
-            ],
-            "properties": {
-                "siteName": "[parameters('FunctionName')]",
-                "hostNameType": "Verified"
-            }
         },
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
@@ -245,6 +237,28 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(parameters('FunctionName'), '/add')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('FunctionName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(concat(resourceId('Microsoft.Web/sites', parameters('FunctionName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2018-11-30').principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "Get",
+                                "List"
+                            ]
+                        }
+                    }
+                ]
             }
         }
     ]
