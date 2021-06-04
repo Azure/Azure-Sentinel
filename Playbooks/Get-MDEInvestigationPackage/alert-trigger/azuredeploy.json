@@ -45,11 +45,9 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('TeamsConnectionName')]",
             "location": "[resourceGroup().location]",
-            "kind": "V1",
             "properties": {
                 "displayName": "[parameters('PlaybookName')]",
                 "customParameterValues": {},
-                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
                 }
@@ -91,9 +89,22 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
+                        "Alert_-_Get_incident": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
                         "Entities_-_Get_Hosts": {
                             "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "body": "@triggerBody()?['Entities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -102,7 +113,11 @@
                                 "method": "post",
                                 "path": "/entities/host"
                             },
-                            "runAfter": {},
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection"
                         },
                         "For_each": {
@@ -110,7 +125,7 @@
                                 "Actions_-_Collect_investigation_package": {
                                     "inputs": {
                                         "body": {
-                                            "Comment": "Collect investigation package from playbook for Azure Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                                            "Comment": "Collect investigation package from playbook for Azure Sentinel Incident: "
                                         },
                                         "host": {
                                             "connection": {
@@ -147,7 +162,7 @@
                                 "Add_comment_to_incident_(V3)": {
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
                                             "message": "<p>The investigation package is ready for download at @{body('Actions_-_Get_investigation_package_download_URI')?['value']}</p>"
                                         },
                                         "host": {
@@ -185,7 +200,7 @@
                                                 "content": "<p>The investigation package is ready for download at @{body('Actions_-_Get_investigation_package_download_URI')?['value']}</p>",
                                                 "contentType": "html"
                                             },
-                                            "subject": "MDATP Investgation Package for @{triggerBody()?['object']?['properties']?['incidentNumber']} is Ready"
+                                            "subject": "MDATP Investgation Package for  is Ready"
                                         },
                                         "host": {
                                             "connection": {
@@ -193,7 +208,7 @@
                                             }
                                         },
                                         "method": "post",
-                                        "path": "[concat('/v3/beta/teams/@{encodeURIComponent(', parameters('TeamsId'), ')}/channels/@{encodeURIComponent(', parameters('TeamsChannelId'), ')}/messages')]"
+                                        "path": "[concat('/v3/beta/teams/@{encodeURIComponent(', parameters('TeamsId'), '/channels/@{encodeURIComponent(', parameters('TeamsChannelId'), ')}/messages')]"
                                     },
                                     "runAfter": {
                                         "Add_comment_to_incident_(V3)": [
@@ -304,7 +319,7 @@
                         }
                     },
                     "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -314,7 +329,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/incident-creation"
+                                "path": "/subscribe"
                             },
                             "type": "ApiConnectionWebhook"
                         }
@@ -336,12 +351,7 @@
                             "teams": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
                                 "connectionName": "[variables('TeamsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]",
-                                "connectionProperties": {
-                                    "authentication": {
-                                        "type": "ManagedServiceIdentity"
-                                    }
-                                }
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
                             },
                             "wdatp": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]",
