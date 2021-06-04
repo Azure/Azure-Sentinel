@@ -35,7 +35,7 @@ None
 ## Screenshots
 
 **Incident Trigger**<br>
-![Incident Trigger](./incident-trigger/images/designerScreenshotLight.png)<br>
+![Incident Trigger](./incident-trigger/images/Create-AzureDevOpsTask_incident.png)<br>
 <br>
 **Alert Trigger**<br>
 ![Alert Trigger](./alert-trigger/images/Create-AzureDevOpsTask_alert.png)

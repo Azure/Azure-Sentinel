@@ -35,7 +35,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 ## Screenshots
 **Incident Trigger**<br>
-![Incident Trigger](./incident-trigger/images/designerScreenshotLight.png)<br>
+![Incident Trigger](./incident-trigger/images/Dismiss-AADRiskyUser_incident.png)<br>
 
 **Alert Trigger**<br>
 ![Alert Trigger](./alert-trigger/images/Dismiss-AADRiskyUser_alert.png)<br>
