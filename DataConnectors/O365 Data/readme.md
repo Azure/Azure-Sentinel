@@ -106,7 +106,7 @@ Thanks to the published ARM template the deployment of the [Azure Funtion App](h
 1. Click to **Deploy the template / Deploy to Azure** below.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
+    <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 2. Now it is time to use the noted details from previous steps.  
@@ -120,7 +120,7 @@ Thanks to the published ARM template the deployment of the [Azure Funtion App](h
 ![Complete](./images/picture10.png)
 
 ### Post Configuration Steps for the Azure Function App 
-1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.  <br>
+1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.<br>
 ![configuration](./images/Picture17.png)<br>
 2. In the **Configuration** edit the **clientSecret** and **workspaceKey** settings. Click to Edit and paste the noted Secret Identifiers as value and **Save** the configuration. The Secret Identifiers should have this format: 
 - @Microsoft.KeyVault(SecretUri=https:///secrets/O365Tenant1_clientSecret/).  
