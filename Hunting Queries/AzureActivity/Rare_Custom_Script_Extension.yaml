@@ -13,41 +13,52 @@ tactics:
 relevantTechniques:
   - T1064
 query: |
- let current = 1d;
- let Lookback = 14d;
- let CustomScriptExecution = AzureActivity 
- | where TimeGenerated >= ago(Lookback) 
- | where OperationName =~ "Create or Update Virtual Machine Extension"
- | extend Settings = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).settings)))
- | parse Settings with * 'fileUris":[' FileURI "]" *
- | parse Settings with * 'commandToExecute":' commandToExecute '}' *
- | extend message_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).statusMessage)).error)).message);
- let LookbackCustomScriptExecution = CustomScriptExecution
- | where TimeGenerated >= ago(Lookback) and TimeGenerated < ago(current)
- | where isnotempty(FileURI) and isnotempty(commandToExecute)
- | summarize max(TimeGenerated), OperationCount = count() by Caller, Resource, CallerIpAddress, FileURI, commandToExecute;
- let CurrentCustomScriptExecution = CustomScriptExecution
- | where TimeGenerated >= ago(current)
- | where isnotempty(FileURI) and isnotempty(commandToExecute)
- | project TimeGenerated, ActivityStatus, OperationId, CorrelationId, ResourceId, CallerIpAddress, Caller, OperationName, Resource, ResourceGroup, FileURI, commandToExecute, FailureMessage = message_, HTTPRequest, Settings;
- let RareCustomScriptExecution =  CurrentCustomScriptExecution
- | join kind= leftanti (LookbackCustomScriptExecution) on Caller, CallerIpAddress, FileURI, commandToExecute;
- let IPCheck = RareCustomScriptExecution 
- | summarize arg_max(TimeGenerated, OperationName), OperationIds = makeset(OperationId), CallerIpAddresses = makeset(CallerIpAddress) by ActivityStatus, CorrelationId, ResourceId, Caller, Resource, ResourceGroup, FileURI, commandToExecute, FailureMessage
- | extend IPArray = arraylength(CallerIpAddresses);
- //Get IPs for later summarization so all associated CorrelationIds and Caller actions have an IP.  Success and Fails do not always have IP
- let multiIP = IPCheck | where IPArray > 1
- | mvexpand CallerIpAddresses | extend CallerIpAddress = tostring(CallerIpAddresses)
- | where isnotempty(CallerIpAddresses);
- let singleIP = IPCheck | where IPArray <= 1
- | mvexpand CallerIpAddresses | extend CallerIpAddress = tostring(CallerIpAddresses);
- let FullDetails = singleIP | union multiIP;
- //Get IP address associated with successes and fails with no IP listed
- let IPList = FullDetails | where isnotempty(CallerIpAddress) | summarize by CorrelationId, Caller, CallerIpAddress;
- let EmptyIP = FullDetails | where isempty(CallerIpAddress) | project-away CallerIpAddress;
- let IpJoin = EmptyIP | join kind= leftouter (IPList) on CorrelationId, Caller | project-away CorrelationId1, Caller1;
- let nonEmptyIP = FullDetails | where isnotempty(CallerIpAddress);
- nonEmptyIP | union IpJoin
- // summarize all activities with a given CorrelationId and Caller together so we can provide a singular result
- | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ActivityStatusSet = makeset(ActivityStatus), OperationIds = makeset(OperationIds), FailureMessages = makeset(FailureMessage) by CorrelationId, ResourceId, CallerIpAddress, Caller, Resource, ResourceGroup, FileURI, commandToExecute
- | extend timestamp = StartTime, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
+  let current = 1d;
+  let Lookback = 14d;
+  let CustomScriptExecution = AzureActivity 
+  | where TimeGenerated >= ago(Lookback) 
+  | where OperationName =~ "Create or Update Virtual Machine Extension"
+  | extend Settings = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).settings)))
+  | parse Settings with * 'fileUris":[' FileURI "]" *
+  | parse Settings with * 'commandToExecute":' commandToExecute '}' *
+  | extend message_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).statusMessage)).error)).message);
+  let LookbackCustomScriptExecution = CustomScriptExecution
+  | where TimeGenerated >= ago(Lookback) and TimeGenerated < ago(current)
+  | where isnotempty(FileURI) and isnotempty(commandToExecute)
+  | summarize max(TimeGenerated), OperationCount = count() by Caller, Resource, CallerIpAddress, FileURI, commandToExecute;
+  let CurrentCustomScriptExecution = CustomScriptExecution
+  | where TimeGenerated >= ago(current)
+  | where isnotempty(FileURI) and isnotempty(commandToExecute)
+  | project TimeGenerated, ActivityStatus, OperationId, CorrelationId, ResourceId, CallerIpAddress, Caller, OperationName, Resource, ResourceGroup, FileURI, commandToExecute, FailureMessage = message_, HTTPRequest, Settings;
+  let RareCustomScriptExecution =  CurrentCustomScriptExecution
+  | join kind= leftanti (LookbackCustomScriptExecution) on Caller, CallerIpAddress, FileURI, commandToExecute;
+  let IPCheck = RareCustomScriptExecution 
+  | summarize arg_max(TimeGenerated, OperationName), OperationIds = makeset(OperationId), CallerIpAddresses = makeset(CallerIpAddress) by ActivityStatus, CorrelationId, ResourceId, Caller, Resource, ResourceGroup, FileURI, commandToExecute, FailureMessage
+  | extend IPArray = arraylength(CallerIpAddresses);
+  //Get IPs for later summarization so all associated CorrelationIds and Caller actions have an IP.  Success and Fails do not always have IP
+  let multiIP = IPCheck | where IPArray > 1
+  | mvexpand CallerIpAddresses | extend CallerIpAddress = tostring(CallerIpAddresses)
+  | where isnotempty(CallerIpAddresses);
+  let singleIP = IPCheck | where IPArray <= 1
+  | mvexpand CallerIpAddresses | extend CallerIpAddress = tostring(CallerIpAddresses);
+  let FullDetails = singleIP | union multiIP;
+  //Get IP address associated with successes and fails with no IP listed
+  let IPList = FullDetails | where isnotempty(CallerIpAddress) | summarize by CorrelationId, Caller, CallerIpAddress;
+  let EmptyIP = FullDetails | where isempty(CallerIpAddress) | project-away CallerIpAddress;
+  let IpJoin = EmptyIP | join kind= leftouter (IPList) on CorrelationId, Caller | project-away CorrelationId1, Caller1;
+  let nonEmptyIP = FullDetails | where isnotempty(CallerIpAddress);
+  nonEmptyIP | union IpJoin
+  // summarize all activities with a given CorrelationId and Caller together so we can provide a singular result
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ActivityStatusSet = makeset(ActivityStatus), OperationIds = makeset(OperationIds), FailureMessages = makeset(FailureMessage) by CorrelationId, ResourceId, CallerIpAddress, Caller, Resource, ResourceGroup, FileURI, commandToExecute
+  | extend timestamp = StartTime, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
