@@ -162,8 +162,8 @@ O365_CL
 | where RecordType_d == "28" 
 ```
 
-<br>
-![Query](./images/Picture20.png)<br>
+
+![Query](./images/Picture20.png)
 
 ### Summary 
 In this document I have shown how you can onboard Office 365 Management Activity API General.Audit and DLP.All activity logs, and some basics queries for you to start to build out your use cases with Defender for Office and Security and Compliance Center alerts. This solution helps you extend, correlate and enrich the data you have with the existing O365 connector, giving you more insights. 
