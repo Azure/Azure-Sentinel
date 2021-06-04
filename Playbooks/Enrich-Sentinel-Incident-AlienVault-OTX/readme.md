@@ -28,3 +28,6 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 ## Prerequisites
 
 - You will need to authorize the API Connection that is created by this deployment to update Azure Sentinel Incidents.  To do this locate the API connection in the resource group and under **Edit API connection** click **Authorize**
+                                                                                                                                     
+## Screenshot
+![Designer](./images/designer.jpg)
