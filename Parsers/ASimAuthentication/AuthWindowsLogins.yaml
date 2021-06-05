@@ -1,9 +1,9 @@
 Parser:
-  Title: Azure active directory authentication
+  Title: Microsoft Windows Logon 
   Version: '0.0'
   LastUpdated: June 3, 2021
 Product:
-  Name: Azure SigninLogs
+  Name: Microsoft Windows
 Normalization:
   Schema: Authentication
   Version: '1.0.0'
@@ -14,7 +14,7 @@ References:
   Link: https://techcommunity.microsoft.com
 Description: |
   TODO
-ParserName: vimAuthSigninLogs
+ParserName: vimMSWindows
 ParserQuery: |
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
@@ -68,7 +68,7 @@ ParserQuery: |
     "0xc0000224", "STATUS_PASSWORD_MUST_CHANGE",
     "0xc0000234", "STATUS_ACCOUNT_LOCKED_OUT",
     "0xc00002ee", "STATUS_UNFINISHED_CONTEXT_DELETED"];
-  let Authentication=(){
+  let WinLogon=(){
     SecurityEvent 
     | where EventID in (LogonEvents) or 
             EventID in (LogoffEvents)
@@ -77,37 +77,38 @@ ParserQuery: |
        EventProduct = EventSourceName
        , EventMessage = Activity
        , EventSubType = LogonTypeName
-       , SessionId=SubjectLogonId
+       , ActorSessionId=SubjectLogonId
+       , TargetSessionId=TargetLogonId
        , ActorUserId=SubjectUserSid
-    //!!! mis interpretation of the ID?
-       , EventUid = EventOriginId
-       , ActorUserDomain= SubjectDomainName
        , TargetUserId =TargetUserSid
-       , TargetUserDomain =  TargetDomainName
        , TargetUserType=AccountType
        , SrcDvcHostname = WorkstationName
        , ResourceId = _ResourceId
        , DstDvcId = SourceComputerId
-       , DstDvcHostname = Computer  
+       , DstDvcHostname = Computer
+       , EventOriginUid = EventOriginId
+       , Protocol=AuthenticationPackageName
     | extend EventOriginId=EventID | project-away EventID // Cannot use rename to overwrite an existing column
     | extend EventResult = iff(EventOriginId == 4625, "Failure", "Success")
+      , ActorUserIdType='SID'
+      , TargetUserIdType='SID'
       , EventVendor="Microsoft"  
       , EventStartTime =TimeGenerated
       , EventEndTime=TimeGenerated
       , EventType=iff(EventOriginId in (LogoffEvents), "Logoff", "Logon")
-    , ActorUserName = iff (ActorUserDomain != '-', SubjectAccount, SubjectUserName)
-    ,TargetUserName = iff (TargetUserDomain != '-', TargetAccount, TargetUserName)
+    , ActorUserName = iff (SubjectDomainName == '-', trim(@'\\',SubjectUserName), trim(@'\\',SubjectAccount))
+    , ActorUserNameType= iff(SubjectDomainName == '-','Simple', 'Windows' )
+    , TargetUserName = iff (TargetDomainName == '-', trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
+    , TargetUserNameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
     , SrcDvcOs = "Windows"
-    , ProcessId=ProcessId
-    , ProcessPath=ProcessName 
-    , ProcessName=Process
+    , ActingProcessId=ProcessId
+    , ActingProcessName=ProcessName // Full name inc path  
+    // , ActingProcessName=Process // Only process Name
     , EventResultDetails= iff(SubStatus=='0x0',Status,SubStatus)
-    // https://github.com/Azure/Azure-Sentinel/blob/master/Hunting%20Queries/SecurityEvent/CustomUserList_FailedLogons.yaml
     | lookup LogonStatus on EventResultDetails
     | project-reorder 
         TimeGenerated
         , EventProduct
-        , EventUid
         , EventMessage
         , EventResult
         , EventResultDetails
@@ -118,18 +119,16 @@ ParserQuery: |
         , SessionId
         , ActorUserId
         , ActorUserName
-        , ActorUserDomain
         , TargetUserId
         , TargetUserName
-        , TargetUserDomain
         , TargetUserType
         , SrcDvcOs
-        , ProcessId
-        , ProcessName
-        , ProcessPath
+        , ActingProcessId
+        , ActingProcessName
         , DstDvcId
         , DstDvcHostname
         , ResourceId
         , EventOriginalResultDetails
+        , Protocol
     };
-  Authentication
+  WinLogon

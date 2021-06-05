@@ -16,27 +16,31 @@ Description: |
   TODO
 ParserName: vimAuthAWSCloudTrail
 ParserQuery: |
+  let AWSLogon=(){
   AWSCloudTrail
    | where EventName == "ConsoleLogin"
    | extend
     EventVendor = "Amazon"
     , EventResult= iff (ResponseElements has_cs "Success", "Success", "Failure")
     // , EventResultDetais
-    , EvventStartTime=TimeGenerated
+    , EventStartTime=TimeGenerated
     , EventEndTime=TimeGenerated
     , EventType="Logon"
-    , EventKind=iff(AdditionalEventData has '"MFAUsed": "No"', "No", "Yes")
+    , AuthenticationMethod=iff(AdditionalEventData has '"MFAUsed": "No"', "No", "Yes")
     // SessionId
     // SessionDuration
     , urlOriginal=tostring(todynamic(AdditionalEventData).LoginTo)
     | project-rename
     EventProduct=SourceSystem // maybe prefer literal string "AWSCloudTrail"
-    , EventUid= AwsEventId
+    , EventOriginalUid= AwsEventId
     , EventOriginalResultDetails= ErrorMessage
     , ActorUserId = UserIdentityPrincipalid /// 
-    , ActorUserName= UserIdentityUserName
+    , ActorUserName= UserIdentityUserName // This mandatort value is always empty
+    , ActorUserNameType='Simple' 
     , ActorUserType=UserIdentityType
-    , TargetUserId=UserIdentityAccountId
+    , ActorUserId=UserIdentityAccountId // Assuming error on IB's mapping. Why is this suddenly "Target user"
+    , ActorUserIdType='AWSId' // need a new id type, again, assuming this is Actor, not target user
     , SrcDvcIpAddr=SourceIpAddress
     , HttpUserAgentOriginal=UserAgent
-    , DstGeoRegion=AWSRegion
+    , DstGeoRegion=AWSRegion};
+    AWSLogon
