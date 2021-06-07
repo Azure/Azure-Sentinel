@@ -3,7 +3,7 @@
     Language:       PowerShell
     Version:        2.0
     Author:         Nicholas Dicola, Sreedhar Ande
-    Last Modified:  03/29/2021
+    Last Modified:  06/07/2021
     
     DESCRIPTION
     This Function App calls the GitHub REST API (https://api.github.com/) to pull the GitHub
@@ -198,12 +198,6 @@ $headers = @{
     Authorization = "bearer $personalAccessToken"
     'Content-Type' = "application/json"
 }
-
-
-
-# retrieve the last execution values
-	$lastExeValues = Get-azTableRow -table $GitHubExecutionsTable -partitionKey "GitHubExecutions" -RowKey "lastRunEndCursor" -ErrorAction Ignore	
-	$lastRunEndCursorValue = $lastExeValues.lastContext
 
 
 #Process each Org
