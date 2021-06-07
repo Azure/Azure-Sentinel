@@ -39,7 +39,6 @@ $workspaceKey = $env:WorkspaceKey
 $LAURI = $env:LAURI
 $GitHubOrgs = $env:GitHubOrgs
 $ExecutionTimeStamps = "GitHubExecutions"
-$storageAccountContainer = "github-repo-logs"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
 
@@ -405,9 +404,8 @@ foreach($org in $GitHubOrgs){
         }       
     }
     
-    # get blobs for last run
-    # For each repo get Github Vulnerability Alerts
-    $blobs = Get-AzStorageBlob -Context $storageAccountContext -Container $storageAccountContainer
+    
+    # For each repo get Github Vulnerability Alerts    
     foreach($repo in $repoList){
         $repoName = $repo.name
 		
