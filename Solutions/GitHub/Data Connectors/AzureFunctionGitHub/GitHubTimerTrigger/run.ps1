@@ -202,7 +202,8 @@ $headers = @{
 
 #Process each Org
 $repoList = @()
-foreach($org in $GitHubOrgs){
+$GitHubOrgsArray = $GitHubOrgs.split(',')
+foreach($org in $GitHubOrgsArray){
     $orgName = $org.org
     Write-Host "Starting to process ORG: $orgName"
     
