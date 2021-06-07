@@ -22,7 +22,6 @@ class MESRequest:
         
         # populate dynamic variables from the Azure Key Vault
         self.az_kv = AzureSecretHandler(vault_uri)
-        # key_obj = self.az_kv.get_secret("key_obj_"+str(key_index))
         
         self.access_token = self.az_kv.get_secret("AccessToken")
         self.refresh_token = self.az_kv.get_secret("RefreshToken")
@@ -67,7 +66,6 @@ class MESRequest:
             response_content = json.loads(response.text)
             if 'access_token' in response_content:
                 self.access_token = response_content['access_token']
-                # os.environ['AccessToken'] = self.access_token
                 self.az_kv.set_secret("AccessToken", self.access_token)
             else:
                 # if the refresh failed, request brand new API credentials
@@ -78,8 +76,6 @@ class MESRequest:
                 if 'access_token' in response_content:
                     self.access_token = response_content['access_token']
                     self.refresh_token = response_content['refresh_token']
-                    # os.environ['AccessToken'] = self.access_token
-                    # os.environ['RefreshToken'] = self.refresh_token
                     self.az_kv.set_secret("AccessToken", self.access_token) 
                     self.az_kv.set_secret("RefreshToken", self.refresh_token)
                 else:
@@ -124,8 +120,6 @@ class MESRequest:
                 logging.info("Storing creds in Azure Vault")
                 self.access_token = token_json['access_token']
                 self.refresh_token = token_json['refresh_token']
-                # os.environ['AccessToken'] = self.access_token
-                # os.environ['RefreshToken'] = self.refresh_token
                 self.az_kv.set_secret("AccessToken", self.access_token)
                 self.az_kv.set_secret("RefreshToken", self.refresh_token)
                 logging.info("Got authenticated")
@@ -181,7 +175,6 @@ class MESRequest:
                 self.stream_position = response.json()['streamPosition']
                 
                 #update stream position in Azure Vault
-                # os.environ['StreamPosition'] = self.stream_position
                 self.az_kv.set_secret("StreamPosition", self.stream_position)
 
                 more_events = response.json()['moreEvents']
@@ -191,8 +184,6 @@ class MESRequest:
             if retry_count >= 10:
                 logging.error("Too many failed attempts to retrieve events, shutting down.")
                 sys.exit(2)
-
-            #os.environ['StreamPosition'] = self.stream_position
 
 
         return events

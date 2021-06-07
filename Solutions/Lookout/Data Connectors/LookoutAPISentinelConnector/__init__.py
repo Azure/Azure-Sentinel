@@ -85,7 +85,6 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
     if events and len(events) > 0:
         logging.info("Got events")        
         logging.info("Processing {} events".format(len(events)))
-        #process_events(events)
         post_status_code = post_data(json.dumps(events))
         if post_status_code is not None:
             logging.info("Events processed to Sentinel successfully")

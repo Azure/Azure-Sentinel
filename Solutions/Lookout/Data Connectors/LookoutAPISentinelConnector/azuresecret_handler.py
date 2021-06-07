@@ -54,9 +54,3 @@ class AzureSecretHandler:
             # Anything else that is not Azure related (network, stdlib, etc.)
             logging.info("Exception during creating key/value in vault  %s" % str(e))
             return None
-        
-    
-    # def delete_secret(self, key):
-
-    
-    # def update_secret(self, key, value):
