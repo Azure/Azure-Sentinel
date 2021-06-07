@@ -220,8 +220,8 @@ Fields marked with * are mandatory. Others can be left empty.
 * **tags**: (array of strings)<br> 
     Use this field to relate the templates to a specific security scenario. <br>
     Examples: "Network security" for playbook which works on firewalls, "Sentinel utilities" for playbook which serves a simple popular use case such send an email.
-* ***source->kind**: (string) <br>
-    Who contributed this playbook. "Microsoft", "Community" or "Developer" (for ISV or vendor)
+* ***support->kind**: (string) <br>
+    The support expectation for this playbook. "Microsoft", "Community" or "Developer" (for ISV or vendor)
 * ***author**: (string) <br>
     Name of the person who contributed the playbook. In case of a bug, will be tagged in GitHub issue.
 
@@ -235,7 +235,7 @@ Fields marked with * are mandatory. Others can be left empty.
         "lastUpdateTime": "2021-05-18T10:00:15.123Z", 
         "entities": ["Account"], 
         "tags": ["Identity protection", "Teams bot"], 
-        "source": {
+        "support": {
             "kind": "Microsoft" 
         },
         "author": {
