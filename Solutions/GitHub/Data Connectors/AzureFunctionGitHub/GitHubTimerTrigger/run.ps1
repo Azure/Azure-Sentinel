@@ -38,7 +38,7 @@ $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
 $LAURI = $env:LAURI
 $GitHubOrgs = $env:GitHubOrgs
-$ExecutionTimeStamps = "GitHubExecutions"
+$StorageTableName = "GitHub"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
 
@@ -203,18 +203,17 @@ $headers = @{
 #Process each Org
 $repoList = @()
 $GitHubOrgsArray = $GitHubOrgs.split(',')
-foreach($org in $GitHubOrgsArray){
-    $orgName = $org.org
+foreach($orgName in $GitHubOrgsArray){    
     Write-Host "Starting to process ORG: $orgName"
     
 	# Retrieve Timestamp from last records received from Okta 
 	# Check if Tabale has already been created and if not create it to maintain state between executions of Function
 	$storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
-	$StorageTable = Get-AzStorageTable -Name $GitHubExecutions -Context $Storage -ErrorAction Ignore
+	$StorageTable = Get-AzStorageTable -Name $StorageTableName -Context $Storage -ErrorAction Ignore
 	if($null -eq $StorageTable.Name){  
-		$result = New-AzStorageTable -Name $GitHubExecutions -Context $storage
-		$GitHubExecutionsTable = (Get-AzStorageTable -Name $GitHubExecutions -Context $storage.Context).cloudTable
-		Add-AzTableRow -table $GitHubExecutionsTable -PartitionKey "GitHubExecutions" -RowKey "lastRunEndCursor" -property @{"org"=$orgName;"lastRun"=$lastRun;"lastContext"=""} -UpdateExisting
+		$result = New-AzStorageTable -Name $StorageTableName -Context $storage
+		$GitHubExecutionsTable = (Get-AzStorageTable -Name $StorageTableName -Context $storage.Context).cloudTable
+		Add-AzTableRow -table $GitHubExecutionsTable -PartitionKey "GitHubRuns" -RowKey "lastRunEndCursor" -property @{"org"=$orgName;"lastRun"=$lastRun;"lastContext"=""} -UpdateExisting
 	}
 	Else {
 		$GitHubExecutionsTable = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
@@ -224,7 +223,7 @@ foreach($org in $GitHubOrgsArray){
 	[string]$orgFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition("org", [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,$orgName)
 		
 	# retrieve the last execution values
-	$orgExeValues = Get-AzTableRow -table $cloudTable -customFilter $orgFilter -ErrorAction Ignore	
+	$orgExeValues = Get-AzTableRow -table $GitHubExecutionsTable -customFilter $orgFilter -ErrorAction Ignore	
 	$lastRunContext = $orgExeValues.lastContext
     
     if([string]::IsNullOrEmpty($lastRunContext)){
@@ -408,7 +407,7 @@ foreach($org in $GitHubOrgsArray){
 		[string]$repoFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition("org", [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,"lastrun-$orgName-$repoName.json")
 		
 		# retrieve the last execution values
-		$repoExeValues = Get-AzTableRow -table $cloudTable -customFilter $repoFilter -ErrorAction Ignore	
+		$repoExeValues = Get-AzTableRow -table $GitHubExecutionsTable -customFilter $repoFilter -ErrorAction Ignore	
 		$lastRunVulnContext = $repoExeValues.lastContext
 		
         if([string]::IsNullOrEmpty($lastRunVulnContext)){
