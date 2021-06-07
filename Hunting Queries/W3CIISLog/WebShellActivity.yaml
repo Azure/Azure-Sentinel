@@ -4,7 +4,7 @@ description: |
   'Web shells are scripts that, when uploaded to a web server, can be used to provide a backdoor to a compromised network.
   Attackers can use this entry point to leave malicious implants, such as obtaining unauthorized access, escalating privilege, and further compromising the environment. 
   
-  This query hunts for web shells by analysing the distribution of commonly-used web shell scripts againts regular scripts for those public client IPs which have not observed any W3CIIS activity in a fixed lookback period.
+  This query hunts for web shells by analysing the distribution of commonly-used web shell scripts against regular scripts for those public client IPs which have not observed any W3CIIS activity in a fixed lookback period.
   The results obtained summarise the public client IPs, user agents, and the distribution of the above scripts between the start and end time.'
 requiredDataConnectors:
   - connectorId: AzureMonitor(IIS)
@@ -32,8 +32,8 @@ query: |
   let potential_webshell_activity = (W3CIISLog
   | where TimeGenerated between (start_time .. end_time)
   | extend csUriStem = tolower(csUriStem)
-  | where csUriStem matches regex \\.[a-zA-Z][a-zA-Z0-9]+$
-  | where csUriStem !in~ (ignore_uristems)
+  | where csUriStem matches regex "\\.[a-zA-Z][a-zA-Z0-9]+$"
+  | where csUriStem !in~ (ignore_uristems) // Remove noisy uri stems in the final results by editing the ignore_uristems variable 
   | extend suffix = strcat(".", split(split(csUriStem, "/")[-1], ".")[-1])
   | extend is_script = iff(suffix in (script_extensions), 1, 0)
   | where not(ipv4_is_private(cIP)) and cIP != "127.0.0.1"
@@ -55,5 +55,5 @@ query: |
   | project cIP, csUserAgent, SessionStarted,  num_dynamic_scripts, set_dynamic_scripts, num_non_dyn_scripts, set_non_dynamic_scripts,  dyn_to_non_dyn_ratio
   | sort by dyn_to_non_dyn_ratio desc, num_dynamic_scripts desc
   | extend summary = pack('IPCustomEntity', cIP, 'user_agent', csUserAgent, 'num_dynamic_scripts', num_dynamic_scripts, 'set_dynamic_scripts', set_dynamic_scripts, 'num_non_dyn_scripts', num_non_dyn_scripts, 'set_non_dynamic_scripts', set_non_dynamic_scripts, 'ratio', dyn_to_non_dyn_ratio, 'Session_StartTime', SessionStarted)
-  | summarize summaries=make_list(summary), num_of_events_on_day = count() by cIP, csUserAgent
-  | sort by num_of_events_on_day asc
+  | summarize summaries=make_list(summary), num_of_sessions_on_day = count() by cIP, csUserAgent
+  | sort by num_of_sessions_on_day asc
