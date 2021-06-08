@@ -37,6 +37,6 @@ NOTE: The secret is displayed only once, so make sure you copy and save it NOW s
 
 Back on the application that was registered in Step 1, copy the Directory (tenant) ID and the Application (client) ID
 
-![screenshot](./Screenshots/IDs.PNG)
+![screenshot](./Screenshots/IDs.JPG)
 
 -------------------------------------------------------------------------------------------
