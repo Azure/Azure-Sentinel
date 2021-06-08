@@ -29,14 +29,13 @@ This package includes:
 
   ![custom connector](./CarbonBlackConnector/CarbonBlackListOfActions.png)
 * Three playbook templates leverage Proofpoint TAP custom connector:
-  * [Check account in VAP](./Playbooks/ProofpointTAP-CheckAccountInVAP) - check if user is in the Very Attacked People list. Post information about the incident as a comment to the incident.
-  * [Enrichment – add information to incidents](./Playbooks/ProofpointTAP-AddInfoToIncident) - DESCRIPTION. Post information about the incident as a comment to the incident.
+  * [Enrichment – add information to incidents](./Playbooks/ProofpointTAP-AddInfoToIncident) - check if user is in the Very Attacked People list. Post information about the incident as a comment to the incident.
   * [Enrichment - add forensics info to incident](./Playbooks/ProofpointTAP-AddForensicsInfoToIncident) - collect information about the threat campaign and post it as incident comment.
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from it's specific folder.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2Fazuredeploy.json)
 
 
 
@@ -61,7 +60,6 @@ This connector supports Basic authentication. When creating the connection for t
 | Parameters | Description |
 |----------------|--------------|
 |**For Playbooks**|
-|**ProofpointTAP-CheckAccountInVAP Playbook Name**|  Enter the playbook name here (e.g. ProofpointTAP-CheckAccountInVAP)|
 |**ProofpointTAP-AddInfoToIncident Playbook Name** | Enter the playbook name here (e.g. ProofpointTAP-AddInfoToIncident)|
 |**ProofpointTAP-AddForensicsInfoToIncident Playbook Name** | Enter the playbook name here (e.g. ProofpointTAP-AddForensicsInfoToIncident)|
 
