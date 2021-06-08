@@ -8,11 +8,9 @@ Download the json template and rename it to as "WatchlistUseCaseName.json" (no s
 
 ### Specifics
 
-The Watchlist template contains a few items that are required for it to work:
+The Watchlist template contains a two items that are required for it to work:
 
 Workspace Name: The workspace name is required so that ARM knows the workspace that Azure Sentinel is using. This is used for deploying the content and function to the workspace.
-
-Watchlist Alias: Name for the Watchlist in both Azure Sentinel and in the workspace when calling it via function. This should reflect what the Watchlist is for.
 
 SearchKey Value: Title of a column that will be used for performing lookups and joins with other tables. It is recommended to choose the a column that will be the most used for joins and lookups.
 
