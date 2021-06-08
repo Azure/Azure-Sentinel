@@ -25,6 +25,8 @@ Note: Playbook is disabled by default. Please enable it before assigning to the 
 <br/><br/>
 ## Screenshot
 ### Playbook screenshoot
-![Playbook](./images/Playbook_Send-basic-email.png)
+![Playbook](./images/LightPlaybook_Send-basic-email.png)
+![Playbook](./images/DarkPlaybook_Send-basic-email.png)
 ### Email screenshot
-![Email](./images/Email_Send-basic-email.png)
+![Email](./images/LightEmail_Send-basic-email.png)
+![Email](./images/DarkEmail_Send-basic-email.png)
