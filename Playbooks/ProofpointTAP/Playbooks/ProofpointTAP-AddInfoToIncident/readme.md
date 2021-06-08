@@ -1,0 +1,30 @@
+# ProofpointTAP-AddInfoToIncident
+ ## Summary
+ When a new sentinal incident is created, this playbook gets triggered and performs below actions
+ 1. Get [Very Attacked People](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/People_API#.2Fv2.2Fpeople.2Fvap) on the latest 14 days. 
+ 2. Enrich the incident with information whether incident's users are in VAP list and change incident severity.
+
+### Prerequisites 
+1. ProofpointTAP Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+2. Obtain ProofpointTAP API credentials. Refer to ProofpointTAP Custom Connector documentation.
+
+### Deployment instructions 
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+2. Fill in the required paramteres:
+    * Playbook Name: Enter the playbook name here
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAPk%2FPlaybooks%2FProofpointTAP-AddInfoToIncident%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2FPlaybooks%2FProofpointTAP-AddInfoToIncident%2Fazuredeploy.json)
+
+
+### Post-Deployment instructions 
+#### a. Authorize connections
+Once deployment is complete, you will need to authorize each connection.
+1.	Click the Azure Sentinel connection resource
+2.	Click edit API connection
+3.	Click Authorize
+4.	Sign in
+5.	Click Save
+6.	Repeat steps for Proofpoint TAP connector API Connection (For authorizing, the Service Principal and the secret need to be provided.)
+#### b. Configurations in Sentinel
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account (*Name* and *UPNSuffix* attributes of the account need to be provided). 
+2. Configure the automation rules to trigger the playbook.
