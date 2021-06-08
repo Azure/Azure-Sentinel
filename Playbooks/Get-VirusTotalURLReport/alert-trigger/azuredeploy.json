@@ -1,30 +1,49 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "comments": "This playbook will take each URL entity and query VirusTotal for analysis (https://developers.virustotal.com/v3.0/reference#urls).",
+        "comments": "This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).",
         "author": "Nicholas DiCola"
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Get-VirusTotalURLAnalyses",
-            "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
+            "defaultValue": "Get-VirusTotalURLReport",
             "type": "string"
         },
         "VirusTotalAPIKey": {
             "defaultValue": "<APIKey>",
             "type": "string"
+        },
+        "workspaceId": {
+            "type": "string"
+        },
+        "workSpaceKey": {
+            "type": "string"
         }
     },
     "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "VirusTotalConnectionName": "[concat('virustotal-',parameters('PlaybookName'))]"
-
     },
     "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('workspaceId')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('workspaceId')]",
+                    "password": "[parameters('workSpaceKey')]"
+                }
+            }
+        },
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
@@ -44,9 +63,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[parameters('PlaybookName')]",
                 "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -60,7 +81,11 @@
             "tags": {
                 "LogicAppsCategory": "security"
             },
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
@@ -132,48 +157,103 @@
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                                    "message": "<p>URL: @{items('For_each')?['Url']} might be harmful.<br>\nMore info: &nbsp;https://www.virustotal.com/gui/url/@{body('Retrieve_information_about_a_file_or_URL_analysis')['meta']['url_info']['id']}</p>"
+                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_URL_report')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                                     }
                                                 },
                                                 "method": "post",
                                                 "path": "/Incidents/Comment"
                                             },
+                                            "runAfter": {
+                                                "Send_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Send_Data": {
+                                            "inputs": {
+                                                "body": "@{body('Get_URL_report')?['data']}",
+                                                "headers": {
+                                                    "Log-Type": "VTURLReport",
+                                                    "time-generated-field": "@{utcNow()}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            },
                                             "runAfter": {},
                                             "type": "ApiConnection"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_URL_report')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                },
+                                                "runAfter": {
+                                                    "Send_Data_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
+                                            },
+                                            "Send_Data_2": {
+                                                "inputs": {
+                                                    "body": "@{body('Get_URL_report')?['data']}",
+                                                    "headers": {
+                                                        "Log-Type": "VTURLReport",
+                                                        "time-generated-field": "@{utcNow()}"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/api/logs"
+                                                },
+                                                "runAfter": {},
+                                                "type": "ApiConnection"
+                                            }
                                         }
                                     },
                                     "expression": {
                                         "or": [
                                             {
-                                                "not": {
-                                                    "equals": [
-                                                        "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']",
-                                                        0
-                                                    ]
-                                                }
-                                            },
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']",
-                                                        0
-                                                    ]
-                                                }
+                                                "greaterOrEquals": [
+                                                    "@body('Get_URL_report')?['data']?['attributes']?['reputation']",
+                                                    0
+                                                ]
                                             }
                                         ]
                                     },
                                     "runAfter": {
-                                        "Retrieve_information_about_a_file_or_URL_analysis": [
+                                        "Get_URL_report": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "If"
                                 },
-                                "Retrieve_information_about_a_file_or_URL_analysis": {
+                                "Get_URL_report": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -181,7 +261,7 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/analyses/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
+                                        "path": "/api/v3/urls/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
                                     },
                                     "runAfter": {
                                         "Analyse_an_URL": [
@@ -228,15 +308,25 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "virustotal": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
-                                "connectionName": "[variables('VirusTotalConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                             },
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "virustotal": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                                "connectionName": "[variables('VirusTotalConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                             }
                         }
                     }
