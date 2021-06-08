@@ -39,10 +39,10 @@ Back on the application that was registered in Step 1, copy the Directory (tenan
 
 ![screenshot](./images/IDs.JPG)
 
-<a href=https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank"> 
+<a href=https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmsprateek%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank"> 
     <img src=https://aka.ms/deploytoazurebutton/> 
 </a> 
-<a href=https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank"> 
+<a href=https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmsprateek%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank"> 
 <img src=https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png/> 
 </a> 
 -------------------------------------------------------------------------------------------
