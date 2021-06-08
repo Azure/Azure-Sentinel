@@ -30,70 +30,12 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 	"PersonalAccessToken": This is the GITHUB PAT  
 	"Workspace Id": The Sentinel Log Analytics Workspace Id  
 	"Workspace Key": The Sentinel Log Analytics Workspace Key  
+	"GitHubOrgs": Organization Name - If you have more than one - enter comma(,) separated  
 	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule  
 	```
 
 ## Post Deployment Steps
-1. There are two json files (ORGS.json and lastrun-Audit.json) in Function Dependencies folder
-2. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name. 
-	```
-	If you have single org
-	[
-		{
-			"org": "sampleorg1"
-		}
-	]  
-
-	If you have multiple org's
-	[
-		{
-			"org": "sampleorg1"
-		},
-		{
-			"org": "sampleorg2"
-		},
-		{
-			"org": "sampleorg3"
-		}
-	]
-	```
-
-3. Edit lastrun-Audit.json and update "org": "sampleorg" and replace sample org with your org name
-
-	```
-	If you have single org
-
-	[
-		{
-			"org":  "sampleorg1",
-			"lastContext":  "",
-			"lastRun":  ""
-		}
-	]  
-
-	If you have multiple org's
-
-	[
-		{
-			"org":  "sampleorg1",
-			"lastContext":  "",
-			"lastRun":  ""
-		},
-		{
-			"org":  "sampleorg2",
-			"lastContext":  "",
-			"lastRun":  ""
-		}
-	]
-	```
-
-4. Upload the following files to the storage account "github-repo-logs" container from 
-	```
-	ORGS.json
-	lastrun-Audit.json
-	```
-
-5. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault `<<Function App Name>><<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
+1. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault `<<Function App Name>><<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
 
 	```
 		a. Go to Azure KeyVault `<<Function App Name>><<uniqueid>>`
@@ -107,7 +49,7 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 
 	```
 
-6. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
+2. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
    the schedule 
    ```
    a.	Click on Function App "Configuration" under Settings 
