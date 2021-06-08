@@ -3,10 +3,10 @@ author: Prateek Taneja, Benjamin Kovacevic
 
 This Playbook synchronizes the comments made to Microsoft 365 Defender Incidents in Azure Sentinel to comments in the corresponding Incident in the Microsoft 365 Defender portal. The LogicApp looks for comments added to Incidents in the past 24 hours and writes these comments to the corresponding M365 incident in the M365 Security and Compliance exprience available at https://security.microsoft.com
 
-<a href=https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank">
+<a href=https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmsprateek%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank">
     <img src=https://aka.ms/deploytoazurebutton/>
 </a>
-<a href=https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank">
+<a href=https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmsprateek%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank">
 <img src=https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png>
 </a>
 
