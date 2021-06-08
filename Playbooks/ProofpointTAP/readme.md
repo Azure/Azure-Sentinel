@@ -1,6 +1,6 @@
   # Proofpoint TAP Logic Apps connector and playbook templates
 
-  <img src="./CarbonBlackConnector/CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+  <img src="./ProofpointTAPConnector/proofpointlogo.png" alt="drawing" width="20%"/><br>
 
 
 ## Table of Contents
@@ -27,7 +27,6 @@ Proofpoint is a cybersecurity platform aimed to protect workers and data from ad
 This package includes:
 * [Logic Apps custom connector for Proofpoint TAP](./ProofpointTAPConnector)
 
-  ![custom connector](./CarbonBlackConnector/CarbonBlackListOfActions.png)
 * Three playbook templates leverage Proofpoint TAP custom connector:
   * [Enrichment – add information to incidents](./Playbooks/ProofpointTAP-AddInfoToIncident) - check if user is in the Very Attacked People list. Post information about the incident as a comment to the incident.
   * [Enrichment - add forensics info to incident](./Playbooks/ProofpointTAP-AddForensicsInfoToIncident) - collect information about the threat campaign and post it as incident comment.
@@ -44,12 +43,18 @@ You can choose to deploy the whole package: connector + all three playbook templ
 <a name="authentication">
 
 ## Authentication
-This connector supports Basic authentication. When creating the connection for the custom connector, you will be asked to provide the Service Principal and the secret which you generated in Proofpoint TAP platform. [Basic authentication](LINK_TO_PP_TAP_AUTH_DOC).
+This connector supports Basic authentication. When creating the connection for the custom connector, you will be asked to provide the Service Principal and the Secret which you generated in Proofpoint TAP platform. 
 
 <a name="prerequisites">
 
 ### Prerequisites in Proofpoint TAP
-1. Get Proofpoint TAP API credentials ([learn how](LINK_TO_PP_TAP_AUTH_DOC))
+To get Proofpoint TAP API credentials follow the instructions:
+1. Login to your Proofpoint TAP dashboard.
+2. Click the *Settings* tab.
+3. Click *Connected Applications*.
+4. In the *Name* section, select *Create New Credential*.
+5. Type the name and click the *Generate* button.
+6. In the *Generated Service Credential* pop-up, the *Service Principal* and *Secret* values are shown.
 
 <a name="deployment">
 

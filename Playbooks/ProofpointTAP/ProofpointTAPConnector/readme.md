@@ -1,6 +1,6 @@
 # Proofpoint TAP Logic Apps Custom connector
 
-<img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+<img src="./proofpointlogo.png" alt="drawing" width="20%"/><br>
 
 This custom connector connects to Proofpoint TAP API.
 
@@ -9,7 +9,13 @@ This custom connector connects to Proofpoint TAP API.
 *  Basic authentication
 
 ### Prerequisites in Proofpoint TAP
-1. Get Proofpoint TAP API credentials ([learn how](LINK_TO_PP_TAP_AUTH_DOC))
+To get Proofpoint TAP API credentials follow the instructions:
+1. Login to your Proofpoint TAP dashboard.
+2. Click the *Settings* tab.
+3. Click *Connected Applications*.
+4. In the *Name* section, select *Create New Credential*.
+5. Type the name and click the *Generate* button.
+6. In the *Generated Service Credential* pop-up, the *Service Principal* and *Secret* values are shown.
 
 
 ## Actions supported by Proofpoint TAP custom connector
