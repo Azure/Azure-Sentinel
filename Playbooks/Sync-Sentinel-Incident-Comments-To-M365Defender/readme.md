@@ -7,7 +7,7 @@ Deploying this playbook requires the following steps:
 
 1. Register an Azure Active Directory Application
 
-![screenshot](./Screenshots/AzureADAppRegistration.PNG)
+![screenshot](./images/AzureADAppRegistration.PNG)
 
 Provide a name and leave everything as defaults and click Register.
 
@@ -29,7 +29,7 @@ Back on the application that was registered in Step 1, click on Certificates & S
 
 Click on '+ New client secret'. Provide a description and expiration and click Add.
 
-![screenshot](./Screenshots/Secret.PNG)
+![screenshot](./images/Secret.PNG)
 
 NOTE: The secret is displayed only once, so make sure you copy and save it NOW so this can be used when deploying the LogicApp.
 
@@ -37,6 +37,12 @@ NOTE: The secret is displayed only once, so make sure you copy and save it NOW s
 
 Back on the application that was registered in Step 1, copy the Directory (tenant) ID and the Application (client) ID
 
-![screenshot](./Screenshots/IDs.JPG)
+![screenshot](./images/IDs.JPG)
 
+<a href=https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank"> 
+    <img src=https://aka.ms/deploytoazurebutton/> 
+</a> 
+<a href=https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FPrateekTaneja1%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank"> 
+<img src=https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png/> 
+</a> 
 -------------------------------------------------------------------------------------------
