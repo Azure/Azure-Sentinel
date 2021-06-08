@@ -38,7 +38,8 @@ $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
 $LAURI = $env:LAURI
 $GitHubOrgs = $env:GitHubOrgs
-$StorageTableName = "GitHub"
+$AuditStorageTableName = "GitHubAuditLogs"
+$RepoStorageTableName = "GitHubRepoLogs"								
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
 
@@ -209,21 +210,24 @@ foreach($orgName in $GitHubOrgsArray){
 	# Retrieve Timestamp from last records received from Okta 
 	# Check if Tabale has already been created and if not create it to maintain state between executions of Function
 	$storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
-	$StorageTable = Get-AzStorageTable -Name $StorageTableName -Context $Storage -ErrorAction Ignore
-	if($null -eq $StorageTable.Name){  
-		$result = New-AzStorageTable -Name $StorageTableName -Context $storage
-		$GitHubExecutionsTable = (Get-AzStorageTable -Name $StorageTableName -Context $storage.Context).cloudTable
-		Add-AzTableRow -table $GitHubExecutionsTable -PartitionKey "GitHubRuns" -RowKey "lastRunEndCursor" -property @{"org"=$orgName;"lastRun"=$lastRun;"lastContext"=""} -UpdateExisting
+	$AuditStorageTable = Get-AzStorageTable -Name $AuditStorageTableName -Context $Storage -ErrorAction Ignore
+	if($null -eq $AuditStorageTable.Name){  
+		$result = New-AzStorageTable -Name $AuditStorageTableName -Context $storage
+		$AuditExecutionsTable = (Get-AzStorageTable -Name $AuditStorageTableName -Context $storage.Context).cloudTable
+		Add-AzTableRow -table $AuditExecutionsTable -PartitionKey $orgName -RowKey $orgName -property @{"org"="$orgName";"lastRun"="$lastRun";"lastContext"=""}
 	}
 	Else {
-		$GitHubExecutionsTable = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
+		$AuditExecutionsTable = (Get-AzStorageTable -Name $AuditStorageTableName -Context $storage.Context).cloudTable
 	}
 	
 	# Create a filter and get the entity to be updated.
 	[string]$orgFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition("org", [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,$orgName)
 		
 	# retrieve the last execution values
-	$orgExeValues = Get-AzTableRow -table $GitHubExecutionsTable -customFilter $orgFilter -ErrorAction Ignore	
+	$orgExeValues = Get-AzTableRow -table $AuditExecutionsTable -customFilter $orgFilter -ErrorAction Ignore	
+    if ($null -eq $orgExeValues){
+        Add-AzTableRow -table $AuditExecutionsTable -PartitionKey $orgName -RowKey $orgName -property @{"org"="$orgName";"lastRun"="$lastRun";"lastContext"=""}
+    }																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																					
 	$lastRunContext = $orgExeValues.lastContext
     
     if([string]::IsNullOrEmpty($lastRunContext)){
@@ -240,18 +244,20 @@ foreach($orgName in $GitHubOrgsArray){
     do {
         $results = $null
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
-        if(($results.data.organization.auditLog.edges).Count -ne 0){
-            #write to log A to be added later           
+        
+		$hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
+        $currentRunContext = $results.data.organization.auditLog.pageInfo.endCursor
+
+        if(($results.data.organization.auditLog.edges).Count -ne 0 -and (![string]::IsNullOrEmpty($currentRunContext))){            
+														
             SendToLogA -gitHubData ($results.data.organization.auditLog.edges) -customLogName $AuditLogTable
         }
-        $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
-        $lastRunContext = $results.data.organization.auditLog.pageInfo.endCursor
-        
-        if ($lastRunContext -eq $null){
-            $lastRunContext = ""
+		
+		if ($null -ne $currentRunContext){ 
+            $lastRunContext = $currentRunContext
         }
-
-        if($hasNextPage -ne $false){
+			
+        if($hasNextPage -ne $false){     
             # if there is more data update the query with endcursor to use
             if([string]::IsNullOrEmpty($lastRunContext)){
                 $AuditQuery = '{"query": "query { organization(login: \"'+$orgName+'\") { auditLog(first: 100 orderBy: { direction: ASC field: CREATED_AT }) { edges { node { ... on AuditEntry { action actor actorIp actorLocation { city country countryCode region regionCode } actorLogin actorResourcePath actorUrl createdAt operationType user { email } userLogin userResourcePath } ... on MembersCanDeleteReposClearAuditEntry { organizationName enterpriseSlug } ... on MembersCanDeleteReposDisableAuditEntry { organizationName enterpriseSlug } ... on MembersCanDeleteReposEnableAuditEntry { organizationName enterpriseSlug } ... on OauthApplicationCreateAuditEntry { applicationUrl oauthApplicationName organizationName state } ... on OrgAddBillingManagerAuditEntry { invitationEmail organizationName } ... on OrgAddMemberAuditEntry { organizationName permission } ... on OrgBlockUserAuditEntry { organizationName blockedUserName } ... on OrgConfigDisableCollaboratorsOnlyAuditEntry { organizationName } ... on OrgConfigEnableCollaboratorsOnlyAuditEntry { organizationName } ... on OrgCreateAuditEntry { organizationName } ... on OrgDisableOauthAppRestrictionsAuditEntry { organizationName } ... on OrgDisableSamlAuditEntry { organizationName } ... on OrgDisableTwoFactorRequirementAuditEntry { organizationName } ... on OrgEnableOauthAppRestrictionsAuditEntry { organizationName } ... on OrgEnableSamlAuditEntry { organizationName } ... on OrgEnableTwoFactorRequirementAuditEntry { organizationName } ... on OrgInviteMemberAuditEntry { email organizationName } ... on OrgInviteToBusinessAuditEntry { organizationName enterpriseSlug } ... on OrgOauthAppAccessApprovedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgOauthAppAccessDeniedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgOauthAppAccessRequestedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgRemoveBillingManagerAuditEntry { organizationName reason } ... on OrgRemoveMemberAuditEntry { organizationName membershipTypes reason } ... on OrgRemoveOutsideCollaboratorAuditEntry { organizationName membershipTypes reason } ... on OrgRestoreMemberAuditEntry { organizationName restoredMembershipsCount restoredRepositoriesCount restoredMemberships { ... on OrgRestoreMemberMembershipOrganizationAuditEntryData { organizationName } ... on OrgRestoreMemberMembershipRepositoryAuditEntryData { repositoryName } ... on OrgRestoreMemberMembershipTeamAuditEntryData { teamName } } } ... on OrgUnblockUserAuditEntry { blockedUserName organizationName } ... on OrgUpdateDefaultRepositoryPermissionAuditEntry { organizationName permission permissionWas } ... on OrgUpdateMemberAuditEntry { organizationName permission permissionWas } ... on OrgUpdateMemberRepositoryCreationPermissionAuditEntry { canCreateRepositories organizationName visibility } ... on OrgUpdateMemberRepositoryInvitationPermissionAuditEntry { canInviteOutsideCollaboratorsToRepositories organizationName } ... on PrivateRepositoryForkingDisableAuditEntry { enterpriseSlug organizationName repositoryName } ... on PrivateRepositoryForkingEnableAuditEntry { enterpriseSlug organizationName repositoryName } ... on RepoAccessAuditEntry { organizationName repositoryName visibility } ... on RepoAddMemberAuditEntry { organizationName repositoryName visibility } ... on RepoAddTopicAuditEntry { organizationName repositoryName topicName } ... on RepoArchivedAuditEntry { organizationName repositoryName visibility } ... on RepoChangeMergeSettingAuditEntry { isEnabled mergeType organizationName repositoryName } ... on RepoConfigDisableAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigDisableCollaboratorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigDisableContributorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigDisableSockpuppetDisallowedAuditEntry { organizationName repositoryName } ... on RepoConfigEnableAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigEnableCollaboratorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigEnableContributorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigEnableSockpuppetDisallowedAuditEntry { organizationName repositoryName } ... on RepoConfigLockAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigUnlockAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoCreateAuditEntry { forkParentName forkSourceName organizationName repositoryName visibility } ... on RepoDestroyAuditEntry { organizationName repositoryName visibility } ... on RepoRemoveMemberAuditEntry { organizationName repositoryName visibility } ... on RepoRemoveTopicAuditEntry { organizationName repositoryName topicName } ... on RepositoryVisibilityChangeDisableAuditEntry { enterpriseSlug organizationName } ... on RepositoryVisibilityChangeEnableAuditEntry { enterpriseSlug organizationName } ... on TeamAddMemberAuditEntry { isLdapMapped organizationName teamName } ... on TeamAddRepositoryAuditEntry { isLdapMapped organizationName repositoryName teamName } ... on TeamChangeParentTeamAuditEntry { organizationName parentTeamName parentTeamNameWas teamName } ... on TeamRemoveMemberAuditEntry { isLdapMapped organizationName teamName } ... on TeamRemoveRepositoryAuditEntry { isLdapMapped organizationName repositoryName teamName } } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } }"}'
@@ -261,11 +267,14 @@ foreach($orgName in $GitHubOrgsArray){
             }
         }
         else {            
-			$orgExeValues.org = $orgName
+			$orgExeValues = Get-AzTableRow -table $AuditExecutionsTable -customFilter $orgFilter -ErrorAction Ignore       
+			if ($null -eq $lastRunContext){        
+                $lastRunContext = ""
+            }
             $orgExeValues.lastContext = $lastRunContext
             $orgExeValues.lastRun = $currentStartTime
             # To commit the change, pipe the updated record into the update cmdlet.
-			$orgExeValues | Update-AzTableRow -table $GitHubExecutionsTable
+			$orgExeValues | Update-AzTableRow -table $AuditExecutionsTable
         }
     } until ($hasNextPage -eq $false)
     
@@ -398,16 +407,29 @@ foreach($orgName in $GitHubOrgsArray){
         }       
     }
     
-    
+	
     # For each repo get Github Vulnerability Alerts    
     foreach($repo in $repoList){
         $repoName = $repo.name
 		
+		$RepoStorageTable = Get-AzStorageTable -Name $RepoStorageTableName -Context $Storage -ErrorAction Ignore
+	    if($null -eq $RepoStorageTable.Name){  
+		    $result = New-AzStorageTable -Name $RepoStorageTableName -Context $storage
+		    $RepoExecutionsTable = (Get-AzStorageTable -Name $RepoStorageTableName -Context $storage.Context).cloudTable
+		    Add-AzTableRow -table $RepoExecutionsTable -PartitionKey $repoName -RowKey $repoName -property @{"repoName"="lastrun-$orgName-$repoName";"lastRun"="$currentStartTime";"lastContext"=""}
+	    }
+	    Else {
+		    $RepoExecutionsTable = (Get-AzStorageTable -Name $RepoStorageTableName -Context $storage.Context).cloudTable
+	    }
+		
 		# Create a filter and get the entity to be updated.
-		[string]$repoFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition("org", [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,"lastrun-$orgName-$repoName.json")
+		[string]$repoFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition("repoName", [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,"lastrun-$orgName-$repoName")
 		
 		# retrieve the last execution values
-		$repoExeValues = Get-AzTableRow -table $GitHubExecutionsTable -customFilter $repoFilter -ErrorAction Ignore	
+		$repoExeValues = Get-AzTableRow -table $RepoExecutionsTable -customFilter $repoFilter -ErrorAction Ignore
+        if ($null -eq $repoExeValues){
+            Add-AzTableRow -table $RepoExecutionsTable -PartitionKey $repoName -RowKey $repoName -property @{"repoName"="lastrun-$orgName-$repoName";"lastRun"="$lastRun";"lastContext"=""}            
+        }
 		$lastRunVulnContext = $repoExeValues.lastContext
 		
         if([string]::IsNullOrEmpty($lastRunVulnContext)){
@@ -424,7 +446,10 @@ foreach($orgName in $GitHubOrgsArray){
             $uri = "https://api.github.com/graphql"
             $results = $null
             $results = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $VulnQuery
-            if(($results.data.organization.repository.vulnerabilityAlerts.nodes).Count -ne 0){
+            $hasNextPage = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.hasNextPage
+            $currentRunVulnContext = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.endCursor
+            
+            if(($results.data.organization.repository.vulnerabilityAlerts.nodes).Count -ne 0 -and (![string]::IsNullOrEmpty($currentRunVulnContext))){
                 $vulnList += $results.data.organization.repository.vulnerabilityAlerts.nodes
                 $vulnList | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $vulnList | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -432,11 +457,11 @@ foreach($orgName in $GitHubOrgsArray){
                 #send to log A; Name:GitHubRepoLogs
                 SendToLogA -gitHubData $vulnList -customLogName $RepoLogTable                
             }
-            $hasNextPage = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.hasNextPage
-            $lastRunVulnContext = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.endCursor
-            if ($lastRunVulnContext -eq $null){
-                $lastRunVulnContext = ""
-            }
+
+            if ($null -ne $currentRunVulnContext){
+                $lastRunVulnContext = $currentRunVulnContext
+            }  
+                                    
             if($hasNextPage -ne $false){
                 if([string]::IsNullOrEmpty($lastRunVulnContext)){
                     $VulnQuery = '{"query": "query {organization(login: \"'+$orgName+'\") {repository(name: \"'+$repoName+'\") { vulnerabilityAlerts(first: 100) { nodes { createdAt dismissReason dismissedAt id vulnerableManifestFilename vulnerableManifestPath vulnerableRequirements securityAdvisory { databaseId description ghsaId id origin permalink publishedAt severity summary withdrawnAt } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } } }"}'
@@ -446,12 +471,15 @@ foreach($orgName in $GitHubOrgsArray){
                 }
             }
             else {
-                $repoExeValues.org = "lastrun-$orgName-$repoName.json"
+                $repoExeValues = Get-AzTableRow -table $RepoExecutionsTable -customFilter $repoFilter -ErrorAction Ignore
+                if ($null -eq $lastRunVulnContext){
+                    $lastRunVulnContext = ""
+                }
 				$repoExeValues.lastContext = $lastRunVulnContext
                 $repoExeValues.lastRun = $currentStartTime
 				
 				# To commit the change, pipe the updated record into the update cmdlet.
-				$repoExeValues | Update-AzTableRow -table $GitHubExecutionsTable
+				$repoExeValues | Update-AzTableRow -table $RepoExecutionsTable
                 
             }
         } until ($hasNextPage -eq $false)
