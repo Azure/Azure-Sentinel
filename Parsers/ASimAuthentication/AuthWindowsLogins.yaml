@@ -18,6 +18,17 @@ ParserName: vimMSWindows
 ParserQuery: |
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
+  let LogonTypes=datatable(LogonType:int, EventSubType:string)[
+    2, 'Interactive',
+    3, 'Network',
+    4, 'Batch',
+    5, 'Service',
+    7, 'Unlock',
+    8, 'NetworkCleartext',
+    9, 'NewCredentials',
+    10, 'RemoteInteractive',
+    11, 'CachedInteractive'
+  ];
   let LogonStatus=datatable 
     (EventResultDetails:string,EventOriginalResultDetails:string)[
     "0x80090325", "SEC_E_UNTRUSTED_ROOT",
@@ -76,18 +87,18 @@ ParserQuery: |
     | project-rename 
        EventProduct = EventSourceName
        , EventMessage = Activity
-       , EventSubType = LogonTypeName
        , ActorSessionId=SubjectLogonId
        , TargetSessionId=TargetLogonId
        , ActorUserId=SubjectUserSid
        , TargetUserId =TargetUserSid
        , TargetUserType=AccountType
        , SrcDvcHostname = WorkstationName
-       , ResourceId = _ResourceId
-       , DstDvcId = SourceComputerId
-       , DstDvcHostname = Computer
+       , TargetHostId = SourceComputerId
+       , TargetHostname = Computer
        , EventOriginUid = EventOriginId
-       , Protocol=AuthenticationPackageName
+       , AuthenticationProtocol=AuthenticationPackageName
+       , SrcIpAddr=IpAddress
+       , SrcPortNumber=IpPort
     | extend EventOriginId=EventID | project-away EventID // Cannot use rename to overwrite an existing column
     | extend EventResult = iff(EventOriginId == 4625, "Failure", "Success")
       , ActorUserIdType='SID'
@@ -96,16 +107,17 @@ ParserQuery: |
       , EventStartTime =TimeGenerated
       , EventEndTime=TimeGenerated
       , EventType=iff(EventOriginId in (LogoffEvents), "Logoff", "Logon")
-    , ActorUserName = iff (SubjectDomainName == '-', trim(@'\\',SubjectUserName), trim(@'\\',SubjectAccount))
+    , ActorUserName = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount)
     , ActorUserNameType= iff(SubjectDomainName == '-','Simple', 'Windows' )
     , TargetUserName = iff (TargetDomainName == '-', trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
     , TargetUserNameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
     , SrcDvcOs = "Windows"
     , ActingProcessId=ProcessId
-    , ActingProcessName=ProcessName // Full name inc path  
+    , ActingProcessName=ProcessName   
     // , ActingProcessName=Process // Only process Name
     , EventResultDetails= iff(SubStatus=='0x0',Status,SubStatus)
     | lookup LogonStatus on EventResultDetails
+    | lookup LogonTypes  on LogonType
     | project-reorder 
         TimeGenerated
         , EventProduct
@@ -116,7 +128,8 @@ ParserQuery: |
         , EventEndTime
         , EventType
         , EventSubType
-        , SessionId
+        , ActorSessionId
+        , TargetSessionId
         , ActorUserId
         , ActorUserName
         , TargetUserId
@@ -125,10 +138,16 @@ ParserQuery: |
         , SrcDvcOs
         , ActingProcessId
         , ActingProcessName
-        , DstDvcId
-        , DstDvcHostname
-        , ResourceId
+        , TargetHostId
+        , TargetHostname
         , EventOriginalResultDetails
-        , Protocol
+        , AuthenticationProtocol
+        , ImpersonationLevel
+    /// ***** alias 
+    | extend
+        UserId=TargetUserId
+        , UserName=TargetUserName
+        , HostId=TargetHostId
+        , Hostname=TargetHostname
     };
   WinLogon
