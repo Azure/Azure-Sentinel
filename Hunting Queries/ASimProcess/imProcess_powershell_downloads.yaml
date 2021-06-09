@@ -1,0 +1,27 @@
+id: d83f40fc-bbcc-4020-8d45-ad2d82355cb2
+name: PowerShell downloads (Normalized Process)
+description: |
+  'Finds PowerShell execution events that could involve a download'
+requiredDataConnectors: []
+tactics:
+  - Execution
+  - CommandAndControl
+query: |
+  let ProcessCreationEvents=() {
+  let processEvents=imProcess
+  | project  TimeGenerated, ComputerName=DvcHostName,AccountName=ActorUserName, AccountDomain=ActorUserDomain,
+    FileName=tostring(split(TargetProcessFilePath, '\\')[-1]),
+  ProcessCommandLine = TargetProcessCommandLine, 
+  InitiatingProcessFileName=ActingProcessFileName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  processEvents};
+  ProcessCreationEvents
+  | where FileName in~ ("powershell.exe", "powershell_ise.exe")
+  | where ProcessCommandLine has "Net.WebClient"
+     or ProcessCommandLine has "DownloadFile"
+     or ProcessCommandLine has "Invoke-WebRequest"
+     or ProcessCommandLine has "Invoke-Shellcode"
+     or ProcessCommandLine contains "http:"
+  | project TimeGenerated, ComputerName, AccountName, InitiatingProcessFileName, FileName, ProcessCommandLine
+  | top 100 by TimeGenerated
+  | extend timestamp = TimeGenerated, HostCustomEntity = ComputerName, AccountCustomEntity = AccountName
+  
