@@ -1,0 +1,46 @@
+id: bee57113-7b9d-4158-958c-a7f3d534c6c4
+name: User Account Linked to Storage Account File Upload
+description: |
+  'This hunting query will try to identify the user account used to perform a file upload to blob storage.
+  This query can be used to match all file upload events, or filtering can be applied on filename to search for a specific upload.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+     - SigninLogs
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+tags:
+  - Ignite2021
+query: |
+
+  //Period of time to look back in signin logs
+  let lookback = 1m;
+  let TargetFile = "mimikatz.exe"; //Example
+  union
+  StorageFileLogs,
+  StorageBlobLogs
+  //Collect file uploads
+  | where StatusText =~ "Success"
+  | where OperationName =~ "PutBlob" or OperationName =~ "PutRange"
+  | extend FileName = extract(@"\/([\w\-. ]+)\?", 1, Uri)
+  //Uncomment below to enable file specific matching
+  //| where FileName =~ TargetFile
+  //Caller IP has the port appended, remove it
+  | extend CallerIpAddress = tostring(split(CallerIpAddress, ":", 0)[0])
+  | extend FileUploadTime = TimeGenerated
+  | extend WindowStart = FileUploadTime - lookback
+  | join (
+      SigninLogs
+      | project AzureLoginTime=TimeGenerated, UserPrincipalName, IPAddress, LoginUserAgent=UserAgent
+  ) on $left.CallerIpAddress == $right.IPAddress
+  //Look back in the signinlogs for the most recent login
+  | where AzureLoginTime between (WindowStart .. FileUploadTime)
+  | project AccountUsed=UserPrincipalName, AzureLoginTime, OperationName, FileUploadPath=Uri, CallerIpAddress, LoginUserAgent, UploadUserAgent=UserAgentHeader
+  //Optional user agent check
+  | where LoginUserAgent =~ UploadUserAgent
+  //Pack and summarise the matching login events by the upload event
+  | extend p = pack("AccountUsed", AccountUsed, "IPUsed", CallerIpAddress, "AzureLoginTime", AzureLoginTime, "UserAgent", LoginUserAgent)
+  | summarize LoginEvents=make_bag(p) by FileUploadPath, OperationName, UploadUserAgent
+

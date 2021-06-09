@@ -1,0 +1,55 @@
+id: f82c89fa-c969-4d12-832f-04d55d14522c
+name: Persisting Via IFEO Registry Key 
+description: |
+   'This query detects instances where IFEO registry keys were created and deleted frequently within a short period of time.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1546.012
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where EventID == 4657
+  | where CommandLine has "Image File Execution Options"
+  | where CommandLine has_any ("reg add", "reg delete")
+  | summarize Count=count() by Computer, CommandLine, Account, NewValue, OldValue
+  | top 10 by Count desc 
+  | extend AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID in (12, 13)
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | where TargetObject has_all ("HKLM", "Image File Execution Options")
+  | summarize Count=count() by Computer, UserName, tostring(TargetObject)
+  | top 10 by Count desc
+  | extend AccountCustomEntity = UserName, HostCustomEntity = Computer
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

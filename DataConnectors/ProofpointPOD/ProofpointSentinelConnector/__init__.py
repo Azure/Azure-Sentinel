@@ -12,6 +12,7 @@ import requests
 import azure.functions as func
 import logging
 import certifi
+import re
 
 
 customer_id = os.environ['WorkspaceID'] 
@@ -20,6 +21,15 @@ cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
 time_delay_minutes = 60
 event_types = ["maillog","message"]
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -35,6 +45,7 @@ def main(mytimer: func.TimerRequest) -> None:
 class Proofpoint_api:
     def __init__(self):
         self.cluster_id = cluster_id
+        self.logAnalyticsUri = logAnalyticsUri
         self._token = _token
         self.time_delay_minutes = int(time_delay_minutes)
         self.gen_timeframe(time_delay_minutes=self.time_delay_minutes)
@@ -113,7 +124,9 @@ class Proofpoint_api:
         content_length = len(body)
         signature = self.build_signature(rfc1123date, content_length, method, content_type,
                                     resource)
-        uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+        
+        uri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
+
         headers = {
             'content-type': content_type,
             'Authorization': signature,
