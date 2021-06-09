@@ -44,7 +44,8 @@
         }
     },
     "variables": {
-            "StroageAccountName": "[tolower(concat(parameters('FunctionName'), uniqueString(resourceGroup().id, subscription().id)))]"
+            "StroageAccountName": "[tolower(concat(parameters('FunctionName'), uniqueString(resourceGroup().id, subscription().id)))]",
+            "KeyVaultName": "[concat(parameters('FunctionName'), uniqueString(resourceGroup().id, subscription().id))]"
     },
     "resources": [
         {
@@ -61,7 +62,7 @@
         {
             "type": "Microsoft.KeyVault/vaults",
             "apiVersion": "2016-10-01",
-            "name": "[parameters('FunctionName')]",
+            "name": "[variables('KeyVaultName')]",
             "location": "[resourceGroup().location]",
             "properties": {
                 "sku": {
@@ -80,9 +81,9 @@
         {
             "type": "Microsoft.KeyVault/vaults/secrets",
             "apiVersion": "2016-10-01",
-            "name": "[concat(parameters('FunctionName'), '/clientSecret')]",
+            "name": "[concat(variables('KeyVaultName'), '/clientSecret')]",
             "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', parameters('FunctionName'))]"
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
             ],
             "properties": {
                 "value": "[parameters('clientSecret')]",
@@ -95,9 +96,9 @@
         {
             "type": "Microsoft.KeyVault/vaults/secrets",
             "apiVersion": "2016-10-01",
-            "name": "[concat(parameters('FunctionName'), '/workspaceKey')]",
+            "name": "[concat(variables('KeyVaultName'), '/workspaceKey')]",
             "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', parameters('FunctionName'))]"
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
             ],
             "properties": {
                 "value": "[parameters('workspaceKey')]",
@@ -206,7 +207,7 @@
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]",
                 "[resourceId('Microsoft.Web/serverfarms', parameters('FunctionName'))]",
-                "[resourceId('Microsoft.KeyVault/vaults', parameters('FunctionName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]",
                 "[resourceId('Microsoft.Insights/components', parameters('FunctionName'))]"
             ],
             "kind": "functionapp",
@@ -236,7 +237,7 @@
                         "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StroageAccountName'),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
                         "WEBSITE_CONTENTSHARE": "[variables('StroageAccountName')]",
                         "clientID": "[parameters('clientID')]",
-                        "clientSecret": "[concat('@Microsoft.KeyVault(SecretUri=https://', reference(resourceId('Microsoft.KeyVault/vaults/secrets', parameters('FunctionName'), 'clientSecret')).SecretUriWithVersion, ')')]",
+                        "clientSecret": "[concat('@Microsoft.KeyVault(SecretUri=https://', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), 'clientSecret')).SecretUriWithVersion, ')')]",
                         "domain": "[parameters('domain')]",
                         "tenantGuid": "[subscription().tenantId]",
                         "publisher": "[parameters('publisher')]",
@@ -244,25 +245,12 @@
                         "contentTypes": "[parameters('contentTypes')]",
                         "recordTypes": "[parameters('recordTypes')]",
                         "workspaceID": "[parameters('workspaceID')]",
-                        "workspaceKey": "[concat('@Microsoft.KeyVault(SecretUri=https://', reference(resourceId('Microsoft.KeyVault/vaults/secrets', parameters('FunctionName'), 'workspaceKey')).SecretUriWithVersion, ')')]",
+                        "workspaceKey": "[concat('@Microsoft.KeyVault(SecretUri=https://', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), 'workspaceKey')).SecretUriWithVersion, ')')]",
                         "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/O365%20Data/O365APItoAS-Template.zip?raw=true",
                         "customLogName": "O365"
                     }
                 }
             ]
-        },
-        {
-            "type": "Microsoft.Web/sites/hostNameBindings",
-            "apiVersion": "2018-11-01",
-            "name": "[concat(parameters('FunctionName'), '/', parameters('FunctionName'), '.azurewebsites.net')]",
-            "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('FunctionName'))]"
-            ],
-            "properties": {
-                "siteName": "[parameters('FunctionName')]",
-                "hostNameType": "Verified"
-            }
         },
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
@@ -298,6 +286,28 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('KeyVaultName'), '/add')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('FunctionName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(concat(resourceId('Microsoft.Web/sites', parameters('FunctionName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2018-11-30').principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "Get",
+                                "List"
+                            ]
+                        }
+                    }
+                ]
             }
         }
     ]
