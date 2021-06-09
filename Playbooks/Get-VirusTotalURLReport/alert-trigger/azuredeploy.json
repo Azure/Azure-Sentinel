@@ -2,22 +2,12 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-            "title": "Get-VirusTotalIPReport", 
-            "description": "This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident.",
-            "prerequisites": "You will need to register to Virus Total community for an API key.",
-            "lastUpdateTime": "2021-06-03T00:00:00.000Z", 
-            "entities": ["IP"], 
-            "tags": ["Enrich"], 
-            "support": {
-                "kind": "community" 
-            },
-            "author": {
-                "name": "Nicholas DiCola"
-            }
-        },
+        "comments": "This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).",
+        "author": "Nicholas DiCola"
+    },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Get-VirusTotalIPReport",
+            "defaultValue": "Get-VirusTotalURLReport",
             "type": "string"
         },
         "VirusTotalAPIKey": {
@@ -34,7 +24,7 @@
     "variables": {
         "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "VirusTotalConnectionName": "[concat('virustotal-', parameters('PlaybookName'))]"
+        "VirusTotalConnectionName": "[concat('virustotal-',parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -57,6 +47,20 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
+            "name": "[variables('VirusTotalConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {
+                    "api_key": "[parameters('VirusTotalAPIKey')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "kind": "V1",
@@ -66,20 +70,6 @@
                 "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('VirusTotalConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "customParameterValues": {
-                    "api_key": "[parameters('VirusTotalAPIKey')]"
-                },
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                 }
             }
         },
@@ -96,37 +86,78 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Entities_-_Get_IPs": {
+                        "Alert_-_Get_incident": {
                             "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
                                 "method": "post",
-                                "path": "/entities/ip"
+                                "path": "/entities/url"
                             },
-                            "runAfter": {},
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection"
                         },
                         "For_each": {
                             "actions": {
+                                "Analyse_an_URL": {
+                                    "inputs": {
+                                        "body": {
+                                            "$content-type": "multipart/form-data",
+                                            "$multipart": [
+                                                {
+                                                    "body": "@items('For_each')?['Url']",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"url\""
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/v3/urls"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                },
                                 "Condition": {
                                     "actions": {
                                         "Add_comment_to_incident_(V3)": {
                                             "inputs": {
                                                 "body": {
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_URL_report')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -145,9 +176,9 @@
                                         },
                                         "Send_Data": {
                                             "inputs": {
-                                                "body": "@{body('Get_an_IP_report')?['data']}",
+                                                "body": "@{body('Get_URL_report')?['data']}",
                                                 "headers": {
-                                                    "Log-Type": "VTIPReport",
+                                                    "Log-Type": "VTURLReport",
                                                     "time-generated-field": "@{utcNow()}"
                                                 },
                                                 "host": {
@@ -164,11 +195,11 @@
                                     },
                                     "else": {
                                         "actions": {
-                                            "Add_comment_to_incident_(V3)_3": {
+                                            "Add_comment_to_incident_(V3)_2": {
                                                 "inputs": {
                                                     "body": {
-                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>Virus Total IP Report found for @{items('For_each')?['Address']}<br>\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"</p>"
+                                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_URL_report')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -187,9 +218,9 @@
                                             },
                                             "Send_Data_2": {
                                                 "inputs": {
-                                                    "body": "@{body('Get_an_IP_report')?['data']}",
+                                                    "body": "@{body('Get_URL_report')?['data']}",
                                                     "headers": {
-                                                        "Log-Type": "VTIPReport",
+                                                        "Log-Type": "VTURLReport",
                                                         "time-generated-field": "@{utcNow()}"
                                                     },
                                                     "host": {
@@ -206,23 +237,23 @@
                                         }
                                     },
                                     "expression": {
-                                        "and": [
+                                        "or": [
                                             {
                                                 "greaterOrEquals": [
-                                                    "@body('Get_an_IP_report')?['data']?['attributes']?['reputation']",
+                                                    "@body('Get_URL_report')?['data']?['attributes']?['reputation']",
                                                     0
                                                 ]
                                             }
                                         ]
                                     },
                                     "runAfter": {
-                                        "Get_an_IP_report": [
+                                        "Get_URL_report": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "If"
                                 },
-                                "Get_an_IP_report": {
+                                "Get_URL_report": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -230,15 +261,19 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('For_each')?['Address'])}"
+                                        "path": "/api/v3/urls/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
                                     },
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Analyse_an_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "ApiConnection"
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
                             "runAfter": {
-                                "Entities_-_Get_IPs": [
+                                "Entities_-_Get_URLs": [
                                     "Succeeded"
                                 ]
                             },
@@ -254,7 +289,7 @@
                         }
                     },
                     "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -264,7 +299,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/incident-creation"
+                                "path": "/subscribe"
                             },
                             "type": "ApiConnectionWebhook"
                         }
