@@ -239,3 +239,12 @@ The main encoding issue here will be that single-quote characters `'` are encode
 To resolve this issue, it's recommended that you install PowerShell 7.1+ and re-generate the package.
 
 See [Setup](#setup) to install PowerShell 7.1+.
+
+
+#### YAML Conversion Issues
+
+If the YAML Toolkit for PowerShell is not installed, you may experience errors related to converting `.yaml` files, for analytic rules or otherwise.
+
+To resolve this issue, it's recommended that you install the YAML Toolkit for Powershell.
+
+See [Setup](#setup) to install the YAML Toolkit for PowerShell.
