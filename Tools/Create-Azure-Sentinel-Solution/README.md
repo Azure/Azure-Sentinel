@@ -4,6 +4,30 @@ Azure Sentinel Solutions provide an in-product experience for central discoverab
 
 The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Azure Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists. 
 
+## Setup
+
+- Install PowerShell 7.1+
+
+  - If you already have PowerShell 5.1, please follow this [upgrade guide](https://docs.microsoft.com/en-us/powershell/scripting/install/migrating-from-windows-powershell-51-to-powershell-7?view=powershell-7.1).
+
+  - If you do not already have PowerShell, please follow this [installation guide](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-windows?view=powershell-7.1).
+
+- Install Node.js
+
+  - The installation process can be started from [their website](https://nodejs.org/).
+
+- Install YAML Toolkit for Powershell
+
+  - `Install-Module powershell-yaml`
+
+- *For ease of editing, it's recommended to use VSCode with the 'Azure Resource Manager (ARM) Tools' extension installed*
+
+  - Install [VSCode](https://code.visualstudio.com/).
+
+  - Install the [Azure Resource Manager (ARM) Tools Extension](https://marketplace.visualstudio.com/items?itemName=msazurermtools.azurerm-vscode-tools).
+  
+    - This extension provides language support, resource auto-completion, and automatic template validation within your IDE.
+
 ## Creating Solution Package
 
 Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) to `C:\One`.
@@ -94,6 +118,35 @@ These files will be created in the solution's `Package` folder with respect to t
 
 Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
 
+### Azure Toolkit Validation
+
+The Azure Toolkit Validation is run automatically after package generation. However, if you make any manual edits to the template after the package is generated, you'll need to manually run the Azure Toolkit technical validation on your solution to check the end result.
+
+If you've already run the package creation tool in your current PowerShell instance, you should have the validation command imported and available, otherwise follow the steps below to install.
+
+#### Azure Toolkit Validation Setup
+
+- Clone the [arm-ttk repository](https://github.com/Azure/arm-ttk) to `C:\One`
+  - If `C:\One` does not exist, create the folder.
+  - You may also choose a different folder, but properly reference it in the Profile script.
+- Open your Powershell Profile script
+  - To find your Powershell Profile Script:
+    - Open Powershell.
+    - Type `$profile`, and hit enter.
+    - Your Powershell Profile script path will be output to the screen.
+    - Open the Profile script.
+- Add the following line of code to your Profile script.
+  - `Import-Module C:\One\arm-ttk\arm-ttk\arm-ttk.psd1`
+- Save and close your Profile script.
+- Refresh your profile.
+  - Run the following command in Powershell: `& $profile`
+  - Alternatively, you can close and re-open your PowerShell window.
+
+#### Azure Toolkit Validation Usage
+
+- Navigate to the directory of your solution.
+- Run: `Test-AzTemplate`
+
 ### Manual Validation
 
 Once the package is created and Azure Toolkit technical validation is passing, one should manually validate that the package is created as desired.
@@ -176,3 +229,13 @@ To fix this, remove the unused parameter from the `parameters` section of `mainT
 In most cases, this error is a result of removing an unused parameter reference from `mainTemplate.json`. To fix the error in such a case, remove the problematic output variable from the `outputs` section of `createUiDefinition.json`.
 
 Otherwise, the parameter will need be added in the `parameters` section of `mainTemplate.json` and referenced as necessary.
+
+#### Main Template Encoding Issues
+
+If you generate your solution package using a version of PowerShell under 7.1, you'll likely face encoding errors which cause issues within the `mainTemplate.json` file.
+
+The main encoding issue here will be that single-quote characters `'` are encoded into `\u0027`, and due to function references relying on single-quotes, this will break the template.
+
+To resolve this issue, it's recommended that you install PowerShell 7.1+ and re-generate the package.
+
+See [Setup](#setup) to install PowerShell 7.1+.
