@@ -31,7 +31,19 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 ## Prerequisites
 
-- You will need to add the managed identity that is created by the logic app to the Password Administrator role in Azure AD.
+- You will need to grant User.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+```powershell
+$MIGuid = "<Enter your managed identity guid here>"
+$MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
+
+$GraphAppId = "00000003-0000-0000-c000-000000000000"
+$PermissionName = "User.ReadWrite.All" 
+
+$GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
+$AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
+New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
+-ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole.Id
+```
 
 
 ## Screenshots

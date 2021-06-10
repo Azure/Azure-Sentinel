@@ -1,7 +1,7 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
+    "metadata": {
         "comments": "This playbook will revoke all signin sessions for the user using Graph API using a Beta API.  It will send and email to the user's manager. NOTE:  You must create an app registration for graph api with appropriate permissions.  NOTE:  You will need to add the managed identity that is created by the logic app to the Password Administrator role in Azure AD.",
         "author": "Nicholas DiCola"
     },
@@ -26,9 +26,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[parameters('PlaybookName')]",
                 "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -68,6 +70,9 @@
             "tags": {
                 "LogicAppsCategory": "security"
             },
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
@@ -77,37 +82,21 @@
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
+                    "actions": {
+                        "Alert_-_Get_incident": {
                             "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
-                    "actions": {
-                        "Alert_-_Get_accounts": {
-                            "runAfter": {
-                                "Alert_-_Get_incidents": [
-                                    "Succeeded"
-                                ]
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                             },
-                            "type": "ApiConnection",
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_Accounts": {
                             "inputs": {
                                 "body": "@triggerBody()?['Entities']",
                                 "host": {
@@ -117,55 +106,38 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/account"
-                            }
-                        },
-                        "Alert_-_Get_incidents": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
+                            },
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
                         },
                         "For_each": {
-                            "foreach": "@body('Alert_-_Get_accounts')?['Accounts']",
                             "actions": {
-                                "For_each_2": {
-                                    "foreach": "@body('Alert_-_Get_incidents')?['value']",
-                                    "actions": {
-                                        "Incident_-_Add_comment": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent(items('For_each_2')?['name'])}/@{encodeURIComponent('User (',concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']),') singin sessions were revoked in AAD and their manager (',body('Get_manager_(V2)')?['mail'],') was contacted using playbook.')}"
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>User @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])} singin sessions were revoked in AAD and their manager @{body('Get_manager_(V2)')?['displayName']} was contacted using playbook.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                             }
-                                        }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
                                     },
                                     "runAfter": {
                                         "Send_an_email_(V2)": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "Foreach"
+                                    "type": "ApiConnection"
                                 },
                                 "Get_manager_(V2)": {
-                                    "runAfter": {
-                                        "HTTP": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -174,27 +146,27 @@
                                         },
                                         "method": "get",
                                         "path": "/codeless/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']))}/manager"
-                                    }
+                                    },
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
                                 },
                                 "HTTP": {
-                                    "runAfter": {},
-                                    "type": "Http",
                                     "inputs": {
                                         "authentication": {
                                             "audience": "https://graph.microsoft.com",
                                             "type": "ManagedServiceIdentity"
                                         },
                                         "method": "POST",
-                                        "uri": "https://graph.microsoft.com/beta//users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/revokeSignInSessions"
-                                    }
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/revokeSignInSessions"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
                                 },
                                 "Send_an_email_(V2)": {
-                                    "runAfter": {
-                                        "Get_manager_(V2)": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
                                             "Body": "<p>User, @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}, was involved in part of a security incident. &nbsp;As part of remediation, the user signin sessions have been revoked. &nbsp;The user will need to reauthenticate in all applications.</p>",
@@ -208,18 +180,48 @@
                                         },
                                         "method": "post",
                                         "path": "/v2/Mail"
-                                    }
+                                    },
+                                    "runAfter": {
+                                        "Get_manager_(V2)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
                                 }
                             },
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "runAfter": {
-                                "Alert_-_Get_accounts": [
+                                "Entities_-_Get_Accounts": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Foreach"
                         }
                     },
-                    "outputs": {}
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
                 },
                 "parameters": {
                     "$connections": {
@@ -227,7 +229,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "office365": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",

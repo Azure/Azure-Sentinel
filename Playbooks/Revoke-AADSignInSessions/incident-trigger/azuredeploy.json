@@ -2,10 +2,10 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Reset-AADUserPassword",
-        "description": "This playbook will reset the user password using Graph API.  It will send the password (which is a random guid substring) to the user's manager.  The user will have to reset the password upon login.",
-        "prerequisites": "1. You will need to grant User.ReadWrite.All permissions to the managed identity.",
-        "lastUpdateTime": "2021-06-10T00:00:00.000Z",
+        "title": "Revoke-AADSignInSessions",
+        "description": "This playbook will revoke all signin sessions for the user using Graph API.  It will send an email to the user's manager.",
+        "prerequisites": "1. You will need tYou will need to grant User.ReadWrite.All permissions to the managed identity.",
+        "lastUpdateTime": "2021-06-03T00:00:00.000Z",
         "entities": [ "Account" ],
         "tags": [ "Repsond" ],
         "support": {
@@ -17,7 +17,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Reset-AADPassword",
+            "defaultValue": "Revoke-AADSignInSessions",
             "type": "string"
         },
         "UserName": {
@@ -93,9 +93,22 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
+                        "Alert_-_Get_incident": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
                         "Entities_-_Get_Accounts": {
                             "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "body": "@triggerBody()?['Entities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -105,7 +118,7 @@
                                 "path": "/entities/account"
                             },
                             "runAfter": {
-                                "Set_variable": [
+                                "Alert_-_Get_incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -116,8 +129,8 @@
                                 "Add_comment_to_incident_(V3)": {
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>User @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])} password was reset in AAD and their manager @{body('Get_manager_(V2)')?['mail']} was contacted using playbook.</p>"
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>User @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])} singin sessions were revoked in AAD and their manager @{body('Get_manager_(V2)')?['displayName']} was contacted using playbook.</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -157,15 +170,8 @@
                                             "audience": "https://graph.microsoft.com",
                                             "type": "ManagedServiceIdentity"
                                         },
-                                        "body": {
-                                            "passwordProfile": {
-                                                "forceChangePasswordNextSignIn": true,
-                                                "forceChangePasswordNextSignInWithMfa": false,
-                                                "password": "@{variables('Password')}"
-                                            }
-                                        },
-                                        "method": "PATCH",
-                                        "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}"
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/revokeSignInSessions"
                                     },
                                     "runAfter": {},
                                     "type": "Http"
@@ -173,8 +179,8 @@
                                 "Send_an_email_(V2)": {
                                     "inputs": {
                                         "body": {
-                                            "Body": "<p>User, @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}, was involved in part of a security incident. &nbsp;As part of remediation, the user password has been reset.<br>\n<br>\nThe temporary password is: @{variables('Password')}<br>\n<br>\nThe user will be required to reset this password upon login.</p>",
-                                            "Subject": "A user password was reset due to security incident.",
+                                            "Body": "<p>User, @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}, was involved in part of a security incident. &nbsp;As part of remediation, the user signin sessions have been revoked. &nbsp;The user will need to reauthenticate in all applications.</p>",
+                                            "Subject": "User signin sessions were reset due to security incident.",
                                             "To": "@body('Get_manager_(V2)')?['mail']"
                                         },
                                         "host": {
@@ -200,31 +206,6 @@
                                 ]
                             },
                             "type": "Foreach"
-                        },
-                        "Initialize_variable": {
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "Password",
-                                        "type": "String",
-                                        "value": "null"
-                                    }
-                                ]
-                            },
-                            "runAfter": {},
-                            "type": "InitializeVariable"
-                        },
-                        "Set_variable": {
-                            "inputs": {
-                                "name": "Password",
-                                "value": "@{substring(guid(), 0, 8)}"
-                            },
-                            "runAfter": {
-                                "Initialize_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "SetVariable"
                         }
                     },
                     "contentVersion": "1.0.0.0",
@@ -236,7 +217,7 @@
                         }
                     },
                     "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -246,7 +227,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/incident-creation"
+                                "path": "/subscribe"
                             },
                             "type": "ApiConnectionWebhook"
                         }
