@@ -30,7 +30,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 ## Prerequisites
 
-- You will need to grant Machine.Isolate permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+- You will need to grant Machine.RestrictExecution permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
