@@ -8,9 +8,9 @@ The packaging tool detailed below provides an easy way to generate your solution
 
 - Install PowerShell 7.1+
 
-  - If you already have PowerShell 5.1, please follow this [upgrade guide](https://docs.microsoft.com/en-us/powershell/scripting/install/migrating-from-windows-powershell-51-to-powershell-7?view=powershell-7.1).
+  - If you already have PowerShell 5.1, please follow this [upgrade guide](https://docs.microsoft.com/powershell/scripting/install/migrating-from-windows-powershell-51-to-powershell-7?view=powershell-7.1).
 
-  - If you do not already have PowerShell, please follow this [installation guide](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-windows?view=powershell-7.1).
+  - If you do not already have PowerShell, please follow this [installation guide](https://docs.microsoft.com/powershell/scripting/install/installing-powershell-core-on-windows?view=powershell-7.1).
 
 - Install Node.js
 
