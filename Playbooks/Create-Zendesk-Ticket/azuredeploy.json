@@ -1,22 +1,31 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
-    "comments": "This playbook will open item when new incident open in Azure Sentinel.",
-    "author": "Lior Tamir"
-},
+    "metadata": {
+        "title": "Create Zendesk ticket", 
+        "description": "This playbook will create a Zendesk ticket when a new incident is created in Azure Sentinel.",
+        "prerequisites": "Create a Zendesk user (for example, call it Azure Sentinel) which on behalf of its requester id new tickets will be created.",
+        "lastUpdateTime": "2021-05-30T10:00:00.000Z", 
+        "entities": [], 
+        "tags": ["Sync"], 
+        "support": {
+            "kind": "community" 
+        },
+        "author": {
+            "name": "Lior Tamir"
+        }
+    },
 "parameters": {
     "PlaybookName": {
-        "defaultValue": "Open-Zendesk-Ticket",
-        "type": "string"
-    },
-    "Zendesk_subdomain": {
-        "defaultValue": "zendesk",
+        "defaultValue": "Create-Zendesk-Ticket",
         "type": "string"
     },
     "requester_id":{
         "defaultValue": "00000000001",
-        "type": "string"
+        "type": "string",
+        "metadata": {
+            "description": "Zendesk id of the user which tickets will be created on behalf. Reccomendation: create an Azure Sentinel user."
+        }
     }
 },
 "variables": {
@@ -43,12 +52,9 @@
             "name": "[variables('ZendeskConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('Zendesk_subdomain')]",
+                "displayName": "[concat('zendesk-', parameters('PlaybookName'))]",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/zendesk')]"
-                },
-                "parameterValues": {
-                "token:SubDomain": "[parameters('Zendesk_subdomain')]"
                 }
             }
         },
@@ -58,7 +64,8 @@
         "name": "[parameters('PlaybookName')]",
         "location": "[resourceGroup().location]",
         "tags": {
-            "LogicAppsCategory": "security"
+            "hidden-SentinelTemplateName": "CreateZendeskTicket-Incident",
+            "hidden-SentinelTemplateVersion": "1.0"
         },
         "dependsOn": [
             "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
@@ -76,48 +83,41 @@
                     }
                 },
                 "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
-                    "actions": {
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
+                    "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                        "inputs": {
+                            "body": {
+                                "callback_url": "@{listCallbackUrl()}"
+                            },
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "path": "/incident-creation"
                         },
-                        "Create_Item": {
+                        "type": "ApiConnectionWebhook"
+                    }
+                },
+                    "actions": {
+                        "Create_CSV_table": {
+                            "inputs": {
+                                "format": "CSV",
+                                "from": "@body('Select')"
+                            },
                             "runAfter": {
-                                "Alert_-_Get_incident": [
+                                "Select": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "ApiConnection",
+                            "type": "Table"
+                        },
+                        "Create_Item": {
                             "inputs": {
                                 "body": {
-                                    "description": "Incident description: @{body('Alert_-_Get_incident')?['properties']?['Description']}",
-                                    "priority": "@body('Alert_-_Get_incident')?['properties']?['Severity']",
-                                    "requester_id": "00000000001",
-                                    "subject": "New Azure Sentinel Incident: @{body('Alert_-_Get_incident')?['properties']?['Title']}",
+                                    "description": "Severity: @{triggerBody()?['object']?['properties']?['severity']}\nCreation time: @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], 'yyyy-MM-dd hh:mm:ss')}\nDescription: @{triggerBody()?['object']?['properties']?['description']}\nEntities:\n@{body('Create_CSV_table')}\n\n\nView incident in Azure Sentinel: @{triggerBody()?['object']?['properties']?['incidentUrl']}\n\n",
+                                    "external_id": "@{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                                    "requester_id": "[parameters('requester_id')]",
+                                    "subject": "@{triggerBody()?['object']?['properties']?['incidentNumber']} Azure Sentinel @{triggerBody()?['object']?['properties']?['severity']} incident: @{triggerBody()?['object']?['properties']?['title']}",
                                     "type": "incident"
                                 },
                                 "host": {
@@ -127,7 +127,24 @@
                                 },
                                 "method": "post",
                                 "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('tickets'))}/items"
-                            }
+                            },
+                            "runAfter": {
+                                "Create_CSV_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Select": {
+                            "inputs": {
+                                "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "select": {
+                                    "Entity": "@item()?['properties']?['friendlyName']",
+                                    "Type": "@item()?['kind']"
+                                }
+                            },
+                            "runAfter": {},
+                            "type": "Select"
                         }
                     },
                     "outputs": {}
