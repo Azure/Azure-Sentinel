@@ -35,7 +35,7 @@ function validateARMTemplateWithPlaybookResource(filePath: string, playbookARMTe
 }
 
 let fileTypeSuffixes = ["azuredeploy.json"];
-let filePathFolderPrefixes = ["Playbooks"];
+let filePathFolderPrefixes = ["Playbooks","Solutions"];
 let fileKinds = ["Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
