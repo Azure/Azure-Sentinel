@@ -2,7 +2,7 @@
  ## Summary
 
 When a new sentinal incident is created,this playbook gets triggered and performs below actions
-1.  An adaptvie card is sent to the SOC Teams channel with information collected from the incident and the risky user information from Okta. 
+1.  An adaptive card is sent to the SOC Teams channel with information collected from the incident and the risky user information from Okta. 
 2.  The SOC is allowed to take action on risky user based on the information provided in the adaptive card.
 
 
