@@ -1,0 +1,80 @@
+Parser:
+  Title: Okta identity management authentication
+  Version: '0.0'
+  LastUpdated: June 6, 2021
+Product:
+  Name: Okta identity management
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Authentication schema documentation
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+Description: |
+      This Query Parser maps Okta sign in logs (Okta_CL) to the Azure Sentinel Information Model authenticaion schema.
+ParserName: vimAuthOktaIM
+ParserQuery: |
+  let OktaSignin=(){
+    let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
+    let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);
+    let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
+    // https://developer.okta.com/docs/reference/api/event-types/#catalog
+    Okta_CL
+    | where eventType_s_s in (OktaSigninEvents)
+    | extend 
+        EventProduct='Okta'
+        , EventVendor='Okta'
+        , EventResult = case (outcome_result_s_s in (OktaSuccessfulOutcome), 'Success',outcome_result_s_s in (OktaFailedOutcome),'Failure', 'Partial')
+    //     'result': String, one of: SUCCESS, FAILURE, SKIPPED, ALLOW, DENY, CHALLENGE, UNKNOWN, Required
+        // EventResultDetails
+        , EventStartTime=TimeGenerated
+        , EventEndTime=TimeGenerated
+        , EventType=iff(eventType_s_s hassuffix 'start', 'Logon', 'Logoff')
+        , EventSubType=legacyEventType_s_s
+        , TargetUserIdType='OktaId'
+        , TargetUserNAmeType='Upn'
+    | project-rename 
+        EventMessage=displayMessage_s_s
+        ,EventOriginalResultDetails=outcome_reason_s_s
+        , AuthMethod = authenticationContext_credentialType_s_s
+        , TargetSessionId=authenticationContext_externalSessionId_s_s
+        , TargetUserId= actor_id_s_s
+        , TargetUserName=actor_alternateId_s_s
+        , TargetUserType=actor_type_s_s
+        , SrcDvcOs=client_userAgent_os_s_s
+        , HttpUserAgentOriginal=client_userAgent_rawUserAgent_s_s
+        , HttpUserAgentName=client_userAgent_browser_s_s
+        , SrcIsp=securityContext_isp_s_s
+        , SrcGeoCity=client_geographicalContext_city_s_s
+        , SrcGeoCountry=client_geographicalContext_country_s_s
+        , SrcGeoLocationLatitude=client_geographicalContext_geolocation_lat_d_s
+        , SrcGeoLocationLongitude=client_geographicalContext_geolocation_lon_d_s
+        , EventOriginalUid = uuid_g_g
+    | project-reorder
+        EventProduct
+        , EventOriginalUid
+        , TimeGenerated
+        , EventMessage
+        , EventResult
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , EventType
+        , EventSubType
+        , AuthMethod
+        , TargetSessionId
+        , TargetUserId
+        , TargetUserName
+        , TargetUserType
+        , SrcDvcOs
+        , HttpUserAgentOriginal 
+        , HttpUserAgentName
+        , SrcIsp
+        , SrcGeoCity
+        , SrcGeoCountry
+        , SrcGeoLocationLongitude
+        , SrcGeoLocationLatitude
+    };
+  OktaSignin

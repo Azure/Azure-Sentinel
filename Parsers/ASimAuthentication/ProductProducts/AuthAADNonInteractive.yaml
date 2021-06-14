@@ -1,0 +1,77 @@
+Parser:
+  Title: Azure active directory non interactive authentication
+  Version: '0.0'
+  LastUpdated: June 3, 2021
+Product:
+  Name: Azure active directory nonInteractive signin logs
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Authentication schema documentation
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+Description: |
+    This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
+ParserName: vimAuthAADNonInteractiveUserSignInLogs
+ParserQuery: |
+  let AADNIAuthentication=(){
+    AADNonInteractiveUserSignInLogs
+    | extend
+        EventVendor = 'Microsoft'
+        , EventProduct = 'Azure Active Directory'
+        , EventResult = iff (ResultType ==0, 'Success', 'Failure')
+        , EventResultDetails= ResultType
+        , EventOriginalResultDetails = ResultDescription
+        , EventStartTime = TimeGenerated
+        , EventEndTime= TimeGenerated
+        , EventType= 'Logon'
+        , SrcHostId=tostring(todynamic(DeviceDetail).deviceId)
+        , SrcHostname=tostring(todynamic(DeviceDetail).displayName)
+        , SrcHostOs=tostring(todynamic(DeviceDetail).operatingSystem)
+        , HttpUserAgent=UserAgent
+        , SrcBrowser= tostring(todynamic(DeviceDetail).browser)
+        , SrcGeoCity=tostring(todynamic(LocationDetails).city)
+        , SrcGeoCountry=tostring(todynamic(LocationDetails).countryOrRegion)
+        , SrcGeoLocationLatitude=tostring(todynamic(LocationDetails).geoCoordinates.latitude)
+        , SrcGeoLocationLongitude=tostring(todynamic(LocationDetails).geoCoordinates.longitude)
+        , TargetResourceId = ResourceIdentity // Overriding the tables ResourceId which is not an interesting value
+        , TargetUserType='NonInteractive'
+        , TargetUserNameType='Upn'
+        , TargetUserIdType='AADID'
+        , TargetResourceName=ResourceDisplayName
+          , AuthTarget=ResourceIdentity
+    | project-rename
+        EventOriginalUid =Id
+        , AuthMethod = AuthenticationRequirement
+        , TargetSessionId=CorrelationId
+        , SessionDuration= DurationMs
+        , TargetUserId = UserId
+        , TargetUserName=UserPrincipalName
+        , SrcIpAddr=IPAddress
+      , AppName=AppDisplayName
+    | project-reorder
+        TimeGenerated
+        ,EventProduct
+        , EventOriginalUid
+        , EventResult
+        , EventResultDetails
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , AuthMethod 
+        , TargetSessionId
+        , SessionDuration
+        , TargetUserId
+        , TargetUserName
+        , SrcHostId
+        , SrcHostname
+        , SrcHostOs
+        , HttpUserAgent 
+        , SrcBrowser
+        , SrcGeoCountry
+        , SrcGeoCity
+        , AppId
+        , AppName};
+  AADNIAuthentication

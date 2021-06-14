@@ -1,0 +1,63 @@
+Parser:
+  Title: Azure active directory managed identity authentication
+  Version: '0.0'
+  LastUpdated: June 3, 2021
+Product:
+  Name: Azure active directory managed identity signin logs
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Authentication schema documentation
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+Description: |
+      This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
+ParserName: vimAuthAADManagedIdentitySignInLogs
+ParserQuery: |
+  let AADMIAuthentication=(){
+    AADManagedIdentitySignInLogs
+    | extend
+        EventVendor = 'Microsoft'
+        , EventProduct = 'Azure Active Directory'
+        , EventResult = iff (ResultType ==0, 'Success', 'Failure')
+        , EventResultDetails= ResultType
+        , EventOriginalResultDetails = ResultDescription
+        , EventStartTime = TimeGenerated
+        , EventEndTime= TimeGenerated
+        , EventType= 'Logon'
+        , SrcGeoCity=tostring(todynamic(LocationDetails).city)
+        , SrcGeoCountry=tostring(todynamic(LocationDetails).countryOrRegion)
+        , SrcGeoLocationLatitude=tostring(todynamic(LocationDetails).geoCoordinates.latitude)
+        , SrcGeoLocationLongitude=tostring(todynamic(LocationDetails).geoCoordinates.longitude)
+        , TargetResourceId = ResourceIdentity // Overriding the tables ResourceId which is not an interesting value
+        , TargetResourceName=ResourceDisplayName
+        , TargetUserType='ServicePrincipal'
+      , TargetUserName=ServicePrincipalName
+      , TargetUserId=ServicePrincipalId
+      , TargetUserNameType='Name'
+      , TargetUserIdType='AADID'
+      /// ////
+        , AuthTarget=ResourceIdentity
+    | project-rename
+        EventOriginalUid =Id
+        , TargetSessionId=CorrelationId
+        , SessionDuration= DurationMs
+        , SrcIpAddr=IPAddress
+    | project-reorder
+        TimeGenerated
+        ,EventProduct
+        , EventOriginalUid
+        , EventResult
+        , EventResultDetails
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , TargetSessionId
+        , SessionDuration
+        , SrcGeoCountry
+        , SrcGeoCity
+        , AppId
+        };
+  AADMIAuthentication
