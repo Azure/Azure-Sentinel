@@ -1,0 +1,76 @@
+Parser:
+  Title: Microsoft DNS
+  Version: '0.0'
+  LastUpdated: May 10, 2021
+Product:
+  Name: MS DNS Events
+Normalization:
+  Schema: Dns
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Dns schema documentation
+  Link: https://aka.ms/AzSentinelDnsDoc
+Description: |
+  This is a Query Parser that is used to map MS DNS (DnsEvents) to the Azure Sentinel Information Model Dns schema.  
+ParserName: vimDnsMicrosoftOMS
+ParserQuery: |
+  let RCodeTable=datatable(ResponseCode:int,ResponseCodeName:string)[
+     0, 'NOERROR'
+   , 1, "FORMERR"
+   , 2,"SERVFAIL"
+   , 3,'NXDOMAIN'
+   , 4,'NOTIMP'
+   , 5,'REFUSED'
+   , 6,'YXDOMAIN'
+   , 7,'YXRRSET'
+   , 8,'NXRRSET'
+   , 9,'NOTAUTH'
+   , 10,'NOTZONE'
+   , 11,'DSOTYPENI'
+   , 16,'BADVERS'
+   , 16,'BADSIG'
+   , 17,'BADKEY'
+   , 18,'BADTIME'
+   , 19,'BADMODE'
+   , 20,'BADNAME'
+   , 21,'BADALG'
+   , 22,'BADTRUNC'
+   , 23,'BADCOOKIE'];
+  let DNSQuery_MS=(){
+    DnsEvents |  where EventId in (257,258)
+  | project-rename
+         Dvc=Computer ,
+         SrcIpAddr = ClientIP,
+         QueryTypeName=QueryType,
+         EventMessage = Message,
+         EventReportUrl = ReportReferenceLink,
+         ResponseName = IPAddresses,
+         Query = Name,
+         ResponseCode = ResultCode
+  | extend
+  // ******************* Mandatory
+         EventCount=int(1),
+         EventStartTime=TimeGenerated,
+         EventVendor = "Microsoft",
+         EventProduct = "Microsoft DNS Server",
+         EventSchemaVersion="0.0.1",
+         //
+         EventEndTime=TimeGenerated,
+         EventSubType='response',
+         EventSeverity = tostring(Severity),
+         EventType = lookup,
+         DvcHostname = Dvc,
+         EventResult = iff(EventId==257 and ResponseCode==0 ,'Success','Failure')
+     | lookup RCodeTable on ResponseCode
+     | extend EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
+                                    , ResponseCode between (3841 .. 4095), 'Reserved for Private Use'
+                                    , 'Unassigned')
+    // **************Aliases
+    | extend
+        ResponseCodeName=EventResultDetails,
+        Domain=Query,
+        IpAddr=SrcIpAddr
+        };
+  DNSQuery_MS

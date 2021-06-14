@@ -32,6 +32,19 @@ After deployment, you can run this playbook manually on an alert or attach it to
 ## Prerequisites
 
 - [This](https://www.linkedin.com/pulse/3-ways-locate-microsoft-team-id-christopher-barber-/) blog shows some simple methods to get the Team Id.  You will need the Team Id and Channel Id.
+- You will need to grant Machine.CollectForensics permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+```powershell
+$MIGuid = "<Enter your managed identity guid here>"
+$MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
+
+$MDEAppId = "fc780465-2017-40d4-a0c5-307022471b92"
+$PermissionName = "Machine.CollectForensics" 
+
+$MDEServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$MDEAppId'"
+$AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
+New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
+-ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+```
 
 ## Screenshots
 **Incident Trigger**<br>

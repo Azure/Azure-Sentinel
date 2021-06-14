@@ -229,6 +229,13 @@ class S3Client:
             logging.error('Error while unpacking file {} - {}'.format(key, err))
 
     @staticmethod
+    def convert_empty_string_to_null_values(d: dict):
+        for k, v in d.items():
+            if v == '' or (isinstance(v, list) and len(v) == 1 and v[0] == ''):
+                d[k] = None
+        return d
+        
+    @staticmethod
     def format_date(date_string, input_format, output_format):
         try:
             date = datetime.datetime.strptime(date_string, input_format)
