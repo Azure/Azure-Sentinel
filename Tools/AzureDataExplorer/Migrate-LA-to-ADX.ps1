@@ -13,11 +13,17 @@
 #>
 
 PARAM(    
-    [Parameter(Mandatory=$true)] $LogAnalyticsWorkspaceName,
+    <# [Parameter(Mandatory=$true)] $LogAnalyticsWorkspaceName,
     [Parameter(Mandatory=$true)] $LogAnalyticsResourceGroup,
     [Parameter(Mandatory=$true)] $ADXResourceGroup,
     [Parameter(Mandatory=$true)] $ADXClusterURL,
-    [Parameter(Mandatory=$true)] $ADXDBName,    
+    [Parameter(Mandatory=$true)] $ADXDBName,#>
+    
+    $LogAnalyticsWorkspaceName = "adminsoc",
+    $LogAnalyticsResourceGroup = "admin",
+    $ADXResourceGroup = "rg-adminsoc-adx",
+    $ADXClusterURL = "https://sreeadminsocadx.westus2.kusto.windows.net",
+    $ADXDBName = "1145db",
     
     $ADXEngineUrl = "$ADXClusterURL/$ADXDBName",
     $kustoToolsPackage = "microsoft.azure.kusto.tools",
@@ -28,7 +34,31 @@ PARAM(
     $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
 )
 
-
+Function Write-Log {
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Message,
+        [string]$LogFileName,
+ 
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('Information','Warning','Error')]
+        [string]$Severity = 'Information'
+    )
+    try {
+        [pscustomobject]@{
+            Time = (Get-Date -f g)
+            Message = $Message
+            Severity = $Severity
+        } | Export-Csv -Path "$PSScriptRoot\$LogFileName" -Append -NoTypeInformation
+    }
+    catch {
+        Write-Host "An error occured in Write-Log() method" -ForegroundColor Red
+    }
+    
+}
 Function CheckModules($module) {
     try{
         $installedModule = Get-InstalledModule -Name $module -ErrorAction SilentlyContinue
@@ -355,7 +385,7 @@ Function CreateADXDataConnection(){
         Register-AzResourceProvider -ProviderNamespace Microsoft.Kusto
         Write-Host "Creating Azure Data Explorer Data Connection" -ForegroundColor Blue
         Write-Log -Message "Creating Azure Data Explorer Data Connection" -LogFileName $LogFileName -Severity Information
-        $ADXClusterName = $ADXClusterURL.split('.')[0].split('//')[2].Trim()
+        $ADXClusterName = $ADXClusterURL.split('.')[0].split('//')[1].Trim()
         foreach ($adxEH in $adxEventHubs)
         {
             try{
@@ -463,31 +493,7 @@ Function Start-Sleep($seconds, $waitMessage) {
     Write-Progress -Activity $waitMessage -Status "Please wait..." -SecondsRemaining 0 -Completed
 }
 
-Function Write-Log {
-    [CmdletBinding()]
-    param(
-        [Parameter()]
-        [ValidateNotNullOrEmpty()]
-        [string]$Message,
-        [string]$LogFileName,
- 
-        [Parameter()]
-        [ValidateNotNullOrEmpty()]
-        [ValidateSet('Information','Warning','Error')]
-        [string]$Severity = 'Information'
-    )
-    try {
-        [pscustomobject]@{
-            Time = (Get-Date -f g)
-            Message = $Message
-            Severity = $Severity
-        } | Export-Csv -Path "$PSScriptRoot\$LogFileName" -Append -NoTypeInformation
-    }
-    catch {
-        Write-Host "An error occured in Write-Log() method" -ForegroundColor Red
-    }
-    
-}
+
 
 CheckModules("Az.Resources")
 CheckModules("Az.OperationalInsights")
@@ -561,7 +567,7 @@ try {
         $eventHubsForADX = CreateEventHubNamespace -ArraysObject $AdxMappedTables        
         CreateLADataExportRule -AdxEventHubs $eventHubsForADX -TablesArrayCollection $AdxMappedTables
         
-        $dataConnectionQuestion = 'Do you want to continue creating Azure Data Explorer Data Ingestion rules for Tables? If Yes, Script will sleep for 30 min before proceeding. If No, you need to create Data connection rules Manually in Azure Data Explorer'
+        
 
         $dataConnectionQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
         $dataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
