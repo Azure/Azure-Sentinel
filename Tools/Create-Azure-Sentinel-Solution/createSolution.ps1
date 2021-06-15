@@ -641,7 +641,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             text = "Azure Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Azure Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Azure Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.";
                                             link = [PSCustomObject]@{
                                                 label = "Learn more";
-                                                uri = "https://docs.microsoft.com/azure/sentinel/watchlists";
+                                                uri = "https://aka.ms/sentinelwatchlists";
                                             }
                                         }
                                     }
