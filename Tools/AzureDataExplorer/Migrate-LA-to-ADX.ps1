@@ -1,15 +1,23 @@
-PARAM(    
-    #[Parameter(Mandatory=$true)] $LogAnalyticsWorkspaceName,
-    #[Parameter(Mandatory=$true)] $LogAnalyticsResourceGroup,
-    #[Parameter(Mandatory=$true)] $ADXResourceGroup,
-    #[Parameter(Mandatory=$true)] $ADXClusterURL,
-    #[Parameter(Mandatory=$true)] $ADXDBName,  
+<#  
+    Title:          Integrate Azure Data Explorer (ADX) for Long term retention storage
+    Language:       PowerShell
+    Version:        1.0
+    Author:         Sreedhar Ande
+    Last Modified:  06/14/2021
+    
+  	THE SCRIPT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SCRIPT OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 
-    $LogAnalyticsWorkspaceName = "adminsoc",
-    $LogAnalyticsResourceGroup = "admin",
-    $ADXResourceGroup = "rg-adminsoc-adx",
-    $ADXClusterURL = "https://sreeadminsocadx.westus2.kusto.windows.net",
-    $ADXDBName = "1250db",
+#>
+
+PARAM(    
+    [Parameter(Mandatory=$true)] $LogAnalyticsWorkspaceName,
+    [Parameter(Mandatory=$true)] $LogAnalyticsResourceGroup,
+    [Parameter(Mandatory=$true)] $ADXResourceGroup,
+    [Parameter(Mandatory=$true)] $ADXClusterURL,
+    [Parameter(Mandatory=$true)] $ADXDBName,    
     
     $ADXEngineUrl = "$ADXClusterURL/$ADXDBName",
     $kustoToolsPackage = "microsoft.azure.kusto.tools",
@@ -220,6 +228,7 @@ Function SplitArrayBySize(){
         exit
     }
 }
+
 Function CreateEventHubNamespace(){
     [CmdletBinding()]
     param (        
@@ -423,6 +432,7 @@ Function CreateADXDataConnection(){
         exit
     }
 }
+
 Function SliceArray {
 
     [CmdletBinding()]
