@@ -58,7 +58,7 @@ def main(mytimer: func.TimerRequest):
     last_ts = get_last_ts(state_manager)
 
     filt = """
-        resource.type="dns_query" AND
+        (protoPayload.serviceName="dns.googleapis.com" OR resource.type="dns_query") AND
         timestamp>="{}"
     """.format(last_ts)
 
