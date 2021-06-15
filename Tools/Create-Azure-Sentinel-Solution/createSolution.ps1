@@ -511,6 +511,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]"
                             apiVersion = "2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
+                            location   = "[parameters('workspace-location')]";
                             kind       = "GenericUI";
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = [PSCustomObject]@{
@@ -1000,5 +1001,5 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 $($solutionName.replace(' ',''))"  
+    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 $solutionName"  
 }
