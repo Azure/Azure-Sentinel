@@ -18,15 +18,15 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Fincident-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure incident](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov incident](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Fincident-trigger%2Fazuredeploy.json)
 
 **Deploy with alert trigger**
 
 After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Falert-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Falert-trigger%2Fazuredeploy.json)<br>
+[![Deploy to Azure alert](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov alert](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate-SNOW-record%2Falert-trigger%2Fazuredeploy.json)<br>
 <br>
 ## Post-deployment
 Go to Playbook edit mode and fix SNOW connection with data from Prerequisite. <br>
@@ -49,4 +49,4 @@ We will need to assign Azure Sentinel Reader role to the Playbooks Managed Ident
 ![Alert Trigger light](./alert-trigger/images/light-Playbook-alert-trigger.png)<br>
 <br>
 **Example in ServiceNow**<br>
-![Alert Trigger light](./images/in-SNOW.png)<br>
+![Incident in SNOW](./images/in-SNOW.png)<br>
