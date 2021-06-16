@@ -49,4 +49,4 @@ We will need to assign Azure Sentinel Reader role to the Playbooks Managed Ident
 ![Alert Trigger light](./alert-trigger/images/light-Playbook-alert-trigger.png)<br>
 <br>
 **Example in ServiceNow**<br>
-![SNOW](./images/in-SNOW.png)<br>
+![Incident in SNOW](./images/in-SNOW.png)<br>
