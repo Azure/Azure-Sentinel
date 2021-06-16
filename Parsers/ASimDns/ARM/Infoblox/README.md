@@ -1,6 +1,6 @@
 # Infoblox NIOS ASIM DNS Normalization Parser
 
-This template deploys the ASIM DNS schema parser for Infoblox NIOS, a part of the Azure Sentinel Information Mode.
+This template deploys the ASIM DNS schema parser for Infoblox NIOS. The parser is a part of the Azure Sentinel Information Mode.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
