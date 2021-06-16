@@ -56,46 +56,6 @@ The high-level architecture would look like this:
 5.	Once Data Connection is success – you will see the data flowing from Log Analytics to ADX ~ 15 min    
 
 
-## Automation Features  
-This PowerShell script automated the above 5 steps described in Challenges section without having you to go multiple places to integrate Azure Data Explorer
-
-1. Installs all the required modules
-	```
-	Az.Resources
-	Az.OperationalInsights
-	Kusto.CLI
-	```
-2. Once user is authorized, it provides two options  
-	a.	To Export all the tables from thhe given Log Analytics workspace  
-	b.	Enter the selected Log Analytics Table Names (Case-Sensitive) by comma separated  
-	
-3. Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next steps. To see all the supported tables navigate to [here](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)
-
-4. Script will perform the following steps in ADX  
-	A. **Create target table** ```<<TableName>>```
-		
-	B.	**Create raw table** ```<<TableName>>Raw```
-	
-	C. **Create table mapping** ```<<TableName>>RawMapping```
-	
-	D. **Create update policy** 
-	
-	E.  **Modify retention for target table**
-	
-5. Create EventHub Namespaces. In this step, script will create EventHub Namespaces by dividing the total number of tables by 10  
-	Note: Event Hub Standard tier has limitation of having 10 EventHub Topics  
-	
-6. Create Data Export Rule. In this step, script will create Data Export rules for each EventHub Namespace with 10 Tables each  
-
-	Note:
-	a.	Based on the output from Step #4, script will create “Data Export” rules for each 10 Tables  
-	b.	LA supports 10 Data Export rules targeting 10 different EventHub Namespaces i.e., you can export 100 tables using 10 Data Export rules  
-	
-7. Create data connection between EventHub and raw data table in ADX. In this step, script will iterate all the EventHub Namespaces and retrieve EventHub Topics and creates ADX Data connection rules specifying the target raw table, mapping table and EventHub Topic.
-
-8. At the end of the script, it will generate a log file with every action that script has performed to identify performance or configuration issues and to gain insights to perform root cause analysis when failures occur.  
-
-
 ## Download the Tool Running PowerShell Script
 
 1. Download the Tool 
@@ -121,18 +81,40 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 4. Script prompts the user to authenticate with his credentials, once the user is authenticated it prompts the following optios  
 	a. Retrieve all the Tables from the given Workspace and create Raw, Mappings table in ADX (or)  
 	b. Enter selected tables from the given Workspace  
+	
+5.  Installs the required modules
+	```
+	Az.Resources
+	Az.OperationalInsights
+	Kusto.CLI
+	```
+Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next steps. To see all the supported tables navigate to [here](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)
 
-5. Script currently creates Raw and Mapping tables for [supported tables](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=rest#supported-tables) only. All the supported tabels are currently listed in ADXSupportedTables.json - This json will be updated as support for additional tables is added  
+6. Script will perform the following operations in ADX for [supported tables](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=rest#supported-tables)  
+	A. **Create target table** ```<<TableName>>```
+		
+	B.	**Create raw table** ```<<TableName>>Raw```
+	
+	C. **Create table mapping** ```<<TableName>>RawMapping```
+	
+	D. **Create update policy** 
+	
+	E.  **Modify retention for target table**
+	
+7. Creates EventHub Namespaces. In this step, script will create EventHub Namespaces by dividing the total number of tables by 10  
+   **Note:** Event Hub Standard tier has limitation of having 10 EventHub Topics  
+	
+8. Creates Data Export Rule on Azure Log Analytics Workspace. In this step, script will create Data Export rules for each EventHub Namespace with 10 Tables each  
 
-6. Script creates Standard EventHub Namespaces programmatically for each 10 tables
-
-7. Creates Log Analytics Data Export rule by taking 10 tables per rule for one Standard EventHub Namespace
-
-8. After successful creation of "Data Export" rule - Script again prompts asking user whether he can wait 30 min until EventHub Topics for all the selected tables gets created in EventHub Namespace  
-	a. If Yes, Script will proceed to continue to create "Data connection" rules after 30 min sleep time  
+	**Note:**
+	a.	Based on the output from Step #4, script will create “Data Export” rules for each 10 Tables  
+	b.	LA supports 10 Data Export rules targeting 10 different EventHub Namespaces i.e., you can export 100 tables using 10 Data Export rules  
+	
+9. After successful creation of "Data Export" rule - Script again prompts asking user whether he can wait 30 min until EventHub Topics for all the selected tables gets created in EventHub Namespace  
+	a. If Yes, Script will proceed to continue to create "Data connection" rules after 30 min sleep time by specifying the target raw table ```<<TableName>>Raw```, mapping table ```<<TableName>>RawMapping``` and EventHub Topic ```am-<<TableName>>```
 	b. If No, script will exit, user has to create "Data Connection" for each table in Azure Data Explorer by selecting appropriate Raw, Mapping Tables and EventHub Topic  
 
-9. Script will generate log file ```ADXMigration_<<TimeStamp>>``` with detailed execution ouputs and status to verify what went wrong - if there are any errors  
+10. At the end of the script, it will generate a log file ```ADXMigration_<<TimeStamp>>``` with every action that script has performed to identify performance or configuration issues and to gain insights to perform root cause analysis when failures occur.  
 
 
 
