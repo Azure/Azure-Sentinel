@@ -14,9 +14,5 @@ Please follow this documentation to create AAD app and give the Permissions base
 
 https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/get-all-vulnerabilities#permissions
 
-<a href="https://azuredeploy.net/?repository=https://github.com/Yaniv-Shasha/Sentinel/tree/master/Playbooks/Enrich-SentinelIncident-MDATPTVM" target="_blank">
-    <img src="http://azuredeploy.net/deploybutton.png"/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FYaniv-Shasha%2FSentinel%2Fmaster%2FPlaybooks%2FEnrich-SentinelIncident-MDATPTVM%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FEnrich-SentinelIncident-MDATPTVM%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FEnrich-SentinelIncident-MDATPTVM%2Fazuredeploy.json)
