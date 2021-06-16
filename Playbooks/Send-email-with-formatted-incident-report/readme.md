@@ -1,8 +1,7 @@
 # Send-email-with-formatted-incident-report
 author: Benjamin Kovacevic
 
-This playbook will be sending email with formated incidents report (Incident title, severity, tactics, link,…) when incident is created in Azure Sentinel. Email notification is made in HTML.<br/>
-Please see screenshots for details.
+This playbook will be sending email with formated incidents report (Incident title, severity, tactics, link,…) when incident is created in Azure Sentinel. Email notification is made in HTML.<br/> Please see screenshots for details.
 <br/><br/>
 ## Pre-requisites:
 An O365 account to be used to send email notification 
@@ -10,9 +9,9 @@ An O365 account to be used to send email notification
 Link with company logo. No formating since size is defined in the Playbook. Linke example - https://azure.microsoft.com/svghandler/azure-sentinel
 <br/><br/>
 ## Deployment:
+
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-email-with-formatted-incident-report%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-email-with-formatted-incident-report%2Fazuredeploy.json)
-<br/><br/>
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-email-with-formatted-incident-report%2Fazuredeploy.json)
 
 ## Post-deployment
 
@@ -29,6 +28,8 @@ Note: Playbook is disabled by default. Please enable it before assigning to the 
 <br/><br/>
 ## Screenshot
 ### Playbook screenshoot
-![Playbook](./images/Playbook_Send-email-with-formatted-incident-report.png)
+![Playbook](./images/LightPlaybook_Send-email-with-formatted-incident-report.png)
+![Playbook](./images/DarkPlaybook_Send-email-with-formatted-incident-report.png)
 ### Email screenshot
-![Email](./images/Email_Send-email-with-formatted-incident-report.png)
+![Email](./images/LightEmail_Send-email-with-formatted-incident-report.png)
+![Email](./images/DarkEmail_Send-email-with-formatted-incident-report.png)

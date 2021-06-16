@@ -24,6 +24,8 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         public string Query { get; set; }
 
         [JsonProperty("version", Required = Required.Always)]
+        [StringLength(20)] //Version should be quite short (for example "1.2.2")
+        [QueryBasedTemplateVersionValidator]
         public string Version { get; set; }
 
         [JsonProperty("queryFrequency", Required = Required.Always)]
