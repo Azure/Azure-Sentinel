@@ -67,7 +67,7 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 	a.	To Export all the tables from thhe given Log Analytics workspace  
 	b.	Enter the selected Log Analytics Table Names (Case-Sensitive) by comma separated  
 	
-3. Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next steps. To see all the supported tables navigate to [here](https://docs.microsoft.com/en-us/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)
+3. Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next steps. To see all the supported tables navigate to [here](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)
 
 4. Script will perform the following steps in ADX  
 	A. **Create target tables** The raw data is ingested first to an intermediate table where the raw data is stored. At that time, the data will be manipulated and expanded. Using an update policy (think of this as a function that will be applied to all new data), the expanded data will then be ingested into the final table that will have the same schema as the original one in Log Analytics/Sentinel. We will set the retention on the raw table to 0 days, because we want the data to be stored only in the properly formatted table and deleted in the raw data table as soon as it’s transformed   
