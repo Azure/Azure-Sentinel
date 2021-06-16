@@ -96,8 +96,8 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 ## Download the Tool Running PowerShell Script
 
 1. Download the Tool 
-
-   <a id="ADX" href="https://aka.ms/Sentinel-AzureDataExplorer-Automation">IntegrateADX</a>  
+  
+   [![Download](./images/Download.png)](https://aka.ms/Sentinel-AzureDataExplorer-Automation)
  
 2. Extract the folder and open "Migrate-LA-to-ADX.ps1" either in Visual Studio Code or PowerShell  
 
