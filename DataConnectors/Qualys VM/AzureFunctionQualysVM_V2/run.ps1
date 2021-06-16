@@ -34,6 +34,7 @@ $TableName = "QualysHostDetection"
 # Build the headers for the Qualys API request
 $username = $env:apiUserName
 $password = $env:apiPassword
+$logAnalyticsUri = $env:logAnalyticsUri
 $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
 $filterParameters = $env:filterParameters
@@ -46,6 +47,20 @@ $time = $env:timeInterval
 # the $time will be reduced from the current UTC time to achive incremental pull.
 $vm_processed_before = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $vm_processed_after = ([System.DateTime]::UtcNow.AddMinutes(-$($time))).ToString('yyyy-MM-ddTHH:mm:ssZ')
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "QualysVM: Invalid Log Analytics Uri."
+}
+
+
 
 #check if the filterParameters are allowed or not
 $allParameters = ""
@@ -129,7 +144,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 		-method $method `
 		-contentType $contentType `
 		-resource $resource
-	$uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+	$uri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
 	$headers = @{
 		"Authorization" = $signature;
