@@ -129,7 +129,7 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 	a. If Yes, Script will proceed to continue to create "Data connection" rules after 30 min sleep time  
 	b. If No, script will exit, user has to create "Data Connection" for each table in Azure Data Explorer by selecting appropriate Raw, Mapping Tables and EventHub Topic  
 
-9. Create will generate log file ```ADXMigration_<<TimeStamp>>``` for detailed execution ouput to verify what went wrong - if there are any errors  
+9. Script will generate log file ```ADXMigration_<<TimeStamp>>``` with detailed execution ouputs and status to verify what went wrong - if there are any errors  
 
 
 
