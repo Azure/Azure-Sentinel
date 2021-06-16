@@ -88,9 +88,7 @@ The high-level architecture would look like this:
 	Az.OperationalInsights
 	Kusto.CLI
 	```
-Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next steps. To see all the supported tables navigate to [here](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)
-
-6. Script will perform the following operations in ADX for [supported tables](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=rest#supported-tables)  
+6. Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next table. To see all the supported tables navigate to [here](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables). For all the supported tables, script will create the following   
 	A. **Create target table** ```<<TableName>>```
 		
 	B.	**Create raw table** ```<<TableName>>Raw```
