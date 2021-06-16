@@ -23,13 +23,15 @@ The high-level architecture would look like this:
 ## Challenges
 1. Use the Azure Data Explorer Web UI to create the target tables in the Azure Data Explorer database. For each table you need to get the schema and run the following commands which consumes lot of time for production workloads  
   
-	A. **Create target tables** The raw data is ingested first to an intermediate table where the raw data is stored. At that time, the data will be manipulated and expanded. Using an update policy (think of this as a function that will be applied to all new data), the expanded data will then be ingested into the final table that will have the same schema as the original one in Log Analytics/Sentinel. We will set the retention on the raw table to 0 days, because we want the data to be stored only in the properly formatted table and deleted in the raw data table as soon as it’s transformed. Detailed steps for this step can be found [here](https://docs.microsoft.com/azure/data-explorer/ingest-data-no-code?tabs=diagnostic-metrics#create-the-target-tables).    
+	A. **Create target table** Table that will have the same schema as the original one in Log Analytics/Sentinel
 	
-	B. **Create table mapping** Because the data format is json, data mapping is required. This defines how records will land in the raw events table as they come from Event Hub. Details for this step can be found [here](https://docs.microsoft.com/azure/data-explorer/ingest-data-no-code?tabs=diagnostic-metrics#create-table-mappings).    
+	B. **Create table raw** The data coming from EventHub is ingested first to an intermediate table where the raw data is stored. At that time, the data will be manipulated and expanded. Using an update policy (think of this as a function that will be applied to all new data), the expanded data will then be ingested into the final table that will have the same schema as the original one in Log Analytics/Sentinel. We will set the retention on the raw table to 0 days, because we want the data to be stored only in the properly formatted table and deleted in the raw data table as soon as it’s transformed. Detailed steps for this step can be found [here](https://docs.microsoft.com/azure/data-explorer/ingest-data-no-code?tabs=diagnostic-metrics#create-the-target-tables).    
 	
-	C. **Create update policy** and attach it to raw records table. In this step we create a function (update policy) and we attach it to the destination table so the data is transformed at ingestion time. See details [here](https://docs.microsoft.com/azure/data-explorer/ingest-data-no-code?tabs=diagnostic-metrics#create-the-update-policy-for-metric-and-log-data). This step is only needed if you want to have the tables with the same schema and format as in Log Analytics  
+	C. **Create table mapping** Because the data format is json, data mapping is required. This defines how records will land in the raw events table as they come from Event Hub. Details for this step can be found [here](https://docs.microsoft.com/azure/data-explorer/ingest-data-no-code?tabs=diagnostic-metrics#create-table-mappings).    
 	
-	D.  **Modify retention for target table** The default retention policy is 100 years, which might be too much in most cases. With the following command we will modify the retention policy to be 1 year:    
+	D. **Create update policy** and attach it to raw records table. In this step we create a function (update policy) and we attach it to the destination table so the data is transformed at ingestion time. See details [here](https://docs.microsoft.com/azure/data-explorer/ingest-data-no-code?tabs=diagnostic-metrics#create-the-update-policy-for-metric-and-log-data). This step is only needed if you want to have the tables with the same schema and format as in Log Analytics  
+	
+	E.  **Modify retention for target table** The default retention policy is 100 years, which might be too much in most cases. With the following command we will modify the retention policy to be 1 year:    
 	```.alter-merge table <tableName> policy retention softdelete = 365d recoverability = disabled  ```  
 
 2.	To stream Log Analytics logs to Event Hub and then ingest them into ADX, you need to create EventHub Namespaces, if you have more than 10 tables, you need to create more EventHub Namespaces for every 10 tables.  
@@ -70,14 +72,15 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 3. Script verifies whether tables from Log Analytics or User Input is supported by “Data Export” feature, for all the un-supported tables it will skip  and continue with the next steps. To see all the supported tables navigate to [here](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)
 
 4. Script will perform the following steps in ADX  
-	A. **Create target tables** The raw data is ingested first to an intermediate table where the raw data is stored. At that time, the data will be manipulated and expanded. Using an update policy (think of this as a function that will be applied to all new data), the expanded data will then be ingested into the final table that will have the same schema as the original one in Log Analytics/Sentinel. We will set the retention on the raw table to 0 days, because we want the data to be stored only in the properly formatted table and deleted in the raw data table as soon as it’s transformed   
+	A. **Create target table** ```<<TableName>>```
+		
+	B.	**Create raw table** ```<<TableName>>Raw```
 	
-	B. **Create table mapping** Because the data format is json, data mapping is required. This defines how records will land in the raw events table as they come from Event Hub  
+	C. **Create table mapping** ```<<TableName>>RawMapping```
 	
-	C. **Create update policy** and attach it to raw records table. In this step we create a function (update policy) and we attach it to the destination table so the data is transformed at ingestion time. This step is only needed if you want to have the tables with the same schema and format as in Log Analytics  
+	D. **Create update policy** 
 	
-	D.  **Modify retention for target table** The default retention policy is 100 years, which might be too much in most cases. With the following command we will modify the retention policy to be 1 year:    
-	```.alter-merge table <tableName> policy retention softdelete = 365d recoverability = disabled  ```  
+	E.  **Modify retention for target table**
 	
 5. Create EventHub Namespaces. In this step, script will create EventHub Namespaces by dividing the total number of tables by 10  
 	Note: Event Hub Standard tier has limitation of having 10 EventHub Topics  
@@ -90,7 +93,7 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 	
 7. Create data connection between EventHub and raw data table in ADX. In this step, script will iterate all the EventHub Namespaces and retrieve EventHub Topics and creates ADX Data connection rules specifying the target raw table, mapping table and EventHub Topic.
 
-8. Creates detailed log file to verify - if there is any error
+8. At the end of the script, it will generate a log file with every action that script has performed to identify performance or configuration issues and to gain insights to perform root cause analysis when failures occur.  
 
 
 ## Download the Tool Running PowerShell Script
