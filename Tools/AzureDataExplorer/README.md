@@ -97,7 +97,7 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 
 1. Download the Tool 
 
-   <a id="ADX" href="https://raw.githubusercontent.com/github-username/project/master/filename">Download Tool</a>  
+   <a id="ADX" href="https://aka.ms/AzSentinelADX">IntegrateADX</a>  
  
 2. Extract the folder and open "Migrate-LA-to-ADX.ps1" either in Visual Studio Code or PowerShell  
 
