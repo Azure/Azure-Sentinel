@@ -8,11 +8,11 @@ Also it automatically add this information to the incident as comments and chang
 Prerequisite:
 
 This logic app use Oauth2 to authenticate against MDATP API:
-https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/apis-intro 
+https://docs.microsoft.com/windows/security/threat-protection/microsoft-defender-atp/apis-intro 
 
 Please follow this documentation to create AAD app and give the Permissions based on this article:
 
-https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/get-all-vulnerabilities#permissions
+https://docs.microsoft.com/windows/security/threat-protection/microsoft-defender-atp/get-all-vulnerabilities#permissions
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FEnrich-SentinelIncident-MDATPTVM%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FEnrich-SentinelIncident-MDATPTVM%2Fazuredeploy.json)

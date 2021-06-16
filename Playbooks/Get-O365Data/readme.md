@@ -1,12 +1,12 @@
 # Ingest Office 365 Management Activity API Data
 Author: Pete Bryan
 
-This playbook ingests Audit.General events from the Office 365 Management Activity API (https://docs.microsoft.com/en-us/office/office-365-management-api/office-365-management-activity-api-reference) and writes them to a custom log table called O365API_CL. 
+This playbook ingests Audit.General events from the Office 365 Management Activity API (https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-reference) and writes them to a custom log table called O365API_CL. 
 
 There are a number of pre-configuration steps required before deploying the Logic App.
 
 ## Enable Office 365 Audit Logging
-In order to collected Audit events from an Office 365 subscription you first need to enable audit logging. There are several ways to do this: https://docs.microsoft.com/en-us/microsoft-365/compliance/turn-audit-log-search-on-or-off?view=o365-worldwide
+In order to collected Audit events from an Office 365 subscription you first need to enable audit logging. There are several ways to do this: https://docs.microsoft.com/microsoft-365/compliance/turn-audit-log-search-on-or-off?view=o365-worldwide
 
 ## Register an Azure AD App
 1. Go to Azure Active Directory / App Registrations
