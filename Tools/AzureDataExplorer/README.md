@@ -115,9 +115,21 @@ This PowerShell script automated the above 5 steps described in Challenges secti
 	d.	ADX Resource Group   
 	e.	ADX DB Name  
 
+4. Script prompts the user to authenticate with his credentials, once the user is authenticated it prompts the following optios  
+	a. Retrieve all the Tables from the given Workspace and create Raw, Mappings table in ADX (or)  
+	b. Enter selected tables from the given Workspace  
 
+5. Script currently creates Raw and Mapping tables for [supported tables](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=rest#supported-tables) only. All the supported tabels are currently listed in ADXSupportedTables.json - This json will be updated as support for additional tables is added  
 
+6. Script creates Standard EventHub Namespaces programmatically for each 10 tables
 
+7. Creates Log Analytics Data Export rule by taking 10 tables per rule for one Standard EventHub Namespace
+
+8. After successful creation of "Data Export" rule - Script again prompts asking user whether he can wait 30 min until EventHub Topics for all the selected tables gets created in EventHub Namespace  
+	a. If Yes, Script will proceed to continue to create "Data connection" rules after 30 min sleep time  
+	b. If No, script will exit, user has to create "Data Connection" for each table in Azure Data Explorer by selecting appropriate Raw, Mapping Tables and EventHub Topic  
+
+9. Create will generate log file ```ADXMigration_<<TimeStamp>>``` for detailed execution ouput to verify what went wrong - if there are any errors  
 
 
 
