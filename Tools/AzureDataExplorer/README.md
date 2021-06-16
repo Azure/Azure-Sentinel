@@ -109,7 +109,7 @@ The high-level architecture would look like this:
 	b.	LA supports 10 Data Export rules targeting 10 different EventHub Namespaces i.e., you can export 100 tables using 10 Data Export rules  
 	
 9. After successful creation of "Data Export" rule - Script again prompts asking user whether he can wait 30 min until EventHub Topics for all the selected tables gets created in EventHub Namespace  
-	a. If Yes, Script will proceed to continue to create "Data connection" rules after 30 min sleep time by specifying the target raw table ```<<TableName>>Raw```, mapping table ```<<TableName>>RawMapping``` and EventHub Topic ```am-<<TableName>>```
+	a. If Yes, Script will proceed to continue to create "Data connection" rules after 30 min sleep time by specifying the target raw table ```<<TableName>>Raw```, mapping table ```<<TableName>>RawMapping``` and EventHub Topic ```am-<<TableName>>```  
 	b. If No, script will exit, user has to create "Data Connection" for each table in Azure Data Explorer by selecting appropriate Raw, Mapping Tables and EventHub Topic  
 
 10. At the end of the script, it will generate a log file ```ADXMigration_<<TimeStamp>>``` with every action that script has performed to identify performance or configuration issues and to gain insights to perform root cause analysis when failures occur.  
