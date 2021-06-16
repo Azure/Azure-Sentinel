@@ -60,8 +60,6 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
     throw "QualysVM: Invalid Log Analytics Uri."
 }
 
-
-
 #check if the filterParameters are allowed or not
 $allParameters = ""
 $notAllowedParams = @("action","vm_processed_after", "vm_processed_before")
