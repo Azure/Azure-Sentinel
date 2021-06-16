@@ -1,4 +1,4 @@
-# Cisco Umbrella DNS Normalization Parser
+# sysmon log events, event_id=1 Process Normalization Parser
 
 This template deploys a ASim Process schema parser for sysmon logs - event number 1 
 
