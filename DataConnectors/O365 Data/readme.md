@@ -105,9 +105,7 @@ Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.offic
 Thanks to the published ARM template the deployment of the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) is done with just a few clicks. 
 1. Click to **Deploy the template / Deploy to Azure** below.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json)
 
 2. Now it is time to use the noted details from previous steps.  
 - Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Funtion App.  
