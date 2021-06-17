@@ -1,8 +1,8 @@
 // Title:           Aruba ClearPass Parser
 // Author:          Microsoft
-// Version:         1.0
-// Last Updated:    12/01/2020
-// Comment:         Initial Release
+// Version:         1.1
+// Last Updated:    01/23/2020
+// Comment:         Added Supported for Version 6.6+
 //  
 // DESCRIPTION:
 // This parser takes raw Aruba ClearPass logs from a Syslog (CEF) stream and parses the logs into a normalized schema.
@@ -25,11 +25,19 @@
 // 
 // Dec 01 2017 15:28:40.540 IST 10.17.4.206 CEF:0Aruba Networks|ClearPass|6.5.0.68878|1604-1-0|Session Logs|0|RADIUS.Acct-Calling-Station-Id=00:32:b6:2c:28:95 RADIUS.Acct-Framed-IP-Address=192.167.230.129 RADIUS.Auth-Source=AD:10.17.4.130 RADIUS.Acct-Timestamp=2014-12-01 15:26:43+05:30 RADIUS.Auth-Method=PAP RADIUS.Acct-Service-Name=Authenticate-Only RADIUS.Acct-Session-Time=3155 TimestampFormat=MMM dd yyyy HH:mm:ss.SSS zzz RADIUS.Acct-NAS-Port=0 RADIUS.Acct-Session-Id=R00001316-01-547c3b5a RADIUS.Acct-NAS-Port-Type=Wireless-802.11 RADIUS.Acct-Output-Octets=578470212 RADIUS.Acct-Username=A_user2 RADIUS.Acct-NAS-IP-Address=10.17.6.124 RADIUS.Acct-Input-Octets=786315664 
 //
+// <143>Aug 10 2016 15:18:04 172.20.21.100 CEF:0|Aruba Networks|ClearPass|6.6.1.84176|2006|Guest Access|1|duser=bob dmac=784b877a4155 dpriv=[User Authenticated] cs2=UNKNOWN cs2Label=System Posture Token outcome=[Allow Access Profile] rt=Aug 10 2016 15:16:51 dvc=172.20.21.100 cat=Session Logs
 //
-let LogHeader = CommonSecurityLog
-| where DeviceVendor == "Aruba Networks" and DeviceProduct == "ClearPass";
+let LogHeader =
+CommonSecurityLog
+| where DeviceVendor == "Aruba Networks" and DeviceProduct == "ClearPass"
+| extend Category = extract(@'cat=([^;]+)(\;|$)',1, AdditionalExtensions),
+        Outcome = extract(@'outcome=([^;]+)\;',1, AdditionalExtensions)
+| project-rename DvcIpAddr = DeviceAddress,
+                 DvcVersion = DeviceVersion,
+                 SrcIpAddr = SourceIP;
 let InsightLogs = LogHeader
-| where Activity == "Insight Logs"
+| where Activity == "Insight Logs" or Category == "Insight Logs"
+// Version 6.5
 | extend UserName = extract(@'Auth.Username=([^;]+)\;',1, AdditionalExtensions),
         AuthorizationSources = extract(@'Auth.Authorization-Sources=([^;]+)\;',1, AdditionalExtensions),
         NetworkProtocol = extract(@'Auth.Protocol=([^;]+)\;',1, AdditionalExtensions),
@@ -48,17 +56,26 @@ let InsightLogs = LogHeader
         Unhealthy = extract(@'Auth.Unhealthy=([^;]+)\;',1, AdditionalExtensions),
         NasIpAddr = extract(@'Auth.NAS-IP-Address=([^;]+)\;',1, AdditionalExtensions),
         CalledStationId = extract(@'Auth.CalledStationId=([^;]+)\;',1, AdditionalExtensions),
-        NasIdentifier = extract(@'Auth.NAS-Identifier=([^;]+)\;',1, AdditionalExtensions); 
+        NasIdentifier = extract(@'Auth.NAS-Identifier=([^;]+)\;',1, AdditionalExtensions)
+// Version 6.6+
+| extend EndpointStatus = extract(@'ArubaClearpassEndpointStatus=([^;]+)\;',1, AdditionalExtensions),
+         EndpointConflict = extract(@'ArubaClearpassEndpointConflict=([^;]+)\;',1, AdditionalExtensions),
+         EndpointDvcCategory = iif(DeviceCustomString3Label == "Endpoint.Device-Category", DeviceCustomString3, ""),
+         EndpointDvcFamily = iif(DeviceCustomString4Label == "Endpoint.Device-Family", DeviceCustomString4, ""),
+         EndpointDvcName = iif(DeviceCustomString5Label == "Endpoint.Device-Name", DeviceCustomString5, ""),
+         EndpointMacVendor = iif(DeviceCustomString6Label == "Endpoint.MAC-Vendor", DeviceCustomString6, ""),        
+         EndpointAddedDate= iif(DeviceCustomDate1Label == "Endpoint.Added-At", todatetime(DeviceCustomDate1), todatetime(""))
+| extend Category = iif(isempty(Category), "Insight Logs", Category); 
 let AuditRecords = LogHeader
-| where Activity == "Audit Records"
+| where Activity == "Audit Records" or Category == "Audit Records"
 | extend TimestampFormat = extract(@'timeFormat=([^;]+)\;',1, AdditionalExtensions),
-        UserName = extract(@'usrName=([^;]+)(\;|$)',1, AdditionalExtensions),
-        Category = extract(@'cat=([^;]+)\;',1, AdditionalExtensions);
+        UserName = extract(@'usrName=([^;]+)(\;|$)',1, AdditionalExtensions)
+| extend Category = iif(isempty(Category), "Audit Records", Category);
 let SessionLogs = LogHeader
-| where Activity == "Session Logs"
+| where Activity == "Session Logs" or Category == "Session Logs"
 | extend Timestamp = extract(@'RADIUS.Acct-Timestamp=([^;]+)\;',1, AdditionalExtensions),
         CallingStationId = extract(@'RADIUS.Acct-Calling-Station-Id=([^;]+)\;',1, AdditionalExtensions),
-        InpuOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\;',1, AdditionalExtensions),
+        InputOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\;',1, AdditionalExtensions),
         TimestampFormat = extract(@'TimestampFormat=([^;]+)\;',1, AdditionalExtensions),
         SessionTime = extract(@'RADIUS.Acct-Session-Time=([^;]+)\;',1, AdditionalExtensions),
         FramedIpAddr = extract(@'RADIUS.Acct-Framed-IP-Address=([^;]+)\;',1, AdditionalExtensions),
@@ -70,12 +87,17 @@ let SessionLogs = LogHeader
         NasPortType = extract(@'RADIUS.Acct-NAS-Port-Type=([^;]+)\;',1, AdditionalExtensions),
         OutputOctets = extract(@'RADIUS.Acct-Output-Octets=([^;]+)\;',1, AdditionalExtensions),
         UserName = extract(@'RADIUS.Acct-Username=([^;]+)\;',1, AdditionalExtensions),
-        NasIpAddr = extract(@'RADIUS.Acct-NAS-IP-Address=([^;]+)\;',1, AdditionalExtensions);
+        NasIpAddr = extract(@'RADIUS.Acct-NAS-IP-Address=([^;]+)\;',1, AdditionalExtensions)
+| project-rename DstServiceName = DestinationServiceName,
+                 DstUserPriviledges = DestinationUserPrivileges,
+                 DstUserName = DestinationUserName,
+                 DstMacAddr = DestinationMACAddress
+| extend Category = iif(isempty(Category), "Sessions Logs", Category);
 let SystemLogs = LogHeader
-| where Activity == "System Logs"
+| where Activity == "System Logs" or Category == "ClearPass System Events"
 | extend Description = extract(@'description=([^;]+)\;',1, AdditionalExtensions),
          Action = extract(@'daction=([^;]+)\;',1, AdditionalExtensions),
          InputOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\;',1, AdditionalExtensions),
-         TimeFormat = extract(@'devTimeFormat=([^;]+)\;',1, AdditionalExtensions);
+         TimeFormat = extract(@'devTimeFormat=([^;]+)\;',1, AdditionalExtensions)
+| extend Category = iif(isempty(Category), "System Logs", "System Logs");
 union SessionLogs, InsightLogs, AuditRecords, SystemLogs
-

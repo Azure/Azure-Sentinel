@@ -1,0 +1,64 @@
+id: 20be967c-4923-4c4b-8e1d-e1c95d537dc3
+name: Azure DevOps - Internal Upstream Package Feed Added.
+description: |
+  'An attacker aiming to insert malicious code into a build process could look to introduce compromised upstream packages into the build process. Looking at internal packages can have a significant false positive rate compared to looking at external feeds so running this as a hunting query at least initially is advised. If an environment has low number of events it can be upgraded to a detection.'
+requiredDataConnectors: []
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1195
+query: |
+  // Add any known allowed sources and source locations to the filter below.
+  let allowed_sources = dynamic([]);
+  let allowed_locations = dynamic([]);
+  let lookback = 30d;
+  let timeframe = 3d;
+  let known_packages = (
+  AzureDevOpsAuditing
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  // Look for feeds created or modified at either the organization or project level
+  | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
+  | where Details has "UpstreamSources, added"
+  | extend UpstreamsAdded = Data.UpstreamsAdded
+  // As multiple feeds may be added expand these out
+  | mv-expand UpstreamsAdded
+  // Only focus on internal feeds
+  | where UpstreamsAdded.UpstreamSourceType =~ "internal"
+  | extend SourceLocation = tostring(UpstreamsAdded.Location)
+  | summarize by SourceLocation);
+  // Look for internal feeds being added from a new location
+  AzureDevOpsAuditing
+  | where TimeGenerated > ago(timeframe)
+  | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
+  | where Details has "UpstreamSources, added"
+  | extend FeedName = tostring(Data.FeedName)
+  | extend FeedId = tostring(Data.FeedId)
+  | extend UpstreamsAdded = Data.UpstreamsAdded
+  // As multiple feeds may be added expand these out
+  | mv-expand UpstreamsAdded
+  // Only focus on internal feeds
+  | where UpstreamsAdded.UpstreamSourceType =~ "internal"
+  | extend SourceLocation = tostring(UpstreamsAdded.Location)
+  | extend SourceName = tostring(UpstreamsAdded.Name)
+  // Exclude sources and locations in the allow list
+  | where SourceLocation !in (known_packages)
+  | where SourceLocation !in (allowed_locations) and SourceName !in (allowed_sources)
+  | extend SourceProtocol = tostring(UpstreamsAdded.Protocol)
+  | extend SourceStatus = tostring(UpstreamsAdded.Status)
+  | project-reorder TimeGenerated, OperationName, ScopeDisplayName, ProjectName, FeedName, SourceName, SourceLocation, SourceProtocol, ActorUPN, UserAgent, IpAddress
+  // See if there are details of who created this feed and when to add context
+  | join kind=leftouter (AzureDevOpsAuditing
+  | where TimeGenerated > ago(lookback)
+  | where OperationName matches regex "Artifacts.Feed.(Org|Project).Create"
+  | extend FeedId = tostring(Data.FeedId)
+  | project FeedId, FeedCreatedBy=ActorUPN, TimeCreated=TimeGenerated) on FeedId, $left.ActorUPN==$right.FeedCreatedBy
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

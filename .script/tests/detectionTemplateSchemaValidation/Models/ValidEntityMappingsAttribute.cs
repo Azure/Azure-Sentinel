@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation
@@ -45,10 +46,19 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                     return new ValidationResult($"Invalid length of '{entityMapping.FieldMappings.Count}' for '{nameof(EntityMapping.FieldMappings)}'. '{nameof(EntityMapping.FieldMappings)}' length should be between '{_fieldMappingsMinLength}' and '{_fieldMappingsMaxLength}'");
                 }
 
+                var entityType = entityMapping.EntityType;
+                var requiredIdentifiers = EntityMappingIdentifiers.EntityIdentifiersMap[entityType].RequiredIdentifiers;
+                var validIdentifiers = EntityMappingIdentifiers.EntityIdentifiersMap[entityType].Identifiers;
                 var usedIdentifiers = new HashSet<string>();
 
                 foreach (FieldMapping fieldMapping in entityMapping.FieldMappings)
                 {
+                    // Check for invalid identifier
+                    if (!validIdentifiers.Contains(fieldMapping.Identifier))
+                    {
+                        return new ValidationResult($"Invalid identifier '{fieldMapping.Identifier}' for entity type '{entityType}' encountered. Valid identifiers are: [{string.Join(", ", validIdentifiers)}]");
+                    }
+
                     // Check for duplicate identifier
                     if (usedIdentifiers.Contains(fieldMapping.Identifier))
                     {
@@ -67,6 +77,14 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                     }
 
                     usedIdentifiers.Add(fieldMapping.Identifier);
+                }
+
+                bool hasRequiredFields = requiredIdentifiers.Any(identifiers => identifiers.All(identifier => usedIdentifiers.Contains(identifier)));
+
+                if (!hasRequiredFields)
+                {
+                    string requiredIdentifiersRepresentation = string.Join("; ", requiredIdentifiers.Select(identifiers => string.Join(", ", identifiers)));
+                    return new ValidationResult($"Missing required identifiers in '{fieldName}' for type '{entityType}'. Required identifiers are one of the following combinations: {requiredIdentifiersRepresentation}");
                 }
             }
 

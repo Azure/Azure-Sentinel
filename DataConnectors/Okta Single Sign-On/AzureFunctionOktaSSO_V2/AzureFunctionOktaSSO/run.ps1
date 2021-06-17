@@ -52,6 +52,7 @@ $TotalRecordCount = 0
 $apiToken = $env:apiToken
 $uri = $env:uri
 $StartDate = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddT00:00:00.000Z") # set default fallback start time to 0:00 UTC today
+$logAnalyticsUri = $env:logAnalyticsUri
 
 # Define the Log Analytics Workspace ID and Key and Custom Table Name
 $customerId = $env:workspaceId
@@ -59,6 +60,17 @@ $sharedKey =  $env:workspaceKey
 $LogType = "Okta"
 $TimeStampField = "published"
 
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "OKTASSO: Invalid Log Analytics Uri."
+}
 
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
@@ -144,14 +156,15 @@ do {
             -method $method `
             -contentType $contentType `
             -resource $resource
-        $LAuri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+
+        $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
             "x-ms-date" = $rfc1123date;
             "time-generated-field" = $TimeStampField
         }
-        $result = Invoke-WebRequest -Uri $LAuri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
+        $result = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
         #update State table for next time we execute function
         #store details in function storage table to retrieve next time function runs 
         $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting

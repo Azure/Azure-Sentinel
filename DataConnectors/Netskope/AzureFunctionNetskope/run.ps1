@@ -22,6 +22,8 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 
+$logAnalyticsUri = $env:logAnalyticsUri
+
 # Function to contruct the Netskope Uri for alerts, event types, and to accomodate for pagination
 function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     if("$logtype" -eq "alert") {
@@ -104,6 +106,18 @@ function Netskope () {
 
     $cwd = (Get-Location).Drive.Root
     $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
+
+    if ([string]::IsNullOrEmpty($logAnalyticsUri))
+    {
+        $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+    }
+    
+    # Returning if the Log Analytics Uri is in incorrect format.
+    # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+    if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+    {
+        throw "Netskope: Invalid Log Analytics Uri."
+    }
             
     foreach($logtype in $apitypes){
 
@@ -186,14 +200,15 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     $rfc1123date = [DateTime]::UtcNow.ToString("r");
     $contentLength = $body.Length;
     $signature = Build-Signature -customerId $customerId -sharedKey $sharedKey -date $rfc1123date -contentLength $contentLength -method $method -contentType $contentType -resource $resource;
-    $uri = "https://$($customerId).ods.opinsights.azure.com$($resource)?api-version=2016-04-01";
+    $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
+
     $headers = @{
         "Authorization" = $signature;
         "Log-Type" = $logType;
         "x-ms-date" = $rfc1123date;
         "time-generated-field" = $TimeStampField;
     };
-    $response = Invoke-WebRequest -Body $body -Uri $uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
+    $response = Invoke-WebRequest -Body $body -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
     return $response.StatusCode
 }
 

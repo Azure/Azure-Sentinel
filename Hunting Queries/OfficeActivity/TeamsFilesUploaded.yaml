@@ -1,12 +1,13 @@
 id: 90e198a9-efb6-4719-ad89-81b8e93633a7
 name: Files uploaded to teams and access summary
 description: |
-  'Provides a summary of files uploaded to teams chats and extracts 
-  the users and IP addresses that have accessed them.'
+  'This hunting queries identifies files uploaded to SharePoint via a Teams chat and
+  summarizes users and IP addresses that have accessed these files. This allows for 
+  identification of anomolous file sharing patterns.'
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
-      - OfficeActivity
+      - OfficeActivity (SharePoint)
 tactics:
   - InitialAccess
   - Exfiltration
@@ -17,18 +18,23 @@ relevantTechniques:
 query: |
 
   OfficeActivity 
-  | where RecordType =~ "SharePointFileOperation" 
-  | where UserId != "app@sharepoint"
-  | where SourceRelativeUrl contains "Microsoft Teams Chat Files" 
+  | where RecordType =~ "SharePointFileOperation"
   | where Operation =~ "FileUploaded" 
+  | where UserId != "app@sharepoint"
+  | where SourceRelativeUrl has "Microsoft Teams Chat Files" 
   | join kind= leftouter ( 
      OfficeActivity 
       | where RecordType =~ "SharePointFileOperation"
-      | where UserId != "app@sharepoint"
-      | where SourceRelativeUrl contains "Microsoft Teams Chat Files" 
       | where Operation =~ "FileDownloaded" or Operation =~ "FileAccessed" 
+      | where UserId != "app@sharepoint"
+      | where SourceRelativeUrl has "Microsoft Teams Chat Files" 
   ) on OfficeObjectId 
   | extend userBag = pack(UserId1, ClientIP1) 
   | summarize makeset(UserId1), make_bag(userBag) by TimeGenerated, UserId, OfficeObjectId, SourceFileName 
   | extend NumberUsers = array_length(bag_keys(bag_userBag))
   | project timestamp=TimeGenerated, AccountCustomEntity=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, NumberOfUsersAccessed=NumberUsers
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

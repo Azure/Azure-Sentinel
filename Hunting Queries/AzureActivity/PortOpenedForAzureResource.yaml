@@ -15,12 +15,9 @@ relevantTechniques:
   - T1496
 query: |
 
-  let timeframe = 7d;
   AzureActivity
-  | where TimeGenerated >= ago(timeframe)
-  | where OperationName has_any ("Create", "Update") and OperationName has_any ("Ip", "Security Rule")
   // Choosing Accepted here because it has the Rule Attributes included
-  | where ActivityStatus == "Accepted" 
+  | where ActivityStatusValue == "Accepted" 
   // If there is publicIP info, include it
   | extend publicIPAddress_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).ipAddress) 
   | extend publicIPAddressVersion_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAddressVersion) 
@@ -32,6 +29,16 @@ query: |
   | extend direction = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).direction) 
   | extend protocol = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).protocol) 
   | extend sourcePortRange = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).sourcePortRange) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ResourceIds = makeset(ResourceId) by Caller, CallerIpAddress, Resource, ResourceGroup, 
-  ActivityStatus, ActivitySubstatus, SubscriptionId, access, description, destinationPortRange, direction, protocol, sourcePortRange  
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResourceIds = makeset(ResourceId) by Caller, CallerIpAddress, Resource, ResourceGroup, 
+  ActivityStatusValue, ActivitySubstatus, SubscriptionId, access, description, destinationPortRange, direction, protocol, sourcePortRange  
+  | extend timestamp = StartTime, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

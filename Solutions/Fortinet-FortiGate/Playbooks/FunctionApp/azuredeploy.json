@@ -1,0 +1,195 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Function App Name": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Function App name is global uniqueness should not contain any special symbol"
+      }
+    },
+    "Secret Identifier of Keyvalut": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Enter API key for all Azure function."
+      }
+    },
+    "service_EndPoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Enter endpoint URL"
+      }
+    },
+    "UserIdentifier": {
+      "type": "string",
+      "defaultValue": "fortinetuseridentity",
+      "metadata": {
+        "description": "User Identifer"
+      }
+    }
+  },
+  "variables": {
+    "functionAppName": "[parameters('Function App Name')]",
+    "hostingPlanName": "[parameters('Function App Name')]",
+    "applicationInsightsName": "[parameters('Function App Name')]",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+    "StorageAccount": "Standard_LRS",
+    "functionWorkerRuntime": "dotnet",
+    "SecretIdentifierofKeyvalut": "[parameters('Secret Identifier of Keyvalut')]",
+    "location": "[resourceGroup().location]",
+    "appInsightsLocation": "[resourceGroup().location]",
+    "Endpoint": "[parameters('service_EndPoint')]",
+    "functionName": "Fortinet-GetEntityDetails",
+    "UserIdentifier": "[parameters('UserIdentifier')]"
+
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[variables('location')]",
+      "sku": {
+        "name": "[variables('StorageAccount')]"
+      },
+      "kind": "Storage"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[variables('location')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "properties": {
+        "name": "[variables('hostingPlanName')]",
+        "computeMode": "Dynamic"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[variables('location')]",
+      "kind": "functionapp",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~2"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~10"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "[variables('functionWorkerRuntime')]"
+            },
+            {
+              "name": "Authorization",
+              "value": "[concat('@','Microsoft.KeyVault(SecretUri=',variables('SecretIdentifierofKeyvalut'),')')]"
+
+            },
+            {
+              "name": "EndpointURL",
+              "value": "[variables('Endpoint')]"
+            },
+            {
+              "name": "BaseURL",
+              "value": "/api/v2/cmdb/firewall/"
+            }
+          ]
+        },
+        "cors": {
+          "allowedOrigins": [
+            "https://functions.azure.com",
+            "https://functions-staging.azure.com",
+            "https://functions-next.azure.com"
+          ],
+          "supportCredentials": false
+        }
+      }
+    },
+    {
+      "type": "microsoft.insights/components",
+      "apiVersion": "2020-02-02-preview",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[variables('appInsightsLocation')]",
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+      },
+      "properties": {
+        "ApplicationId": "[variables('applicationInsightsName')]",
+        "Request_Source": "IbizaWebAppExtensionCreate"
+      }
+    },
+    {
+      "apiVersion": "2019-08-01",
+      "name": "[concat(variables('FunctionappName'),'/', variables('functionName'))]",
+      "type": "Microsoft.Web/sites/functions",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('UserIdentifier'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ],
+      "properties": {
+        "config": {
+          "bindings": [
+            {
+              "name": "req",
+              "webHookType": "genericJson",
+              "direction": "in",
+              "type": "httpTrigger",
+              "authLevel": "anonymous"
+            },
+            {
+              "name": "res",
+              "direction": "out",
+              "type": "http"
+            }
+          ]
+        },
+        "files": {
+          "run.csx": "#r \"Newtonsoft.Json\"\r\n #r \"System.Net.Http\"\r\n using System.Net;\r\n using Microsoft.AspNetCore.Mvc;\r\n using Microsoft.Extensions.Primitives;\r\n using Newtonsoft.Json;\r\n using Newtonsoft.Json.Linq;\r\n public static async Task<IActionResult> Run(HttpRequest req, ILogger log)\r\n{\r\nlog.LogInformation(\"HTTP request recived.\");\r\n var entity = req.Query[\"entity\"];\r\nvar filter = req.Query[\"filter\"];\r\nvar key = Environment.GetEnvironmentVariable(\"Authorization\", EnvironmentVariableTarget.Process);\r\nvar endpointURL = Environment.GetEnvironmentVariable(\"EndpointURL\", EnvironmentVariableTarget.Process);\r\nvar baseURL = Environment.GetEnvironmentVariable(\"BaseURL\", EnvironmentVariableTarget.Process);\r\nJToken results = null;\r\nlog.LogInformation(filter);\r\nlog.LogInformation(entity);\r\nvar httpclient = new HttpClient();\r\nvar httpRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(endpointURL + baseURL + entity + \"?\" + filter ));\r\nlog.LogInformation(httpRequest.RequestUri.ToString());\r\nhttpRequest.Headers.Add(\"Authorization\", key.ToString());\r\nvar response = httpclient.SendAsync(httpRequest).Result;\r\nvar responseJson = response.Content.ReadAsStringAsync().Result;\r\nif (responseJson != null)\r\n{\r\nJObject json = new JObject();\r\ndynamic obj = JsonConvert.DeserializeObject(responseJson);\r\njson = (JObject)obj;\r\nresults = json.SelectToken(\"results\");\r\nreturn new OkObjectResult(results);\r\n}\r\nreturn new OkObjectResult(results);\r\n}\r\n"
+        }
+      }
+    }
+  ]
+}

@@ -9,6 +9,8 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 
+$logAnalyticsUri = $env:logAnalyticsUri
+
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 
@@ -40,6 +42,43 @@ $subid = $env:subId
 $bplastLog = $env:BPlastLogTime
 $apdlastLog = $env:APDlastLogTime
 $aprlastLog = $env:APRlastLogTime
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "Agari: Invalid Log Analytics Uri."
+}
+
+# Set boolean values based on environment variables
+if ($bpEnabled -Match "True"){
+    $bpEnabled = $true
+} else {
+    $bpEnabled = $false 
+}
+
+if ($apdEnabled -Match  "True"){
+    $apdEnabled = $true
+} else {
+    $apdEnabled = $false 
+}
+
+if ($aprEnabled -Match  "True"){
+    $aprEnabled = $true
+} else {
+    $aprEnabled = $false
+}
+
+if ($sgEnabled -Match "True"){
+    $sgEnabled = $true
+} else {
+    $sgEnabled = $false
+}
 
 # Function to build the Authorization signature for the Log Analytics Data Connector API
 Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
@@ -78,7 +117,8 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+
+    $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
     $headers = @{
         "Authorization" = $signature;
@@ -87,7 +127,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "time-generated-field" = $TimeStampField;
     }
 
-    $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     return $response.StatusCode
 }
 
