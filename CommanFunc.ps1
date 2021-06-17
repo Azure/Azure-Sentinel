@@ -12,7 +12,7 @@ Write-Host("URI : $uri")
 Write-Host("header :$($headers)")
 Write-Host("$body")
 
-$response = Invoke-WebRequest -Uri $uri -Method 'GET' -Headers $headers -Body $body -UseBasicParsing
+$response = Invoke-WebRequest -Uri $uri -Method 'GET' -Headers $headers -UseBasicParsing
 
 $responseObj = (ConvertFrom-Json $response.Content)
 $responseCount = $responseObj.count
