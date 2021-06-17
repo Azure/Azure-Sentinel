@@ -1,5 +1,5 @@
 Parser:
-  Title: Windows event log - event id 4688
+  Title: ASIM Security Events Process Creation Parser
   Version: '0.1'
   LastUpdated: May 30, 2021
 Product:
@@ -12,51 +12,85 @@ References:
   Link: https://aka.ms/AzSentinelProcessDoc
 - Title: ASIM
   Link: https:/aka.ms/AzSentinelNormalization
-Description: ASIM process craetion parser for Security Events (event number 4688)
+Description: ASIM process creation parser for Security Events (event number 4688)
 ParserName: vimProcessCreateMicrosftSecurityEvents
 ParserQuery: | 
-              let ProcessEvents=(){
-              SecurityEvent    
+              let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)
+                [
+                  "S-1-16-0", "0x00000000", "SECURITY_MANDATORY_UNTRUSTED_RID", "Untrusted",
+                  "S-1-16-4096", "0x00001000", "SECURITY_MANDATORY_LOW_RID", "Low integrity",
+                  "S-1-16-8192", "0x00002000", "SECURITY_MANDATORY_MEDIUM_RID", "Medium integrity",
+                  "S-1-16-8448", "0x00002100", "SECURITY_MANDATORY_MEDIUM_PLUS_RID", "Medium high integrity",
+                  "S-1-16-12288", "0X00003000", "SECURITY_MANDATORY_HIGH_RID", "High integrity",
+                  "S-1-16-16384", "0x00004000", "SECURITY_MANDATORY_SYSTEM_RID", "System integrity",
+                  "S-1-16-20480", "0x00005000", "SECURITY_MANDATORY_PROTECTED_PROCESS_RID", "Protected process"
+                ];
+             let ProcessEvents=(){
+              SecurityEvent
+              // -- Filter
               | where EventID == 4688
-              |project-rename
-              //***** Mandatory Fields - name change *****
-                  EventProduct = EventSourceName,
-                  DvcHostName = Computer,
-              //***** Optional Fields - name change ******
-                  EventOriginalUid = EventOriginId, 
-                  ActorUserDomain = SubjectDomainName,
-                  ActorUserName = SubjectUserName,
-                  ActorUserId = SubjectUserSid,
-                  ActingProcessFileName = ParentProcessName,
-                  ActorAccount = SubjectAccount,
-                  DvcId = SourceComputerId,
-                  TargetUserDomain = TargetDomainName,
-                  TargetProcessFileName = Process,
-                  TargetProcessFilePath = NewProcessName,
-                  TargetProcessCommandLine = CommandLine,
-                //TargetProcessGuid = ProcessGuid,
-                  TargetProcessTokenElevation = TokenElevationType
+
+              // -- Map
               | extend
-              //***** Mandatory Fields - calculating value ******
+                // Event
                   EventCount = int(1),
                   EventVendor = "Microsoft",
-                  EventSchemaVersion = "0.0.1",
+                  EventProduct = "Security Events",
+                  EventSchemaVersion = "0.1.0",
                   EventStartTime = todatetime(TimeGenerated),
                   EventEndTime = todatetime(TimeGenerated),
                   EventType = "ProcessCreated",
+                  EventOritingalType = EventID,
+                  EventOriginalUid = EventOriginId, 
+
+                // Device
+                  DvcId = SourceComputerId,
+                  DvcHostname = Computer,
                   DvcOs = "Windows",
-                  TargetUserIdType = "SID",
+                  Dvc = DvcHostname,
+
+                // Users
+                  ActorUserId = SubjectUserSid,
                   ActorUserIdType = "SID",
-                  TargetProcessId = toint(NewProcessId),
-              //***** Optional Fields - calculating value ****** 
-                  ActingProcessId = toint(ProcessId),
-                  ActorUserSessionId = toint(SubjectLogonId),
-                  TargetUserSessionId = toint(TargetLogonId)
-                  //***** Aliases ******
-              | extend
-                  TargetUser = TargetUserName,
-                  TargetProcessName = TargetProcessFilePath,
-                  Dvc = DvcHostName
+                  ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount),
+                  ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows'),
+                  ActorUserSessionId = SubjectLogonId,
+                  ActorType = AccountType, // Add?
+                  ActorDomainName = SubjectDomainName,
+
+                  TargetUserId =TargetUserSid, 
+                  TargetUserIdType = "SID",
+                  TargetUsername = iff (TargetDomainName == '-', TargetUserName, TargetAccount)),
+                  TargetUsernameType = iff (TargetDomainName == '-', 'Simple', 'Windows'),
+                  TargetUserSessionId = TargetLogonId,
+
+                  User = TargetUsername,
+              
+                // Processes 
+                  ActingProcessId = ProcessId,
+                  ActingProcessName = ParentProcessName,
+
+                  TargetProcessId = NewProcessId,
+                  TargetProcessName = NewProcessName,
+                  TargetProcessCommandLine = CommandLine,
+                  TargetProcessTokenElevation = TokenElevationType,
+
+                  Process = NewProcessName,
+
+                | lookup MandatoryLabelLookup on MandatoryLabel 
+
+              // -- Remove potentially confusing
+                | project-remove 
+                    ParentProcessName, 
+                    ProcessId, 
+                    SubjectUserSid,
+                    SubjectDomainName,
+                    SubjectUserName,
+                    SubjectAccount,
+                    TargetUserSid,
+                    TargetDomainName,
+                    TargetUserName,
+                    TargetAccount,
               }; ProcessEvents
 
 

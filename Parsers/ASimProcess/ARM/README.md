@@ -7,13 +7,13 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
+- [Azure Sentinel process events normalization schema reference](https://aka.ms/AzSentinelProcessDoc)
 
 
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fdev%2Fprocess_events%2FParsers%2FASimProcess%2FARM%2FimProcess.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessARM)
 
 <br>
 
@@ -22,13 +22,13 @@ For more information, see:
 
 This template deploys the following:
 * vimProcessEmpty - Empty ASim Process table
-* imProcess - Process Events from all normalized process events providers
-* imProcessCreation - Process creation Events from all normalized process events providers
-* imProcessTermination - Process termination Events from all normalized process events providers
-* vimProcessEventsMicrosft365D - Process events from Microsoft Defender for Endpoints
-* vimProcessEventsMicrosftSysmon1 - Process Creation Events from sysmon
-* vimProcessEventsMicrosftSysmon5 - Process Termination Events from sysmon
-* vimProcessEventsMicrosftWindowsEvent4688 - Process Creation Events from windows logs
+* imProcess - Process Events from all normalized process events sources
+* imProcessCreate - Process creation Events from all normalized process events sources
+* imProcessTerminate - Process termination Events from all normalized process events sources
+* vimProcessEventsMicrosft365D - Process events from Microsoft 365 Defender for Endpoints
+* vimProcessCreateMicrosftSysmon - Process Creation Events from Sysmon
+* vimProcessTermianteMicrosftSysmon - Process Termination Events from Sysmon
+* vimProcessCreateMicrosftSecurityEvents - Process Creation Events from Security Events
 
 
 <br>
