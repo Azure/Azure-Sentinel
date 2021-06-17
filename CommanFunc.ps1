@@ -1,18 +1,27 @@
-﻿#common function to verify azure function
+﻿Param(
+        [hashtable]$hash
+    )
 
-param
-(
-  [string]$uri,
-  [System.Collections.Generic.Dictionary[[String],[String]]]$headers,
-  [string]$body
-)
+    $api ="Invoke-WebRequest "
 
-#$response = Invoke-RestMethod -Headers $authHeaders -Uri $uri
-Write-Host("URI : $uri")
-Write-Host("header :$($headers)")
-Write-Host("$body")
+  foreach ($key in $hash.Keys){
+         $api+= "$key" +" "+ '$hash'+ '["'+ $key+ '"]'+ " "
+         Write-Host("Key : $($key)"+ "`n" +"Value : $($hash[$key])")
+     }
 
-$response = Invoke-WebRequest -Uri $uri -Method 'GET' -Headers $headers -UseBasicParsing
+     $api+= "-UseBasicParsing"
+
+try
+{
+    $response = Invoke-Expression $api 
+  }
+catch { 
+
+Write-host("An API error occurred.")
+Write-Host $_
+ }
+
+#$response = Invoke-WebRequest -Uri $hash["uri"] -Method 'GET' -Headers $hash["headers"] -Body $hash["body"] -UseBasicParsing
 
 $responseObj = (ConvertFrom-Json $response.Content)
 $responseCount = $responseObj.count
