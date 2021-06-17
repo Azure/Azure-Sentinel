@@ -9,7 +9,7 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
+- [Azure Sentinel process events normalization schema reference](https://aka.ms/AzSentinelProcessDoc)
 
 <br>
 

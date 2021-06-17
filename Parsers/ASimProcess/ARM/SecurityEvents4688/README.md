@@ -1,6 +1,6 @@
-# Windows logs (4688) Process Normalization Parser
+# SecurityEvents process creation normalization parser (Event 4688)
 
-This template deploys a ASim Process schema parser for Windows logs - eventId number 4688. The parser is a part of the Azure Sentinel Information Mode.
+This template deploys a ASIM Process Events schema parser Security Event #4688. The parser is a part of the Azure Sentinel Information Mode.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
