@@ -1,4 +1,5 @@
-﻿Param(
+﻿ [CmdletBinding()]
+param(
         [hashtable]$hash
     )
 
