@@ -1,5 +1,5 @@
-﻿ [CmdletBinding()]
-param(
+﻿param(
+		[Parameter(Mandatory=$true,ValueFromPipeline=$true)]
         [hashtable]$hash
     )
 
