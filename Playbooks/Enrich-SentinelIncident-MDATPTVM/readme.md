@@ -7,12 +7,22 @@ Also it automatically add this information to the incident as comments and chang
 
 Prerequisite:
 
-This logic app use Oauth2 to authenticate against MDATP API:
-https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/apis-intro 
+<li>Oauth2 to authenticate:
+<ul>
+<li><a href="https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/apis-intro " target="_blank" rel="noopener">This logic app use Oauth2 to authenticate against MDATP API</a></li>
+</ul>
+</li>
 
-Please follow this documentation to create AAD app and give the Permissions based on this article:
 
-https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/get-all-vulnerabilities#permissions
+
+<li>Create AAD app:
+<ul>
+<li><a href="https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-atp/get-all-vulnerabilities#permissions" target="_blank" rel="noopener">create AAD app and give the Permissions based on this article</a></li>
+</ul>
+</li>
+
+
+
 
 <href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FEnrich-SentinelIncident-MDATPTVM%2Fazuredeploy.json" target="_blank">
    <img src="https://aka.ms/deploytoazurebutton"/>
