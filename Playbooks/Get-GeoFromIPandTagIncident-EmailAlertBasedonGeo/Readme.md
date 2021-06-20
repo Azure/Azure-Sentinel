@@ -20,7 +20,4 @@ _Define "to" address for alerts:_
 ![image](https://user-images.githubusercontent.com/60908383/102939800-f1e6cb80-447c-11eb-8f12-9402ab76306a.png)
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frjubran%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIPandTagIncident-EmailAlertBasedonGeo%2Fazuredeploy.json)
-
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frjubran%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIPandTagIncident-EmailAlertBasedonGeo%2Fazuredeploy.json">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frjubran%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIPandTagIncident-EmailAlertBasedonGeo%2Fazuredeploy.json)
