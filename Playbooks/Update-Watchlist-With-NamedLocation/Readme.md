@@ -8,7 +8,7 @@ version: 1.0
 This Logic App runs on a scheduled basis (every 7 days by default) and checks if new IP ranges have been added to your Named Location. If there are new IP ranges, they will be added to your preexisting Azure Sentinel Watchlist, which you can then use in queries, analytics, hunting queries, etc. for correlation.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-Watchlist-With-NamedLocation%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-Watchlist-With-NamedLocation%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-Watchlist-With-NamedLocation%2Fazuredeploy.json)
 
  
 ## Pre-requisites

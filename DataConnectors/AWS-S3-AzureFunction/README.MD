@@ -7,9 +7,10 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
  - .jsonl.gz  
  - .json  
  - .csv.gz
+ - .log.gz
 
 ## **Function Flow process**
-**.json.gz/.jsonl.gz/.json/.csv.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
+**.json.gz/.jsonl.gz/.json/.csv.gz/.log.gz --> AWS S3 --> Azure Function --> Azure Log Analytics**  
 ![AWS-S3-Ingestion.png](./Images/AWS-S3-Ingestion.png)  
 
 **Ingesting AWS GuardDuty Findings steps are [here](https://www.linkedin.com/pulse/ingesting-aws-guard-duty-findings-azure-sentinel-marko-lauren/?trackingId=JATgHPaTpKHk07Z5%2BHhnFw%3D%3D)**    
@@ -17,9 +18,8 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
 ## Installation / Setup Guide
 
 1. Click  "Deploy To Azure" (For both Commercial & Azure GOV)  
-   <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-S3-AzureFunction%2Fazuredeploy_awss3.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-</a>  
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-S3-AzureFunction%2Fazuredeploy_awss3.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-S3-AzureFunction%2Fazuredeploy_awss3.json)
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
    **Note**  
@@ -34,7 +34,7 @@ Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. T
 	"AWS Region Name" : AWS SecurityHub Region
 	"S3 Bucket": AWS S3 Bucket URI  
 	  - Ex: s3://<<S3 Bucket Name>>/AWSLogs/
-	"S3FolderName" : Folder Name in AWS S3  
+	"S3FolderName" : Folder Name in AWS Account folder in S3
 	  - Ex: CloudTrail/GuardDuty/SecurityHub/DNSLogs  
 	"CustomLogTableName": Azure Log Analytics Custom Log Table Name		
 	```

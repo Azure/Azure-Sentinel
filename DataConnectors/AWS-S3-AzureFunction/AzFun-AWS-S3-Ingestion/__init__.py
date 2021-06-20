@@ -218,7 +218,9 @@ class S3Client:
             elif '.json.gz' in key.lower():
                 extracted_file = gzip.GzipFile(fileobj=file_obj)
             elif '.jsonl.gz' in key.lower():
-                extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')                              
+                extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')
+            elif '.log.gz' in key.lower():
+                extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')                             
             elif '.json' in key.lower():
                 extracted_file = file_obj
             return extracted_file
@@ -226,7 +228,13 @@ class S3Client:
         except Exception as err:
             logging.error('Error while unpacking file {} - {}'.format(key, err))
 
-  
+    @staticmethod
+    def convert_empty_string_to_null_values(d: dict):
+        for k, v in d.items():
+            if v == '' or (isinstance(v, list) and len(v) == 1 and v[0] == ''):
+                d[k] = None
+        return d
+        
     @staticmethod
     def format_date(date_string, input_format, output_format):
         try:
@@ -255,6 +263,10 @@ class S3Client:
             downloaded_obj = self.download_obj(key)
             csv_file = self.unpack_file(downloaded_obj, key)
             sortedLogEvents = self.parse_csv_file(csv_file)
+        elif '.log.gz' in key.lower():
+            downloaded_obj = self.download_obj(key)
+            csv_file = self.unpack_file(downloaded_obj, key)
+            sortedLogEvents = self.parse_log_file(csv_file)
         elif '.json' in key.lower():
             downloaded_obj = self.download_obj(key)
             sortedLogEvents = self.unpack_file(downloaded_obj, key)            
@@ -265,9 +277,207 @@ class S3Client:
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
-                event = {"message": convert_list_to_csv_line(row)}
+                if len(row) == 10:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'Policy Identity': row[1],
+                        'Identities': row[2].split(','),
+                        'InternalIp': row[3],
+                        'ExternalIp': row[4],
+                        'Action': row[5],
+                        'QueryType': row[6],
+                        'ResponseCode': row[7],
+                        'Domain': row[8],
+                        'Categories': row[9].split(',')
+                    }
+                    try:
+                        event['Policy Identity Type'] = row[10]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Identity Types'] = row[11].split(',')
+                    except IndexError:
+                        pass
+                    try:
+                        event['Blocked Categories'] = row[12].split(',')
+                    except IndexError:
+                        pass
+                elif len(row) == 14:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'originId': row[1],
+                        'Identity': row[2],
+                        'Identity Type': row[3],
+                        'Direction': row[4],
+                        'ipProtocol': row[5],
+                        'packetSize': row[6],
+                        'sourceIp': row[7],
+                        'sourcePort': row[8],
+                        'destinationIp': row[9],
+                        'destinationPort': row[10],
+                        'dataCenter': row[11],
+                        'ruleId': row[12],
+                        'verdict': row[13]
+                    }
+                elif len(row) == 21:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'Identities': row[1],
+                        'Internal IP': row[2],
+                        'External IP': row[3],
+                        'Destination IP': row[4],
+                        'Content Type': row[5],
+                        'Verdict': row[6],
+                        'URL': row[7],
+                        'Referer': row[8],
+                        'userAgent': row[9],
+                        'statusCode': row[10],
+                        'requestSize': row[11],
+                        'responseSize': row[12],
+                        'responseBodySize': row[13],
+                        'SHA-SHA256': row[14],
+                        'Categories': row[15].split(','),
+                        'AVDetections': row[16].split(','),
+                        'PUAs': row[17].split(','),
+                        'AMP Disposition': row[18],
+                        'AMP Malware Name': row[19],
+                        'AMP Score': row[20]
+                    }
+                    try:
+                        event['Blocked Categories'] = row[21].split(',')
+                    except IndexError:
+                        pass
+
+                    int_fields = [
+                        'requestSize',
+                        'responseSize',
+                        'responseBodySize'
+                    ]
+
+                    for field in int_fields:
+                        try:
+                            event[field] = int(event[field])
+                        except Exception:
+                            pass                
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                
                 event = self.convert_empty_string_to_null_values(event)                
                 yield event
+                
+    def parse_log_file(self, log_file):
+        log_reader = csv.reader(log_file.split('\n'), delimiter=' ')        
+        for row in log_reader:
+            if len(row) > 1:
+                if len(row) == 28: #Service name, traffic path, and flow direction
+                    event = {                    
+                        'version': row[0],
+                        'srcaddr': row[1],
+                        'dstaddr': row[2],
+                        'srcport': row[3],
+                        'dstport': row[4],
+                        'protocol': row[5],
+                        'start': row[6],
+                        'end': row[7],
+                        'type': row[8],
+                        'packets': row[9],
+                        'bytes': row[10],
+                        'account-id': row[11],                    
+                        'vpc-id': row[12],
+                        'subnet-id': row[13],
+                        'instance-id': row[14],
+                        'region': row[15],
+                        'az-id': row[16],
+                        'sublocation-type': row[17],
+                        'sublocation-id': row[18],
+                        'action': row[19],
+                        'tcp-flags': row[20],
+                        'pkt-srcaddr': row[21],
+                        'pkt-dstaddr': row[22],
+                        'pkt-src-aws-service': row[23],
+                        'pkt-dst-aws-service': row[24],
+                        'traffic-path': row[25],
+                        'flow-direction': row[26],
+                        'log-status': row[27]                    
+                    }                   
+                elif len(row) == 6: #Traffic through a NAT gateway
+                    event = {                    
+                        'instance-id': row[0],
+                        'interface-id': row[1],
+                        'srcaddr': row[2],
+                        'dstaddr': row[3],
+                        'pkt-srcaddr': row[4],
+                        'pkt-dstaddr': row[5]
+                    }                    
+                elif len(row) == 17: #Traffic through a transit gateway
+                    event = {                    
+                        'version': row[0],
+                        'interface-id': row[1],
+                        'account-id': row[2],
+                        'vpc-id': row[3],
+                        'subnet-id': row[4],
+                        'instance-id': row[5],
+                        'srcaddr': row[6],
+                        'dstaddr': row[7],
+                        'srcport': row[8],
+                        'dstport': row[9],
+                        'protocol': row[10],
+                        'tcp-flags': row[11],                    
+                        'type': row[12],
+                        'pkt-srcaddr': row[13],
+                        'pkt-dstaddr': row[14],
+                        'action': row[15],
+                        'log-status': row[16]
+                    }                    
+                elif len(row) == 21: #TCP flag sequence
+                    event = {                    
+                        'version': row[0],
+                        'vpc-id': row[1],
+                        'subnet-id': row[2],
+                        'instance-id': row[3],
+                        'interface-id': row[4],
+                        'account-id': row[5],
+                        'type': row[6],
+                        'srcaddr': row[7],
+                        'dstaddr': row[8],
+                        'srcport': row[9],
+                        'dstport': row[10],
+                        'pkt-srcaddr': row[11],                    
+                        'pkt-dstaddr': row[12],
+                        'protocol': row[13],
+                        'bytes': row[14],
+                        'packets': row[15],
+                        'start': row[16],
+                        'end': row[17],
+                        'action': row[18],
+                        'tcp-flags': row[19],
+                        'log-status': row[20]
+                    }                    
+                elif len(row) == 14: 
+                    #Accepted and rejected traffic; No data and skipped records
+                    #Security group and network ACL rules; IPv6 traffic
+                    event = {                    
+                        'version': row[0],
+                        'account-id': row[1],
+                        'interface-id': row[2],
+                        'srcaddr': row[3],
+                        'dstaddr': row[4],
+                        'srcport': row[5],
+                        'dstport': row[6],
+                        'protocol': row[7],
+                        'packets': row[8],
+                        'bytes': row[9],
+                        'start': row[10],
+                        'end': row[11],                    
+                        'action': row[12],
+                        'log-status': row[13]                        
+                    }                    
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+
+                event = self.convert_empty_string_to_null_values(event)                
+                yield event
+
 
 class AzureSentinelConnector:
     def __init__(self, log_analytics_uri, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):

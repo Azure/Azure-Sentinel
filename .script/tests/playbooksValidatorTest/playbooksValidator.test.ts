@@ -10,6 +10,10 @@ describe("Playbooks validator", () => {
     await checkValid(".script/tests/playbooksValidatorTest/testFiles/validPlaybookTemplate.json");
   });
 
+  it(`Should pass when playbook template is using using capitalized parameter types`, async () => {
+    await checkValid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithCapitalizedParameterType.json");
+  });
+
   it(`Should throw an exception when template is missing 'PlaybookName' parameter`, async () => {
     await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithNoPlaybookNameParameter.json");
   });

@@ -28,7 +28,7 @@ This document covers the required steps to ingest Audit.General and DLP.All acti
 
 The Azure Function App uses a PowerShell script to collect Office 365 Audit.General and DLP.All Activity logs and ingests into a custom table in Azure Sentinel (custom tables end with _CL when created in Log Analytics). The secrets for the required connections are stored in Azure Key Vault. 
 
-![Function App](./images/picture1.png)
+![Function App](./images/Picture1.png)<br>
 
 Let’s get started with the configuration! 
 
@@ -49,21 +49,21 @@ Onboarding Azure Sentinel is not part of this document post. However, required g
 The Azure AD app is later required to use it as service principle for the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) app. 
 
 1. Go to **Azure Active Directory** / **App Registrations**
-2. Create **New Registration**
-![App Registration](./images/picture2.png)
+2. Create **New Registration**<br>
+![App Registration](./images/Picture2.png)<br>
 3. Call it "O365APItoAzureSentinel".  Click **Register**.
 4. Click **API Permissions** Blade.
 5. Click **Add a Permission**.  
 6. Click **Office 365 Management APIs**.
 7. Click **Appplication Permissions**
-8. Check **ActivityFeed.Read** and **ActivityFeed.ReadDlp**.  Click **Add permissions**.
-![Permissions](./images/picture5.png)
-9. Click **Grant admin consent for ...**.
-![Admin Consent](./images/picture6.png)
+8. Check **ActivityFeed.Read** and **ActivityFeed.ReadDlp**.  Click **Add permissions**.<br>
+![Permissions](./images/Picture5.png)<br>
+9. Click **Grant admin consent for ...**.<br>
+![Admin Consent](./images/Picture6.png)<br>
 10. Click **Certificates and Secrets** blade.
 11. Click **New Client Secret**.
-12. Enter a description, select **never**.  Click **Add**.
-![Secret](./images/picture3.png)
+12. Enter a description, select **never**.  Click **Add**.<br>
+![Secret](./images/Picture3.png)<br>
 13. **IMPORTANT**.  Click **copy** next to the new secret and paste it somewhere temporaily.  You can not come back to get the secret once you leave the blade.
 14. Copy the **client Id** from the application properties and paste it somewhere.
 15. Also copy the **tenant Id** from the AAD directory properties blade.
@@ -98,16 +98,14 @@ Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.offic
 ```powershell
 Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=DLP.ALL&PublisherIdentifier=$Publisher"
 ```
-5. A successful output looks like as below. 
-![Output](./images/picture7.png)
+5. A successful output looks like as below. <br>
+![Output](./images/Picture7.png)<br>
 
 ### Deploy the Azure Function App 
 Thanks to the published ARM template the deployment of the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) is done with just a few clicks. 
 1. Click to **Deploy the template / Deploy to Azure** below.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json)
 
 2. Now it is time to use the noted details from previous steps.  
 - Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Funtion App.  
@@ -119,33 +117,16 @@ Thanks to the published ARM template the deployment of the [Azure Funtion App](h
 4. Now the deployment of ARM template is completed. 
 ![Complete](./images/picture10.png)
 
-### Post Configuration Steps for the Azure Key Vault  
-The used credentials, Client Secret and Workspace Key within the Function App is secured in Azure Key Vault, in final stage and operations. Follow the configuration steps to finalize the post configurations steps for the Key Vault.  
-1. Click to **Deploy the template / Deploy to Azure** below. 
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy2.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-
-2. Select the right **Subscription**, **Resource Group** and fill the **Function App Name**. Click to **Review + create**, review the configuration and click **Create**. 
-![Deployment](./images/picture12.png)
-3. Once the configuration is done, review the configuration. 
-4. To validate the configuration open the **Azure Portal** and navigate to **Azure Key Vault** > The name of the Function App > **Access Policy**. In the **Access Policy** blade, you should see the Function App name **O365APItoAS** as an application and with required access policies to work with the Azure Key Vault. 
-![Policy](./images/picture14.png)
-5. From the Access policies page review the generated Secrets by the ARM template. 
-6. And now make a note of both Secret Identifiers later for the Azure Function App post configuration. 
-![Secrets](./images/picture15.png)
-
 ### Post Configuration Steps for the Azure Function App 
-1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.  
-![configuration](./images/picture17.png)
+1. For the final configuration of Azure Function App open the Azure Portal and navigate to **Azure Function App** > The name of the Function App > **Configuration**.<br>
+![configuration](./images/Picture17.png)<br>
 2. In the **Configuration** edit the **clientSecret** and **workspaceKey** settings. Click to Edit and paste the noted Secret Identifiers as value and **Save** the configuration. The Secret Identifiers should have this format: 
 - @Microsoft.KeyVault(SecretUri=https:///secrets/O365Tenant1_clientSecret/).  
 3. Once the configuration is finished the **clientSecret** and **workspaceKey** settings should have a green checkmark.  
 
 ## How to use the Activity Logs in Azure Sentinel 
-Once the Azure Function App is functional you can query the General.Audit and DLP.All activity logs. The activity will reside in a Custom Table as configured in the Azure Function App above. The following table includes sample Kusto Language Queries (KQL).  You can see these are using the Custom Logs (Custom log tables always end in “_CL”) and the values we mentioned earlier.
-![Review](./images/picture19.png)
+Once the Azure Function App is functional you can query the General.Audit and DLP.All activity logs. The activity will reside in a Custom Table as configured in the Azure Function App above. The following table includes sample Kusto Language Queries (KQL).  You can see these are using the Custom Logs (Custom log tables always end in “_CL”) and the values we mentioned earlier.<br>
+![Review](./images/Picture19.png)<br>
 
 ***Note***: Custom Logs are a billable data source.  The record types that are important have been added below, as simple starting queries. 
 
@@ -161,7 +142,10 @@ An example results for the Defender for Office Safe Attachment block detection a
 O365_CL 
 | where RecordType_d == "28" 
 ```
-![Query](./images/picture20.png)
+
+
+![Query](./images/Picture20.png)
+
 ### Summary 
 In this document I have shown how you can onboard Office 365 Management Activity API General.Audit and DLP.All activity logs, and some basics queries for you to start to build out your use cases with Defender for Office and Security and Compliance Center alerts. This solution helps you extend, correlate and enrich the data you have with the existing O365 connector, giving you more insights. 
   

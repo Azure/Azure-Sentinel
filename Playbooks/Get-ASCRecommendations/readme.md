@@ -11,31 +11,22 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Fazuredeploy_incidents.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Fazuredeploy_incidents.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Fincident-trigger%2Fazuredeploy.json)
 
 **Deploy with alert trigger**
 
 After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Fazuredeploy_alert.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Fazuredeploy_alert.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-ASCRecommendations%2Falert-trigger%2Fazuredeploy.json[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](
 
 ## Prerequisites
 
-- This playbook uses a managed identity to access the API.  You will need to add the playbook to the subscriptions or management group with Security Reader Role.
+- This playbook uses a managed identity to access the API.  You will need to add the managed identity that is created by the logic app to the subscripton(s) of management group with Security Reader permissions.
 
 ## Screenshots
-**Incident Trigger**
-![Incident Trigger](./images/Get-ASCRecommendations_incident.png)
-
-**Alert Trigger**
-![Alert Trigger](./images/Get-ASCRecommendations_alert.png)
+**Incident Trigger**<br>
+![Incident Trigger](./incident-trigger/images/Get-ASCRecommendations_incident.png)<br>
+**Alert Trigger**<br>
+![Alert Trigger](./alert-trigger/images/Get-ASCRecommendations_alert.png)<br>
