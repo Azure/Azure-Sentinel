@@ -1,50 +1,52 @@
 Parser:
   Title: Azure active directory managed identity authentication
-  Version: '0.0'
-  LastUpdated: June 3, 2021
+  Version: '0.1.0'
+  LastUpdated: June 17, 2021
 Product:
   Name: Azure active directory managed identity signin logs
 Normalization:
   Schema: Authentication
-  Version: '1.0.0'
+  Version: 0.1.0'
 References:
-- Title: Using functions
-  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
-- Title: Authentication schema documentation
+- Title: ASIM Authentication Schema
   Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
 Description: |
-      This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
+  This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
 ParserName: vimAuthAADManagedIdentitySignInLogs
 ParserQuery: |
   let AADMIAuthentication=(){
     AADManagedIdentitySignInLogs
     | extend
-        EventVendor = 'Microsoft Azure'
+        EventVendor = 'Microsoft'
         , EventProduct = 'AAD Managed Identity'
         , EventCount=1
-        , EventSchemaVersion='1.0.0'
+        , EventSchemaVersion='0.1.0'
         , EventResult = iff (ResultType ==0, 'Success', 'Failure')
         //, EventOriginalResultDetails = ResultType
         , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
         , EventStartTime = TimeGenerated
         , EventEndTime= TimeGenerated
         , EventType= 'Logon'
-        , SrcGeoCity=tostring(todynamic(LocationDetails).city)
-        , SrcGeoCountry=tostring(todynamic(LocationDetails).countryOrRegion)
-        , SrcGeoLocationLatitude=tostring(todynamic(LocationDetails).geoCoordinates.latitude)
-        , SrcGeoLocationLongitude=tostring(todynamic(LocationDetails).geoCoordinates.longitude)
+        , Locatoin = todynamic(LocationDetails)
         , TargetResourceId = ResourceIdentity // Overriding the tables ResourceId which is not an interesting value
         , TargetResourceName=ResourceDisplayName
         , TargetUserType='ServicePrincipal'
-      , TargetUsername=ServicePrincipalName
-      , TargetUserId=ServicePrincipalId
-      , TargetUsernameType='Name'
-      , TargetUserIdType='AADID'
+        , TargetUsername=ServicePrincipalName
+        , TargetUserId=ServicePrincipalId
+        , TargetUsernameType='Simple'
+        , TargetUserIdType='AADID'
+    | extend
+        , SrcGeoCity=tostring(Location.city)
+        , SrcGeoCountry=tostring(Location.countryOrRegion)
+        , SrcGeoLocationLatitude=tostring(Location.geoCoordinates.latitude)
+        , SrcGeoLocationLongitude=tostring(Location.geoCoordinates.longitude)
     | project-rename
-        EventOriginalUid =Id
-        , TargetSessionId=CorrelationId
-        , SessionDuration= DurationMs
-        , SrcIpAddr=IPAddress
+        EventOriginalUid = Id
+        , TargetSessionId = CorrelationId
+        , SessionDuration = DurationMs
+        , SrcIpAddr = IPAddress
         , TargetAppId = AppId
     | project-reorder
         TimeGenerated
