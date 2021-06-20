@@ -1,6 +1,5 @@
 import { PlaybookValidationError } from "../validationError";
 import { ArmTemplate, ArmTemplateResource } from "./Models/armTemplateModels";
-import { ApiConnectionResourceProperties } from "./Models/playbookArmModels";
 import { getTemplateAPIConnectionResources, isNullOrUndefined } from "./playbookARMTemplateUtils";
 
 const VariableFieldValuePrefix: string = "[variables('";
@@ -17,13 +16,6 @@ function validateAPIConnectionResource(filePath: string, playbookARMTemplate: Ar
         throw new PlaybookValidationError(`Playbook template '${filePath}' has API connection with name '${apiConnectionResource.name}' with name not taken from template variables.`);
     }
     validateTemplateVariableExists(filePath, playbookARMTemplate, apiConnectionResource.name, connectionResourceNameVariableName as string);
-
-    let connectionResourceDisplayName: string = (apiConnectionResource.properties as ApiConnectionResourceProperties)?.displayName;
-    let connectionDisplayNameVariableName: string | null = extractVariableNameFromTemplateFieldValue(connectionResourceDisplayName);
-    if (isNullOrUndefined(connectionDisplayNameVariableName)) {
-        throw new PlaybookValidationError(`Playbook template '${filePath}' has API connection with name '${apiConnectionResource.name}' with display name not taken from template variables.`);
-    }
-    validateTemplateVariableExists(filePath, playbookARMTemplate, apiConnectionResource.name, connectionDisplayNameVariableName as string);
 }
 
 function validateTemplateVariableExists(filePath: string, playbookARMTemplate: ArmTemplate<any>, apiConnectionResourceName: string, variableName: string): void {
