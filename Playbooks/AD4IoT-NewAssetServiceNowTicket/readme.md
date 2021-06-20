@@ -10,7 +10,8 @@ This playbook parses explicitly the IOT device entity fields.
 
 
 ## screenshots
-
+![screenshot1](./images/ticketSnow.png)<br>
+![screenshot2](./images/designerOverviewLight.png)<br>
 
 ## Deploy to Azure
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAD4IoT-NewAssetServiceNowTicket%2Fazuredeploy.json" target="_blank">

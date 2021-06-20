@@ -12,6 +12,7 @@ A sample of such watchlist is provided in this folder as an example. Please use 
 
 ## Screenshots
 ![screenshot1](./images/ClosedAlert.png)<br>
+![screenshot2](./images/designerOverviewLight.png)<br>
 
 
 ## Deploy to Azure

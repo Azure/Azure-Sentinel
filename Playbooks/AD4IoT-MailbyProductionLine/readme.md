@@ -14,6 +14,7 @@ One example can be in the case of specific security team per product line or per
 
 ## Screenshots
 ![screenshot1](./images/MailToStakeholder.png)<br>
+![screenshot2](./images/designerOverviewLight.png)<br>
 
 
 ## Deploy to Azure
