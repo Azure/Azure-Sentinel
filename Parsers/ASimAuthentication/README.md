@@ -1,4 +1,4 @@
-# Dns - Azure Sentinel Information Model
+# Authentication - Azure Sentinel Information Model
 
 This template deploys the following:
 * imDns - DNS events from all normalized DNS providers
@@ -7,4 +7,4 @@ This template deploys the following:
 * vimDnsInfoblox - DNS Events from Infoblox NIOS 
 * vimDnsEmpty - Emtpy ASIM DNS table
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthenticationARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelDnsARM)
