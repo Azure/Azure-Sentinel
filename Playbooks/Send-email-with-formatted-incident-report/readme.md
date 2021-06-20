@@ -9,9 +9,9 @@ An O365 account to be used to send email notification
 Link with company logo. No formating since size is defined in the Playbook. Linke example - https://azure.microsoft.com/svghandler/azure-sentinel
 <br/><br/>
 ## Deployment:
+
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-email-with-formatted-incident-report%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-email-with-formatted-incident-report%2Fazuredeploy.json)
-<br/><br/>
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-email-with-formatted-incident-report%2Fazuredeploy.json)
 
 ## Post-deployment
 
