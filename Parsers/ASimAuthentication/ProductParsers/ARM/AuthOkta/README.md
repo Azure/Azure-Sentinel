@@ -1,4 +1,4 @@
-# Okta identity management ASIM DNS Normalization Parser
+# Okta identity management ASIM Authentication Normalization Parser
 
 This template deploys the ASIM Authentication schema parser for Okta identity management. The parser is a part of the Azure Sentinel Information Mode.
 
@@ -7,7 +7,7 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
+- [Azure Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
 
 <br>
  

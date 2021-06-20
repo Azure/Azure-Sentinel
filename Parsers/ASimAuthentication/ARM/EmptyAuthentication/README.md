@@ -1,4 +1,4 @@
-# Azure Sentinel ASIM DNS Normalization Parser
+# Azure Sentinel ASIM Authentication Normalization Parser
 
 This template deploys the ASIM Authentication schema parser for Azure Sentinel. The parser is a part of the Azure Sentinel Information Mode.
 
