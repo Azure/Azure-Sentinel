@@ -43,7 +43,7 @@ We will need to assign Azure Sentinel Reader role to the Playbooks Managed Ident
 <br>
 ## Screenshots
 
-**Incident Trigger**<br>
+**Incident Trigger **<br>
 ![Incident Trigger dark](./incident-trigger/images/dark-Playbook-incident-trigger.png)<br>
 ![Incident Trigger light](./incident-trigger/images/light-Playbook-incident-trigger.png)<br>
 <br>
