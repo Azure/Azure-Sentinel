@@ -28,10 +28,10 @@ query: |
   let endtime = 1d;
   let Activity = AzureActivity
   | where TimeGenerated >= startofday(ago(starttime))
-  // We look for any Operation that created and then succeeded where ActivitySubStatus has a value so that we can provide context
-  | where OperationName has "Create"
-  | where ActivityStatus has "Succeeded"
-  | make-series dResourceCount=dcount(ResourceId) default=0 on EventSubmissionTimestamp in range(startofday(ago(7d)), now(), 1d) by Caller, Resource, OperationName
+  // We look for any Operation that created and then succeeded where ActivitySubstatusValue has a value so that we can provide context
+  | where OperationNameValue has "Create"
+  | where ActivityStatusValue has "Succeeded"
+  | make-series dResourceCount=dcount(ResourceId) default=0 on EventSubmissionTimestamp in range(startofday(ago(7d)), now(), 1d) by Caller, Resource, OperationNameValue
   | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)
   // Comment slope reference below to see all returns
   | where Slope > 0.2
@@ -39,14 +39,14 @@ query: |
   // Last day's activity is anomalous
   AzureActivity
   | where TimeGenerated >= startofday(ago(endtime))
-  // We look for any Operation that created and then succeeded where ActivitySubStatus has a value so that we can provide context
-  | where OperationName has "Create"
-  | where ActivityStatus has "Succeeded"
-  | make-series dResourceCount=dcount(ResourceId) default=0 on EventSubmissionTimestamp in range(startofday(ago(1d)), now(), 1d) by Caller, Resource, OperationName
+  // We look for any Operation that created and then succeeded where ActivitySubstatusValue has a value so that we can provide context
+  | where OperationNameValue has "Create"
+  | where ActivityStatusValue has "Succeeded"
+  | make-series dResourceCount=dcount(ResourceId) default=0 on EventSubmissionTimestamp in range(startofday(ago(1d)), now(), 1d) by Caller, Resource, OperationNameValue
   | extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)
   // Comment slope reference below to see all returns
   | where Slope > 0.2
-  ) on Caller, Resource, OperationName
+  ) on Caller, Resource, OperationNameValue
   // Expanding the fields that were grouped so we can match on a time window when we join the details later
   | mvexpand EventSubmissionTimestamp, dResourceCount
   // Making sure the fields are the right type or the join fails
@@ -54,11 +54,11 @@ query: |
   | join kind= inner (
     AzureActivity
     | where TimeGenerated >= ago(endtime)
-    // We look for any Operation that created and then succeeded where ActivitySubStatus has a value so that we can provide context
-    | where OperationName has "Create"
-    | where ActivityStatus has "Succeeded" and isnotempty(ActivitySubstatus) 
-    | summarize by EventSubmissionTimestamp = bin(EventSubmissionTimestamp, 1d), Caller, CallerIpAddress, OperationName, OperationNameValue, ActivityStatusValue, Resource, ResourceGroup, ResourceId, SubscriptionId
-  ) on EventSubmissionTimestamp, Caller, Resource, OperationName;
+    // We look for any Operation that created and then succeeded where ActivitySubstatusValue has a value so that we can provide context
+    | where OperationNameValue has "Create"
+    | where ActivityStatusValue has "Succeeded" and isnotempty(ActivitySubstatusValue) 
+    | summarize by EventSubmissionTimestamp = bin(EventSubmissionTimestamp, 1d), Caller, CallerIpAddress, OperationNameValue, ActivityStatusValue, Resource, ResourceGroup, ResourceId, SubscriptionId
+  ) on EventSubmissionTimestamp, Caller, Resource, OperationNameValue;
   let NetworkAnalytics = 
     union isfuzzy=true
     (AzureNetworkAnalytics_CL
