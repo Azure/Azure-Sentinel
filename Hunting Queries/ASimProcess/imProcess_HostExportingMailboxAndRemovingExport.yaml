@@ -19,18 +19,16 @@ query: |
      // Adjust the timeframe to change the window events need to occur within to alert
       let timeframe = 1h;
       imProcessCreation
-      | where TargetProcessFileName in~ ("powershell.exe", "cmd.exe")
-      | where TargetProcessCommandLine contains 'New-MailboxExportRequest'
-      | summarize by DvcHostName, timekey = bin(TimeGenerated, timeframe), TargetProcessCommandLine, ActorUserName, EventVendor, EventProduct
+      | where Process has_any ("powershell.exe", "cmd.exe")
+      | where CommandLine has 'New-MailboxExportRequest'
+      | summarize by Dvc, timekey = bin(TimeGenerated, timeframe), CommandLine, ActorUserName, EventVendor, EventProduct
       | join kind=inner (imProcessCreation
-      | where TargetProcessFileName in~ ("powershell.exe", "cmd.exe")
-      | where TargetProcessCommandLine contains 'Remove-MailboxExportRequest'
-      | summarize by DvcHostName,EventProduct, EventVendor, timekey = bin(TimeGenerated, timeframe), TargetProcessCommandLine, ActorUserName) on DvcHostName, timekey, ActorUserName
-      | extend commands = TargetProcessCommandLine
-      | summarize by timekey, DvcHostName, tostring(commands), ActorUserName
-      | project-reorder timekey, DvcHostName, ActorUserName, ['commands']
-      | extend HostCustomEntity = DvcHostName, AccountCustomEntity = ActorUserName
-
+      | where Process has_any ("powershell.exe", "cmd.exe")
+      | where CommandLine has 'Remove-MailboxExportRequest'
+      | summarize by Dvc, EventProduct, EventVendor, timekey = bin(TimeGenerated, timeframe), CommandLine, ActorUserName) on Dvc, timekey, ActorUserName
+      | summarize by timekey, Dvc, CommandLine, ActorUserName
+      | project-reorder timekey, Dvc, ActorUserName, CommandLine
+      | extend HostCustomEntity = Dvc, AccountCustomEntity = ActorUserName
 
 entityMappings:
   - entityType: Account

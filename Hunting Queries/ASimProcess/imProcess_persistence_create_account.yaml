@@ -14,18 +14,15 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-
-        imProcessCreation
-        | project TimeGenerated, ComputerName=DvcHostName,AccountName=ActorUserName, 
-            AccountDomain=ActorUserDomain, FileName=tostring(split(TargetProcessFilePath, '\\')[-1]), 
-            ProcessCommandLine = TargetProcessCommandLine, 
-            FolderPath = "", InitiatingProcessFileName=ActingProcessFileName,
-            InitiatingProcessCommandLine="",InitiatingProcessParentFileName="", EventVendor, EventProduct
+        imProcessCreation //| project TargetProcessName, split(Process, '\\')[-1], EventProduct, EventVendor
+        | where Process has_any ("net.exe", "net1.exe") // preformance pre-filtering
+        | extend FileName = tostring(split(Process, '\\')[-1]) 
+        | extend ActingProcessFileName= tostring(split(ActingProcessName, '\\')[-1]) 
         | where FileName in~ ("net.exe", "net1.exe")
-        | parse kind=regex flags=iU ProcessCommandLine with * "user " CreatedUser " " * "/ad"
-        | where not(FileName =~ "net1.exe" and InitiatingProcessFileName =~ "net.exe" and replace("net", "net1", InitiatingProcessCommandLine) =~ ProcessCommandLine)
-        | extend CreatedOnLocalMachine=(ProcessCommandLine !contains "/do")
-        | where ProcessCommandLine contains "/add" or (CreatedOnLocalMachine == 0 and ProcessCommandLine !contains "/domain")
-        | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), MachineCount=dcount(ComputerName) by CreatedUser, CreatedOnLocalMachine, InitiatingProcessFileName, FileName, ProcessCommandLine, InitiatingProcessCommandLine, EventVendor, EventProduct
+        | parse kind=regex flags=iU CommandLine with * "user " CreatedUser " " * "/ad"
+        | where not(FileName =~ "net1.exe" and ActingProcessFileName =~ "net.exe" and replace("net", "net1", ActingProcessCommandLine) =~ CommandLine)
+        | extend CreatedOnLocalMachine=(CommandLine !has "/do")
+        | where CommandLine has "/add" or (CreatedOnLocalMachine == 0 and CommandLine !has "/domain")
+        | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), MachineCount=dcount(Dvc) by CreatedUser, CreatedOnLocalMachine, ActingProcessFileName, FileName, CommandLine, ActingProcessCommandLine, EventVendor, EventProduct
         | extend timestamp = StartTimeUtc, AccountCustomEntity = CreatedUser
   

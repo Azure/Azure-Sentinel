@@ -10,33 +10,20 @@ requiredDataConnectors:
 tactics:
   - Execution
 query: |
-  let ProcessCreationEvents=() {
-  let processEvents=imProcessCreation
+let freqs = imProcessCreate 
   // filter out common randomly named files related to MSI installers and browsers
-  | where not(TargetProcessFilePath matches regex @"\\TRA[0-9A-Fa-f]{3}\.tmp")
-  | where not(TargetProcessFilePath matches regex @"\\TRA[0-9A-Fa-f]{4}\.tmp")
-  | where not(TargetProcessFilePath matches regex @"Installer\\MSI[0-9A-Fa-f]{3}\.tmp")
-  | where not(TargetProcessFilePath matches regex @"Installer\\MSI[0-9A-Fa-f]{4}\.tmp")
-  | project TimeGenerated, ComputerName=DvcHostName, AccountName=ActorUserName, AccountDomain=ActorUserDomain,
-  FileName=tostring(split(TargetProcessFilePath, '\\')[-1]), ProcessCommandLine = TargetProcessCommandLine, 
-  InitiatingProcessFileName=ActingProcessFileName, InitiatingProcessCommandLine="", InitiatingProcessParentFileName="", EventVendor, EventProduct;
-  processEvents;
-  };
-  let normalizedProcesses = ProcessCreationEvents 
+  | where not(Process has_all ('TRA', '.tmp') and Process matches regex @"\\TRA[0-9A-Fa-f]{3,4}\.tmp")
+  | where not(Process has_all ('MSI', '.tmp') and Process matches regex @"\\MSI[0-9A-Fa-f]{3,4}\.tmp")
+  | extend FileName = tostring(split(Process, '\\')[-1])
   // normalize guids
-  | project TimeGenerated, FileName = replace("[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}", "<guid>", FileName) , EventVendor, EventProduct
-  // normalize digits away
-  | project TimeGenerated, FileName=replace(@'\d', 'n', FileName), EventVendor, EventProduct; 
-  let freqs = normalizedProcesses
-  | summarize frequency=count() by FileName
-  | join kind= leftouter (
-  normalizedProcesses
-  | summarize Since=min(TimeGenerated), LastSeen=max(TimeGenerated) by FileName , EventVendor, EventProduct
-  ) on FileName;
-  freqs 
-  | where frequency <= toscalar( freqs | serialize | project frequency | summarize percentiles(frequency, 5))
+  | extend FileName = replace("[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}", "<guid>", FileName)
+  | extend FileName = replace(@'\d', 'n', FileName)
+  | summarize frequency=count(), Since=min(TimeGenerated), LastSeen=max(TimeGenerated) by FileName , EventVendor, EventProduct;
+let precentile_5 = toscalar ( freqs | summarize percentiles(frequency, 5));
+freqs
+  | where frequency <= precentile_5
   | order by frequency asc
-  | project FileName, frequency, Since, LastSeen , EventVendor, EventProduct
+  | project FileName, frequency, precentile_5, Since, LastSeen , EventVendor, EventProduct
   // restrict results to unusual processes seen in last day 
   | where LastSeen >= ago(1d)
   | extend timestamp = LastSeen 

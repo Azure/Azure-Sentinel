@@ -6,25 +6,19 @@ requiredDataConnectors: []
 tactics:
   - Execution
 query: |
-          let ProcessCreationEvents=() {
-          let processEvents=imProcessCreation
-          | project EventTime=TimeGenerated, ComputerName=DvcHostName,AccountName=ActorUserName, AccountDomain=ActorUserDomain,
-          FileName=tostring(split(TargetProcessFilePath, '\\')[-1]),  ProcessCommandLine = TargetProcessCommandLine, 
-          InitiatingProcessFileName=ActingProcessFileName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="", EventVendor, EventProduct;
-          processEvents;
-          };
-          // Daily summary of cscript activity - extracting script name and parameters from commandline:
-          ProcessCreationEvents 
+          imProcessCreate
+          | where Process has "cscript.exe"
+          | extend FileName=tostring(split(Process, '\\')[-1])
           | where FileName =~ "cscript.exe"
-          | extend removeSwitches = replace(@"/+[a-zA-Z0-9:]+", "", ProcessCommandLine)
+          | extend removeSwitches = replace(@"/+[a-zA-Z0-9:]+", "", CommandLine)
           | extend CommandLine = trim(@"[a-zA-Z0-9\\:""]*cscript(.exe)?("")?(\s)+", removeSwitches)
           // handle case where script name is enclosed in " characters or is not enclosed in quotes 
           | extend ScriptName= iff(CommandLine startswith @"""", 
           extract(@"([:\\a-zA-Z_\-\s0-9\.()]+)(""?)", 0, CommandLine), 
-          extract(@"([:\\a-zA-Z_\-0-9\.()]+)(""?)", 0, CommandLine)), CommandLine , EventVendor, EventProduct
+          extract(@"([:\\a-zA-Z_\-0-9\.()]+)(""?)", 0, CommandLine))
           | extend ScriptName=trim(@"""", ScriptName) , ScriptNameLength=strlen(ScriptName)
           // extract remainder of commandline as script parameters: 
           | extend ScriptParams = iff(ScriptNameLength < strlen(CommandLine), substring(CommandLine, ScriptNameLength +1), "")
-          | summarize min(EventTime), count() by ComputerName, AccountName, ScriptName, ScriptParams, EventVendor, EventProduct
+          | summarize min(TimeGenerated), count() by Dvc, User, ScriptName, ScriptParams, EventVendor, EventProduct
           | order by count_ asc nulls last 
-          | extend timestamp = min_EventTime, HostCustomEntity = ComputerName, AccountCustomEntity = AccountName
+          | extend timestamp = min_TimeGenerated, HostCustomEntity = Dvc, AccountCustomEntity = User

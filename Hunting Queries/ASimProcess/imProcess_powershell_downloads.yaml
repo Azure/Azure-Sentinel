@@ -7,20 +7,11 @@ tactics:
   - Execution
   - CommandAndControl
 query: |
-  let ProcessCreationEvents=() {
-  let processEvents=imProcessCreation
-  | project  TimeGenerated, ComputerName=DvcHostName,AccountName=ActorUserName, AccountDomain=ActorUserDomain,
-    FileName=tostring(split(TargetProcessFilePath, '\\')[-1]),
-  ProcessCommandLine = TargetProcessCommandLine, 
-  InitiatingProcessFileName=ActingProcessFileName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="", EventVendor, EventProduct;
-  processEvents};
-  ProcessCreationEvents
+imProcessCreate 
+  | where Process has_any ("powershell.exe", "powershell_ise.exe") // perfromance pre-filtering
+  | extend FileName=tostring(split(TargetProcessFilePath, '\\')[-1])
   | where FileName in~ ("powershell.exe", "powershell_ise.exe")
-  | where ProcessCommandLine has "Net.WebClient"
-     or ProcessCommandLine has "DownloadFile"
-     or ProcessCommandLine has "Invoke-WebRequest"
-     or ProcessCommandLine has "Invoke-Shellcode"
-     or ProcessCommandLine contains "http:"
-  | project TimeGenerated, ComputerName, AccountName, InitiatingProcessFileName, FileName, ProcessCommandLine, EventVendor, EventProduct
+  | where CommandLine has_any ("Net.WebClient", "DownloadFile", "Invoke-WebRequest", "Invoke-Shellcode", "http:")
+  | project TimeGenerated, Dvc, User, InitiatingProcessFileName, FileName, CommandLine, EventVendor, EventProduct
   | top 100 by TimeGenerated
-  | extend timestamp = TimeGenerated, HostCustomEntity = ComputerName, AccountCustomEntity = AccountName
+  | extend timestamp = TimeGenerated, HostCustomEntity = Dvc, AccountCustomEntity = User
