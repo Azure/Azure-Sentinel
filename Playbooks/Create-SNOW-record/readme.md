@@ -3,6 +3,9 @@ author: Yaniv Shasha, Benjamin Kovacevic
 
 This playbook will open a Service Now incident when a new incident is opened in Azure Sentinel.<br>
 <br>
+High severity incident in Azure Sentinel will be synced with Critical priority to SNOW<br>
+Medium severity incident in Azure Sentinel will be synced with Moderate priority to SNOW<br>
+Low and Informational severity incident in Azure Sentinel will be synced with Planning priority to SNOW<br><br>
 ## Prerequisites
 
 We will need following data to make SNOW connector:<br>
