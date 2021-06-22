@@ -7,9 +7,9 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
+- [Azure Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
 
 <br>
  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FEmptyAuthentication%2FEmptyAuthentication.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fdev%2FAuthentication%2FParsers%2FASimAuthentication%2FARM%2FEmptyAuthentication%2FEmptyAuthentication.json)

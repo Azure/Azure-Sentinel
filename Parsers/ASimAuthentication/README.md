@@ -9,6 +9,7 @@ This template deploys the following:
 * vimAuthAWSCloudTrail
 * vimAuthOktaSSO
 * vimAuthWindowsSecurityEvents
+* AADSTSErrorCodes
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthenticationARM)
