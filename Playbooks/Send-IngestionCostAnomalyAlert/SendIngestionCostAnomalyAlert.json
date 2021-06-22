@@ -1,0 +1,190 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_IngestionAnomalyAlert_name": {
+            "defaultValue": "IngestionAnomalyAlert",
+            "type": "String"
+        },
+        "connections_azuremonitorlogs_1_externalid": {
+            "defaultValue": "/subscriptions/1c61ccbf-70b3-45a3-a1fb-848ce46d70a6/resourceGroups/CxE-inwafula/providers/Microsoft.Web/connections/azuremonitorlogs-1",
+            "type": "String"
+        },
+        "connections_office365_1_externalid": {
+            "defaultValue": "/subscriptions/1c61ccbf-70b3-45a3-a1fb-848ce46d70a6/resourceGroups/CxE-inwafula/providers/Microsoft.Web/connections/office365-1",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_IngestionAnomalyAlert_name')]",
+            "location": "eastus",
+            "tags": {
+                "createddate": "04/19/2021",
+                "owner": "inwafula"
+            },
+            "identity": {
+                "principalId": "5d0b688e-ba4a-415d-b32c-c7187ee4d689",
+                "tenantId": "5f1060f2-d9a4-4f59-bf9c-1dd8f3604a4b",
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "LookBack": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PercentIncrease",
+                                        "type": "integer",
+                                        "value": 30
+                                    }
+                                ]
+                            }
+                        },
+                        "LookBack": {
+                            "runAfter": {
+                                "ReportingQty": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "LookBack",
+                                        "type": "integer",
+                                        "value": 30
+                                    }
+                                ]
+                            }
+                        },
+                        "ReportingQty": {
+                            "runAfter": {
+                                "UpperAnomalyThreshold": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ReportingQty",
+                                        "type": "float",
+                                        "value": 5
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_visualize_results": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let UpperThreshold = @{variables('UpperAnomalyThreshold')};\nUsage\n| where IsBillable == \"true\"\n| where Quantity > @{variables('ReportingQty')}\n| make-series Qty=sum(Quantity) on TimeGenerated from ago(@{variables('LookBack')}d) to now() step 1d by DataType\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Qty, 1.5, 7, 'linefit', 1, 'ctukey', 0.01)\n| where anomalies[-1] == 1 or anomalies[-1] == -1\n| extend Score = score[-1]\n| where Score >= @{variables('UpperAnomalyThreshold')}\n| extend PercentageQtyIncrease = ((round(todouble(Qty[-1]),0)-round(todouble(baseline[-1]),1))/round(todouble(Qty[-1]),0) * 100)\n| project DataType,ExpectedQty=round(todouble(baseline[-1]),0), ActualQty=round(todouble(Qty[-1]),0),round(PercentageQtyIncrease,0)  \n| order by  round(todouble(PercentageQtyIncrease),0) desc \n| where PercentageQtyIncrease > @{variables('PercentIncrease')}\n",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/visualizeQuery",
+                                "queries": {
+                                    "resourcegroups": "CxE-inwafula",
+                                    "resourcename": "IW-Sec",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "1c61ccbf-70b3-45a3-a1fb-848ce46d70a6",
+                                    "timerange": "Set in query",
+                                    "visType": "Html Table"
+                                }
+                            }
+                        },
+                        "Send_an_email_(V2)": {
+                            "runAfter": {
+                                "Run_query_and_visualize_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>An ingestion spike has been detected for the below tables:<br>\n<br>\n<br>\n@{base64ToString(body('Run_query_and_visualize_results')?['body'])}</p>",
+                                    "Importance": "High",
+                                    "Subject": "Ingestion Cost Spike Alert",
+                                    "To": "inwafula@microsoft.com"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        },
+                        "UpperAnomalyThreshold": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "UpperAnomalyThreshold",
+                                        "type": "float",
+                                        "value": 2.5
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[parameters('connections_azuremonitorlogs_1_externalid')]",
+                                "connectionName": "azuremonitorlogs-1",
+                                "id": "/subscriptions/1c61ccbf-70b3-45a3-a1fb-848ce46d70a6/providers/Microsoft.Web/locations/eastus/managedApis/azuremonitorlogs"
+                            },
+                            "office365": {
+                                "connectionId": "[parameters('connections_office365_1_externalid')]",
+                                "connectionName": "office365-1",
+                                "id": "/subscriptions/1c61ccbf-70b3-45a3-a1fb-848ce46d70a6/providers/Microsoft.Web/locations/eastus/managedApis/office365"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
