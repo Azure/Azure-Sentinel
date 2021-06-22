@@ -7,18 +7,15 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel process events normalization schema reference](https://aka.ms/AzSentinelProcessDoc)
+- [Azure Sentinel process events normalization schema reference](https://aka.ms/AzSentinelProcessEventsDoc)
 
 
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessEventsARM)
 
 <br>
-
-
-
 
 This template deploys the following:
 * vimProcessEmpty - Empty ASim Process table
@@ -29,7 +26,7 @@ This template deploys the following:
 * vimProcessCreateMicrosftSysmon - Process Creation Events from Sysmon
 * vimProcessTermianteMicrosftSysmon - Process Termination Events from Sysmon
 * vimProcessCreateMicrosftSecurityEvents - Process Creation Events from Security Events
-
+* vimProcessTerminateMicrosftSecurityEvents - Process Terination Events from Security Events
 
 <br>
 
