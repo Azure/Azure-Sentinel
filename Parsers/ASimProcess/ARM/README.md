@@ -22,11 +22,11 @@ This template deploys the following:
 * imProcess - Process Events from all normalized process events sources
 * imProcessCreate - Process creation Events from all normalized process events sources
 * imProcessTerminate - Process termination Events from all normalized process events sources
-* vimProcessEventsMicrosft365D - Process events from Microsoft 365 Defender for Endpoints
-* vimProcessCreateMicrosftSysmon - Process Creation Events from Sysmon
-* vimProcessTermianteMicrosftSysmon - Process Termination Events from Sysmon
-* vimProcessCreateMicrosftSecurityEvents - Process Creation Events from Security Events
-* vimProcessTerminateMicrosftSecurityEvents - Process Terination Events from Security Events
+* vimProcessEventsMicrosoft365D - Process events from Microsoft 365 Defender for Endpoints
+* vimProcessCreateMicrosoftSysmon - Process Creation Events from Sysmon
+* vimProcessTermianteMicrosoftSysmon - Process Termination Events from Sysmon
+* vimProcessCreateMicrosoftSecurityEvents - Process Creation Events from Security Events
+* vimProcessTerminateMicrosoftSecurityEvents - Process Terination Events from Security Events
 
 <br>
 
