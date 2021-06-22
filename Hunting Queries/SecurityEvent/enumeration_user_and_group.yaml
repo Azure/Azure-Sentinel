@@ -11,19 +11,20 @@ tactics:
 query: |
 
   let ProcessCreationEvents=() {
-  let processEvents=imProcessCreation
-  | project TimeGenerated, ComputerName=DvcHostName,AccountName=ActorUserName, AccountDomain=ActorUserDomain,
-  FileName=tostring(split(TargetProcessFilePath, '\\')[-1]),
-  ProcessCommandLine = TargetProcessCommandLine, 
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  | project TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,        AccountDomain=SubjectDomainName,
+  FileName=tostring(split(NewProcessName, '\\')[-1]),
+  ProcessCommandLine = CommandLine, 
   FolderPath = "",
-  InitiatingProcessFileName=ActingProcessFileName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="", EventVendor, EventProduct;
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
   processEvents};
   ProcessCreationEvents
   | where FileName == 'net.exe' and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add' 
   | where (ProcessCommandLine contains ' user ' or ProcessCommandLine contains ' group ') and (ProcessCommandLine endswith ' /do' or ProcessCommandLine endswith ' /domain') 
   | extend Target = extract("(?i)[user|group] (\"*[a-zA-Z0-9-_ ]+\"*)", 1, ProcessCommandLine) | filter Target  != '' 
-  | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by AccountName, Target, ProcessCommandLine, ComputerName, EventVendor, EventProduct
-  | project minTimeGenerated, maxTimeGenerated, count_, AccountName, Target, ProcessCommandLine, ComputerName, EventVendor, EventProduct
+  | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by AccountName, Target, ProcessCommandLine, ComputerName
+  | project minTimeGenerated, maxTimeGenerated, count_, AccountName, Target, ProcessCommandLine, ComputerName
   | sort by AccountName, Target
   | extend timestamp = minTimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = ComputerName
   
