@@ -28,7 +28,7 @@ This package includes:
 * [Logic Apps custom connector for Proofpoint TAP](./ProofpointTAPConnector)
 
 * Three playbook templates leverage Proofpoint TAP custom connector:
-  * [Enrichment – add information to incidents](./Playbooks/ProofpointTAP-AddInfoToIncident) - check if user is in the Very Attacked People list. Post information about the incident as a comment to the incident.
+  * [Enrichment – add information to incidents](./Playbooks/ProofpointTAP-CheckAccountInVAP) - check if user is in the Very Attacked People list. Post information about the incident as a comment to the incident.
   * [Enrichment - add forensics info to incident](./Playbooks/ProofpointTAP-AddForensicsInfoToIncident) - collect information about the threat campaign and post it as incident comment.
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from it's specific folder.
@@ -65,7 +65,7 @@ To get Proofpoint TAP API credentials follow the instructions:
 | Parameters | Description |
 |----------------|--------------|
 |**For Playbooks**|
-|**ProofpointTAP-AddInfoToIncident Playbook Name** | Enter the playbook name here (e.g. ProofpointTAP-AddInfoToIncident)|
+|**ProofpointTAP-CheckAccountInVAP Playbook Name** | Enter the playbook name here (e.g. ProofpointTAP-CheckAccountInVAP)|
 |**ProofpointTAP-AddForensicsInfoToIncident Playbook Name** | Enter the playbook name here (e.g. ProofpointTAP-AddForensicsInfoToIncident)|
 
 <br>

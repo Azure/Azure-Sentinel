@@ -1,4 +1,4 @@
-# ProofpointTAP-AddInfoToIncident
+# ProofpointTAP-CheckAccountInVAP
  ## Summary
  When a new sentinal incident is created, this playbook gets triggered and performs below actions
  1. Get [Very Attacked People](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/People_API#.2Fv2.2Fpeople.2Fvap) on the latest 14 days. 
@@ -13,7 +13,7 @@
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAPk%2FPlaybooks%2FProofpointTAP-AddInfoToIncident%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2FPlaybooks%2FProofpointTAP-AddInfoToIncident%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAPk%2FPlaybooks%2FProofpointTAP-CheckAccountInVAP%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fproofpoint_tap_logic_app%2FPlaybooks%2FProofpointTAP%2FPlaybooks%2FProofpointTAP-CheckAccountInVAP%2Fazuredeploy.json)
 
 
 ### Post-Deployment instructions 
