@@ -4,6 +4,8 @@
  1. Get [Very Attacked People](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/People_API#.2Fv2.2Fpeople.2Fvap) on the latest 14 days. 
  2. Enrich the incident with information whether incident's users are in VAP list and change incident severity.
 
+<img src="./playbook_screenshot.png" width="80%"/><br>
+
 ### Prerequisites 
 1. ProofpointTAP Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Obtain ProofpointTAP API credentials. Refer to ProofpointTAP Custom Connector documentation.

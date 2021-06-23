@@ -4,6 +4,7 @@
  1. [Get Forensics](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/Forensics_API) by the *campaignId*, provided in the alert custom entities. 
  2. Enrich the incident with Forensics info.
 
+<img src="./playbook_screenshot.png" width="80%"/><br>
 ### Prerequisites 
 1. ProofpointTAP Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Obtain ProofpointTAP API credentials. Refer to ProofpointTAP Custom Connector documentation.
