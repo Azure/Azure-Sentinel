@@ -147,7 +147,7 @@ namespace Kqlvalidations.Tests
             {
                 detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
-            catch (Exception e) when (e.Message.Contains("sequence contains no elements"))
+            catch (Exception e) when (e.Message.Contains("Sequence contains no elements"))
             {
                 detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
             }
