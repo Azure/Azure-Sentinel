@@ -7,13 +7,13 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel process events normalization schema reference](https://aka.ms/AzSentinelProcessEventsDoc)
+- [Azure Sentinel process events normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
 
 
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessEventsARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessEventARM)
 
 <br>
 
