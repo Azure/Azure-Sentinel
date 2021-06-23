@@ -147,9 +147,13 @@ namespace Kqlvalidations.Tests
             {
                 detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
-            catch
+            catch (Exception e) when (e.Message.Contains("Sequence contains no elements"))
             {
                 detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+            }
+            catch (Exception e) when (e.Message.Contains("Sequence contains more than one element"))
+            {
+                throw new Exception($"Should not have 2 templates with the same name , problematic name is {detectionsYamlFileName}");
             }
 
             return File.ReadAllText(detectionsYamlFile);
