@@ -1,4 +1,4 @@
-# Triton Attack Playbook
+# AD4IoT - Triton Attack Playbook
 Author: Amit Sheps and Lior Tamir
 
 In December 2017, it was reported that safety systems of an unidentified power station, believed to be in Saudi Arabia, were compromised when a Triconex industrial a safety system made by Schneider Electric SE was targeted. It is believed that this was a state-sponsored attack. 
@@ -9,8 +9,8 @@ This playbook allows users to validate any PLC programming command which is perf
 
 ### Note: This playbook offers a complex flow, and requires configuration by the specific environment.
 
-### This playbook currently leverages Incident Trigger which is in Private Preview.<br><br>
 
+## Deploy to Azure
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FTritonDetectionAndResponse%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FTritonDetectionAndResponse%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAD4IoT-TritonDetectionAndResponse%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAD4IoT-TritonDetectionAndResponse%2Fazuredeploy.json)
