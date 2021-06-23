@@ -1,0 +1,112 @@
+Parser:
+  Title: ASIM M365 Defender for endpoint Process Events Parser
+  Version: '0.1'
+  LastUpdated: June 23, 2021
+Product:
+  Name: Microsoft 365 Defender
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM M365 Defender for endpoint Process Events Parser
+ParserName: vimProcessEventsMicrosoft365D
+ParserQuery: |
+              let ProcessEvents_M365D=()
+              {
+                DeviceProcessEvents
+                | extend
+                  // Event
+                  EventOriginalUid = tostring(ReportId),
+                  EventCount = int(1),
+                  EventProduct = 'M365 Defender for Endpoint',
+                  EventVendor = 'Microsoft',
+                  EventSchemaVersion = '0.1.0',
+                  EventStartTime = todatetime(TimeGenerated),
+                  EventEndTime = todatetime(TimeGenerated),
+                  EventType = 'ProcessCreated',
+
+                  // Device
+                  DvcHostname = DeviceName,
+                  DvcId = DeviceId,
+                  DvcOs = 'Windows',
+                  Dvc = DeviceName
+
+                  // Users
+                | extend
+                  ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
+                  TargetUsername = iff (AccountDomain == '', AccountName, strcat(AccountDomain, '\\', AccountName)),
+                  TargetUsernameType = iff(AccountDomain == '','Simple', 'Windows'),
+                  ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),
+                  ActorUserIdType = 'SID',
+                  TargetUserIdType = 'SID',
+                  ActorSessionId = tostring(InitiatingProcessLogonId),
+                  TargetUserSessionId = tostring(LogonId)
+
+                | project-rename
+                  ActorUserId = InitiatingProcessAccountSid,
+
+                  ActorUserAadId = InitiatingProcessAccountObjectId,
+                  ActorUserUpn = InitiatingProcessAccountUpn,
+                 
+                  TargetUserId = AccountSid,
+                  TargetUserAadId = AccountObjectId,
+                  TargetUserUpn = AccountUpn
+
+                  // Processes
+                | extend
+                  TargetProcessId = tostring(ProcessId),
+                  ActingProcessId = tostring(InitiatingProcessId),
+                  ParentProcessId = tostring(InitiatingProcessParentId)
+
+                | project-rename
+                  ParentProcessName = InitiatingProcessParentFileName, 
+
+                  ParentProcessCreationTime = InitiatingProcessParentCreationTime,
+                  
+                  TargetProcessName = FolderPath,
+                  TargetProcessCommandLine = ProcessCommandLine,
+                  TargetProcessMD5 = MD5,
+                  TargetProcessSHA1 = SHA1,
+                  TargetProcessSHA256 = SHA256,
+                  TargetProcessIntegrityLevel = ProcessIntegrityLevel,
+                  TargetProcessTokenElevation = ProcessTokenElevation,
+                  TargetProcessCreationTime = ProcessCreationTime,
+                  // TargetProcessFileSize = FileSize,
+                  // TargetProcessCompany = ProcessVersionInfoCompanyName,
+                  // TargetProcessFileProduct = ProcessVersionInfoProductName,
+                  // TargetProcessFileVersion = ProcessVersionInfoProductVersion,
+                  // TargetProcessFileInternalName = ProcessVersionInfoInternalFileName,
+                  // TargetProcessFileOriginallName = ProcessVersionInfoOriginalFileName,
+                  // TargetProcessFileDescription = ProcessVersionInfoFileDescription
+
+                  ActingProcessName = InitiatingProcessFolderPath, 
+                  ActingProcessCommandLine = InitiatingProcessCommandLine, 
+
+                  ActingProcessMD5 = InitiatingProcessMD5, 
+                  ActingProcessSHA1 = InitiatingProcessSHA1, 
+                  ActingProcessSHA256 = InitiatingProcessSHA256, 
+                  ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+                  ActingProcessTokenElevation = InitiatingProcessTokenElevation,
+                  ActingProcessCreationTime = InitiatingProcessCreationTime
+
+                  // ActingProcessFileSize = InitiatingProcessFileSize,
+                  // ActingProcessCompany = InitiatingProcessVersionInfoCompanyName,
+                  // ActingProcessFileProduct = InitiatingProcessVersionInfoProductName,
+                  // ActingProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
+                  // ActingProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
+                  // ActingProcessFileOriginallName = InitiatingProcessVersionInfoOriginalFileName,
+                  // ActingProcessFileDescription = InitiatingProcessVersionInfoFileDescription
+
+                  // -- aliases
+                | extend 
+                  User = coalesce(TargetUsername, ActorUsername),
+                  CommandLine = TargetProcessCommandLine,
+                  Process = TargetProcessName
+
+
+               };
+               ProcessEvents_M365D

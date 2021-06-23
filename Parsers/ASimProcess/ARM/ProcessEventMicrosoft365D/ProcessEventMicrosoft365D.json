@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessEventsMicrosoft365D",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM M365 Defender for endpoint Process Events Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessEventsMicrosoft365D",
+            "query": "let ProcessEvents_M365D=()\n{\n  DeviceProcessEvents\n  | extend\n    // Event\n    EventOriginalUid = tostring(ReportId),\n    EventCount = int(1),\n    EventProduct = 'M365 Defender for Endpoint',\n    EventVendor = 'Microsoft',\n    EventSchemaVersion = '0.1.0',\n    EventStartTime = todatetime(TimeGenerated),\n    EventEndTime = todatetime(TimeGenerated),\n    EventType = 'ProcessCreated',\n\n    // Device\n    DvcHostname = DeviceName,\n    DvcId = DeviceId,\n    DvcOs = 'Windows',\n    Dvc = DeviceName\n\n    // Users\n  | extend\n    ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\\\', InitiatingProcessAccountName)),\n    TargetUsername = iff (AccountDomain == '', AccountName, strcat(AccountDomain, '\\\\', AccountName)),\n    TargetUsernameType = iff(AccountDomain == '','Simple', 'Windows'),\n    ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),\n    ActorUserIdType = 'SID',\n    TargetUserIdType = 'SID',\n    ActorSessionId = tostring(InitiatingProcessLogonId),\n    TargetUserSessionId = tostring(LogonId)\n\n  | project-rename\n    ActorUserId = InitiatingProcessAccountSid,\n\n    ActorUserAadId = InitiatingProcessAccountObjectId,\n    ActorUserUpn = InitiatingProcessAccountUpn,\n   \n    TargetUserId = AccountSid,\n    TargetUserAadId = AccountObjectId,\n    TargetUserUpn = AccountUpn\n\n    // Processes\n  | extend\n    TargetProcessId = tostring(ProcessId),\n    ActingProcessId = tostring(InitiatingProcessId),\n    ParentProcessId = tostring(InitiatingProcessParentId)\n\n  | project-rename\n    ParentProcessName = InitiatingProcessParentFileName, \n\n    ParentProcessCreationTime = InitiatingProcessParentCreationTime,\n    \n    TargetProcessName = FolderPath,\n    TargetProcessCommandLine = ProcessCommandLine,\n    TargetProcessMD5 = MD5,\n    TargetProcessSHA1 = SHA1,\n    TargetProcessSHA256 = SHA256,\n    TargetProcessIntegrityLevel = ProcessIntegrityLevel,\n    TargetProcessTokenElevation = ProcessTokenElevation,\n    TargetProcessCreationTime = ProcessCreationTime,\n    // TargetProcessFileSize = FileSize,\n    // TargetProcessCompany = ProcessVersionInfoCompanyName,\n    // TargetProcessFileProduct = ProcessVersionInfoProductName,\n    // TargetProcessFileVersion = ProcessVersionInfoProductVersion,\n    // TargetProcessFileInternalName = ProcessVersionInfoInternalFileName,\n    // TargetProcessFileOriginallName = ProcessVersionInfoOriginalFileName,\n    // TargetProcessFileDescription = ProcessVersionInfoFileDescription\n\n    ActingProcessName = InitiatingProcessFolderPath, \n    ActingProcessCommandLine = InitiatingProcessCommandLine, \n\n    ActingProcessMD5 = InitiatingProcessMD5, \n    ActingProcessSHA1 = InitiatingProcessSHA1, \n    ActingProcessSHA256 = InitiatingProcessSHA256, \n    ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel,\n    ActingProcessTokenElevation = InitiatingProcessTokenElevation,\n    ActingProcessCreationTime = InitiatingProcessCreationTime\n\n    // ActingProcessFileSize = InitiatingProcessFileSize,\n    // ActingProcessCompany = InitiatingProcessVersionInfoCompanyName,\n    // ActingProcessFileProduct = InitiatingProcessVersionInfoProductName,\n    // ActingProcessFileVersion = InitiatingProcessVersionInfoProductVersion,\n    // ActingProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,\n    // ActingProcessFileOriginallName = InitiatingProcessVersionInfoOriginalFileName,\n    // ActingProcessFileDescription = InitiatingProcessVersionInfoFileDescription\n\n    // -- aliases\n  | extend \n    User = coalesce(TargetUsername, ActorUsername),\n    CommandLine = TargetProcessCommandLine,\n    Process = TargetProcessName\n\n\n };\n ProcessEvents_M365D",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
