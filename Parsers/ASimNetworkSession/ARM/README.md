@@ -1,7 +1,7 @@
 # NetworkSessions - Azure Sentinel Information Model
 
 This template deploys the following:
-* imNetworkSessions - NetworkSessions events from all normalized network providers
+* imNetworkSessions - Network Session events from all normalized network providers
 * vimNwSCheckPoint
 * vimDnsCiscoASA
 * vimNwSM365Defender
@@ -11,4 +11,4 @@ This template deploys the following:
 * vimNwSZScaler
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelNetworkSessionsARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelNetworkSessionARM)
