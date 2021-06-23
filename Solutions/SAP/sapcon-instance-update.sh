@@ -44,12 +44,12 @@ while IFS= read -r containerid
 do	
 	
 	contname=$(docker ps -a --filter id=$containerid --format '{{.Names}}')
+	echo ''
 	echo Updating $contname....
 
 	if [  ! -z $containerid ]
 	then
 		sysfileloc=$(docker inspect -f '{{ .Mounts }}' $containerid | awk 'NR==1 {print $2}')
-		echo ''
 		if [  ! -z $sysfileloc ]
 		then
 			last=${sysfileloc: -1}
@@ -63,20 +63,18 @@ do
 
 			if [ $contstate == "false" ]
 			then
-					docker cp $containerid:$sdkfileloc $(pwd)
-					docker container rm $containerid >/dev/null
-					docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
-					docker cp "$(pwd)/inst/" $containerid:/sapcon-app/ >/dev/null
-					echo ''
+					docker cp $contname:$sdkfileloc $(pwd) >/dev/null
+					docker container rm $contname >/dev/null
+					docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage$tagver >/dev/null
+					docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
 					echo 'Container "'"$contname"'" was updated - please start the app by running "docker start '"$contname"'"'
 			else
-				docker cp $containerid:$sdkfileloc $(pwd)
-				docker stop $containerid >/dev/null
-				docker container rm $containerid >/dev/null
-				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
-				docker cp "$(pwd)/inst/" $containerid:/sapcon-app/ >/dev/null
-				docker start $containerid >/dev/null
-				echo ''
+				docker cp $contname:$sdkfileloc $(pwd) >/dev/null
+				docker stop $contname >/dev/null
+				docker container rm $contname >/dev/null
+				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage$tagver >/dev/null
+				docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
+				docker start $contname >/dev/null
 				echo 'Container "'"$contname"'" was updated'
 			fi
 		else
