@@ -20,7 +20,7 @@ keyVaultName = str(os.environ['KeyVaultName'])
 KVUri = "https://" + keyVaultName + ".vault.azure.net/"
 
 #RISK MES API credentials
-lookout_mes_uri = "https://api.lesstage0.flexilis.org"
+lookout_mes_uri = "https://api.lookout.com"
 ent_name = os.environ.get('EnterpriseName')
 api_key = os.environ.get('ApiKey')
 
