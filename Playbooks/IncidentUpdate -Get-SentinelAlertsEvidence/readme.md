@@ -8,7 +8,7 @@ Author: Naomi Christis and Yaniv Shasha
 
 Deploy the solution
 1.	Create an Event Hub using the article "Create an event hub using Azure portal" <br>
-https://docs.microsoft.com/en-us/azure/event-hubs/event-hubs-create  or use an existing Event Hub.
+https://docs.microsoft.com/azure/event-hubs/event-hubs-create  or use an existing Event Hub.
 
 2.	Deploy the playbook to your environment
 
