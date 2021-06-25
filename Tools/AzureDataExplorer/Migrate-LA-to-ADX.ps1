@@ -5,25 +5,46 @@
 	SOFTWARE.
 #>
 
-PARAM(    
-    [Parameter(Mandatory=$true)] $LogAnalyticsWorkspaceName,
-    [Parameter(Mandatory=$true)] $LogAnalyticsResourceGroup,
-    [Parameter(Mandatory=$true)] $ADXResourceGroup,
-    [Parameter(Mandatory=$true)] $ADXClusterURL,
-    [Parameter(Mandatory=$true)] $ADXDBName,   
-        
-    $ADXEngineUrl = "$ADXClusterURL/$ADXDBName",
-    $kustoToolsPackage = "microsoft.azure.kusto.tools",
-    $kustoConnectionString = "$ADXEngineUrl;Fed=True",
-    
-    $nugetPackageLocation = "$($env:USERPROFILE)\.nuget\packages",
-    $nugetIndex = "https://api.nuget.org/v3/index.json",
-    $nugetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+Param(    
+    [Parameter(Mandatory = $true, HelpMessage = "Enter the resource group location for the Log Analytics workspace.")]
+    [string]$LogAnalyticsResourceGroup,
+
+    [Parameter(Mandatory = $true, HelpMessage = "Enter the Log Analytics workspace name from which to export data.")]
+    [string]$LogAnalyticsWorkspaceName,
+
+    [Parameter(Mandatory = $true, HelpMessage = "Enter the resource group location for the existing Azure Data Explorer (ADX) cluster for which to export data.")]
+    [string]$AdxResourceGroup,
+
+    [Parameter(Mandatory = $true, HelpMessage = "Enter the Azure Data Explorer (ADX) cluster Url.")] 
+    [string]$AdxClusterURL,
+
+    [Parameter(Mandatory = $true, HelpMessage = "Enter the Azure Data Explorer (ADX) cluster database name.")]
+    [string]$AdxDBName
+
 )
 
-Function Write-Log {
+
+#region StaticValues
+
+# These values do not need to be accessible from the commandline
+[string]$AdxEngineUrl = "$AdxClusterURL/$AdxDBName"
+[string]$KustoToolsPackage = "microsoft.azure.kusto.tools"
+[string]$KustoConnectionString = "$AdxEngineUrl;Fed=True"
+[string]$NuGetIndex = "https://api.nuget.org/v3/index.json"
+[string]$NuGetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+#endregiou StaticValues
+
+function Write-Log {
+    <#
+    .Description 
+    Write-Log is used to write information to a log file.
+    
+    .Parameter Severity
+    Parameter specifies the severity of the log message. Values can be: Information, Warning, or Error. 
+    #>
+
     [CmdletBinding()]
-    param(
+    Param(
         [Parameter()]
         [ValidateNotNullOrEmpty()]
         [string]$Message,
@@ -31,136 +52,166 @@ Function Write-Log {
  
         [Parameter()]
         [ValidateNotNullOrEmpty()]
-        [ValidateSet('Information','Warning','Error')]
+        [ValidateSet('Information', 'Warning', 'Error')]
         [string]$Severity = 'Information'
     )
+
+    # Write the message out to the correct channel
+    switch($Severity)
+    {
+        "Information" {Write-Information -MessageData $Message -ErrorAction Continue}
+        "Warning" {Write-Warning -Message $Message -ErrorAction Continue}
+        "Error" {Write-Error -Message $Message -ErrorAction Continue}
+    }  
+
     try {
-        [pscustomobject]@{
-            Time = (Get-Date -f g)
-            Message = $Message
+        [PSCustomObject]@{
+            Time     = (Get-Date -f g)
+            Message  = $Message
             Severity = $Severity
         } | Export-Csv -Path "$PSScriptRoot\$LogFileName" -Append -NoTypeInformation
+        
+
     }
     catch {
-        Write-Host "An error occured in Write-Log() method" -ForegroundColor Red
+        Write-Error "An error occurred in Write-Log method" -ErrorAction Continue
     }
     
 }
-Function CheckModules($module) {
-    try{
-        $installedModule = Get-InstalledModule -Name $module -ErrorAction SilentlyContinue
+
+function Get-RequiredModules {
+    <#
+    .Description 
+    Get-Required is used to install and then import the specified PowerShell module.
+    
+    .Parameter Module
+    Parameter specifices the PowerShell module to install. 
+    #>
+
+    [CmdletBinding()]
+    Param (        
+        [Parameter(Mandatory = $true)] $Module        
+    )
+    
+    try {
+        $installedModule = Get-InstalledModule -Name $Module -ErrorAction SilentlyContinue
         if ($null -eq $installedModule) {
-            Write-Warning "The $module PowerShell module is not found"
-            Write-Log -Message "The $module PowerShell module is not found" -LogFileName $LogFileName -Severity Warning
+
+            Write-Log -Message "The $Module PowerShell module was not found" -LogFileName $LogFileName -Severity Warning
             #check for Admin Privleges
             $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 
             if (-not ($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
                 #Not an Admin, install to current user            
-                Write-Warning -Message "Can not install the $module module. You are not running as Administrator"
-                Write-Log -Message "Can not install the $module module. You are not running as Administrator" -LogFileName $LogFileName -Severity Warning
 
-                Write-Warning -Message "Installing $module module to current user Scope"
-                Write-Log -Message "Installing $module module to current user Scope" -LogFileName $LogFileName -Severity Warning
+                Write-Log -Message "Can not install the $Module module. You are not running as Administrator" -LogFileName $LogFileName -Severity Warning
+                Write-Log -Message "Installing $Module module to current user Scope" -LogFileName $LogFileName -Severity Warning
                 
-                Install-Module -Name $module -Scope CurrentUser -Force
-                Import-Module -Name $module -Force
+                Install-Module -Name $Module -Scope CurrentUser -Force
+                Import-Module -Name $Module -Force
             }
             else {
                 #Admin, install to all users
-                Write-Warning -Message "Installing the $module module to all users"
-                Write-Log -Message "Installing the $module module to all users" -LogFileName $LogFileName -Severity Warning
-                Install-Module -Name $module -Force
-                Import-Module -Name $module -Force
+                Write-Log -Message "Installing the $Module module to all users" -LogFileName $LogFileName -Severity Warning
+                Install-Module -Name $Module -Force
+                Import-Module -Name $Module -Force
             }
         }
         #Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
         #Import-Module will bring the module and its functions into your current powershell session, if the module is installed.  
     }
-    catch{
-        Write-Host "An error occured in CheckModules() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in CheckModules() method" -LogFileName $LogFileName -Severity Error        
+    catch {
+        Write-Log -Message "An error occurred in Get-RequiredModules() method" -LogFileName $LogFileName -Severity Error 
         exit
     }
 }
 
-Function InvokeKustoCLI($adxCommandsFile) {
-    try{
-        $kustoToolsDir = "$env:USERPROFILE\.nuget\packages\$kustoToolsPackage\"
-        $currentDir = Get-Location
-        Set-Location $scriptDir
+function Invoke-KustoCLI {
+        <#
+    .Description 
+    Invoke-KustoCLI is used to execute the KustoCLI with the specified AdxCommandsFile.
+    
+    .Parameter AdxCommandsFile
+    Parameter specifices the path the the file that includes the commands to execute 
+    #>
 
-        if (!(test-path $kustoToolsDir))
-        {        
-            if(!(test-path nuget))
-            {
-                Write-Warning "The Nuget module is not found"
-                Write-Log -Message "The Nuget module is not found" -LogFileName $LogFileName -Severity Warning
-            
-                Write-Host "Downloading Nuget package" -ForegroundColor Green
-                Write-Log -Message "Downloading Nuget package" -LogFileName $LogFileName -Severity Information
-                (new-object net.webclient).downloadFile($nugetDownloadUrl, "$pwd\nuget.exe")
+    [CmdletBinding()]
+    Param (        
+        [Parameter(Mandatory = $true)] $AdxCommandsFile        
+    )
+
+    try {
+        $KustoToolsDir = "$env:USERPROFILE\.nuget\packages\$KustoToolsPackage\"
+        $CurrentDir = Get-Location
+        Set-Location $ScriptDir
+
+        if (!(Test-Path $KustoToolsDir)) {        
+            if (!(Test-Path nuget)) {
+
+                Write-Log -Message "The NuGet module is not found" -LogFileName $LogFileName -Severity Warning
+
+                Write-Host " Downloading NuGet package"
+                Write-Log -Message "Downloading NuGet package" -LogFileName $LogFileName -Severity Information
+                (New-Object net.webclient).downloadFile($NuGetDownloadUrl, "$pwd\nuget.exe")
             }
 
-            Write-Host "Installing Kusto Tools Package" -ForegroundColor Green
+            Write-Host " Installing Kusto Tools Package"
             Write-Log -Message "Installing Kusto Tools Package" -LogFileName $LogFileName -Severity Information
             &.\nuget.exe install $kustoToolsPackage -Source $nugetIndex -OutputDirectory $nugetPackageLocation
         }
 
-        $kustoExe = $kustoToolsDir + @(get-childitem -recurse -path $kustoToolsDir -Name kusto.cli.exe)[-1]
+        $KustoExe = $KustoToolsDir + @(Get-ChildItem -Recurse -Path $KustoToolsDir -Name kusto.cli.exe)[-1]
         
-        if (!(test-path $kustoExe))
-        {
-            Write-Warning "Unable to find kusto client tool $kustoExe. exiting"
-            Write-Log -Message "Unable to find kusto client tool $kustoExe. exiting" -LogFileName $LogFileName -Severity Warning
+        if (!(Test-Path $KustoExe)) {
+            Write-Log -Message "Unable to find Kusto client tool $KustoExe. exiting" -LogFileName $LogFileName -Severity Warning
+            Write-Warning "Unable to find Kusto client tool $KustoExe. exiting"
             return
         }
         
-        Write-Host "Executing queries on Azure Data Explorer (ADX)" -ForegroundColor Green
+        Write-Host "Executing queries on Azure Data Explorer (ADX)"
         Write-Log -Message "Executing queries on Azure Data Explorer (ADX)" -LogFileName $LogFileName -Severity Information
-        invoke-expression "$kustoExe `"$kustoConnectionString`" -script:$adxCommandsFile"
+        Invoke-Expression "$kustoExe `"$kustoConnectionString`" -script:$adxCommandsFile"
+        Set-Location $currentDir
 
-        set-location $currentDir
     }
-    catch{
-        Write-Host "An error occured in InvokeKustoCLI() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in InvokeKustoCLI() method" -LogFileName $LogFileName -Severity Error        
+    catch {
+        Write-Log -Message "An error occurred in Invoke-KustoCLI() method" -LogFileName $LogFileName -Severity Error        
         exit
     }
 }
 
-Function CreateRawMappingTablesInADX() {    
+function New-AdxRawMappingTables {    
     [CmdletBinding()]
-    param (        
-        [Parameter(Mandatory=$true)] $LATables        
+    Param (        
+        [Parameter(Mandatory = $true)] $LaTables        
     )
 
-    try{
-        if(!(Test-Path "$PSScriptRoot\KustoQueries" -PathType Container)) { 
+    try {
+        if (!(Test-Path "$PSScriptRoot\KustoQueries" -PathType Container)) { 
             New-Item -Path $PSScriptRoot -Name "KustoQueries" -ItemType "directory"
         }
         
         $supportedTables = Get-Content "$PSScriptRoot\ADXSupportedTables.json" | ConvertFrom-Json
         
-        foreach ($table in $LATables) {
+        foreach ($table in $LaTables) {
             if ($decision -eq 0) {
                 $TableName = $table.'$table'
             }
             else {
                 $TableName = $table
             }
-            IF ($TableName -match '_CL$'){
-                Write-Host "Custom Log Table : $TableName not supported" -ForegroundColor Red
-                Write-Log -Message "Custom Log Table : $TableName not supported" -LogFileName $LogFileName -Severity Information
+            if ($TableName -match '_CL$') {
+                Write-Log -Message "Custom log table : $TableName not supported" -LogFileName $LogFileName -Severity Information
             }
             elseif ($supportedTables."SupportedTables" -contains $TableName.Trim()) {        
-                Write-Host "Getting schema and mappings for $TableName"
-                Write-Log -Message "Getting schema and mappings for $TableName" -LogFileName $LogFileName -Severity Information
+                Write-Log -Message "Retrieving schema and mappings for $TableName" -LogFileName $LogFileName -Severity Information
                 $query = $TableName + ' | getschema | project ColumnName, DataType'        
                 $AdxTablesArray.Add($TableName.Trim())
+
+                Write-Verbose "Executing: (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results"
                 $output = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results
 
-                $TableExpandFunction = $TableName + 'Expand'
+                $TableExpandfunction = $TableName + 'Expand'
                 $TableRaw = $TableName + 'Raw'
                 $RawMapping = $TableRaw + 'Mapping'
 
@@ -171,7 +222,8 @@ Function CreateRawMappingTablesInADX() {
                     if ($record.DataType -eq 'System.DateTime') {
                         $dataType = 'datetime'
                         $ThirdCommand += $record.ColumnName + " = todatetime(events." + $record.ColumnName + "),"
-                    } else {
+                    }
+                    else {
                         $dataType = 'string'
                         $ThirdCommand += $record.ColumnName + " = tostring(events." + $record.ColumnName + "),"
                     }
@@ -191,13 +243,13 @@ Function CreateRawMappingTablesInADX() {
 
                 $CreateTable = '.create table {0} ({1})' -f $TableName, $schema
 
-                $CreateFunction = @'
+                $Createfunction = @'
                 .create-or-alter function {0} {{{1} | mv-expand events = Records | project {2} }}
-'@ -f $TableExpandFunction, $TableRaw, $function
+'@ -f $TableExpandfunction, $TableRaw, $function
 
                 $CreatePolicyUpdate = @'
                 .alter table {0} policy update @'[{{"Source": "{1}", "Query": "{2}()", "IsEnabled": "True", "IsTransactional": true}}]'
-'@ -f $TableName, $TableRaw, $TableExpandFunction
+'@ -f $TableName, $TableRaw, $TableExpandfunction
 
                 $scriptDir = "$PSScriptRoot\KustoQueries"
                 New-Item "$scriptDir\adxCommands.txt"
@@ -205,129 +257,128 @@ Function CreateRawMappingTablesInADX() {
                 Add-Content "$scriptDir\adxCommands.txt" "`n$CreateRawMapping"
                 Add-Content "$scriptDir\adxCommands.txt" "`n$CreateRetention"
                 Add-Content "$scriptDir\adxCommands.txt" "`n$CreateTable"
-                Add-Content "$scriptDir\adxCommands.txt" "`n$CreateFunction"
+                Add-Content "$scriptDir\adxCommands.txt" "`n$Createfunction"
                 Add-Content "$scriptDir\adxCommands.txt" "`n$CreatePolicyUpdate"
 
-                InvokeKustoCLI -AdxCommandsFile "$scriptDir\adxCommands.txt"
+                Invoke-KustoCLI -AdxCommandsFile "$scriptDir\adxCommands.txt"
                 Remove-Item $scriptDir\adxCommands.txt -Force -ErrorAction Ignore        
-                Write-Host "Successfully created Raw and Mapping tables for :$TableName in Azure Data Explorer Cluster Database" -ForegroundColor Green
                 Write-Log -Message "Successfully created Raw and Mapping tables for :$TableName in Azure Data Explorer Cluster Database" -LogFileName $LogFileName -Severity Information
             }
             else {
-                Write-Host "$TableName not supported by Data Export rule" -ForegroundColor Red
                 Write-Log -Message "$TableName not supported by Data Export rule" -LogFileName $LogFileName -Severity Error
             }
         }   
     }
-    catch{
-        Write-Host "An error occured in CreateRawMappingTablesInADX() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in CreateRawMappingTablesInADX() method" -LogFileName $LogFileName -Severity Error        
-        exit
-    }
-} # Function close
-
-Function SplitArrayBySize(){
-    [CmdletBinding()]
-    param (        
-        [Parameter(Mandatory=$true)] $ADXTabsArray,
-        [Parameter(Mandatory=$true)] $ArraySize
-    )    
-    try{
-        Write-Host "Splitting Array by size 10" -ForegroundColor Green
-        Write-Log -Message "Splitting Array by size 10" -LogFileName $LogFileName -Severity Information
-        $slicedArraysResult = SliceArray -Item $ADXTabsArray -Size $ArraySize | ForEach-Object { '{0}' -f ($_ -join '","') }
-    
-        return $slicedArraysResult
-    }
-    catch{
-        Write-Host "An error occured in SplitArrayBySize() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in SplitArrayBySize() method" -LogFileName $LogFileName -Severity Error        
+    catch {
+        Write-Log -Message "An error occurred in New-AdxRawMappingTables() method" -LogFileName $LogFileName -Severity Error        
         exit
     }
 }
 
-Function CreateEventHubNamespace(){
+function Split-ArrayBySize {
     [CmdletBinding()]
-    param (        
-        [Parameter(Mandatory=$true)] $ArraysObject        
+    Param (        
+        [Parameter(Mandatory = $true)] $AdxTabsArray,
+        [Parameter(Mandatory = $true)] $ArraySize
+    )    
+    try {
+        Write-Log -Message "Splitting array into groups of up to $ArraySize" -LogFileName $LogFileName -Severity Information
+        $slicedArraysResult = Split-Array -Item $AdxTabsArray -Size $ArraySize | ForEach-Object { '{0}' -f ($_ -join '","') }
+    
+        return $slicedArraysResult
+    }
+    catch {
+
+        Write-Log -Message "An error occurred in Split-ArrayBySize() method" -LogFileName $LogFileName -Severity Error
+        exit
+    }
+}
+
+function New-EventHubNamespace {
+    [CmdletBinding()]
+    Param (        
+        [Parameter(Mandatory = $true)] $ArraysObject        
     )
-    try{
+    try {
         $EventHubsArray = @()
         
         foreach ($slicedArray in $ArraysObject) {
-            if ($slicedArray.Length -gt 0){
+            if ($slicedArray.Length -gt 0) {
                 #Create EventHub NameSpace
                 $randomNumber = Get-Random
                 $EventHubNamespaceName = "$($LogAnalyticsWorkspaceName)-$($randomNumber)"        
                 $EventHubsArray += $EventHubNamespaceName
+                Write-Verbose "Executing: New-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup -NamespaceName $EventHubNamespaceName `
+                -Location $LogAnalyticsLocation -SkuName Standard -SkuCapacity 12 -EnableAutoInflate -MaximumThroughputUnits 20"
+
                 try {
-                    Write-Host "Create a new EventHub-Namespace:$EventHubNamespaceName under Resource Group:$LogAnalyticsResourceGroup" -ForegroundColor Green
-                    Write-Log -Message "Create a new EventHub-Namespace:$EventHubNamespaceName under Resource Group:$LogAnalyticsResourceGroup" -LogFileName $LogFileName -Severity Information
+                    Write-Host " Create a new EventHub-Namespace:$EventHubNamespaceName in Resource Group:$LogAnalyticsResourceGroup"
+                    Write-Log -Message "Create a new EventHub-Namespace:$EventHubNamespaceName in Resource Group:$LogAnalyticsResourceGroup" -LogFileName $LogFileName -Severity Information
                     Set-Item Env:\SuppressAzurePowerShellBreakingChangeWarnings "true"
+
                     $resultEventHubNS = New-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup `
-                                                            -NamespaceName $EventHubNamespaceName `
-                                                            -Location $LogAnalyticsLocation `
-                                                            -SkuName "Standard" `
-                                                            -SkuCapacity 12 `
-                                                            -EnableAutoInflate `
-                                                            -MaximumThroughputUnits 20 `
-                                                            -Verbose
+                        -NamespaceName $EventHubNamespaceName `
+                        -Location $LogAnalyticsLocation `
+                        -SkuName "Standard" `
+                        -SkuCapacity 12 `
+                        -EnableAutoInflate `
+                        -MaximumThroughputUnits 20
                     
-                    if($resultEventHubNS.ProvisioningState.Trim().ToLower() -eq "succeeded") {
-                        Write-Host "$EventHubNamespaceName created succesfully" -ForegroundColor Green
-                        Write-Log -Message "$EventHubNamespaceName created succesfully" -LogFileName $LogFileName -Severity Information
+                    if ($resultEventHubNS.ProvisioningState.Trim().ToLower() -eq "succeeded") {
+                        Write-Host "`n`n  $EventHubNamespaceName created successfully"
+                        Write-Log -Message "$EventHubNamespaceName created successfully" -LogFileName $LogFileName -Severity Information
                     }                
                 }
-                catch{
-                    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
+                catch {
                     Write-Log -Message "$($_.Exception.Response.StatusCode.value__)" -LogFileName $LogFileName -Severity Error
-                    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
                     Write-Log -Message "$($_.Exception.Response.StatusDescription)" -LogFileName $LogFileName -Severity Error
                 }
             }
         } 
         return $EventHubsArray
     }
-    catch{
-        Write-Host "An error occured in CreateEventHubNamespace() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in CreateEventHubNamespace() method" -LogFileName $LogFileName -Severity Error        
+    catch {
+        Write-Log -Message "An error occurred in New-EventHubNamespace() method" -LogFileName $LogFileName -Severity Error        
         exit
     }
 }
 
-Function CreateLADataExportRule() {
+function New-LaDataExportRule {
     [CmdletBinding()]
-    param (        
-        [Parameter(Mandatory=$true)] $adxEventHubs,
-        [Parameter(Mandatory=$true)] $tablesArrayCollection     
+    Param (        
+        [Parameter(Mandatory = $true)] $AdxEventHubs,
+        [Parameter(Mandatory = $true)] $TablesArrayCollection     
     )
-    try{
-        Write-Host "Creating Log Analytics Data Export rules" -ForegroundColor Blue
-        Write-Log -Message "Creating Log Analytics Data Export rules" -LogFileName $LogFileName -Severity Information
-        $count=0
-        
-        
+
+    Write-Host "Creating Log Analytics data export rules"
+    Write-Log -Message "Creating Log Analytics data export rules" -LogFileName $LogFileName -Severity Information
+    try {
+
+        $count = 0
+                
         foreach ($adxEventHub in $adxEventHubs) {        
-            $eventHubNameSpace = Get-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup -NamespaceName $adxEventHub    
-            
-            if ($adxEventHubs.Count -gt 1){
+            Write-Verbose "Executing: Get-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup -NamespaceName $AdxEventHub"
+            $EventHubNameSpace = Get-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup -NamespaceName $AdxEventHub -ErrorAction SilentlyContinue     
+
+            if ($adxEventHubs.Count -gt 1) {
                 $exportRuleTables = '"{0}"' -f ($tablesArrayCollection[$count] -join '","')
             }
             else {
+
                 $exportRuleTables = '"{0}"' -f ($tablesArrayCollection -join '","')
             }
 
-            IF ($eventHubNameSpace.ProvisioningState -eq "Succeeded") {
-                $randomNumber = Get-Random
-                $laDataExportRuleName = "$($LogAnalyticsWorkspaceName)-$($randomNumber)"
-                $dataExportAPI = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.operationalInsights/workspaces/$LogAnalyticsWorkspaceName/dataexports/$laDataExportRuleName" + "?api-version=2020-08-01"
-            
-                $LAAccessToken = (Get-AzAccessToken).Token            
-                $LAAPIHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-                $LAAPIHeaders.Add("Content-Type", "application/json")
-                $LAAPIHeaders.Add("Authorization", "Bearer $LAAccessToken")
-                
-                $dataExportBody = @"
+            if ($eventHubNameSpace.ProvisioningState -eq "Succeeded") {
+                $RandomNumber = Get-Random
+
+                $LaDataExportRuleName = "$($LogAnalyticsWorkspaceName)-$($RandomNumber)"
+                $DataExportAPI = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.operationalInsights/workspaces/$LogAnalyticsWorkspaceName/dataexports/$laDataExportRuleName" + "?api-version=2020-08-01"
+                $LaAccessToken = (Get-AzAccessToken).Token   
+                $LaAPIHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+                $LaAPIHeaders.Add("Content-Type", "application/json")
+                $LaAPIHeaders.Add("Authorization", "Bearer $LaAccessToken")
+
+                $DataExportBody = @"
                 {
                     "properties": {
                         "destination": {
@@ -338,211 +389,233 @@ Function CreateLADataExportRule() {
                     }
                 }
 "@
-                try {        
-                    $createDataExportRule = Invoke-RestMethod -Uri $dataExportAPI -Method "PUT" -Headers $LAAPIHeaders -Body $dataExportBody
-                    Write-Host $createDataExportRule -ForegroundColor Green
-                    Write-Log -Message $createDataExportRule -LogFileName $LogFileName -Severity Information
-                } catch {    
-                    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
+                
+                Write-Verbose "Executing: Invoke-RestMethod -Uri $DataExportAPI -Method 'PUT' -Headers $LaAPIHeaders -Body $DataExportBody"
+                
+                try {                     
+                    $CreateDataExportRule = Invoke-RestMethod -Uri $DataExportAPI -Method "PUT" -Headers $LaAPIHeaders -Body $DataExportBody
+                    Write-Output $CreateDataExportRule
+                    Write-Log -Message $CreateDataExportRule -LogFileName $LogFileName -Severity Information
+                }
+                catch {    
                     Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error
-                    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
                     Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error
                 }   
-                $count++
+                $Count++
             }
-            ELSE {
-                Start-Sleep 300
+            else {
+                Start-SleepMessage 300
             }
         }
     }
-    catch{
-        Write-Host "An error occured in CreateLADataExportRule() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in CreateLADataExportRule() method" -LogFileName $LogFileName -Severity Error        
+    catch {
+
+        Write-Log -Message "An error occurred in New-LaDataExportRule" -LogFileName $LogFileName -Severity Error   
         exit
     }
 }
 
-Function CreateADXDataConnection(){
+function New-AdxDataConnection {
     [CmdletBinding()]
-    param (        
-        [Parameter(Mandatory=$true)] $adxEventHubs        
+    Param (        
+        [Parameter(Mandatory = $true)] $AdxEventHubs        
     )
     
-    try{   
+    try {   
+        
         Register-AzResourceProvider -ProviderNamespace Microsoft.Kusto
-        Write-Host "Creating Azure Data Explorer Data Connection" -ForegroundColor Blue
-        Write-Log -Message "Creating Azure Data Explorer Data Connection" -LogFileName $LogFileName -Severity Information
-        $ADXClusterName = $ADXClusterURL.split('.')[0].split('//')[1].Trim()
-        foreach ($adxEH in $adxEventHubs)
-        {
-            try{
-                $eventHubTopics = Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup `
-                                                 -NamespaceName $adxEH `
-                                                 -Verbose        
+        Write-Host "Creating Azure Data Explorer Data connection"
+        Write-Log -Message "Creating Azure Data Explorer Data connection" -LogFileName $LogFileName -Severity Information
+
+        $AdxClusterUrl.split(".")[0].replace("https://", "").Trim()
+        
+        foreach ($AdxEH in $AdxEventHubs) {
+            
+            Write-Verbose "Executing: Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup -NamespaceName $AdxEH"
+            
+            try {
+                
+                $eventHubTopics = Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup -NamespaceName $adxEH        
                 if ($null -ne $eventHubTopics) {
-                    foreach($eventHubTopic in $eventHubTopics)
-                    {
+                    foreach ($eventHubTopic in $eventHubTopics) {
                         $tableEventHubTopic = $eventHubTopic.Name.split('-')[1]
                         # The above statement will return Table name in lower case
-                        # When sending lower case table to Azure Kusto Data connection, its throwing error
-                        # It is expecting the table name in title case (Case Sensitive)
+                        # Azure Kusto Data connection is expecting the table name in title case (Case Sensitive)
                         # In order to get exact same case table name, getting it from Source array                        
-                        $adxTables = $AdxTablesArray.ToArray()                        
-                        $arrIndex = $adxTables.ForEach{$_.ToLower()}.IndexOf($tableEventHubTopic)                        
-                        $eventHubResourceId = $eventHubTopic.Id
-                        $adxTableRealName = $adxTables[$arrIndex].Trim().ToString()
-                        $adxTableRaw = "$($adxTableRealName)HistoricRaw"
-                        $adxTableRawMapping = "$($adxTableRealName)HistoricMapping"
-                        $dataConnName = "$($tableEventHubTopic)dataconnection"
+                        $AdxTables = $AdxTablesArray.ToArray()                        
+                        $ArrIndex = $AdxTables.ForEach{ $_.ToLower() }.IndexOf($tableEventHubTopic)                        
+                        $EventHubResourceId = $EventHubTopic.Id
+                        $AdxTableRealName = $AdxTables[$arrIndex].Trim().ToString()
+                        $AdxTableRaw = "$($AdxTableRealName)Raw"
+                        $AdxTableRawMapping = "$($AdxTableRealName)Mapping"
+                        $DataConnName = "dc-$($TableEventHubTopic)"
 
-                        $dataConnAPI = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ADXResourceGroup/providers/Microsoft.Kusto/clusters/$ADXClusterName/databases/$ADXDBName/dataConnections/$dataConnName" + "?api-version=2021-01-01"
+                        $DataConnAPI = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$AdxResourceGroup/providers/Microsoft.Kusto/clusters/$AdxClusterName/databases/$AdxDBName/dataConnections/$DataConnName" + "?api-version=2021-01-01"
             
-                        $LAAccessToken = (Get-AzAccessToken).Token            
-                        $LAAPIHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-                        $LAAPIHeaders.Add("Content-Type", "application/json")
-                        $LAAPIHeaders.Add("Authorization", "Bearer $LAAccessToken")
+                        $LaAccessToken = (Get-AzAccessToken).Token            
+                        $LaAPIHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+                        $LaAPIHeaders.Add("Content-Type", "application/json")
+                        $LaAPIHeaders.Add("Authorization", "Bearer $LaAccessToken")
                                                                         
-                        $dataConnBody = @"
+                        $DataConnBody = @"
                         {
                             "location": "$LogAnalyticsLocation",
                             "kind": "EventHub",
                             "properties": {
-                              "eventHubResourceId": "$eventHubResourceId",                              
+                              "eventHubResourceId": "$EventHubResourceId",                              
                               "consumerGroup": "$('$Default')",
-                              "dataFormat":"MULTILINE JSON",
-                              "tableName":"$adxTableRaw",
-                              "mappingRuleName":"$adxTableRawMapping",
+                              "dataFormat":"JSON",
+                              "tableName":"$AdxTableRaw",
+                              "mappingRuleName":"$AdxTableRawMapping",
                               "compression":"None"
                             }
                         }
 "@
-                        
-                        try {        
-                            $createDataConnRule = Invoke-RestMethod -Uri $dataConnAPI -Method "PUT" -Headers $LAAPIHeaders -Body $dataConnBody
-                            Write-Host $createDataConnRule -ForegroundColor Green
-                            Write-Log -Message $createDataConnRule -LogFileName $LogFileName -Severity Information
-                        } catch {
-                            Write-Host "An error occured in creating Data Connection for $($eventHubTopic.Name)" -ForegroundColor Red
-                            Write-Log -Message "An error occured in creating Data Connection for $($eventHubTopic.Name)" -LogFileName $LogFileName -Severity Error            
-                            Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__ -ForegroundColor Red
+                        Write-Verbose "Executing: Invoke-RestMethod -Uri $DataConnAPI -Method 'PUT' -Headers $LaAPIHeaders -Body $DataConnBody"
+
+                        try {                                  
+                            $CreateDataConnRule = Invoke-RestMethod -Uri $DataConnAPI -Method "PUT" -Headers $LaAPIHeaders -Body $DataConnBody                   
+                            Write-Output $CreateDataConnRule
+                            Write-Log -Message $CreateDataConnRule -LogFileName $LogFileName -Severity Information
+                        }
+                        catch {
+
+                            Write-Log -Message "An error occurred in creating Data Connection for $($EventHubTopic.Name)" -LogFileName $LogFileName -Severity Error            
                             Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error
-                            Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription -ForegroundColor Red
                             Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error
                         }                      
                                                                                                 
                     }
                 }
                 else {                    
-                    Write-Host "EventHubTopics not available in $adxEH" -ForegroundColor Red
-                    Write-Log -Message "EventHubTopics not available in $adxEH" -LogFileName $LogFileName -Severity Error        
+                    Write-Log -Message "EventHubTopics not available in $AdxEH" -LogFileName $LogFileName -Severity Error 
+                    exit   
                 }
                 
-            } catch {
-                Write-Host "An error occured in retreiving EventHub Topics from $adxEH" -ForegroundColor Red
-                Write-Log -Message "An error occured in retreiving EventHub Topics from $adxEH" -LogFileName $LogFileName -Severity Error        
+            }
+            catch {
+                Write-Log -Message "An error occurred in retrieving EventHub Topics from $AdxEH" -LogFileName $LogFileName -Severity Error   
+                exit
+     
             }
         }
     }
-    catch{
-        Write-Host "An error occured in CreateADXDataConnection() method" -ForegroundColor Red
-        Write-Log -Message "An error occured in CreateADXDataConnection() method" -LogFileName $LogFileName -Severity Error        
+    catch {
+
+        Write-Log -Message "An error occurred in New-AdxDataConnection() method" -LogFileName $LogFileName -Severity Error  
         exit
     }
 }
 
-Function SliceArray {
+function Split-Array {
 
     [CmdletBinding()]
-    param (        
-        [Parameter(Mandatory=$true)] [String[]]$Item,
-        [Parameter(Mandatory=$true)] [int]$Size
+    Param (        
+        [Parameter(Mandatory = $true)] [String[]]$Item,
+        [Parameter(Mandatory = $true)] [int]$Size
     )
     
-    BEGIN { $Items=@()}
-    PROCESS {
+    begin { $Items = @() }
+    process {
         foreach ($i in $Item ) { $Items += $i }
     }
-    END {
-        0..[math]::Floor($Items.count/$Size) | ForEach-Object { 
-            $x, $Items = $Items[0..($Size-1)], $Items[$Size..$Items.Length]; ,$x
+    end {
+        0..[math]::Floor($Items.count / $Size) | ForEach-Object { 
+            $x, $Items = $Items[0..($Size - 1)], $Items[$Size..$Items.Length]; , $x
         } 
     }  
 }
 
-Function Start-Sleep($seconds, $waitMessage) {
-    $doneDT = (Get-Date).AddSeconds($seconds)
-    while($doneDT -gt (Get-Date)) {
-        $secondsLeft = $doneDT.Subtract((Get-Date)).TotalSeconds
-        $percent = ($seconds - $secondsLeft) / $seconds * 100
-        Write-Progress -Activity $waitMessage -Status "Please wait..." -SecondsRemaining $secondsLeft -PercentComplete $percent
+function Start-SleepMessage {
+    Para(
+        $Seconds, 
+        $WaitMessage
+    )
+
+    $DoneDT = (Get-Date).AddSeconds($seconds)
+    
+    while ($DoneDT -gt (Get-Date)) {
+        $SecondsLeft = $doneDT.Subtract((Get-Date)).TotalSeconds
+        $Percent = ($Seconds - $SecondsLeft) / $seconds * 100
+        Write-Progress -Activity $WaitMessage -Status "Please wait..." -SecondsRemaining $SecondsLeft -PercentComplete $Percent
         [System.Threading.Thread]::Sleep(500)
     }
+    
     Write-Progress -Activity $waitMessage -Status "Please wait..." -SecondsRemaining 0 -Completed
 }
 
-
-
-CheckModules("Az.Resources")
-CheckModules("Az.OperationalInsights")
+Get-RequiredModules("Az.Resources")
+Get-RequiredModules("Az.OperationalInsights")
 
 $TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
 $LogFileName = '{0}_{1}.csv' -f "ADXMigration", $TimeStamp
 
 Write-Host "`r`nIf not logged in to Azure already, you will now be asked to log in to your Azure environment. `nFor this script to work correctly, you need to provide credentials `nAzure Log Analytics Workspace Read Permissions `nAzure Data Explorer Database User Permission. `nThis will allow the script to read all the Tables from Log Analytics Workspace `nand create tables in Azure Data Explorer.`r`n" -BackgroundColor Blue
 
-Read-Host -Prompt "Press enter to continue or CTRL+C to quit the script"
+Read-Host -Prompt "Press enter to continue or CTRL+C to exit the script"
 
-$context = Get-AzContext
+$Context = Get-AzContext
 
-if(!$context){
+if (!$Context) {
     Connect-AzAccount
-    $context = Get-AzContext
+    $Context = Get-AzContext
 }
 
-$SubscriptionId = $context.Subscription.Id
+$SubscriptionId = $Context.Subscription.Id
+
+Write-Verbose "Executing: Get-AzOperationalInsightsWorkspace -Name $LogAnalyticsWorkspaceName -ResourceGroupName $LogAnalyticsResourceGroup -DefaultProfile $context"
 
 try {
-    $WorkspaceObject = Get-AzOperationalInsightsWorkspace -Name $LogAnalyticsWorkspaceName -ResourceGroupName $LogAnalyticsResourceGroup -DefaultProfile $context 
+
+    $WorkspaceObject = Get-AzOperationalInsightsWorkspace -Name $LogAnalyticsWorkspaceName -ResourceGroupName $LogAnalyticsResourceGroup -DefaultProfile $Context 
     $LogAnalyticsLocation = $WorkspaceObject.Location
     $LogAnalyticsWorkspaceId = $WorkspaceObject.CustomerId
-    Write-Host "Workspace named $LogAnalyticsWorkspaceName in region $LogAnalyticsLocation exists."  -ForegroundColor Green
-    Write-Log -Message "Workspace named $LogAnalyticsWorkspaceName in region $LogAnalyticsLocation exists." -LogFileName $LogFileName -Severity Information
-    $question = 'Do you want to create Raw and Mapping Tables in Azure Data Explorer(ADX) for all the tables in your LA?'
+    Write-Output "Workspace named $LogAnalyticsWorkspaceName in region $LogAnalyticsLocation already exists.`n"
+    Write-Log -Message "Workspace named $LogAnalyticsWorkspaceName in region $LogAnalyticsLocation already exists." -LogFileName $LogFileName -Severity Information
 
-    $choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-    $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-    $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+    $Question = 'Do you want to create Azure Data Explorer (ADX) Raw and Mapping Tables for the tables in your Log Analytics workspace?'
 
-    $decision = $Host.UI.PromptForChoice($title, $question, $choices, 1)
-    if ($decision -eq 0) {
-        TRY{        
-            Write-Host "Getting all the tables from $LogAnalyticsWorkspaceName"  -ForegroundColor Green
-            Write-Log -Message "Getting all the tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-            $queryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
-            $resultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $queryAllTables).Results
-        }
-        CATCH{
-            Write-Host "An error occured in querying all the Table names from $LogAnalyticsWorkspaceName" -ForegroundColor Red
-            Write-Log -Message "An error occured in querying all the Table names from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error        
-            exit
-        }
-    } else {
-        try {
-            Write-Host "Enter selected Log Analytics Table names separated by comma (,) (Case-Sensitive)" -ForegroundColor Blue
-            $userInputTables = Read-Host 
-            $resultsAllTables = $userInputTables.Split(',')
+    $Choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+    $Choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+    $Choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+
+    $Decision = $Host.UI.PromptForChoice($title, $question, $choices, 1)
+    
+    if ($Decision -eq 0) {
+
+        Write-Verbose "Executing: Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $queryAllTables" 
+        
+        try {       
+
+            Write-Output "Retrieving tables from $LogAnalyticsWorkspaceName"
+            Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
+            $QueryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
+            $ResultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables).Results
         }
         catch {
-            Write-Host "In-correct user input - table names should be separated with comma(,)" -ForegroundColor Red
-            Write-Log -Message "In-correct user input - table names should be separated with comma(,)" -LogFileName $LogFileName -Severity Error        
+            Write-Log -Message "An error occurred in querying tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error        
+            exit
+        }
+    }
+    else {
+        try {
+            Write-Host "`nEnter selected Log Analytics Table names separated by comma (,) (Case-Sensitive)" -ForegroundColor Blue
+            $UserInputTables = Read-Host 
+            $ResultsAllTables = $UserInputTables.Split(',')
+        }
+        catch {
+
+            Write-Log -Message "Incorrect user input - table names should be separated with comma (,)" -LogFileName $LogFileName -Severity Error        
             exit
         }
         
     }
-    $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
-    CreateRawMappingTablesInADX -LATables $resultsAllTables
 
-    $dataExportQuestion = 'Do you want to continue creating Data Export rule and Data Ingestion rules for Tables in Azure Data Explorer(ADX)?'
+    $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
+    New-AdxRawMappingTables -LaTables $resultsAllTables
+    
+    Write-Output "`n"
+    $dataExportQuestion = "Do you want to create Data Export and Data Ingestion rules in Azure Data Explorer (ADX)?"
 
     $choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
     $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
@@ -550,34 +623,38 @@ try {
 
     $dataExportDecision = $Host.UI.PromptForChoice($title, $dataExportQuestion, $choices, 0)
     if ($dataExportDecision -eq 0) {        
-        $AdxMappedTables = SplitArrayBySize -ADXTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
-        $eventHubsForADX = CreateEventHubNamespace -ArraysObject $AdxMappedTables        
-        CreateLADataExportRule -AdxEventHubs $eventHubsForADX -TablesArrayCollection $AdxMappedTables
+        $AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10
         
+        Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables"      
         
+        $EventHubsForADX = New-EventHubNamespace -ArraysObject $AdxMappedTables
+        
+        Write-Verbose "Executing: New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables"        
+        
+        New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables
+             
+        $DataConnectionQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+        $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+        $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
 
-        $dataConnectionQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-        $dataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-        $dataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-        $dataConnectionDecision = $Host.UI.PromptForChoice($title, $dataConnectionQuestion, $dataConnectionQuestionChoices, 0)
-        if ($dataConnectionDecision -eq 0) {
-            Start-Sleep -seconds 1800 -waitMessage "EventHubTopics for LA Tables are provisioning"                    
-            CreateADXDataConnection -AdxEventHubs $eventHubsForADX
+        $DataConnectionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
+        
+        if ($DataConnectionDecision -eq 0) {
+            Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning EventHubTopics for Log Analytics tables"                    
+            New-AdxDataConnection -AdxEventHubs $eventHubsForADX
         }
         else {
-            Write-Host "Create Dataconnection rules manually for $ADXDBName under $ADXEngineUrl"
-            Write-Log -Message "Create Dataconnection rules manually for $ADXDBName under $ADXEngineUrl" -LogFileName $LogFileName -Severity Warning
+            Write-Log -Message "Creating data connection rules manually for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Warning
             exit
         }
     } 
     else {
-        Write-Host "Create Data Export & Dataconnection rules manually for $ADXDBName under $ADXEngineUrl"
-        Write-Log -Message "Create Data Export & Dataconnection rules manually for $ADXDBName under $ADXEngineUrl" -LogFileName $LogFileName -Severity Warning
+
+        Write-Log -Message "Create data export data connection rules manually for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Warning
         exit
     }    
 
-} catch {
-    Write-Host "$LogAnalyticsWorkspaceName not found"
+}
+catch {
     Write-Log -Message "$LogAnalyticsWorkspaceName not found" -LogFileName $LogFileName -Severity Error
 }
