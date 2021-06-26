@@ -238,18 +238,11 @@ function Invoke-KustoCLI {
         if (!(Test-Path $KustoToolsDir)) {        
 				 
             if (!(Test-Path nuget)) {
-			 
-															 
-																											  
-
-                Write-Log -Message "The NuGet module is not found" -LogFileName $LogFileName -Severity Warning
-
-                Write-Host " Downloading NuGet package"
+                Write-Log -Message "The NuGet module is not found" -LogFileName $LogFileName -Severity Warning                
                 Write-Log -Message "Downloading NuGet package" -LogFileName $LogFileName -Severity Information
                 (New-Object net.webclient).downloadFile($NuGetDownloadUrl, "$pwd\nuget.exe")
             }
-
-            Write-Host " Installing Kusto Tools Package"
+            
             Write-Log -Message "Installing Kusto Tools Package" -LogFileName $LogFileName -Severity Information
             &.\nuget.exe install $kustoToolsPackage -Source $nugetIndex -OutputDirectory $nugetPackageLocation
         }
@@ -261,9 +254,8 @@ function Invoke-KustoCLI {
             Write-Log -Message "Unable to find Kusto client tool $KustoExe. exiting" -LogFileName $LogFileName -Severity Warning
             Write-Warning "Unable to find Kusto client tool $KustoExe. exiting"
             return
-        }
+        }    
         
-        Write-Host "Executing queries on Azure Data Explorer (ADX)"
         Write-Log -Message "Executing queries on Azure Data Explorer (ADX)" -LogFileName $LogFileName -Severity Information
         Invoke-Expression "$kustoExe `"$kustoConnectionString`" -script:$adxCommandsFile"
         Set-Location $CurrentDir
