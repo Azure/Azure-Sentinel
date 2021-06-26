@@ -5,20 +5,20 @@
 	SOFTWARE.
 #>
 
-Param(    
-    [Parameter(Mandatory = $true, HelpMessage = "Enter the resource group location for the Log Analytics workspace.")]
+param(    
+    [parameter(Mandatory = $true, HelpMessage = "Enter the resource group location for the Log Analytics workspace.")]
     [string]$LogAnalyticsResourceGroup,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Enter the Log Analytics workspace name from which to export data.")]
+    [parameter(Mandatory = $true, HelpMessage = "Enter the Log Analytics workspace name from which to export data.")]
     [string]$LogAnalyticsWorkspaceName,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Enter the resource group location for the existing Azure Data Explorer (ADX) cluster for which to export data.")]
+    [parameter(Mandatory = $true, HelpMessage = "Enter the resource group location for the existing Azure Data Explorer (ADX) cluster for which to export data.")]
     [string]$AdxResourceGroup,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Enter the Azure Data Explorer (ADX) cluster Url.")] 
+    [parameter(Mandatory = $true, HelpMessage = "Enter the Azure Data Explorer (ADX) cluster Url.")] 
     [string]$AdxClusterURL,
 
-    [Parameter(Mandatory = $true, HelpMessage = "Enter the Azure Data Explorer (ADX) cluster database name.")]
+    [parameter(Mandatory = $true, HelpMessage = "Enter the Azure Data Explorer (ADX) cluster database name.")]
     [string]$AdxDBName
 
 )
@@ -36,21 +36,21 @@ Param(
 
 function Write-Log {
     <#
-    .Description 
+    .DESCRIPTION 
     Write-Log is used to write information to a log file.
     
-    .Parameter Severity
-    Parameter specifies the severity of the log message. Values can be: Information, Warning, or Error. 
+    .PARAMETER Severity
+    parameter specifies the severity of the log message. Values can be: Information, Warning, or Error. 
     #>
 
     [CmdletBinding()]
-    Param(
-        [Parameter()]
+    param(
+        [parameter()]
         [ValidateNotNullOrEmpty()]
         [string]$Message,
         [string]$LogFileName,
  
-        [Parameter()]
+        [parameter()]
         [ValidateNotNullOrEmpty()]
         [ValidateSet('Information', 'Warning', 'Error')]
         [string]$Severity = 'Information'
@@ -81,16 +81,16 @@ function Write-Log {
 
 function Get-RequiredModules {
     <#
-    .Description 
+    .DESCRIPTION
     Get-Required is used to install and then import the specified PowerShell module.
     
-    .Parameter Module
-    Parameter specifices the PowerShell module to install. 
+    .PARAMETER Module
+    parameter specifices the PowerShell module to install. 
     #>
 
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $Module        
+    param (        
+        [parameter(Mandatory = $true)] $Module        
     )
     
     try {
@@ -127,17 +127,17 @@ function Get-RequiredModules {
 }
 
 function Invoke-KustoCLI {
-        <#
-    .Description 
+    <#
+    .DESCRIPTION 
     Invoke-KustoCLI is used to execute the KustoCLI with the specified AdxCommandsFile.
     
-    .Parameter AdxCommandsFile
-    Parameter specifices the path the the file that includes the commands to execute 
+    .PARAMETER AdxCommandsFile
+    parameter specifices the path the the file that includes the commands to execute 
     #>
 
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $AdxCommandsFile        
+    param (        
+        [parameter(Mandatory = $true)] $AdxCommandsFile        
     )
 
     try {
@@ -180,10 +180,18 @@ function Invoke-KustoCLI {
     }
 }
 
-function New-AdxRawMappingTables {    
+function New-AdxRawMappingTables {
+    <#
+    .DESCRIPTION
+    New-AdxRawMappingTables
+    
+    .PARAMETER LaTables
+    Parameter specifices the PowerShell module to install. 
+    
+    #>  
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $LaTables        
+    param (        
+        [parameter(Mandatory = $true)] $LaTables        
     )
 
     try {
@@ -277,9 +285,9 @@ function New-AdxRawMappingTables {
 
 function Split-ArrayBySize {
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $AdxTabsArray,
-        [Parameter(Mandatory = $true)] $ArraySize
+    param (        
+        [parameter(Mandatory = $true)] $AdxTabsArray,
+        [parameter(Mandatory = $true)] $ArraySize
     )    
     try {
         Write-Log -Message "Splitting array into groups of up to $ArraySize" -LogFileName $LogFileName -Severity Information
@@ -296,8 +304,8 @@ function Split-ArrayBySize {
 
 function New-EventHubNamespace {
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $ArraysObject        
+    param (        
+        [parameter(Mandatory = $true)] $ArraysObject        
     )
     try {
         $EventHubsArray = @()
@@ -345,9 +353,9 @@ function New-EventHubNamespace {
 
 function New-LaDataExportRule {
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $AdxEventHubs,
-        [Parameter(Mandatory = $true)] $TablesArrayCollection     
+    param (        
+        [parameter(Mandatory = $true)] $AdxEventHubs,
+        [parameter(Mandatory = $true)] $TablesArrayCollection     
     )
 
     Write-Host "Creating Log Analytics data export rules"
@@ -417,8 +425,8 @@ function New-LaDataExportRule {
 
 function New-AdxDataConnection {
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] $AdxEventHubs        
+    param (        
+        [parameter(Mandatory = $true)] $AdxEventHubs        
     )
     
     try {   
@@ -510,9 +518,9 @@ function New-AdxDataConnection {
 function Split-Array {
 
     [CmdletBinding()]
-    Param (        
-        [Parameter(Mandatory = $true)] [String[]]$Item,
-        [Parameter(Mandatory = $true)] [int]$Size
+    param (        
+        [parameter(Mandatory = $true)] [String[]]$Item,
+        [parameter(Mandatory = $true)] [int]$Size
     )
     
     begin { $Items = @() }
