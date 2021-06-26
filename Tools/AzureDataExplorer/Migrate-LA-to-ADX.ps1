@@ -608,40 +608,7 @@ catch {
     Write-Log -Message "$LogAnalyticsWorkspaceName not found" -LogFileName $LogFileName -Severity Error
 }
 
-$LaTablesQuestion = 'Do you want to create Raw and Mapping Tables in Azure Data Explorer(ADX) for all the tables in your LA?'
 
-$LaTablesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-$LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-$LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-$LaTablesQuestionDecision = $Host.UI.PromptForChoice($title, $LaTablesQuestion, $LaTablesQuestionChoices, 1)
-
-if ($LaTablesQuestionDecision -eq 0) {
-    Write-Verbose "Executing: Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables" 
-    try{        
-        
-        Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-        $QueryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
-        $ResultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables).Results
-    }
-    catch {            
-        Write-Error "An error occurred in querying all the Table names from $LogAnalyticsWorkspaceName"            
-        exit
-    }
-} 
-else {
-    try {
-        Write-Host "`nEnter selected Log Analytics Table names separated by comma (,) (Case-Sensitive)" -ForegroundColor Blue
-        $UserInputTables = Read-Host 
-        $ResultsAllTables = $UserInputTables.Split(',')
-    }
-    catch {
-        Write-Log -Message "In-correct user input - table names should be separated with comma(,)" -LogFileName $LogFileName -Severity Error       
-        exit
-    }    
-}
-
-$AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]
 
 #region ADXTableCreation
 $TableCreationQuestion = "Do you want to create target ADX Table, Raw and Mappings on ADX Database $AdxDBName?"    
@@ -650,8 +617,43 @@ $TableCreationQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceD
 $TableCreationQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
 
 $TableCreationQuestionDecision = $Host.UI.PromptForChoice($title, $TableCreationQuestion, $TableCreationQuestionChoices, 0)
-if ($TableCreationQuestionDecision -eq 0) {    
+if ($TableCreationQuestionDecision -eq 0) {
+    $LaTablesQuestion = "Do you want to create Raw and Mapping Tables in Azure Data Explorer(ADX) for all the tables in your Log Analytics Workspace $LogAnalyticsWorkspaceName"
+    $LaTablesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+    $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+    $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+
+    $LaTablesQuestionDecision = $Host.UI.PromptForChoice($title, $LaTablesQuestion, $LaTablesQuestionChoices, 1)
+
+    if ($LaTablesQuestionDecision -eq 0) {
+        Write-Verbose "Executing: Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables" 
+        try{       
+            Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
+            $QueryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
+            $ResultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables).Results
+        }
+        catch {            
+            Write-Log -Message "An error occurred in querying all the Table names from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error         
+            exit
+        }
+    } 
+    else {
+        try {
+            Write-Host "`nEnter selected Log Analytics Table names separated by comma (,) (Case-Sensitive)" -ForegroundColor Blue
+            $UserInputTables = Read-Host 
+            $ResultsAllTables = $UserInputTables.Split(',')
+        }
+        catch {
+            Write-Log -Message "In-correct user input - table names should be separated with comma(,)" -LogFileName $LogFileName -Severity Error       
+            exit
+        }    
+    }
+
+    $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
     New-AdxRawMappingTables -LaTables $ResultsAllTables
+}
+else {
+    Write-Log -Message "Skipping table creation in Azure Data Explorer" -LogFileName $LogFileName -Severity Warning
 }
 #endregion
 
@@ -669,6 +671,9 @@ if ($EventHubQuestionDecision -eq 0) {
     Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
     $EventHubsForADX =  New-EventHubNamespace -ArraysObject $AdxMappedTables 
 }
+else {
+    Write-Log -Message "Skipping EventHub NameSpaces creation" -LogFileName $LogFileName -Severity Warning
+}
 
 #endregion
 
@@ -684,7 +689,7 @@ if ($DataExportDecision -eq 0) {
     New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables
 }
 else {
-    Write-Log -Message "Skipping Data Export rule creation" -LogFileName $LogFileName -Severity Error
+    Write-Log -Message "Skipping Data Export rule creation" -LogFileName $LogFileName -Severity Warning
 }
 #endregion
 
@@ -697,15 +702,10 @@ $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.Choice
 
 $DataConnectionQuestionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
 if ($DataConnectionQuestionDecision -eq 0) {
-    #Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning EventHubTopics for Log Analytics tables"                    
+    Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning EventHubTopics for Log Analytics tables"                    
     New-ADXDataConnectionRules -AdxEventHubs $EventHubsForADX
 }
 else {            
-    Write-Log -Message "Creating data connection rules manually for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Error    
+    Write-Log -Message "Create data connection rules manually for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Warning    
 }
 #endregion
-
-Write-Host("*****************************************************************************")
-Write-Host("                        Summary                                              ")
-Write-Host("*****************************************************************************")
-Import-Csv "$PSScriptRoot\$LogFileName" | Format-Table
