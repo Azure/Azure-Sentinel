@@ -1,0 +1,118 @@
+Parser:
+  Title: Google Drive FileEvent Parser
+  Version: '0.0'
+  LastUpdated: June 28, 2021
+Product:
+  Name: Google Drive
+Normalization:
+  Schema: FileEvent
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Dns schema documentation
+  Link: https://aka.ms/AzSentinelFileEventDoc
+Description: |
+  This is a Query Parser that is used to map Google Drive Events (GSuite_ReportsAPI_drive_CL) to the Azure Sentinel Information Model FileEvent schema.
+ParserName: vimFileEventGoogleDrive
+ParserQuery: |
+  let GoogleEvents=datatable(event_name_s:string, EventType:string)[
+   // FileCreated/Modified/Deleted/Other
+    // access, 
+    'add_to_folder', 'FileCreated'
+    //approval_canceled
+    //approval_comment_added
+    //approval_completed
+    //approval_decisions_reset
+    //approval_due_time_change
+    //approval_requested
+    //approval_reviewer_change
+    // approval_reviewer_responded
+    //'copy'
+    ,'create'  , 'FileCreated'
+    ,'delete'  , 'FileDeleted'
+    ,'download', 'FileDownloaded'
+    // drive_email_as_attachment
+    ,'edit'    , 'FileModified'
+    //label_applied
+    //label_applied_on_creation
+    //label_field_value_changed
+    //label_removed
+    //lock
+    //move 
+    //preview
+    //print
+    //remove_from_folder
+    //rename
+    //restore
+    //sheets_importrange
+    //trash
+    //unlock
+    //upload
+    // view
+    ];
+  let GDrive=(){
+    GSuite_ReportsAPI_drive_CL
+    //      
+    // ****************** Event
+    // DvcId="",
+    //  DvcHostname
+    // Calculating:  EventType = 
+    |lookup GoogleEvents on event_name_s
+    | extend
+      EventProduct='GWorkspaceDrive'
+      // EventProductVersion
+      , EventCount = int(1)
+      // EventMessage
+      , EventResult = 'Success'
+      , EventResultDetails=''
+      , EventVendor ='Google'   
+      , EventSchemaVersion = '0.1.0'
+      , TimeGenerated=id_time_t
+    | project-rename 
+      EventOriginalUid=id_uniqueQualifier_s
+      , EventStartTime=id_time_t // ? Should we trust TimeGenerated to be the sam, or use the value from the report
+    // , EventReportUrl
+    // SessionId
+    // 
+    // ****************** Actor (in Yuval terms: Src)
+    | project-rename 
+      ActorUsername=actor_email_s  // (TargetUser???)
+    , ActorUserId=actor_profileId_s
+    , SrcDvcIpAddr=IPAddress
+    , ActingAppId=originating_app_id
+    | extend
+    ActorUsernameType='upn'
+    , ActorUserIdType='GProfileId'
+    //
+    // ***************** File
+    , FileName='doc_title_s'// ? Not sure what this contains when changing file name. maybe in that case new_value_s is needed
+    , FilePath=destination_folder_title_s // This value only exists in context of moving file to from folder
+    //FileSize
+    //FileHashes: unavailable
+    , PreviousFileName=old_value_s
+    , PreviousFilePath=source_folder_title_s // This value only exists in context of moving file to from folder
+    // , PreviousFileSize
+    // , PreviousFileHashes
+    // , WebsiteOriginalUrl
+    // , FileOriginUrl
+    // , ShareName: how is this not same as path? do we need previous too?
+    , SensitivityLabel=visibility_s
+    //
+    // ********************* Dvc (irrelevant?)
+    // DvcOS
+    // DvcOSVersion
+    // AdditionalFields
+    // DvcIpAddr: 
+    // DvcMacAddr     
+    // 
+    // ************************ Actor (in Yuval terms)
+        //ActorUsername
+        //ActorUserId
+    // ***********************  Acting Process
+        //ActingProcess*
+    // *********************** Alias
+    | extend 
+        EventEndTime=EventStartTime  // ?Should we trust TimeGenerated to be the sam, or use the value from the report?
+        , User=ActorUsername;}
+  GDrive
