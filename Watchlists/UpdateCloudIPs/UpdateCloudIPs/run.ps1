@@ -37,7 +37,8 @@ function Check-Watchlist {
 function Get-AzureIPRanges {
     param(
         [string]$resourceURI = $resourceURI,
-        [string]$subscriptionId = $subscriptionId
+        [string]$subscriptionId = $subscriptionId,
+        $requestHeaders = $requestHeaders
     )
     $Uri = $resourceURI + "/subscriptions/" + $subscriptionId + "/providers/Microsoft.Network/locations/centralus/serviceTags?api-version=2020-11-01"
     $AzureIPRanges = Invoke-RestMethod -Method Get -Headers $requestHeaders -Uri $Uri
@@ -86,7 +87,7 @@ function Get-WatchlistItemTable {
             $WatchListItemsCollection += $WatchListItems.value
         }
         $a++
-        write-host $a
+        write-host "Fetching another 100, this is number $($a) time"
     } until ($nextLink -eq $false)
 
     #Build Table from all the results
@@ -103,6 +104,76 @@ function Get-WatchlistItemTable {
     return $WatchListItemsTable
 }
 
+#Add Watchlist Item
+function Add-WatchlistItem{
+    param(
+        [string]$watchlistAlias,
+        [string]$watchlistitem,
+        [string]$Notes,
+        [string]$resourceURI = $resourceURI,
+        [string]$subscriptionId = $subscriptionId,
+        [string]$resourceGroupName = $resourceGroupName,
+        [string]$workspaceName = $workspaceName,
+        $requestHeaders = $requestHeaders,
+        $date = $date
+    )
+
+    $body = @{
+        "properties" = @{
+            "itemsKeyValue" = @{
+                "IPRange" = "$watchlistitem"
+                "Expiration" = "$Date"
+                "Notes" = "$Notes"
+            }
+        }
+    }
+    $body = $body | ConvertTo-Json
+    $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"/watchlistItems/"+$watchlistitem+"?api-version=2021-03-01-preview"
+    $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
+}
+
+#Delete Watchlist Item
+function Remove-WatchlistItem{
+    param (
+        [string]$watchlistAlias,
+        [string]$watchlistitem,
+        [string]$resourceURI = $resourceURI,
+        [string]$subscriptionId = $subscriptionId,
+        [string]$resourceGroupName = $resourceGroupName,
+        [string]$workspaceName = $workspaceName,
+        $requestHeaders = $requestHeaders
+    )
+    $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"/watchlistItems/"+$watchlistitem+"?api-version=2021-03-01-preview"
+    $response = Invoke-RestMethod -Method Delete -Headers $requestHeaders -Uri $Uri
+}
+
+#Update Watchlist Item
+function Update-WatchlistItem{
+    param(
+        [string]$watchlistAlias,
+        [string]$watchlistitem,
+        [string]$resourceURI = $resourceURI,
+        [string]$subscriptionId = $subscriptionId,
+        [string]$resourceGroupName = $resourceGroupName,
+        [string]$workspaceName = $workspaceName,
+        $requestHeaders = $requestHeaders,
+        $date = $date
+    )
+
+    $body = @{
+        "properties" = @{
+            "itemsKeyValue" = @{
+                "IPRange" = "$watchlistitem"
+                "Expiration" = "$Date"
+            }
+        }
+    }
+    $body = $body | ConvertTo-Json
+    $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"/watchlistItems/"+$watchlistitem+"?api-version=2021-03-01-preview"
+    $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
+}
+
+
 #Prepare Variables
 $AzureWebJobsStorage = $env:AzureWebJobsStorage
 $subscriptionId = $env:SubscriptionId
@@ -114,15 +185,14 @@ $tokenAuthURI = $env:IDENTITY_ENDPOINT + "?resource=$resourceURI&api-version=201
 $tokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER"="$env:IDENTITY_HEADER"} -Uri $tokenAuthURI
 $accessToken = $tokenResponse.access_token
 
-$AzureWebJobsStorage = "DefaultEndpointsProtocol=https;AccountName=aaduserinfotest;AccountKey=mXz7E6ogZ3XqWTxuYxGovDxWIJpOdPsxlF5VRTYHUj2VY/0Os729oZ9eSp+0lmdpj5pBMoUA6IsB2k04vqiR8A==;EndpointSuffix=core.windows.net"
 $subscriptionId = "1c61ccbf-70b3-45a3-a1fb-848ce46d70a6"
 $resourceGroupName = "cxe-yanivsh"
 $workspaceName = "Yanivsh-Sentinel"
-$accessToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Im5PbzNaRHJPRFhFSzFqS1doWHNsSFJfS1hFZyIsImtpZCI6Im5PbzNaRHJPRFhFSzFqS1doWHNsSFJfS1hFZyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuYXp1cmUuY29tIiwiaXNzIjoiaHR0cHM6Ly9zdHMud2luZG93cy5uZXQvNWYxMDYwZjItZDlhNC00ZjU5LWJmOWMtMWRkOGYzNjA0YTRiLyIsImlhdCI6MTYyNDQ2OTI0OSwibmJmIjoxNjI0NDY5MjQ5LCJleHAiOjE2MjQ0NzMxNDksImFpbyI6IkUyWmdZSWhNOTJMcmVENTFTcEdZN0RZbTMzV3JBQT09IiwiYXBwaWQiOiIwY2RjMTUxMy05ZGVjLTRhODItYmZlZS1kNWMyMzJmZGM3MDgiLCJhcHBpZGFjciI6IjEiLCJpZHAiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC81ZjEwNjBmMi1kOWE0LTRmNTktYmY5Yy0xZGQ4ZjM2MDRhNGIvIiwib2lkIjoiMTRjOTNjZjMtZTVlMy00NWNmLThiNGUtMWE2ZjYyYmRmMjAyIiwicmgiOiIwLkFXNEE4bUFRWDZUWldVLV9uQjNZODJCS1N4TVYzQXpzbllKS3YtN1Z3akw5eHdodUFBQS4iLCJzdWIiOiIxNGM5M2NmMy1lNWUzLTQ1Y2YtOGI0ZS0xYTZmNjJiZGYyMDIiLCJ0aWQiOiI1ZjEwNjBmMi1kOWE0LTRmNTktYmY5Yy0xZGQ4ZjM2MDRhNGIiLCJ1dGkiOiJUazRCc1c3RWVVQ2VBcjY1aU1rc0FBIiwidmVyIjoiMS4wIiwieG1zX3RjZHQiOjE1OTY3MzcyMTh9.XrlKNiI-imQHF5pG2D0_ccFg6P4KWKhKMX_zzxfKTEckKit6mhVnFoJC8u_HeIy-VQ7I5qcbwN2bjH-LwBjyGFlOA8jUnFY7MfIsurwSvRHyQdTuNK2fBm31_f7r8oZV0ptss0e1YU23lnlwPXqRsBG_tQj2rgXFk712E-sjIs0KZ8SvT1_r2yH2UPwOxV8B_eQ7L37iE9fClej6ng8ifZWgjpZMQC5ofoAhnwg6fAlzHS_XLre48ET9KBN39KcTWeFsXKoH7yqnwBfm51hfOYFd124PfSVvH7G8IVj5_Aetr7px4VmLiXxE8uEGw0Egsj4RV5OnidLsx6fMit_1TQ"
+$accessToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Im5PbzNaRHJPRFhFSzFqS1doWHNsSFJfS1hFZyIsImtpZCI6Im5PbzNaRHJPRFhFSzFqS1doWHNsSFJfS1hFZyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuYXp1cmUuY29tIiwiaXNzIjoiaHR0cHM6Ly9zdHMud2luZG93cy5uZXQvNWYxMDYwZjItZDlhNC00ZjU5LWJmOWMtMWRkOGYzNjA0YTRiLyIsImlhdCI6MTYyNDg5ODAyMCwibmJmIjoxNjI0ODk4MDIwLCJleHAiOjE2MjQ5MDE5MjAsImFpbyI6IkUyWmdZRkQ3VnRoN2ZvTC96MTF1cXhWT1RHSDdBQUE9IiwiYXBwaWQiOiIwY2RjMTUxMy05ZGVjLTRhODItYmZlZS1kNWMyMzJmZGM3MDgiLCJhcHBpZGFjciI6IjEiLCJpZHAiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC81ZjEwNjBmMi1kOWE0LTRmNTktYmY5Yy0xZGQ4ZjM2MDRhNGIvIiwib2lkIjoiMTRjOTNjZjMtZTVlMy00NWNmLThiNGUtMWE2ZjYyYmRmMjAyIiwicmgiOiIwLkFXNEE4bUFRWDZUWldVLV9uQjNZODJCS1N4TVYzQXpzbllKS3YtN1Z3akw5eHdodUFBQS4iLCJzdWIiOiIxNGM5M2NmMy1lNWUzLTQ1Y2YtOGI0ZS0xYTZmNjJiZGYyMDIiLCJ0aWQiOiI1ZjEwNjBmMi1kOWE0LTRmNTktYmY5Yy0xZGQ4ZjM2MDRhNGIiLCJ1dGkiOiJOYk1IMjNBWnRFV2VjUDNmNUwyOUFBIiwidmVyIjoiMS4wIiwieG1zX3RjZHQiOjE1OTY3MzcyMTh9.n_pYCZKxmg_NtfZsFMLDYM6GUn9WFPKg5vNSiI8VU_qE6Pc5BPfu7wiqvqoNLjeLbQOnKT0-XfwDCdg5cgvVJYxXTbeYfg4_gOXFqOmBjq08scj6GZVOoLxSl7nYB_y4_MRhXOPIlrFLojhiyhD-lssU6DbbfUFwDs4e9-UFMhaGLMBdxZAVbb-l_ZpUsETVdeUGgjlEWTJLlzCLqv4NHV2qvkocqS3yWh7mhZscewB8PDUBk7VYs1Q-eCLTHKG8z1rSCwAshkeF41pdqQQE2yYS9PHs2aF6xktiBN9MJL-QHFvjI4FxdTIlHOQhqZKRIgeBwhR8OmsQ0NtxvnmoIA"
 
 $requestHeaders = @{
     "Authorization" = "Bearer $accessToken"
-    "Content-Type" = "application/json"
+    "Content-Type"  = "application/json"
 }
 
 $Date = (Get-Date).AddDays(7) | Get-Date -Format yyyy-MM-ddTHH:mm:ssZ -asUTC
@@ -172,7 +242,56 @@ if ($env:AWS -eq "Yes") {
         
     }
     elseif ($new -eq $false) {
+        Write-Host "Found existing AWS watchlist"
+        #build tables
+        $AWSIPRanges = Get-AWSIPRanges
+        $AWSIPRangesTable = @()
+        $totalCount = $AWSIPRanges.Count
+        $a = 0
+        $b = 0
+        $c = 0
+        foreach($item in $AWSIPRanges){
+            $range = $item.ip_prefix
+            $serviceName = $item.service
+            $AWSIPRangesTableObject = New-Object psobject
+            $AWSIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "IPRange" -Value $range
+            $AWSIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "Notes" -Value $serviceName
+            $AWSIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "ItemId" -Value ""
+            $AWSIPRangesTable += $AWSIPRangesTableObject
+            $a++
+            $b++
+            $c++
+            if($a -eq 100){
+                Write-Host "$b entries of $totalCount processed"
+                $a = 0
+            }
+        }
+        Write-Host "$b entries with total of $c AWS IP Ranges"
+    
+        #Build Watchlist Table
+        $WatchListItemsTable = Get-WatchlistItemTable -watchlistAlias $watchlistAlias
         
+        #Compare Watchlist Table to Ip Range Table
+        $compareResults = Compare-Object $WatchListItemsTable $AWSIPRangesTable -Property IPRange -IncludeEqual -PassThru
+    
+        foreach ($compareresult in $compareResults) {
+            if (($compareresult.SideIndicator) -eq "==") {
+                #Update Expiration since it was in both lists
+                Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
+                Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
+            }
+            elseif (($compareresult.SideIndicator) -eq "<=") {
+                # Detele the item as its no longer in the ip ranges
+                Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
+                Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
+            }
+            elseif (($compareresult.SideIndicator) -eq "=>") {
+                # Add new item 
+                Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
+                Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
+            }
+            
+        }
     }
 }
 if ($env:GCP -eq "Yes") {
@@ -187,7 +306,13 @@ if ($env:GCP -eq "Yes") {
         $b = 0
         $rawContent = "IPRange,Expiration,Notes`r`n"
         foreach($item in $GCPIPRanges){
-            $range = $item.ipv4Prefix
+            if ($item.ipv4Prefix) {
+                $range = $item.ipv4Prefix
+            }
+            if ($item.ipv6prefix) {
+                $range = $item.ipv6prefix           
+            }
+
             $serviceName = $item.service
             $rawContent += "$range,$Date,$serviceName`r`n"
             $a++
@@ -195,7 +320,7 @@ if ($env:GCP -eq "Yes") {
             if($a -eq 100){
                 Write-Host "$b entries of $totalCount processed"
                 $a = 0
-            }
+            }     
         }
         Write-Host "$b entries with total of $totalCount GCP IP Ranges"
         
@@ -218,7 +343,61 @@ if ($env:GCP -eq "Yes") {
         Write-Host "Created new GCP IP watchlist with all ranges."
     }
     elseif ($new -eq $false) {
+        Write-Host "Found existing GCP watchlist"
+        #build tables
+        $GCPIPRanges = Get-GCPIPRanges
+        $GCPIPRangesTable = @()
+        $totalCount = $GCPIPRanges.Count
+        $a = 0
+        $b = 0
+        $c = 0
+        foreach($item in $GCPIPRanges){
+            if ($item.ipv4Prefix) {
+                $range = $item.ipv4Prefix
+            }
+            if ($item.ipv6prefix) {
+                $range = $item.ipv6prefix           
+            }
+            $serviceName = $item.service
+            $GCPIPRangesTableObject = New-Object psobject
+            $GCPIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "IPRange" -Value $range
+            $GCPIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "Notes" -Value $serviceName
+            $GCPIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "ItemId" -Value ""
+            $GCPIPRangesTable += $GCPIPRangesTableObject
+            $a++
+            $b++
+            $c++
+            if($a -eq 100){
+                Write-Host "$b entries of $totalCount processed"
+                $a = 0
+            }
+        }
+        Write-Host "$b entries with total of $c GCP IP Ranges"
+    
+        #Build Watchlist Table
+        $WatchListItemsTable = Get-WatchlistItemTable -watchlistAlias $watchlistAlias
         
+        #Compare Watchlist Table to Ip Range Table
+        $compareResults = Compare-Object $WatchListItemsTable $GCPIPRangesTable -Property IPRange -IncludeEqual -PassThru
+    
+        foreach ($compareresult in $compareResults) {
+            if (($compareresult.SideIndicator) -eq "==") {
+                #Update Expiration since it was in both lists
+                Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
+                Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
+            }
+            elseif (($compareresult.SideIndicator) -eq "<=") {
+                # Detele the item as its no longer in the ip ranges
+                Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
+                Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
+            }
+            elseif (($compareresult.SideIndicator) -eq "=>") {
+                # Add new item 
+                Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
+                Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
+            }
+            
+        }
     }
 }
 if ($env:Azure -eq "Yes") {
@@ -300,6 +479,7 @@ if ($env:Azure -eq "Yes") {
                     $AzureIPRangesTableObject = New-Object psobject
                     $AzureIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "IPRange" -Value $range
                     $AzureIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "Notes" -Value $serviceName
+                    $AzureIPRangesTableObject | Add-Member -MemberType NoteProperty -Name "ItemId" -Value ""
                     $AzureIPRangesTable += $AzureIPRangesTableObject
                     $c++
                 }
@@ -321,15 +501,19 @@ if ($env:Azure -eq "Yes") {
     
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
-                #UpdateExpiration
-                $Uri = $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"/watchlistItems?api-version=2021-03-01-preview"
+                #Update Expiration since it was in both lists
+                Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
+                Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
             }
             elseif (($compareresult.SideIndicator) -eq "<=") {
-                # Detele the item
+                # Detele the item as its no longer in the ip ranges
+                Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
+                Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
             }
             elseif (($compareresult.SideIndicator) -eq "=>") {
-                # Add new item
-                            
+                # Add new item 
+                Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
+                Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
             }
             
         }
