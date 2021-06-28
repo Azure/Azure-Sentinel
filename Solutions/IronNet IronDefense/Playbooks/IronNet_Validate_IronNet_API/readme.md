@@ -1,4 +1,4 @@
-# Validate_IronNet_API
-author: Sacumen
+# IronNet_ValidateIronAPI
+author: IronNet
 
-This playbook will be used for testing the 8 IronNet Endpoints
+This playbook is used for testing IronAPI Endpoints.
