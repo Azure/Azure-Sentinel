@@ -415,15 +415,12 @@ function New-EventHubNamespace {
 function New-LaDataExportRule {
     [CmdletBinding()]
     param (        
-        [Parameter(Mandatory = $true)] $AdxEventHubs,
-        [Parameter(Mandatory = $true)] $TablesArrayCollection     
+        [Parameter(Mandatory=$true, Position=0)] $AdxEventHubs,
+        [Parameter(Mandatory=$true, Position=1)] $TablesArrayCollection     
     )
 	Write-Log -Message "Creating Log Analytics Data Export rules" -LogFileName $LogFileName -Severity Information																											 
     try{        
-        
-        $Count=0
-        
-        
+        $Count=0        
         foreach ($AdxEventHub in $AdxEventHubs) {        
             $EventHubNameSpace = Get-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup -NamespaceName $AdxEventHub    
             
@@ -483,7 +480,7 @@ function New-LaDataExportRule {
 function New-ADXDataConnectionRules {
     [CmdletBinding()]
     Param (        
-        [Parameter(Mandatory = $true)] $AdxEventHubs        
+        [Parameter(Mandatory=$true, Position=0)] $AdxEventHubs        
     )
     
     try{   
@@ -600,100 +597,66 @@ try {
     $WorkspaceObject = Get-AzOperationalInsightsWorkspace -Name $LogAnalyticsWorkspaceName -ResourceGroupName $LogAnalyticsResourceGroup -DefaultProfile $Context 
     $LogAnalyticsLocation = $WorkspaceObject.Location
     $LogAnalyticsWorkspaceId = $WorkspaceObject.CustomerId
-    Write-Log -Message "Workspace named $LogAnalyticsWorkspaceName in region $LogAnalyticsLocation exists." -LogFileName $LogFileName -Severity Information
-} 
-catch {    
-    Write-Log -Message "$LogAnalyticsWorkspaceName not found" -LogFileName $LogFileName -Severity Error
+    if ($null -ne $LogAnalyticsWorkspaceId) {
+        Write-Log -Message "Workspace named $LogAnalyticsWorkspaceName in region $LogAnalyticsLocation exists." -LogFileName $LogFileName -Severity Information
+    }
+    else {            
+        Write-Log -Message "$LogAnalyticsWorkspaceName not found" -LogFileName $LogFileName -Severity Error       
+    } 
 }
-
-
+catch {    
+    Write-Log -Message "Error occurred in retreiving given Log Analytics Workspace $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error
+}
 
 #region ADXTableCreation
-$TableCreationQuestion = "Do you want to create target ADX Table, Raw and Mappings on ADX Database $AdxDBName?"    
-$TableCreationQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-$TableCreationQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-$TableCreationQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+$LaTablesQuestion = "Do you want to create Raw and Mapping Tables in Azure Data Explorer(ADX) for all the tables in your Log Analytics Workspace $LogAnalyticsWorkspaceName"
+$LaTablesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+$LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+$LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
 
-$TableCreationQuestionDecision = $Host.UI.PromptForChoice($title, $TableCreationQuestion, $TableCreationQuestionChoices, 0)
-if ($TableCreationQuestionDecision -eq 0) {
-    $LaTablesQuestion = "Do you want to create Raw and Mapping Tables in Azure Data Explorer(ADX) for all the tables in your Log Analytics Workspace $LogAnalyticsWorkspaceName"
-    $LaTablesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-    $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-    $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+$LaTablesQuestionDecision = $Host.UI.PromptForChoice($title, $LaTablesQuestion, $LaTablesQuestionChoices, 1)
 
-    $LaTablesQuestionDecision = $Host.UI.PromptForChoice($title, $LaTablesQuestion, $LaTablesQuestionChoices, 1)
-
-    if ($LaTablesQuestionDecision -eq 0) {
-        Write-Verbose "Executing: Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables" 
-        try{       
-            Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-            $QueryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
-            $ResultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables).Results
-        }
-        catch {            
-            Write-Log -Message "An error occurred in querying all the Table names from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error         
-            exit
-        }
-    } 
-    else {
-        try {
-            Write-Host "`nEnter selected Log Analytics Table names separated by comma (,) (Case-Sensitive)" -ForegroundColor Blue
-            $UserInputTables = Read-Host 
-            $ResultsAllTables = $UserInputTables.Split(',')
-        }
-        catch {
-            Write-Log -Message "In-correct user input - table names should be separated with comma(,)" -LogFileName $LogFileName -Severity Error       
-            exit
-        }    
+if ($LaTablesQuestionDecision -eq 0) {
+    Write-Verbose "Executing: Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables" 
+    try{       
+        Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
+        $QueryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
+        $ResultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables).Results
     }
-
-    $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
-    New-AdxRawMappingTables -LaTables $ResultsAllTables
-}
+    catch {            
+        Write-Log -Message "An error occurred in querying all the Table names from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error         
+        exit
+    }
+} 
 else {
-    Write-Log -Message "Skipping table creation in Azure Data Explorer" -LogFileName $LogFileName -Severity Warning
+    try {
+        Write-Host "`nEnter selected Log Analytics Table names separated by comma (,) (Case-Sensitive)" -ForegroundColor Blue
+        $UserInputTables = Read-Host 
+        $ResultsAllTables = $UserInputTables.Split(',')
+    }
+    catch {
+        Write-Log -Message "In-correct user input - table names should be separated with comma(,)" -LogFileName $LogFileName -Severity Error       
+        exit
+    }    
 }
+
+$AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
+New-AdxRawMappingTables -LaTables $ResultsAllTables
 #endregion
 
-#region EventHubsCreation
-$EventHubQuestion = "Do you want to create EventHub NameSpaces (Standard)?"
-
-$EventHubQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-$EventHubQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-$EventHubQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-$EventHubQuestionDecision = $Host.UI.PromptForChoice($title, $EventHubQuestion, $EventHubQuestionChoices, 0)
-
-if ($EventHubQuestionDecision -eq 0) {        
-    $AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
-    Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
-    $EventHubsForADX =  New-EventHubNamespace -ArraysObject $AdxMappedTables 
-}
-else {
-    Write-Log -Message "Skipping EventHub NameSpaces creation" -LogFileName $LogFileName -Severity Warning
-}
-
+#region EventHubsCreation      
+$AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
+Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
+$EventHubsForADX =  New-EventHubNamespace -ArraysObject $AdxMappedTables
 #endregion
 
 #region LogAnalyticsDataExportRule
-$DataExportQuestion = "Do you want to create Data Export rules on $LogAnalyticsWorkspaceName Log Analytics Workspace?"
-
-$DataExportQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-$DataExportQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-$DataExportQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-$DataExportDecision = $Host.UI.PromptForChoice($title, $DataExportQuestion, $DataExportQuestionChoices, 0)
-if ($DataExportDecision -eq 0) {               
-    New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables
-}
-else {
-    Write-Log -Message "Skipping Data Export rule creation" -LogFileName $LogFileName -Severity Warning
-}
+New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables
 #endregion
 
 #region ADXDataConnectionRule
 $DataConnectionQuestion = "Do you want to create Data Connection rules on Database $AdxDBName for each table by selecting appropriate EventHub Topic, TableRaw and TableRawMappings. `
-                        If Yes, Script will sleep for 30 min, If No, you need to create Data Connection rules Manually"
+                           If Yes, Script will sleep for 30 min, If No, you need to create Data Connection rules Manually"
 $DataConnectionQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
 $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
 $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
