@@ -572,6 +572,12 @@ function New-ADXDataConnectionRules {
 Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
 
+# Check powershell version, needs to be 5 or higher
+if ($host.Version.Major -lt 5) {
+    Write-Log "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
+    exit
+}
+
 $TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
 $LogFileName = '{0}_{1}.csv' -f "ADXMigration", $TimeStamp
 
@@ -700,4 +706,6 @@ if ($DataConnectionQuestionDecision -eq 0) {
 else {            
     Write-Log -Message "Create data connection rules manually for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Warning    
 }
+#endregion
+
 #endregion
