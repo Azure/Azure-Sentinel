@@ -1,0 +1,102 @@
+Parser:
+  Title: Microsoft SharePoint File Operation - FileEvent Parser
+  Version: '0.0'
+  LastUpdated: June 28, 2021
+Product:
+  Name: Microsoft SharePoint
+Normalization:
+  Schema: FileEvent
+  Version: '1.0.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Dns schema documentation
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/en-us/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: |
+  This is a Query Parser that is used to map SharePoint File Operation (OfficeActivity) to the Azure Sentinel Information Model FileEvent schema.
+ParserName: vimFileEventMicrosoftSharePoint
+ParserQuery: |
+  let SharepointFile=(){
+    OfficeActivity
+    | extend
+    // TimeGenerated
+    //    , _ResourceId : guid
+        //        
+        EventMessage =Operation 
+        , EventCount=int(1)
+        , EventStartTime= TimeGenerated // Start_Time ?
+        , EventEndTime= TimeGenerated
+        , EventType=Operation
+        , EventResult=case(ResultStatus =='Succeeded', 'Success'
+                            , ResultStatus == 'Failed', 'Failure'
+                            , 'Partial')
+     // , EventResultDetails:string
+        , EventProduct='SharePoint'
+        , EventVendor='Microsoft'
+     // , EventSchemaVersion :string 
+     // , EventReportUrl :string 
+     // , Dvc :string 
+     // , DvcIpAddr :string 
+     // , DvcHostname :string 
+     // , DvcId :string 
+     // , DvcMacAddr :string 
+     // , DvcOS :string 
+     // , DvcOSVersion :string 
+     // , AdditionalFields :dynamic
+        //
+        , ActorUsername=UserId 
+        , ActorUsernameType='upn'
+        , ActorUserId=UserKey
+        , ActorUserIdType='Puid' //(PUID) for events performed by users in SharePoint, OneDrive
+        , ActorUserType=UserType
+     // , ActingAppId :string 
+     // , ActingAppName :string 
+        , HttpUserAgent=UserAgent
+     // , TargetUserId :string 
+     // , TargetUserIdType :string 
+     // , TargetUsername :string 
+     // , TargetUsernameType :string 
+     // , TargetUserType :string 
+     // , TargetSessionId :string 
+     // , SrcDvcId :string 
+     // , SrcDvcHostname :string 
+     // , SrcDvcHostnameType :string 
+     // , SrcDvcType :string 
+        , SrcDvcIpAddr =ClientIP
+     // , SrcDvcOs :string 
+     // , SrcIsp :string 
+     // , SrcGeoCountry :string 
+     // , SrcGeoCity :string 
+     // , SrcGeoRegion  :string 
+     // , SrcGeoLongtitude :string 
+     // , SrcGeoLatitude :string 
+     // , TargetAppId :string 
+     // , TargetAppName :string 
+     // , TargetAppType :string 
+     // , TargetUrl :string 
+     // , AuthTarget :string 
+     // , TargetDvcId :string 
+     // , TargetDvcHostname :string 
+     // , TargetDvcHostnameType :string 
+     // , TargetDvcType :string 
+     // , TargetDvcIpAddr :string 
+     // , TargetDvc :string 
+     // , TargetDvcOs :string 
+     // , TargetPortNumber :string 
+     // , EventOriginalUid :string 
+     // , EventProductVersion :string 
+        /// If operation is copied/moved than SourceFile us the "Previous file". (what about FileRenamed?)
+       , FileName=iff(Operation in ('FileCopied', 'FileMoved'), DestinationFileName, SourceFileName) // need to see samples. Maybe use SourceFileName
+       , FilePath= iff(Operation in ('FileCopied', 'FileMoved'),strcat(Site_Url, '/', DestinationRelativeUrl), strcat(Site_Url, '/', SourceRelativeUrl))
+     // , SensitivityLabel:string // ? 
+       , PreviousFileName=iff(Operation in ('FileCopied', 'FileMoved'), SourceFileName,'')
+       , PreviousFilePath=iff(Operation in ('FileCopied', 'FileMoved'), strcat(Site_Url, '/', SourceRelativeUrl),'')
+     // Aliases
+     | extend 
+        User=ActorUsername
+   };
+    SharePointEvents
+  
+  
