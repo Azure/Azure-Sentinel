@@ -26,7 +26,7 @@
         Enter the Resource Group name of Azure Data Explorer (ADX) Database Name (required)
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 25 Jun 2021
+        LASTEDIT: 28 Jun 2021
     .EXAMPLE
         Migrate-LA-to-ADX -LogAnalyticsResourceGroup "LARGName" -LogAnalyticsWorkspaceName "LAWName"
                           -AdxResourceGroup "ADXRG" -AdxClusterURL "ADXClusterURL" -AdxDBName "ADXDBName"
@@ -418,7 +418,7 @@ function New-LaDataExportRule {
         [Parameter(Mandatory=$true, Position=0)] $AdxEventHubs,
         [Parameter(Mandatory=$true, Position=1)] $TablesArrayCollection     
     )
-	Write-Log -Message "Creating Log Analytics Data Export rules" -LogFileName $LogFileName -Severity Information																											 
+	Write-Log -Message "Creating Log Analytics Data Export rules" -LogFileName $LogFileName -Severity Information
     try{        
         $Count=0        
         foreach ($AdxEventHub in $AdxEventHubs) {        
