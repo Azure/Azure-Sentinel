@@ -319,16 +319,20 @@ function New-AdxRawMappingTables {
     }
   
     foreach ($table in $LaTables) {
+
+        # not sure this does anything
         if ($decision -eq 0) {
             $TableName = $table.'$table'
+
         }
         else {
             $TableName = $table
         }
+                
         if ($TableName -match '_CL$') {                
             Write-Log -Message "Custom log table : $TableName not supported" -LogFileName $LogFileName -Severity Information
         }
-        elseif ($supportedTables."SupportedTables" -contains $TableName.tostring().Trim()) {        
+        elseif ($supportedTables.SupportedTables -contains $TableName.ToString().Trim()) {        
             Write-Log -Message "Retrieving schema and mappings for $TableName" -LogFileName $LogFileName -Severity Information
             $query = $TableName + ' | getschema | project ColumnName, DataType'        
             $AdxTablesArray.Add($TableName.Trim())
@@ -376,6 +380,7 @@ function New-AdxRawMappingTables {
                 .alter table {0} policy update @'[{{"Source": "{1}", "Query": "{2}()", "IsEnabled": "True", "IsTransactional": true}}]'
 '@ -f $TableName, $TableRaw, $TableExpandFunction
 
+
             $scriptDir = "$PSScriptRoot\KustoQueries"
             New-Item "$scriptDir\adxCommands.txt"
             Add-Content "$scriptDir\adxCommands.txt" "`n$CreateRawTable"
@@ -384,7 +389,8 @@ function New-AdxRawMappingTables {
             Add-Content "$scriptDir\adxCommands.txt" "`n$CreateTable"
             Add-Content "$scriptDir\adxCommands.txt" "`n$CreateFunction"
             Add-Content "$scriptDir\adxCommands.txt" "`n$CreatePolicyUpdate"
-            try {    
+            
+            try {         
                 Invoke-KustoCLI -AdxCommandsFile "$scriptDir\adxCommands.txt"
                 Remove-Item $ScriptDir\adxCommands.txt -Force -ErrorAction Ignore        
             }
@@ -392,11 +398,11 @@ function New-AdxRawMappingTables {
                 Write-Log -Message "An error occurred in New-AdxRawMappingTables() method" -LogFileName $LogFileName -Severity Error		
                 exit
             }
-            Write-Log -Message "Successfully created Raw and Mapping tables for: $TableName in ADX cluster database" -LogFileName $LogFileName -Severity Information
+            Write-Log -Message "Successfully created Raw and Mapping tables for: $TableName in ADX cluster database." -LogFileName $LogFileName -Severity Information
         }
-        else {                
-            $t = $TableName[0].ToString().Replace('@{$table=','')
-            Write-Log -Message "Table: $t is not supported by data export rule" -LogFileName $LogFileName -Severity Error
+        else {             
+
+            Write-Log -Message "$($table[0].'$table') table is not supported by data export." -LogFileName $LogFileName -Severity Error
         }
     }   
 
@@ -722,9 +728,18 @@ $EventHubQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescri
 $EventHubQuestionDecision = $Host.UI.PromptForChoice($title, $EventHubQuestion, $EventHubQuestionChoices, 0)
 
 if ($EventHubQuestionDecision -eq 0) {        
-    $AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
-    Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
-    $EventHubsForADX = New-EventHubNamespace -ArraysObject $AdxMappedTables 
+    
+
+    if ($AdxMappedTables.Count -gt 0) {
+        Write-Verbose " There are $($AdxMappedTables.Count) supported tables to map."
+        $AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
+        Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
+        $EventHubsForADX = New-EventHubNamespace -ArraysObject $AdxMappedTables 
+    }
+    else {
+        Write-Log "There are $($AdxMappedTables.Count) supported tables to map in $($LogAnalyticsWorkspaceName), choose a workspace with supported tables." -Severity Error
+        exit
+    }
 }
 else {
     Write-Log -Message "Skipping Event Hub namespace creation" -LogFileName $LogFileName -Severity Warning
