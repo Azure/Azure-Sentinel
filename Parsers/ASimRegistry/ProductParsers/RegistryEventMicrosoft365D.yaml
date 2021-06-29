@@ -15,120 +15,7 @@ References:
 Description: ASIM M365 Defender for endpoint Registry Events Parser
 ParserName: vimRegistryEventMicrosoft365D
 ParserQuery: |
- 
-*
-*
-CyberSecuritySOC
-Save
-Share
-New alert rule
-Export
-Search
-Group by: Solution
-Favorites
-You can add favorites by clicking on theicon
-Azure Monitor for VMs
-Azure Sentinel
-Anomalies
-AWSCloudTrail
-CommonSecurityLog
-DeviceEvents
-DeviceFileEvents
-DeviceImageLoadEvents
-DeviceInfo
-DeviceLogonEvents
-DeviceNetworkEvents
-DeviceNetworkInfo
-DeviceProcessEvents
-DeviceRegistryEvents
-t
-ActionType (string)
-t
-AppGuardContainerId (string)
-t
-DeviceId (string)
-t
-DeviceName (string)
-t
-InitiatingProcessAccountDomain (string)
-t
-InitiatingProcessAccountName (string)
-t
-InitiatingProcessAccountObjectId (string)
-t
-InitiatingProcessAccountSid (string)
-t
-InitiatingProcessAccountUpn (string)
-t
-InitiatingProcessCommandLine (string)
-InitiatingProcessCreationTime (datetime)
-t
-InitiatingProcessFileName (string)
-t
-InitiatingProcessFolderPath (string)
-#
-InitiatingProcessId (long)
-t
-InitiatingProcessIntegrityLevel (string)
-t
-InitiatingProcessMD5 (string)
-InitiatingProcessParentCreationTime (datetime)
-t
-InitiatingProcessParentFileName (string)
-#
-InitiatingProcessParentId (long)
-t
-InitiatingProcessSHA1 (string)
-t
-InitiatingProcessSHA256 (string)
-t
-InitiatingProcessTokenElevation (string)
-t
-MachineGroup (string)
-t
-PreviousRegistryKey (string)
-t
-PreviousRegistryValueData (string)
-t
-PreviousRegistryValueName (string)
-t
-RegistryKey (string)
-t
-RegistryValueData (string)
-t
-RegistryValueName (string)
-t
-RegistryValueType (string)
-#
-ReportId (long)
-t
-SourceSystem (string)
-t
-TenantId (string)
-TimeGenerated (datetime)
-t
-Type (string)
-HuntingBookmark
-OfficeActivity
-SecurityAlert
-SecurityEvent
-SecurityIncident
-SentinelHealth
-ThreatIntelligenceIndicator
-Watchlist
-Azure Sentinel UEBA
-Change Tracking
-DNS Analytics (Preview)
-LogManagement
-Network Performance Monitor
-Security and Audit
-SecurityCenterFree
-SQL Advanced Threat Protection
-SQL Vulnerability Assessment
-Update Management
-Custom Logs
-656667697071727374757668
-let RegistryType = datatable (TypeCode:string,TypeName:string)
+              let RegistryType = datatable (TypeCode:string,TypeName:string)
                 [
                   "None", "Reg_None",
                   "String",	"Reg_Sz",
@@ -138,98 +25,84 @@ let RegistryType = datatable (TypeCode:string,TypeName:string)
                   "MultiString",	"Reg_Multi_Sz",
                   "QWord",	"Reg_QWord"
                 ];
-…                    InitiatingProcessAccountDomain,
-                    PreviousRegistryKey,
-                    PreviousRegistryValueName,
-                    RegistryValueName,
-                    TypeName
 
+              let RegistryEvents_M365D=()
+              {
+                DeviceRegistryEvents
+                | extend
+                  // Event
+                  EventOriginalUid = tostring(ReportId), 
+                  EventCount = int(1), 
+                  EventProduct = 'M365 Defender for Endpoint', 
+                  EventVendor = 'Microsoft', 
+                  EventSchemaVersion = '0.1.0', 
+                  EventStartTime = todatetime(TimeGenerated), 
+                  EventEndTime = todatetime(TimeGenerated), 
+                  EventType = ActionType,
+
+                  // Registry
+                  RegistryKey = iff (ActionType in ("RegistryKeyDeleted", "RegistryValueDeleted"), PreviousRegistryKey, RegistryKey),
+                  RegistryValue = iff (ActionType == "RegistryValueDeleted", PreviousRegistryValueName, RegistryValueName),
+                  // RegistryValueType -- original name is fine 
+                  // RegistryValueData -- original name is fine 
+                  RegistryKeyModified = iff (ActionType == "RegistryKeyRenamed", PreviousRegistryKey, ""),
+                  RegistryValueModified = iff (ActionType == "RegistryValueSet", PreviousRegistryValueName, ""),
+                  // RegistryValueTypeModified -- Not provided by Defender
+                  RegistryValueDataModified = PreviousRegistryValueData
+                | lookup RegistryType on $left.RegistryValueType == $right.TypeCode | extend RegistryValueType = TypeName
+                | project-away TypeName, PreviousRegistryKey, PreviousRegistryValueName, PreviousRegistryValueData
+
+                  // Device
+                | extend
+                  DvcHostname = DeviceName, 
+                  DvcId = DeviceId, 
+                  DvcOs = 'Windows', 
+                  Dvc = DeviceName 
+
+                  // Users
+                | extend
+                  ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)), 
+                  ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'), 
+                  ActorUserIdType = 'SID'
+                | project-away InitiatingProcessAccountDomain, InitiatingProcessAccountName
+ 
+                | project-rename
+                  ActorUserId = InitiatingProcessAccountSid, 
+
+                  ActorUserAadId = InitiatingProcessAccountObjectId, 
+                  ActorUserUpn = InitiatingProcessAccountUpn
+
+                  // Processes
+                | extend
+                  ActingProcessId = tostring(InitiatingProcessId), 
+                  ParentProcessId = tostring(InitiatingProcessParentId) 
+                | project-away InitiatingProcessId, InitiatingProcessParentId
+
+                | project-rename
+                  ParentProcessName = InitiatingProcessParentFileName, 
+
+                  ParentProcessCreationTime = InitiatingProcessParentCreationTime, 
+
+                  ActingProcessName = InitiatingProcessFolderPath, 
+                  ActingProcessFileName = InitiatingProcessFileName,
+                  ActingProcessCommandLine = InitiatingProcessCommandLine, 
+
+                  ActingProcessMD5 = InitiatingProcessMD5, 
+                  ActingProcessSHA1 = InitiatingProcessSHA1, //OK
+                  ActingProcessSHA256 = InitiatingProcessSHA256, 
+                  ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel, 
+                  ActingProcessTokenElevation = InitiatingProcessTokenElevation, 
+                  ActingProcessCreationTime = InitiatingProcessCreationTime 
+
+                  // -- aliases
+                | extend 
+                  Username = ActorUsername,
+                  UserId = ActorUserId,
+                  UserIdType = ActorUserIdType,
+                  User = ActorUsername,
+                  CommandLine = ActingProcessCommandLine,
+                  Process = ActingProcessName
 
 
                };
                RegistryEvents_M365D
-TargetProcessCommandLine
-No results
-Columns
-Group columns
-Completed. Showing results from the last 30 minutes.
-00:01.1
-54 records
-	
-TimeGenerated [Jerusalem]
-ActionType
-RegistryKey
-RegistryValueType
-EventOriginalUid
-EventCount
-EventProduct
-EventVendor
-EventSchemaVersion
-EventStartTime [Jerusalem]
-EventEndTime [Jerusalem]
-EventType
-RegistryValue
-RegistryKeyModified
-RegistryValueModified
-DvcHostname
-DvcId
-DvcOs
-Dvc
-ActorUsername
-	6/29/2021, 3:19:28.530 PM	RegistryValueDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\NetBT\Parameters	Reg_None	548	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:28.530 PM	6/29/2021, 3:19:28.530 PM	RegistryValueDeleted	DhcpScopeID			sql01.na.contosohotels.com	bf9ef47588cfc900ec9fd68910cda8f6bba2189e	Windows	sql01.na.contosohotels.com	nt authority\local service	
-	6/29/2021, 3:19:28.530 PM	RegistryValueDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\NetBT\Parameters	Reg_None	549	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:28.530 PM	6/29/2021, 3:19:28.530 PM	RegistryValueDeleted	DhcpScopeID			sql01.na.contosohotels.com	bf9ef47588cfc900ec9fd68910cda8f6bba2189e	Windows	sql01.na.contosohotels.com	nt authority\local service	
-	6/29/2021, 3:19:33.037 PM	RegistryKeyDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\MpKsl95fb1134	Reg_None	571	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:33.037 PM	6/29/2021, 3:19:33.037 PM	RegistryKeyDeleted				sql01.na.contosohotels.com	5c2e815bae08eac9b0d95913be67f2baaf437f0c	Windows	sql01.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:19:43.197 PM	RegistryValueDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\NetBT\Parameters	Reg_None	574	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:43.197 PM	6/29/2021, 3:19:43.197 PM	RegistryValueDeleted	DhcpScopeID			sql01.na.contosohotels.com	5c2e815bae08eac9b0d95913be67f2baaf437f0c	Windows	sql01.na.contosohotels.com	nt authority\local service	
-	6/29/2021, 3:19:43.197 PM	RegistryValueDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\NetBT\Parameters	Reg_None	575	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:43.197 PM	6/29/2021, 3:19:43.197 PM	RegistryValueDeleted	DhcpScopeID			sql01.na.contosohotels.com	5c2e815bae08eac9b0d95913be67f2baaf437f0c	Windows	sql01.na.contosohotels.com	nt authority\local service	
-	6/29/2021, 3:19:44.871 PM	RegistryKeyCreated	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	3728	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:44.871 PM	6/29/2021, 3:19:44.871 PM	RegistryKeyCreated				appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:19:44.871 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Binary	3729	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:44.871 PM	6/29/2021, 3:19:44.871 PM	RegistryValueSet	SD		SD	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:19:44.871 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Sz	3730	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:44.871 PM	6/29/2021, 3:19:44.871 PM	RegistryValueSet	Id		Id	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:19:44.871 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_DWord	3731	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:19:44.871 PM	6/29/2021, 3:19:44.871 PM	RegistryValueSet	Index		Index	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:20:14.620 PM	RegistryKeyDeleted	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_None	2979	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:20:14.620 PM	6/29/2021, 3:20:14.620 PM	RegistryKeyDeleted				appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:20:14.884 PM	RegistryKeyCreated	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	2980	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:20:14.884 PM	6/29/2021, 3:20:14.884 PM	RegistryKeyCreated				appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:20:14.884 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Binary	2981	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:20:14.884 PM	6/29/2021, 3:20:14.884 PM	RegistryValueSet	SD		SD	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:20:14.884 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Sz	2982	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:20:14.884 PM	6/29/2021, 3:20:14.884 PM	RegistryValueSet	Id		Id	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:20:14.884 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_DWord	2983	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:20:14.884 PM	6/29/2021, 3:20:14.884 PM	RegistryValueSet	Index		Index	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:21:00.694 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Advanced Threat Protection		513723	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:21:00.694 PM	6/29/2021, 3:21:00.694 PM	RegistryValueSet	CrashHeartbeat		CrashHeartbeat	onpremsql	9a48b057ce19bfb09f0dcffc01ebebd90c496ff9	Windows	onpremsql	nt authority\system	
-	6/29/2021, 3:26:09.503 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Defender\Signature Updates	Reg_Sz	223	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:26:09.503 PM	6/29/2021, 3:26:09.503 PM	RegistryValueSet	AVSignatureVersion		AVSignatureVersion	contosodc.contoso.azure	d221f53d245821448d1dd2eeaddb239fde66bda7	Windows	contosodc.contoso.azure	nt authority\system	
-	6/29/2021, 3:28:25.889 PM	RegistryKeyDeleted	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	3800	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:28:25.889 PM	6/29/2021, 3:28:25.889 PM	RegistryKeyDeleted				appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:28:25.947 PM	RegistryKeyCreated	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_None	3801	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:28:25.947 PM	6/29/2021, 3:28:25.947 PM	RegistryKeyCreated				appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:28:25.947 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_Binary	3802	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:28:25.947 PM	6/29/2021, 3:28:25.947 PM	RegistryValueSet	SD		SD	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:28:25.947 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_Sz	3803	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:28:25.947 PM	6/29/2021, 3:28:25.947 PM	RegistryValueSet	Id		Id	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:28:25.947 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_DWord	3804	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:28:25.947 PM	6/29/2021, 3:28:25.947 PM	RegistryValueSet	Index		Index	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:28:51.108 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\BITS	Reg_DWord	3805	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:28:51.108 PM	6/29/2021, 3:28:51.108 PM	RegistryValueSet	Start		Start	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:32:50.880 PM	RegistryKeyDeleted	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_None	3848	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:32:50.880 PM	6/29/2021, 3:32:50.880 PM	RegistryKeyDeleted				appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:32:51.076 PM	RegistryKeyCreated	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	3850	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:32:51.076 PM	6/29/2021, 3:32:51.076 PM	RegistryKeyCreated				appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:32:51.076 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Binary	3851	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:32:51.076 PM	6/29/2021, 3:32:51.076 PM	RegistryValueSet	SD		SD	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:32:51.076 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Sz	3852	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:32:51.076 PM	6/29/2021, 3:32:51.076 PM	RegistryValueSet	Id		Id	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:32:51.077 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_DWord	3853	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:32:51.077 PM	6/29/2021, 3:32:51.077 PM	RegistryValueSet	Index		Index	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:23:16.117 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\BITS	Reg_DWord	3768	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:23:16.117 PM	6/29/2021, 3:23:16.117 PM	RegistryValueSet	Start		Start	appbe00.na.contosohotels.com	9381d286657b2b36581aa3f018bea4b53374e38d	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:23:06.097 PM	RegistryKeyDeleted	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	3060	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:23:06.097 PM	6/29/2021, 3:23:06.097 PM	RegistryKeyDeleted				appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:08:15.283 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\ClusSvc\Parameters	Reg_Binary	396	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:08:15.283 PM	6/29/2021, 3:08:15.283 PM	RegistryValueSet	LastUpdatedTelemetry		LastUpdatedTelemetry	sql01.na.contosohotels.com	5c2e815bae08eac9b0d95913be67f2baaf437f0c	Windows	sql01.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:10:34.019 PM	RegistryKeyCreated	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	2896	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:10:34.019 PM	6/29/2021, 3:10:34.019 PM	RegistryKeyCreated				appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:10:34.019 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Binary	2897	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:10:34.019 PM	6/29/2021, 3:10:34.019 PM	RegistryValueSet	SD		SD	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:10:34.019 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_Sz	2898	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:10:34.019 PM	6/29/2021, 3:10:34.019 PM	RegistryValueSet	Id		Id	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:10:34.019 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_DWord	2899	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:10:34.019 PM	6/29/2021, 3:10:34.019 PM	RegistryValueSet	Index		Index	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:09:41.417 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\BITS	Reg_DWord	145	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:09:41.417 PM	6/29/2021, 3:09:41.417 PM	RegistryValueSet	Start		Start	sql01.na.contosohotels.com	bf9ef47588cfc900ec9fd68910cda8f6bba2189e	Windows	sql01.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:12:29.260 PM	RegistryValueDeleted	HKEY_CURRENT_USER\S-1-5-21-1661583231-2311428937-3957907789-1107\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings	Reg_None	5276	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:12:29.260 PM	6/29/2021, 3:12:29.260 PM	RegistryValueDeleted	AutoConfigURL			victimpc.contoso.azure	b1f9804561bc0e55ccca45bc11e767c360e70616	Windows	victimpc.contoso.azure	contoso\jeffl	
-	6/29/2021, 3:12:29.260 PM	RegistryValueDeleted	HKEY_CURRENT_USER\S-1-5-21-1661583231-2311428937-3957907789-1107\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings	Reg_None	5277	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:12:29.260 PM	6/29/2021, 3:12:29.260 PM	RegistryValueDeleted	AutoDetect			victimpc.contoso.azure	b1f9804561bc0e55ccca45bc11e767c360e70616	Windows	victimpc.contoso.azure	contoso\jeffl	
-	6/29/2021, 3:14:13.972 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Advanced Threat Protection		27231	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:14:13.972 PM	6/29/2021, 3:14:13.972 PM	RegistryValueSet	CrashHeartbeat		CrashHeartbeat	adfs01.seccxp.ninja	f41c80d351ba579ff01e7c2d43b529dedb607b69	Windows	adfs01.seccxp.ninja	nt authority\system	
-	6/29/2021, 3:12:02.866 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\BITS	Reg_DWord	2903	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:12:02.866 PM	6/29/2021, 3:12:02.866 PM	RegistryValueSet	Start		Start	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:12:18.283 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Advanced Threat Protection		16635	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:12:18.283 PM	6/29/2021, 3:12:18.283 PM	RegistryValueSet	CrashHeartbeat		CrashHeartbeat	win10	888ff1c2a524200795d81d3f4ea356eaed9047a9	Windows	win10	nt authority\system	
-	6/29/2021, 3:14:34.361 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Advanced Threat Protection		20165	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:14:34.361 PM	6/29/2021, 3:14:34.361 PM	RegistryValueSet	CrashHeartbeat		CrashHeartbeat	win2019svr	a0d146122de8662980d66ecf97b0ac92994eaa1d	Windows	win2019svr	nt authority\system	
-	6/29/2021, 3:17:10.780 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Advanced Threat Protection	Reg_DWord	14	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:17:10.780 PM	6/29/2021, 3:17:10.780 PM	RegistryValueSet	EpochResetCount		EpochResetCount	contosodc.contoso.azure	d221f53d245821448d1dd2eeaddb239fde66bda7	Windows	contosodc.contoso.azure	nt authority\system	
-	6/29/2021, 3:15:55.310 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Advanced Threat Protection	Reg_DWord	4	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:15:55.310 PM	6/29/2021, 3:15:55.310 PM	RegistryValueSet	EpochResetCount		EpochResetCount	dc11.na.contosohotels.com	2d76f9d759af9652c2b757e0085e9cd6625d1027	Windows	dc11.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:16:54.240 PM	RegistryValueDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\NetBT\Parameters	Reg_None	32	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:54.240 PM	6/29/2021, 3:16:54.240 PM	RegistryValueDeleted	DhcpScopeID			dc11.na.contosohotels.com	2d76f9d759af9652c2b757e0085e9cd6625d1027	Windows	dc11.na.contosohotels.com	nt authority\local service	
-	6/29/2021, 3:16:54.240 PM	RegistryValueDeleted	HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\NetBT\Parameters	Reg_None	33	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:54.240 PM	6/29/2021, 3:16:54.240 PM	RegistryValueDeleted	DhcpScopeID			dc11.na.contosohotels.com	2d76f9d759af9652c2b757e0085e9cd6625d1027	Windows	dc11.na.contosohotels.com	nt authority\local service	
-	6/29/2021, 3:16:39.796 PM	RegistryKeyDeleted	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Download	Reg_None	2934	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:39.796 PM	6/29/2021, 3:16:39.796 PM	RegistryKeyDeleted				appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:16:39.842 PM	RegistryKeyCreated	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_None	2935	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:39.842 PM	6/29/2021, 3:16:39.842 PM	RegistryKeyCreated				appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:16:39.842 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_Binary	2936	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:39.842 PM	6/29/2021, 3:16:39.842 PM	RegistryValueSet	SD		SD	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:16:39.842 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_Sz	2937	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:39.842 PM	6/29/2021, 3:16:39.842 PM	RegistryValueSet	Id		Id	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-	6/29/2021, 3:16:39.842 PM	RegistryValueSet	HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\UpdateOrchestrator\AC Power Install	Reg_DWord	2938	1	M365 Defender for Endpoint	Microsoft	0.1.0	6/29/2021, 3:16:39.842 PM	6/29/2021, 3:16:39.842 PM	RegistryValueSet	Index		Index	appbe00.na.contosohotels.com	69edbc8962a07aa12b2cf40c82836a740c81dead	Windows	appbe00.na.contosohotels.com	nt authority\system	
-Page
-1
-of 2
-50
-items per page
-1 - 50 of 54 items
-No results found for 'TargetProcessCommandLine'
