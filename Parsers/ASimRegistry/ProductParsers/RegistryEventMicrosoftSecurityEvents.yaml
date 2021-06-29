@@ -20,10 +20,10 @@ ParserQuery: |
                   "%%1872", "Reg_None",
                   "%%1873",	"Reg_Sz",
                   "%%1874",	"Reg_Expand_Sz",
-                  "%%1875"	"Reg_Binary".
-                  "%%1876"	"Reg_DWord".
-                  "%%1879"	"Reg_Multi_Sz",
-                  "%%1883"	"Reg_QWord",
+                  "%%1875",	"Reg_Binary",
+                  "%%1876",	"Reg_DWord",
+                  "%%1879",	"Reg_Multi_Sz",
+                  "%%1883",	"Reg_QWord"
                 ];
               let RegistryAction = datatable (EventOriginalSubType:string,EventType:string)
                 [
@@ -44,12 +44,12 @@ ParserQuery: |
 
               // Event
               | extend
-                  EventCount = int(1), // OK
-                  EventVendor = 'Microsoft', // OK
-                  EventProduct = 'Security Events', // OK
-                  EventSchemaVersion = '0.1.0', // OK
-                  EventStartTime = todatetime(TimeGenerated), // OK
-                  EventEndTime = todatetime(TimeGenerated) // OK
+                  EventCount = int(1), 
+                  EventVendor = 'Microsoft', 
+                  EventProduct = 'Security Events', 
+                  EventSchemaVersion = '0.1.0', 
+                  EventStartTime = todatetime(TimeGenerated), 
+                  EventEndTime = todatetime(TimeGenerated) 
               | project-rename
                   EventOriginalType = EventID,
                   EventOriginalSubType = OperationType,
@@ -58,52 +58,54 @@ ParserQuery: |
               | lookup RegistryAction on EventOriginalSubType
  
               // Registry
+              // Normalize key hive
               | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" Key
               | lookup Hives on KeyPrefix
-              | extend 
-                RegistryKey = strcat (Hive, "\\", Key)
-                RegistryValue = ObjectValueName,
-                RegistryValueData = iff (OperationType in ("%%1906", OldValue, NewValue), 
-                RegistryKeyModified = iff (OperationType in ("%%1905", RegistryKey, "")
-                RegistryValueModified = iff (OperationType in ("%%1905", RegistryValue, "")
-                RegistryValueDataModified = OldValue
+              | extend RegistryKey = strcat (Hive, "\\", Key)
+              | project-away Hive, Key, KeyPrefix, ObjectName
+
+              | project-rename
+                RegistryValue = ObjectValueName
+              | extend
+                RegistryValueData = iff (EventOriginalSubType == "%%1906", OldValue, NewValue), 
+                RegistryKeyModified = iff (EventOriginalSubType == "%%1905", RegistryKey, ""),
+                RegistryValueModified = iff (EventOriginalSubType == "%%1905", RegistryValue, ""),
+                RegistryValueDataModified = iff (EventOriginalSubType == "%%1905", OldValue, "")
               | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName
-              | lookup RegistryType on $left.OldalueType == $right.TypeCode | project-rename RegistryValueTypeModified = TypeName
+              | lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryValueTypeModified = TypeName
+              | project-away OldValue, NewValue, OldValueType, NewValueType
 
               // Device
               | extend
                   DvcId = SourceComputerId,
-                  DvcHostname = Computer
-                  DvcOs = 'Windows',
+                  DvcHostname = Computer,
+                  DvcOs = 'Windows'
 
               // User
               | project-rename
-                  ActorUserId = SubjectUserSid, // OK
-                  ActorUserIdType = 'SID' // OK
-                  ActorUserSessionId = SubjectLogonId, // OK
-                  ActorDomainName = SubjectDomainName, // OK
+                  ActorUserId = SubjectUserSid, 
+                  ActorUserSessionId = SubjectLogonId, 
+                  ActorDomainName = SubjectDomainName
               | extend
-                  ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount), // OK
-                  ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows') // OK
+                  ActorUserIdType = 'SID',
+                  ActorUsername = iff (ActorDomainName == '-', SubjectUserName, SubjectAccount), 
+                  ActorUsernameType = iff(ActorDomainName == '-','Simple', 'Windows') 
               
               // Process 
               | project-rename
-                  ActingProcessId = ProcessId, // OK
-                  ActingProcessName = ParentProcessName, // OK
+                  ActingProcessId = ProcessId, 
+                  ActingProcessName = ProcessName
 
               // -- Aliases
                 | extend
                   User = ActorUsername,
-                  UserId = ActorUserId
+                  UserId = ActorUserId,
                   Dvc = DvcHostname,
                   Process = ActingProcessName
 
               // -- Remove potentially confusing
                 | project-away 
-                    ParentProcessName, 
-                    SubjectUserSid,
-                    SubjectDomainName,
                     SubjectUserName,
-                    SubjectAccount,
+                    SubjectAccount
 
               }; RegistryEvents
