@@ -1057,7 +1057,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         break;
     }
     $zipPackageName = "$(if($contentToImport.Version){$contentToImport.Version}else{"newSolutionPackage"}).zip"
-    Compress-Archive -Path $solutionFolder -DestinationPath "$solutionFolder/$zipPackageName" -Force
+    Compress-Archive -Path "$solutionFolder/*" -DestinationPath "$solutionFolder/$zipPackageName" -Force
     
     #downloading and running arm-ttk on generated solution
     $armTtkFolder = "$PSScriptRoot/arm-ttk"
@@ -1065,5 +1065,5 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 $solutionName"  
+    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"  
 }
