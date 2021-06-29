@@ -15,8 +15,15 @@ References:
 Description: ASIM Security Events Registry Creation Event Parser (event number 4657)
 ParserName: vimRegistryEventMicrosoftSecurityEvents
 ParserQuery: | 
-              let RegistryType = datatable (Code:string,Name:string)
+              let RegistryType = datatable (TypeCode:string,TypeName:string)
                 [
+                  "%%1872", "Reg_None",
+                  "%%1873",	"Reg_Sz",
+                  "%%1874",	"Reg_Expand_Sz",
+                  "%%1875"	"Reg_Binary".
+                  "%%1876"	"Reg_DWord".
+                  "%%1879"	"Reg_Multi_Sz",
+                  "%%1883"	"Reg_QWord",
                 ];
               let RegistryAction = datatable (EventOriginalSubType:string,EventType:string)
                 [
@@ -24,17 +31,11 @@ ParserQuery: |
                   "%%1905", "RegistryValueSet",      
                   "%%1906", "RegistryValueDeleted"             
                 ];
-              let HiveList = datatable (KeyRoot:string,Hive:string)
+              let Hives = datatable (KeyPrefix:string,Hive:string)
                 [
-                  "REGISTRY\MACHINE", "HKEY_LOCAL_MACHINE",
-                  "REGISTRY\USER", "RegistryValueSet",      
-                  "%%1906", "RegistryValueDeleted"             
+                  "MACHINE", "HKEY_LOCAL_MACHINE",
+                  "USER", "HKEY_USERS",   
                 ];
-
-
-
-                		HKEY_LOCAL_MACHINE 
-                    HKEY_CURRENT_USER
 
               let RegistryEvents=(){
               SecurityEvent
@@ -57,37 +58,36 @@ ParserQuery: |
               | lookup RegistryAction on EventOriginalSubType
  
               // Registry
-              | parse ObjectName with "\\" KeyRootTop "\\" KeyRootSecondary "\\" KeyMain
-              | extend KeyRoot = strcat (KeyRootTop, "\\", KeyRootSecondary)
-              | lookup HiveList on KeyRoot
-              | extend RegistryKey = strcat (Hive, "\\", KeyMain)
-                  RegistryValue = iff (ActionType == "RegistryValueDeleted", PreviousRegistryValueName, RegistryValueName),
-                  // RegistryValueType -- original name is fine 
-                  // RegistryValueData -- original name is fine 
-                  RegistryKeyModified = iff (ActionType == "RegistryKeyRenamed", PreviousRegistryKey, ""),
-                  RegistryValueModified = iff (ActionType == "RegistryValueSet", PreviousRegistryValueName, ""),
-                  // RegistryValueTypeModified -- Recommended only
-                  RegistryValueDataModified = PreviousPreviousValueData,
-
+              | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" Key
+              | lookup Hives on KeyPrefix
+              | extend 
+                RegistryKey = strcat (Hive, "\\", Key)
+                RegistryValue = ObjectValueName,
+                RegistryValueData = iff (OperationType in ("%%1906", OldValue, NewValue), 
+                RegistryKeyModified = iff (OperationType in ("%%1905", RegistryKey, "")
+                RegistryValueModified = iff (OperationType in ("%%1905", RegistryValue, "")
+                RegistryValueDataModified = OldValue
+              | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName
+              | lookup RegistryType on $left.OldalueType == $right.TypeCode | project-rename RegistryValueTypeModified = TypeName
 
               // Device
               | extend
                   DvcId = SourceComputerId,
                   DvcHostname = Computer
-              | project-rename
                   DvcOs = 'Windows',
 
               // User
+              | project-rename
                   ActorUserId = SubjectUserSid, // OK
                   ActorUserIdType = 'SID' // OK
+                  ActorUserSessionId = SubjectLogonId, // OK
+                  ActorDomainName = SubjectDomainName, // OK
               | extend
                   ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount), // OK
                   ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows') // OK
-              | project-rename
-                 ActorUserSessionId = SubjectLogonId, // OK
-                  ActorDomainName = SubjectDomainName, // OK
               
               // Process 
+              | project-rename
                   ActingProcessId = ProcessId, // OK
                   ActingProcessName = ParentProcessName, // OK
 
