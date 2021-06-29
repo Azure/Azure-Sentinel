@@ -1,0 +1,109 @@
+Parser:
+  Title: ASIM Security Events Registry Creation Event Parser
+  Version: '0.1'
+  LastUpdated: June 23, 2021
+Product:
+  Name: Microsoft Windows Security Events
+Normalization:
+  Schema: RegistryEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Registry Schema
+  Link: https://aka.ms/AzSentinelRegistryEventsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Security Events Registry Creation Event Parser (event number 4657)
+ParserName: vimRegistryEventMicrosoftSecurityEvents
+ParserQuery: | 
+              let RegistryType = datatable (Code:string,Name:string)
+                [
+                ];
+              let RegistryAction = datatable (EventOriginalSubType:string,EventType:string)
+                [
+                  "%%1904", "RegistryValueSet",
+                  "%%1905", "RegistryValueSet",      
+                  "%%1906", "RegistryValueDeleted"             
+                ];
+              let HiveList = datatable (KeyRoot:string,Hive:string)
+                [
+                  "REGISTRY\MACHINE", "HKEY_LOCAL_MACHINE",
+                  "REGISTRY\USER", "RegistryValueSet",      
+                  "%%1906", "RegistryValueDeleted"             
+                ];
+
+
+
+                		HKEY_LOCAL_MACHINE 
+                    HKEY_CURRENT_USER
+
+              let RegistryEvents=(){
+              SecurityEvent
+              // -- Filter
+              | where EventID == 4657          
+
+              // Event
+              | extend
+                  EventCount = int(1), // OK
+                  EventVendor = 'Microsoft', // OK
+                  EventProduct = 'Security Events', // OK
+                  EventSchemaVersion = '0.1.0', // OK
+                  EventStartTime = todatetime(TimeGenerated), // OK
+                  EventEndTime = todatetime(TimeGenerated) // OK
+              | project-rename
+                  EventOriginalType = EventID,
+                  EventOriginalSubType = OperationType,
+                  EventOriginalUid = EventOriginId
+ 
+              | lookup RegistryAction on EventOriginalSubType
+ 
+              // Registry
+              | parse ObjectName with "\\" KeyRootTop "\\" KeyRootSecondary "\\" KeyMain
+              | extend KeyRoot = strcat (KeyRootTop, "\\", KeyRootSecondary)
+              | lookup HiveList on KeyRoot
+              | extend RegistryKey = strcat (Hive, "\\", KeyMain)
+                  RegistryValue = iff (ActionType == "RegistryValueDeleted", PreviousRegistryValueName, RegistryValueName),
+                  // RegistryValueType -- original name is fine 
+                  // RegistryValueData -- original name is fine 
+                  RegistryKeyModified = iff (ActionType == "RegistryKeyRenamed", PreviousRegistryKey, ""),
+                  RegistryValueModified = iff (ActionType == "RegistryValueSet", PreviousRegistryValueName, ""),
+                  // RegistryValueTypeModified -- Recommended only
+                  RegistryValueDataModified = PreviousPreviousValueData,
+
+
+              // Device
+              | extend
+                  DvcId = SourceComputerId,
+                  DvcHostname = Computer
+              | project-rename
+                  DvcOs = 'Windows',
+
+              // User
+                  ActorUserId = SubjectUserSid, // OK
+                  ActorUserIdType = 'SID' // OK
+              | extend
+                  ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount), // OK
+                  ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows') // OK
+              | project-rename
+                 ActorUserSessionId = SubjectLogonId, // OK
+                  ActorDomainName = SubjectDomainName, // OK
+              
+              // Process 
+                  ActingProcessId = ProcessId, // OK
+                  ActingProcessName = ParentProcessName, // OK
+
+              // -- Aliases
+                | extend
+                  User = ActorUsername,
+                  UserId = ActorUserId
+                  Dvc = DvcHostname,
+                  Process = ActingProcessName
+
+              // -- Remove potentially confusing
+                | project-away 
+                    ParentProcessName, 
+                    SubjectUserSid,
+                    SubjectDomainName,
+                    SubjectUserName,
+                    SubjectAccount,
+
+              }; RegistryEvents

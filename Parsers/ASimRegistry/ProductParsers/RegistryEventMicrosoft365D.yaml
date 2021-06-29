@@ -1,7 +1,7 @@
 Parser:
-  Title: ASIM M365 Defender for endpoint Registry Events Parser
+  Title: ASIM M365 Defender for Endpoint Registry Events Parser
   Version: '0.1'
-  LastUpdated: June 23, 2021
+  LastUpdated: June 29, 2021
 Product:
   Name: Microsoft 365 Defender
 Normalization:
@@ -13,87 +13,77 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AzSentinelNormalization
 Description: ASIM M365 Defender for endpoint Registry Events Parser
-ParserName: vimRegistryEventsMicrosoft365D
+ParserName: vimRegistryEventMicrosoft365D
 ParserQuery: |
               let ProcessEvents_M365D=()
               {
                 DeviceRegistryEvents
                 | extend
                   // Event
-                  EventOriginalUid = tostring(ReportId), // OK
-                  EventCount = int(1), // OK
-                  EventProduct = 'M365 Defender for Endpoint', // OK
-                  EventVendor = 'Microsoft', // OK
-                  EventSchemaVersion = '0.1.0', // OK
-                  EventStartTime = todatetime(TimeGenerated), // OK
-                  EventEndTime = todatetime(TimeGenerated), // OK
-                  EventType = ActionType // OK
+                  EventOriginalUid = tostring(ReportId), 
+                  EventCount = int(1), 
+                  EventProduct = 'M365 Defender for Endpoint', 
+                  EventVendor = 'Microsoft', 
+                  EventSchemaVersion = '0.1.0', 
+                  EventStartTime = todatetime(TimeGenerated), 
+                  EventEndTime = todatetime(TimeGenerated), 
+                  EventType = ActionType 
 
                   // Registry
-                  TargetRegistryKey = RegistryKey, // RegistryKey serves as an alias
-                  TargetRegistryValueType = RegistryValueType,
-                  RegistryValueName // ??
+                  RegistryKey = iff (ActionType in ("RegistryKeyDeleted", "RegistryValueDeleted"), PreviousRegistryKey, RegistryKey),
+                  RegistryValue = iff (ActionType == "RegistryValueDeleted", PreviousRegistryValueName, RegistryValueName),
+                  // RegistryValueType -- original name is fine 
+                  // RegistryValueData -- original name is fine 
+                  RegistryKeyModified = iff (ActionType == "RegistryKeyRenamed", PreviousRegistryKey, ""),
+                  RegistryValueModified = iff (ActionType == "RegistryValueSet", PreviousRegistryValueName, ""),
+                  // RegistryValueTypeModified -- Recommended only
+                  RegistryValueDataModified = PreviousPreviousValueData,
 
                   // Device
-                  DvcHostname = DeviceName, // OK
-                  DvcId = DeviceId, // OK
-                  DvcOs = 'Windows', // OK
-                  Dvc = DeviceName // OK
+                  DvcHostname = DeviceName, 
+                  DvcId = DeviceId, 
+                  DvcOs = 'Windows', 
+                  Dvc = DeviceName 
 
                   // Users
                 | extend
-                  ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)), // OK
-                  ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'), // OK
-                  ActorUserIdType = 'SID', // OK
-                  ActorSessionId = tostring(InitiatingProcessLogonId),
-
+                  ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)), 
+                  ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'), 
+                  ActorUserIdType = 'SID', 
+ 
                 | project-rename
-                  ActorUserId = InitiatingProcessAccountSid, // OK
+                  ActorUserId = InitiatingProcessAccountSid, 
 
-                  ActorUserAadId = InitiatingProcessAccountObjectId, // OK
-                  ActorUserUpn = InitiatingProcessAccountUpn, // OK
+                  ActorUserAadId = InitiatingProcessAccountObjectId, 
+                  ActorUserUpn = InitiatingProcessAccountUpn, 
 
                   // Processes
                 | extend
-                  ActingProcessId = tostring(InitiatingProcessId), // OK
-                  ParentProcessId = tostring(InitiatingProcessParentId) // OK
+                  ActingProcessId = tostring(InitiatingProcessId), 
+                  ParentProcessId = tostring(InitiatingProcessParentId) 
 
                 | project-rename
-                  ParentProcessName = InitiatingProcessFolderPath, // OK
+                  ParentProcessName = InitiatingProcessFolderPath, 
 
-                  ParentProcessCreationTime = InitiatingProcessParentCreationTime, // OK
-                  
-                  TargetProcessName = FolderPath,
-                  TargetProcessCommandLine = ProcessCommandLine,
+                  ParentProcessCreationTime = InitiatingProcessParentCreationTime, 
 
-                  TargetProcessIntegrityLevel = ProcessIntegrityLevel,
-                  TargetProcessTokenElevation = ProcessTokenElevation,
-                  TargetProcessCreationTime = ProcessCreationTime,
-                  // TargetProcessFileSize = FileSize,
-                  // TargetProcessCompany = ProcessVersionInfoCompanyName,
-                  // TargetProcessFileProduct = ProcessVersionInfoProductName,
-                  // TargetProcessFileVersion = ProcessVersionInfoProductVersion,
-                  // TargetProcessFileInternalName = ProcessVersionInfoInternalFileName,
-                  // TargetProcessFileOriginallName = ProcessVersionInfoOriginalFileName,
-                  // TargetProcessFileDescription = ProcessVersionInfoFileDescription
+                  ActingProcessName = InitiatingProcessFolderPath, 
+                  ActingProcessCommandLine = InitiatingProcessCommandLine, 
 
-                  ActingProcessName = InitiatingProcessFolderPath, // OK
-                  ActingProcessCommandLine = InitiatingProcessCommandLine, // OK
-
-                  ActingProcessMD5 = InitiatingProcessMD5, // OK
+                  ActingProcessMD5 = InitiatingProcessMD5, 
                   ActingProcessSHA1 = InitiatingProcessSHA1, //OK
-                  ActingProcessSHA256 = InitiatingProcessSHA256, // OK
-                  ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel, // OK
-                  ActingProcessTokenElevation = InitiatingProcessTokenElevation, // OK
-                  ActingProcessCreationTime = InitiatingProcessCreationTime // OK
+                  ActingProcessSHA256 = InitiatingProcessSHA256, 
+                  ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel, 
+                  ActingProcessTokenElevation = InitiatingProcessTokenElevation, 
+                  ActingProcessCreationTime = InitiatingProcessCreationTime 
 
-                  // ActingProcessFileSize = InitiatingProcessFileSize, // OK
-                  // ActingProcessCompany = InitiatingProcessVersionInfoCompanyName, // OK
-                  // ActingProcessFileProduct = InitiatingProcessVersionInfoProductName, // OK
-                  // ActingProcessFileVersion = InitiatingProcessVersionInfoProductVersion, // OK
-                  // ActingProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName, // OK
-                  // ActingProcessFileOriginallName = InitiatingProcessVersionInfoOriginalFileName, // OK
-                  // ActingProcessFileDescription = InitiatingProcessVersionInfoFileDescription // OK
+                  // ActingProcessFileSize = InitiatingProcessFileSize, 
+                  // ActingProcessCompany = InitiatingProcessVersionInfoCompanyName, 
+                  // ActingProcessFileProduct = InitiatingProcessVersionInfoProductName, 
+                  // ActingProcessFileVersion = InitiatingProcessVersionInfoProductVersion, 
+                  // ActingProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName, 
+                  // ActingProcessFileOriginallName = InitiatingProcessVersionInfoOriginalFileName, 
+                  // ActingProcessFileDescription = InitiatingProcessVersionInfoFileDescription 
 
                   // -- aliases
                 | extend 
