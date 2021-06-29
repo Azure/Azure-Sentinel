@@ -1,0 +1,18 @@
+id: 653462ce-ab65-43ea-a139-658d6c3a6ef9
+name: Test YAML Generate
+description: ''
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+query: "  (union isfuzzy=true\n  (SecurityEvent \n  | where EventID == 4625\n  //4625: An account failed to log on\n  | where AccountType == 'User' \n  | where SubStatus == '0xc0000193' \n  | extend Reason = \n  case\n  ( SubStatus == '0xc0000193', 'Windows EventID (4625) - Account has expired', \"Unknown\")\n  | project Computer, Account,  Reason , TimeGenerated\n  ),\n  (\n  SecurityEvent \n  | where EventID == 4769\n  //4769: A Kerberos service ticket was requested ( Kerberos Auth)\n  | parse EventData with * 'Status\">' Status \"<\" *\n  | parse EventData with * 'TargetUserName\">' TargetUserName \"<\" *\n  | where Status == '0x12'\n  | where TargetUserName !has \"$\" and isnotempty(TargetUserName)\n  | extend Reason = \n  case(\n  Status == '0x12', 'Windows EventID (4769) - Account disabled, expired, locked out',\n  'Unknown'), Account = TargetUserName \n  | project Computer, Account, Reason , TimeGenerated\n  ),\n  (\n  SecurityEvent\n  | where EventID == 4776 \n  // 4776: The domain controller attempted to validate the credentials for an account ( NTLM Auth)\n  | where Status == \"0xc0000193\"\n  | extend Reason = \n  case(\n  ErrorCode == '0xc0000193', 'Windows EventID (4776) - Account has expired',\n  'Unknown'), Account = TargetAccount \n  | parse EventData with * 'Workstation\">' Workstation \"<\" *\n  | extend Workstation = trim_start(@\"[\\\\]*\", Workstation)\n  | extend Computer = iff(isnotempty(Workstation), Workstation, Computer ) \n  | project Computer, Account, Reason , TimeGenerated\n  ) ,\n  (\n  SigninLogs \n  | where ResultType == \"50057\" \n  | extend Reason = \n  case(\n  ResultType == '50057', 'SigninLogs( Result Code- 50057) - User account is disabled. The account has been disabled by an administrator.',\n  'Unknown'), Account = UserPrincipalName \n  | project Computer, Account, Reason , TimeGenerated\n  ) )\n  | summarize StartTimeUtc = min(TimeGenerated), EndTImeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, Reason\n  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer\n  | order by EventCount desc "
+version: 1.0.0
