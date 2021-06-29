@@ -1,0 +1,167 @@
+// Usage instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as CiscoWSAEvent and specify Legacy Category.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. CiscoWSAEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// **** Access Logs (non-w3c format) ****
+// This Kusto function expects the following fiels order for CiscoWSA Access logs (Squid type):
+// %t %e %a %w %h %s %1r %2r %A %H %d %c %D %Xr %?BLOCK_SUSPECT_ USER_AGENT, MONITOR_SUSPECT_ USER_AGENT?% < User-Agent:%!%-%
+// **** Access Logs (w3c format) ****
+// This Kusto function expects the following fiels order for CiscoWSA logs in w3c format:
+// date time timestamp x-elapsed-time referer c-ip sc-result-code cs-bytes sc-body-size cs-method cs-url s-hostname cs-uri cs-username "cs-mime-type" x-acltag X-Forwarded-For c-port s-computerName s-port cs-version x-webcat-code-abbr x-wbrs-score x-webroot-scanverdict x-webroot-threat-name x-webroot-trr x-webroot-spyid x-webroot-trace-id x-mcafee-scanverdict x-mcafee-filename x-mcafee-av-scanerror x-mcafee-av-detecttype x-mcafee-av-virustype x-mcafee-virus-name x-sophos-scanverdict x-sophos-scanerror x-sophos-file-name x-sophos-virus-name x-ids-verdict x-icap-verdict x-webcat-req-code-abbr x-webcat-resp-code-abbr x-wbrs-threat-type x-avc-app x-avc-type x-avc-behavior x-request-rewrite x-avg-bw x-bw-throttled user-type x-resp-dvs-threat-name x-resp-dvs-scanverdict x-resp-dvs-verdictname x-req-dvs-threat-name x-req-dvs-scanverdict x-req-dvs-verdictname x-amp-verdict x-amp-malware-name x-amp-score x-amp-upload x-amp-filename x-amp-sha x-suspect-user-agent bytes
+// Description of log fields for different formats can be found here: https://www.cisco.com/c/en/us/td/docs/security/wsa/wsa_14-0/User-Guide/b_WSA_UserGuide_14_0/b_WSA_UserGuide_11_7_chapter_010101.html#con_1621159
+let cisco_wsa_access_logs =() {
+Syslog
+| where SyslogMessage matches regex @"\A\d{10}\.\d{3}\s\d+\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+| extend EventVendor = 'Cisco'
+| extend EventProduct = 'Web Security Appliance'
+| extend EventType = 'Access Log'
+| extend EventFields = split(SyslogMessage, ' ')
+| extend ScanningVerdictFields = parse_csv(tostring(extract(@'<(.*?)>', 1, SyslogMessage)))
+| extend EventStartTime = unixtime_seconds_todatetime(todouble(EventFields[0]))
+| extend Latency = toint(EventFields[1])
+| extend SrcIpAddr = tostring(EventFields[2])
+| extend EventResultDetails = extract(@'\A(.*?)\/[1-5]\d{2}', 1, tostring(EventFields[3]))
+| extend HttpStatusCode = extract(@'\A.*?\/([1-5]\d{2})', 1, tostring(EventFields[3]))
+| extend DstBytes = toint(EventFields[4])
+| extend HttpRequestMethod = tostring(EventFields[5])
+| extend UrlOriginal = tostring(EventFields[6])
+| extend SrcUserName = tostring(EventFields[7])
+| extend ContactedServerCode = extract(@'\A(\w+)\/\d{1,3}', 1, tostring(EventFields[8]))
+| extend DstIpAddr = extract(@'\A\w+\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, tostring(EventFields[8]))
+| extend DstDvcHostname = extract(@'\A\w+\/(\D+)', 1, tostring(EventFields[8]))
+| extend ResponseBodyMimeType = tostring(EventFields[9])
+| extend DvcAction = extract(@'\A(.*?)\-', 1, tostring(EventFields[10]))
+| extend PolicyGroupName = extract(@'\A.*?\-(.*?)\-', 1, tostring(EventFields[10]))
+| extend IdentityPolicyGroupName = extract(@'\A.*?\-.*?\-(.*?)\-', 1, tostring(EventFields[10]))
+| extend OutboundMalwareScanningPolicyGroupName = extract(@'\A.*?\-.*?\-.*?\-(.*?)\-', 1, tostring(EventFields[10]))
+| extend DataSecurityPolicyGroupName = extract(@'\A.*?\-.*?\-.*?\-.*?\-(.*?)\-', 1, tostring(EventFields[10]))
+| extend ExternalDplPolicyGroupName = extract(@'\A.*?\-.*?\-.*?\-.*?\-.*?\-(.*?)\-', 1, tostring(EventFields[10]))
+| extend RoutingPolicy = extract(@'\A(.*?\-){6}(.*)', 2, tostring(EventFields[10]))
+| extend SuspectedUserAgent = tostring(EventFields[-1])
+| extend UrlCategory = tostring(ScanningVerdictFields[0])
+| extend WebReputationScore = tostring(ScanningVerdictFields[1])
+| extend MalwareScanningVerdict = tostring(ScanningVerdictFields[2])
+| extend ThreatName = tostring(ScanningVerdictFields[3])
+| extend ThreatRiskRatioValue = tostring(ScanningVerdictFields[4])
+| extend ThreatIdentifier = tostring(ScanningVerdictFields[5])
+| extend TraceIdentifier = tostring(ScanningVerdictFields[6])
+| extend McAfeeMalwareScanningVerdict = tostring(ScanningVerdictFields[7])
+| extend McAfeeScannedFileName = tostring(ScanningVerdictFields[8])
+| extend McAfeeScanError = tostring(ScanningVerdictFields[9])
+| extend McAfeeDetectionType = tostring(ScanningVerdictFields[10])
+| extend McAfeeThreatCategory = tostring(ScanningVerdictFields[11])
+| extend McAfeeThreatName = tostring(ScanningVerdictFields[12])
+| extend SophosScanningVerdict = tostring(ScanningVerdictFields[13])
+| extend SophosScanReturnCode = tostring(ScanningVerdictFields[14])
+| extend SophosScannedFileName = tostring(ScanningVerdictFields[15])
+| extend SophosThreatName = tostring(ScanningVerdictFields[16])
+| extend CiscoDataSecurityScanningVerdict = case(tostring(ScanningVerdictFields[17]) == '0', 'Allow',
+                                             tostring(ScanningVerdictFields[17]) == '1', 'Block',
+                                             '-')
+| extend ExternalDlpScannningVerdict = case(tostring(ScanningVerdictFields[18]) == '0', 'Allow',
+                                       tostring(ScanningVerdictFields[18]) == '1', 'Block',
+                                       '-')
+| extend ResponseSideScanningUrlCategoryVerdict = tostring(ScanningVerdictFields[19])
+| extend DcaUrlCategoryVerdict = tostring(ScanningVerdictFields[20])
+| extend ResponseThreatCategory = tostring(ScanningVerdictFields[21])
+| extend WebReputationThreatType = tostring(ScanningVerdictFields[22])
+| extend GteEncapsulatedUrl = tostring(ScanningVerdictFields[23])
+| extend AvcApplicationName = tostring(ScanningVerdictFields[24])
+| extend AvcApplicationType = tostring(ScanningVerdictFields[25])
+| extend AvcApplicationBehavior = tostring(ScanningVerdictFields[26])
+| extend SafeBrowsingScanningVerdict = tostring(ScanningVerdictFields[27])
+| extend ['AvgBandwidth(Kb/sec)'] = todouble(ScanningVerdictFields[28])
+| extend Throttled = tostring(ScanningVerdictFields[29])
+| extend UserType = tostring(ScanningVerdictFields[30])
+| extend RequestSideAntiMalwareScanningVerdict = tostring(ScanningVerdictFields[31])
+| extend ClientRequestThreatName = tostring(ScanningVerdictFields[32])
+| extend AmpScanningVerdict = tostring(ScanningVerdictFields[33])
+| extend AmpThreatName = tostring(ScanningVerdictFields[34])
+| extend AmpReputationScore = tostring(ScanningVerdictFields[35])
+| extend AmpUploadIndicator = tostring(ScanningVerdictFields[36])
+| extend AmpFileName = tostring(ScanningVerdictFields[37])
+| extend AmpFileHashSha256 = tostring(ScanningVerdictFields[38])
+| extend ArchiveScanningVerdict = tostring(ScanningVerdictFields[39])
+| extend ArchiveScanningVerdictDetail = tostring(ScanningVerdictFields[40])
+| extend ArchiveScannerFileVerdict = tostring(ScanningVerdictFields[41])
+| extend WebTapBehavior = tostring(ScanningVerdictFields[42])
+| extend YouTubeUrlCategory = tostring(ScanningVerdictFields[43])
+| extend BlockedFileTypeDetail = extract_all(@"(?P<key>[a-zA-Z0-9- ]+):(?P<value>[a-zA-Z0-9-_:/@.#{};= ]+)", dynamic(["key","value"]), tostring(ScanningVerdictFields[44]))
+| mv-apply BlockedFileTypeDetail on (
+    summarize BlockedFileTypeDetail = make_list(pack(tostring(BlockedFileTypeDetail[0]), BlockedFileTypeDetail[1]))
+    )
+};
+let cisco_wsa_w3c_logs =() {
+Syslog
+| where SyslogMessage matches regex @"\A\d{4}\-\d{2}\-\d{2}\s\d{2}:\d{2}:\d{2}\s\d{10}\.\d{3}"
+| extend EventVendor = 'Cisco'
+| extend EventProduct = 'Web Security Appliance'
+| extend EventType = 'Access Log'
+| extend EventFields = split(SyslogMessage, ' ')
+| extend EventStartTime = todatetime(strcat(EventFields[0], ' ', EventFields[1]))
+| extend Latency = toint(EventFields[3])
+| extend HttpReferrerOriginal = tostring(EventFields[4])
+| extend SrcIpAddr = tostring(EventFields[5])
+| extend EventResultDetails = tostring(EventFields[6])
+| extend SrcBytes = toint(EventFields[7])
+| extend DstBytes = toint(EventFields[8])
+| extend HttpRequestMethod = tostring(EventFields[9])
+| extend UrlOriginal = tostring(EventFields[10])
+| extend DstIpAddr = tostring(EventFields[11])
+| extend RequestUri = tostring(EventFields[12])
+| extend SrcUserName = tostring(EventFields[13])
+| extend ResponseBodyMimeType = tostring(EventFields[14])
+| extend DvcAction = tostring(EventFields[15])
+| extend HttpRequestXff = tostring(EventFields[16])
+| extend SrcPortNumber = tostring(EventFields[17])
+| extend DstDvcHostname = tostring(EventFields[18])
+| extend DstPortNumber = tostring(EventFields[19])
+| extend NetworkApplicationProtocol = tostring(EventFields[20])
+| extend UrlCategory = tostring(EventFields[21])
+| extend WbrsScore = tostring(EventFields[22])
+| extend WebrootScanningVerdict = tostring(EventFields[23])
+| extend WebrootThreatName = tostring(EventFields[24])
+| extend WebrootThreatRiskRatio = tostring(EventFields[25])
+| extend WebrootSpyId = tostring(EventFields[26])
+| extend WebrootTraceId = tostring(EventFields[27])
+| extend McAfeeMalwareScanningVerdict = tostring(EventFields[28])
+| extend McAfeeScannedFileName = tostring(EventFields[29])
+| extend McAfeeScanError = tostring(EventFields[30])
+| extend McAfeeDetectionType = tostring(EventFields[31])
+| extend McAfeeThreatCategory = tostring(EventFields[32])
+| extend McAfeeThreatName = tostring(EventFields[33])
+| extend SophosScanningVerdict = tostring(EventFields[34])
+| extend SophosScanReturnCode = tostring(EventFields[35])
+| extend SophosScannedFileName = tostring(EventFields[36])
+| extend SophosThreatName = tostring(EventFields[37])
+| extend CiscoDataSecurityScanningVerdict = tostring(EventFields[38])
+| extend ExternalDlpScannningVerdict = tostring(EventFields[39])
+| extend RequestSideScanningUrlCategoryVerdict = tostring(EventFields[40])
+| extend ResponseSideScanningUrlCategoryVerdict = tostring(EventFields[41])
+| extend WebReputationThreatCategory = tostring(EventFields[42])
+| extend AvcApplicationName = tostring(EventFields[43])
+| extend AvcApplicationType = tostring(EventFields[44])
+| extend AvcApplicationBehavior = tostring(EventFields[45])
+| extend SafeBrowsingScanningVerdict = tostring(EventFields[46])
+| extend ['AvgBandwidth(Kb/sec)'] = todouble(EventFields[47])
+| extend Throttled = tostring(EventFields[48])
+| extend UserType = tostring(EventFields[49])
+| extend ResponseSideThreatName = tostring(EventFields[50])
+| extend ResponseSideThreatCategoryCode = tostring(EventFields[51])
+| extend ResponseSideThreatCategory = tostring(EventFields[52])
+| extend RequestSideDvsThreatName = tostring(EventFields[53])
+| extend RequestSideDvsScanningVerdict = tostring(EventFields[54])
+| extend RequestSideDvsVerdictName = tostring(EventFields[55])
+| extend AmpScanningVerdict = tostring(EventFields[56])
+| extend AmpThreatName = tostring(EventFields[57])
+| extend AmpReputationScore = tostring(EventFields[58])
+| extend AmpUploadIndicator = tostring(EventFields[59])
+| extend AmpFileName = tostring(EventFields[60])
+| extend AmpFileHashSha256 = tostring(EventFields[61])
+| extend SuspectedUserAgent = tostring(EventFields[62])
+| extend NetworkBytes = toint(EventFields[63])
+};
+union isfuzzy=true cisco_wsa_access_logs, cisco_wsa_w3c_logs
+| project-away SyslogMessage
+             , EventFields
+             , ScanningVerdictFields
