@@ -3,12 +3,8 @@ author: Prateek Taneja, Benjamin Kovacevic
 
 This Playbook synchronizes the comments made to Microsoft 365 Defender Incidents in Azure Sentinel to comments in the corresponding Incident in the Microsoft 365 Defender portal. The LogicApp looks for comments added to Incidents in the past 24 hours and writes these comments to the corresponding M365 incident in the M365 Security and Compliance exprience available at https://security.microsoft.com
 
-<a href=https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank">
-    <img src=https://aka.ms/deploytoazurebutton/>
-</a>
-<a href=https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json target="_blank">
-<img src=https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-Sentinel-Incident-Comments-To-M365Defender%2Fazuredeploy.json)
 
 Deploying this playbook requires the following steps:
 
@@ -45,4 +41,14 @@ NOTE: The secret is displayed only once, so make sure you copy and save it NOW s
 Back on the application that was registered in Step 1, copy the Directory (tenant) ID and the Application (client) ID
 
 ![screenshot](./images/IDs.JPG)
+
+# Modifying time interval
+
+Certain situations may dictate Security Operations to lower the frequency of the synchronization of comments from Azure Sentinel to M365 Defender. The following steps can be followed if changing the frequency of comments sync is required:
+
+1. After the LogicApp has been deployed, you could modify the Recurrence trigger to a lower time interval. The default when the LogicApp is deployed is 1 day.
+
+![screenshot](./images/Trigger.JPG)
+
+Also, you could add more parameters for the triggers such as Time zone and/or the Start (or Trigger) time.
 -------------------------------------------------------------------------------------------
