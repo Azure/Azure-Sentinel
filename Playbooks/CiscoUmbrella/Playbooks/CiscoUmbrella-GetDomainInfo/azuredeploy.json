@@ -54,7 +54,7 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Entities_-_Get_Hosts": {
+                        "Entities_-_Get_URLs": {
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
@@ -63,18 +63,18 @@
                                     }
                                 },
                                 "method": "post",
-                                "path": "/entities/host"
+                                "path": "/entities/url"
                             },
                             "runAfter": {},
                             "type": "ApiConnection"
                         },
-                        "For_each": {
+                        "For_each_URL": {
                             "actions": {
                                 "Add_comment_to_incident_(V3)": {
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p><strong>CiscoUmbrella-GetDomainInfo</strong><br>\nRisk score info for domain @{items('For_each')?['HostName']}:<br>\n@{body('Get_domain_security_data')}<br>\n@{body('Get_Risk_score_for_a_domain')}<br>\n</p>"
+                                            "message": "<p><strong></strong><strong>@{outputs('Get_logo')}</strong><strong> CiscoUmbrella-GetDomainInfo</strong><br>\nRisk score info for domain @{items('For_each_URL')?['HostName']}:<br>\n@{outputs('Remove_excessive_fields')}<br>\n@{body('Get_Risk_score_for_a_domain')}<br>\n</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -85,7 +85,7 @@
                                         "path": "/Incidents/Comment"
                                     },
                                     "runAfter": {
-                                        "Get_Risk_score_for_a_domain": [
+                                        "Remove_excessive_fields": [
                                             "Succeeded"
                                         ]
                                     },
@@ -99,7 +99,7 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/domains/risk-score/@{encodeURIComponent(items('For_each')?['HostName'])}"
+                                        "path": "/domains/risk-score/@{encodeURIComponent(outputs('Get_domain_from_URL'))}"
                                     },
                                     "runAfter": {
                                         "Get_domain_security_data": [
@@ -107,6 +107,11 @@
                                         ]
                                     },
                                     "type": "ApiConnection"
+                                },
+                                "Get_domain_from_URL": {
+                                    "inputs": "@split(replace(replace(item()?['Url'],'http://',''), 'https://', ''), '/')[0]",
+                                    "runAfter": {},
+                                    "type": "Compose"
                                 },
                                 "Get_domain_security_data": {
                                     "inputs": {
@@ -116,15 +121,37 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/security/name/@{encodeURIComponent(items('For_each')?['HostName'])}"
+                                        "path": "/security/name/@{encodeURIComponent(outputs('Get_domain_from_URL'))}"
                                     },
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Get_domain_from_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "ApiConnection"
+                                },
+                                "Get_logo": {
+                                    "inputs": "<img src=\"https://github.com/socprime/Azure-Sentinel/raw/cisco_umbrella_playbooks/Playbooks/CiscoUmbrella/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                                    "runAfter": {
+                                        "Get_Risk_score_for_a_domain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                },
+                                "Remove_excessive_fields": {
+                                    "inputs": "@removeProperty(removeProperty(body('Get_domain_security_data'), 'geodiversity'), 'geodiversity_normalized')",
+                                    "runAfter": {
+                                        "Get_logo": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
                             "runAfter": {
-                                "Entities_-_Get_Hosts": [
+                                "Entities_-_Get_URLs": [
                                     "Succeeded"
                                 ]
                             },
