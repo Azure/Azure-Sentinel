@@ -95,7 +95,7 @@ class MESRequest:
                         # Set flag to avoid unwanted retries in case of invalid key/client
                         self.retry_counter = self.retry_counter + 1
                         self.az_kv.set_secret("AuthRetryCounter", self.retry_counter)
-                        if self.retry_counter >= 10
+                        if self.retry_counter >= 10:
                             self.az_kv.set_secret("IsValid", "NO")
 
                     logging.error("Your Lookout application key has expired. " +
@@ -150,7 +150,7 @@ class MESRequest:
                     # Set flag to avoid unwanted retries in case of invalid key/client
                     self.retry_counter = self.retry_counter + 1
                     self.az_kv.set_secret("AuthRetryCounter", self.retry_counter)
-                    if self.retry_counter >= 10
+                    if self.retry_counter >= 10:
                         self.az_kv.set_secret("IsValid", "NO")
                 logging.info("Auth API retry count :  " + str(self.retry_counter))
                 logging.info("Error in oauth")
