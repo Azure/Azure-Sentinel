@@ -30,7 +30,7 @@ class MESRequest:
         self.retry_counter = self.az_kv.get_secret("AuthRetryCounter")
         
         if not self.retry_counter:
-            self.retry_counter = 0
+            self.retry_counter = 1
         else:
             self.retry_counter = int(self.retry_counter)
             
@@ -78,7 +78,7 @@ class MESRequest:
                 self.access_token = response_content['access_token']
                 self.az_kv.set_secret("AccessToken", self.access_token)
                 self.az_kv.set_secret("IsValid", "YES")
-                self.az_kv.set_secret("AuthRetryCounter", 0)
+                self.az_kv.set_secret("AuthRetryCounter", 1)
             else:
                 # if the refresh failed, request brand new API credentials
                 response = requests.post(self.api_domain + "/oauth/token",
@@ -91,7 +91,7 @@ class MESRequest:
                     self.az_kv.set_secret("AccessToken", self.access_token) 
                     self.az_kv.set_secret("RefreshToken", self.refresh_token)
                     self.az_kv.set_secret("IsValid", "YES")
-                    self.az_kv.set_secret("AuthRetryCounter", 0)
+                    self.az_kv.set_secret("AuthRetryCounter", 1)
                 else:
                     if response_content['error'] and response_content['error'] == 'invalid_client':
                         # Set flag to avoid unwanted retries in case of invalid key/client
@@ -144,7 +144,7 @@ class MESRequest:
                 self.az_kv.set_secret("AccessToken", self.access_token)
                 self.az_kv.set_secret("RefreshToken", self.refresh_token)
                 self.az_kv.set_secret("IsValid", "YES")
-                self.az_kv.set_secret("AuthRetryCounter", 0)
+                self.az_kv.set_secret("AuthRetryCounter", 1)
                 logging.info("Got authenticated")
                 return self.access_token, self.refresh_token
             else: 
