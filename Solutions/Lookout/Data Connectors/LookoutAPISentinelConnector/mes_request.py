@@ -27,11 +27,13 @@ class MESRequest:
         self.refresh_token = self.az_kv.get_secret("RefreshToken")
         self.stream_position = self.az_kv.get_secret("StreamPosition")
         self.is_valid = self.az_kv.get_secret("IsValid")
-        self.retry_counter = int(self.az_kv.get_secret("AuthRetryCounter"))
+        self.retry_counter = self.az_kv.get_secret("AuthRetryCounter")
         
         if not self.retry_counter:
             self.retry_counter = 0
-
+        else:
+            self.retry_counter = int(self.retry_counter)
+            
         if not self.is_valid:
             self.is_valid = "YES"
 
