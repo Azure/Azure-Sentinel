@@ -34,7 +34,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 25 Jun 2021
+        LASTEDIT: 30 Jun 2021
 
     .EXAMPLE
         .\Migrate-LA-to-ADX.ps1 -LogAnalyticsResourceGroup la-resgrp1 -LogAnalyticsWorkspaceName la-workspace-1 `
