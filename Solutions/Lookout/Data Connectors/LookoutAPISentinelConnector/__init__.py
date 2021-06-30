@@ -104,3 +104,5 @@ def main(mytimer: func.TimerRequest)  -> None:
         #threading mechanism is not supported in Azure function
         
         single_ent_events(KVUri, ent_name, api_key, lookout_mes_uri, 0)
+    else:
+        logging.info("No API key or Enterprise name found in Key Vault")

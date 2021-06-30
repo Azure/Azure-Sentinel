@@ -26,7 +26,15 @@ class MESRequest:
         self.access_token = self.az_kv.get_secret("AccessToken")
         self.refresh_token = self.az_kv.get_secret("RefreshToken")
         self.stream_position = self.az_kv.get_secret("StreamPosition")
+        self.is_valid = self.az_kv.get_secret("IsValid")
+        self.retry_counter = self.az_kv.get_secret("AuthRetryCounter")
         
+        if not self.retry_counter:
+            self.retry_counter = 0
+
+        if not self.is_valid:
+            self.is_valid = "YES"
+
         #For very first time, vault doesn't have any stream position saved, so start from 0
         if not self.stream_position:
             self.stream_position = 0
@@ -67,6 +75,8 @@ class MESRequest:
             if 'access_token' in response_content:
                 self.access_token = response_content['access_token']
                 self.az_kv.set_secret("AccessToken", self.access_token)
+                self.az_kv.set_secret("IsValid", "YES")
+                self.az_kv.set_secret("AuthRetryCounter", 0)
             else:
                 # if the refresh failed, request brand new API credentials
                 response = requests.post(self.api_domain + "/oauth/token",
@@ -78,7 +88,16 @@ class MESRequest:
                     self.refresh_token = response_content['refresh_token']
                     self.az_kv.set_secret("AccessToken", self.access_token) 
                     self.az_kv.set_secret("RefreshToken", self.refresh_token)
+                    self.az_kv.set_secret("IsValid", "YES")
+                    self.az_kv.set_secret("AuthRetryCounter", 0)
                 else:
+                    if response_content['error'] and response_content['error'] == 'invalid_client':
+                        # Set flag to avoid unwanted retries in case of invalid key/client
+                        self.retry_counter = self.retry_counter + 1
+                        self.az_kv.set_secret("AuthRetryCounter", self.retry_counter)
+                        if self.retry_counter >= 10
+                            self.az_kv.set_secret("IsValid", "NO")
+
                     logging.error("Your Lookout application key has expired. " +
                                 "Please get a new key and set up this connector app again.\n" +
                                 "Go to https://mtp.lookout.com and generate a new key by " +
@@ -122,9 +141,18 @@ class MESRequest:
                 self.refresh_token = token_json['refresh_token']
                 self.az_kv.set_secret("AccessToken", self.access_token)
                 self.az_kv.set_secret("RefreshToken", self.refresh_token)
+                self.az_kv.set_secret("IsValid", "YES")
+                self.az_kv.set_secret("AuthRetryCounter", 0)
                 logging.info("Got authenticated")
                 return self.access_token, self.refresh_token
             else: 
+                if token_json['error'] and token_json['error'] == 'invalid_client':
+                    # Set flag to avoid unwanted retries in case of invalid key/client
+                    self.retry_counter = self.retry_counter + 1
+                    self.az_kv.set_secret("AuthRetryCounter", self.retry_counter)
+                    if self.retry_counter >= 10
+                        self.az_kv.set_secret("IsValid", "NO")
+                logging.info("Auth API retry count :  " + str(self.retry_counter))
                 logging.info("Error in oauth")
                 logging.info(str(token_json))
                 return False
@@ -141,14 +169,18 @@ class MESRequest:
         - Requests events (retries if error HTTP code)
         - Collect events lists from Metis API, returns full list of events
         '''
-        if not self.access_token:
-            self.get_oauth()
-
         
         events = []
         retry_count = 0
         more_events = True
         
+        if self.is_valid == "NO" or self.retry_counter >= 10:
+            logging.info("Please check API key, Auth API responds with Invalid Client error after 10 retries")
+            return events
+
+        if not self.access_token:
+            self.get_oauth()
+
         if self.access_token:
             # Added cycle count to avoid long data polling
             cycle_count = 0
