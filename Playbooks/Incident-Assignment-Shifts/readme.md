@@ -71,7 +71,7 @@ Ensure you have the following details:
 
 ### 2. Configure connections
 - Edit the Logic App or go to Logic app designer.
-- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/pic1.png" width="30" height="30">. 
+- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic1.png" width="30" height="30">. 
   1. Incident Trigger
   2. Update Incident
   3. Add comment to incident
@@ -108,7 +108,7 @@ Incidents are assigned to users based on the following criteria:
   
   You can change this value by modifying the below variable:
 
-    <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/pic4.png" width="500" height="180">
+    <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic4.png" width="500" height="180">
 
 - User with the least incidents assigned on the current Shift will be assigned incident first.
 
@@ -119,6 +119,6 @@ Incidents are assigned to users based on the following criteria:
 - When an incident is assigned, the incident owner will be notified via email.
 - Below is the sample email notification:
 
-   <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/pic6.png" width="500" height="240">
+   <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic6.png" width="500" height="240">
 
 - The email body has a banner with colour mapped to incident's severity (High=red, Medium=orange, Low=yellow and Informational=grey).
