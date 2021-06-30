@@ -38,5 +38,5 @@ Once deployment is complete, you will need to authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel analytical rules should be configured to trigger an incident with malware URL. In the *Entity maping* section of the analytics rule creation workflow, user's email should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/en-us/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Azure sentinel analytical rules should be configured to trigger an incident with malicious URL. In the *Entity maping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/en-us/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.
