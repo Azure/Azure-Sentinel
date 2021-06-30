@@ -33,7 +33,7 @@ Once deployment is complete, you will need to authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for Cisco Umbrella Investigate connector API Connection (For authorizing, the API key needs to be provided.)
+6. Repeat steps for Cisco Umbrella Investigate connector API Connection (For authorizing, the API key needs to be provided in the following format: "Bearer YOUR_API_KEY".)
 
 #### b. Configurations in Sentinel
 
