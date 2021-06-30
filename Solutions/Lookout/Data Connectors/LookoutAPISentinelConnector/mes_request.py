@@ -27,7 +27,7 @@ class MESRequest:
         self.refresh_token = self.az_kv.get_secret("RefreshToken")
         self.stream_position = self.az_kv.get_secret("StreamPosition")
         self.is_valid = self.az_kv.get_secret("IsValid")
-        self.retry_counter = self.az_kv.get_secret("AuthRetryCounter")
+        self.retry_counter = int(self.az_kv.get_secret("AuthRetryCounter"))
         
         if not self.retry_counter:
             self.retry_counter = 0
@@ -93,9 +93,9 @@ class MESRequest:
                 else:
                     if response_content['error'] and response_content['error'] == 'invalid_client':
                         # Set flag to avoid unwanted retries in case of invalid key/client
-                        self.retry_counter = self.retry_counter + 1
+                        self.retry_counter = int(self.retry_counter) + 1
                         self.az_kv.set_secret("AuthRetryCounter", self.retry_counter)
-                        if self.retry_counter >= 10:
+                        if int(self.retry_counter) >= 10:
                             self.az_kv.set_secret("IsValid", "NO")
 
                     logging.error("Your Lookout application key has expired. " +
@@ -148,9 +148,9 @@ class MESRequest:
             else: 
                 if token_json['error'] and token_json['error'] == 'invalid_client':
                     # Set flag to avoid unwanted retries in case of invalid key/client
-                    self.retry_counter = self.retry_counter + 1
+                    self.retry_counter = int(self.retry_counter) + 1
                     self.az_kv.set_secret("AuthRetryCounter", self.retry_counter)
-                    if self.retry_counter >= 10:
+                    if int(self.retry_counter) >= 10:
                         self.az_kv.set_secret("IsValid", "NO")
                 logging.info("Auth API retry count :  " + str(self.retry_counter))
                 logging.info("Error in oauth")
@@ -174,7 +174,7 @@ class MESRequest:
         retry_count = 0
         more_events = True
         
-        if self.is_valid == "NO" or self.retry_counter >= 10:
+        if self.is_valid == "NO" or int(self.retry_counter) >= 10:
             logging.info("Please check API key, Auth API responds with Invalid Client error after 10 retries")
             return events
 
