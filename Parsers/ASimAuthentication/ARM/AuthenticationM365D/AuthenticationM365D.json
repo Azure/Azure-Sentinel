@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationM365Defender",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM M365 Defender DeviceLogonEvent Authentication parser",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationM365Defender",
+            "query": "let FaliureReason=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[\n  'InvalidUserNameOrPassword','No such user or password' \n  // What other will we find here?\n  ];\n  let AuthM365D=(){\n  DeviceLogonEvents \n  // ---   Already mapped\n  // // TimeGenerated - exists\n  //\n  | project-rename \n     EventOriginalResultDetails=FailureReason \n     , EventSubType=LogonType\n  | extend \n  //\n     // ----  Untouched\n     TimeGenerated\n  // \n    // ----  Event\n     , EventCount=int(1)\n     , EventStartTime=TimeGenerated\n     , EventEndTime=TimeGenerated\n     , EventOriginalType = EventSubType // Previously:LogonType\n     , EventProduct='M365 Defender for EndPoint'\n    ,  EventResult = case(ActionType =='LogonSuccess', 'Success'\n                          , ActionType=='LogonFailed', 'Failure'\n                          , ActionType=='LogonAttempted', 'NA' //// Not sure what this is\n                          , 'NA')\n    , EventSchemaVersion='0.1.0'\n    , EventType='Logon'\n    , EventVendor ='Microsoft'\n  //    -   No Data\n  //  EventOriginalUid \n  //  EventProductVersion \n  //  EventReportUrl\n  //  EventMessage \n  //  \n  //  \n  //  ----   Target and Actor Users\n   | project-rename \n       TargetUserId=AccountSid\n     , ActorUserId =InitiatingProcessAccountSid\n    | extend \n       TargetUserIdType ='UserSid'\n     , TargetUsername = strcat(AccountDomain,'\\\\',AccountName)\n     , TargetUsernameType='Windows'\n  //    -  No Data\n    // TargetUserType \n  // \n  // ActingAppName \n  // ActingAppType \n  // ActorSessionId \n    , ActorUserIdType='SID'\n  // ActorUserType \n    , ActorUsername=coalesce(InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain,'\\\\',InitiatingProcessAccountName)) // InitiatingProcessAccountName\n    , ActorUsernameType=case(isnotempty( InitiatingProcessAccountUpn), 'Upn/Email'\n                              , isnotempty(InitiatingProcessAccountDomain), 'Windows'\n                              , 'Simple')\n   //, AdditionalFields:already exists\n    | project-rename \n      DvcHostname=DeviceName\n    , LogonProtocol=Protocol\n    , TargetDvcId=DeviceId\n    , TargetDvcIpAddr=RemoteIP\n  // No Data\n  // DvcIpAddr \n  // HttpUserAgent \n  // LogonMethod \n  //\n    , SrcDvcHostname=RemoteDeviceName \n    // SrcDvcHostnameType == Requires calculation. not sure it is worth it\n  // SrcDvcId \n  // SrcDvcIpAddr \n  // SrcDvcOs \n  // SrcDvcType \n  // SrcGeo fields \n  //\n  // TargetAppId \n  // TargetAppName \n  // TargetAppType \n  // TargetDvc \n    | extend \n      TargetDvcHostname=DvcHostname\n      ,  TargetDvcHostnameType='FQDN'\n      , TargetDvcIdType='MDE'\n  // TargetDvcOs\n  // TargetDvcType\n    , TargetPortNumber=RemotePort\n    , TargetSessionId =LogonId\n    // EventResultDetails\n    | lookup FaliureReason on EventOriginalResultDetails \n  // TargetUrl \n  // -----------  Alias\n    | extend \n      User=TargetUsername \n      , LogonTarget=TargetDvcHostname\n      , Dvc=TargetDvcHostname\n  // No data\n      // // _ResourceId - no data \n      };",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
