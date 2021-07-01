@@ -20,16 +20,9 @@ For more information, see:
 This template deploys the following:
 * vimRegistryEmpty - Empty ASim Registry table
 * imRegistry - Registry Events from all normalized Registry events sources
-* imRegistryCreate - Registry creation events from all normalized Registry events sources
-* imRegistryDelete - Registry delete events from all normalized Registry events sources
-* imRegistryModify - Registry modification events from all normalized Registry events sources
 * vimRegistryEventsMicrosoft365D - Registry events from Microsoft 365 Defender for Endpoints
-* vimRegistryCreateMicrosoftSysmon - Registry Creation events from Sysmon
-* vimRegistryDeleteMicrosoftSysmon - Registry delete events from Sysmon
-* vimRegistryModifyMicrosoftSysmon - Registry modify events from Sysmon
-* vimRegistryCreateMicrosoftSecurityEvents - Registry Creation Events from Security Events
-* vimRegistryDeleteMicrosoftSecurityEvents - Registry delete Events from Security Events
-* vimRegistryModifyMicrosoftSecurityEvents - Registry modify Events from Security Events
+* vimRegistryEventMicrosoftSysmon - Registry events from Sysmon (Events 12,13 and 14) collected using the Log Analytics Agent or the Azure Monitor Agent to the Event table.
+* vimRegistryEventMicrosoftSecurityEvents - Registry Events from Windows Events (Event 4657) collected using the Log Analytics Agent or the Azure Monitor Agent to the SecuirtyEvent table.
 
 <br>
 
