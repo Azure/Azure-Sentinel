@@ -1,6 +1,6 @@
-# Azure Sentinel ASIM Authentication Normalization Parser
+# Base schema ASIM Authentication Normalization Parser
 
-This template deploys the ASIM Authentication schema parser for Azure Sentinel. The parser is a part of the Azure Sentinel Information Mode.
+This template deploys a parser which makes available the default schema columns for the ASIM Authentication schema. The parser is a part of the Azure Sentinel Information Model.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
