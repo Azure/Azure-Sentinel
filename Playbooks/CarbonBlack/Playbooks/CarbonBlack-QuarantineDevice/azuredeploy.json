@@ -2,15 +2,36 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "comments": "This playbook automatically quarantine the device and enrich sentinel incident with device information.",
-    "author": "Dharma Reddy, CarbonBlack"
-  },
+    "title": "Isolate endpoint - Carbon Black", 
+    "description": "This playbook will quarantine the host in Carbon Black.",
+    "mainSteps": ["1. Fetch the device information from Carbon Black", "2. Quarantine host", "3. Enrich the incident with device information from Carbon Black"],
+    "prerequisites": ["1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+      "2. Generate an API key. Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)",
+      "3. [Find Organziation key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)"],
+    "prerequisitesDeployTemplateFile": "../../CarbonBlackConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
+    "entities": ["Host"], 
+    "tags": ["Remediation"], 
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    }
+},
   "parameters": {
-    "Playbook Name": {
-      "defaultValue": "CarbonBlack-QuarantineDevice",
+    "PlaybookName": {
+      "defaultValue": "IsolateEndpoint-CarbonBlack",
       "type": "string",
       "metadata": {
-        "description": "Name of the Logic App/Playbook"
+        "description": "Name of the Logic Apps resource to be created"
+      }
+    },
+    "CustomConnectorName":{
+      "defaultValue": "CarbonBlackCloudConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Carbon Black"
       }
     },
     "OrganizationKey": {
@@ -22,8 +43,8 @@
     }
   },
   "variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-    "CarbonBlackConnectionName": "[concat('CarbonBlackCloudConnector-', parameters('Playbook Name'))]"
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "CarbonBlackConnectionName": "[concat('CarbonBlackCloudConnector-', parameters('PlaybookName'))]"
   },
   "resources": [
     {
@@ -34,7 +55,7 @@
       "properties": {
         "customParameterValues": {},
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/CarbonBlackCloudConnector')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
         }
       }
     },
@@ -53,12 +74,16 @@
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
-      "name": "[parameters('Playbook Name')]",
+      "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
         "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
       ],
+      "tags": {
+        "hidden-SentinelTemplateName": "IsolateEndpoint-CarbonBlack",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
       "properties": {
         "state": "Enabled",
         "definition": {
@@ -630,7 +655,7 @@
               "CarbonBlackCloudConnector": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
                 "connectionName": "[variables('CarbonBlackConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/CarbonBlackCloudConnector')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
               },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",

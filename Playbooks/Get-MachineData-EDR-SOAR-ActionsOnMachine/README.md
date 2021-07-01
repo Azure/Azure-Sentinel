@@ -51,12 +51,8 @@ API connections for the above mentioned prerequisites are created as a part of A
 8. Also make sure "Create sharing link for the subfolder which contains all csv files" is given the same SharePoint site URL and the Library Name  (Documents) in (6)
 
 ## Deploy to Azure
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fkloudynetklassrooms%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-MachineData-EDR-SOAR-ActionsOnMachine%2Fazuredeploy.json)
 
 ## Support
 Optionally, you can always reachout to kloudynetklassrooms@kloudynet.com to get further assistance.

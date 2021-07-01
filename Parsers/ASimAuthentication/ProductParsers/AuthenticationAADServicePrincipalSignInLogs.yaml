@@ -1,0 +1,68 @@
+Parser:
+  Title: Azure active directory service principal authentication
+  Version: '0.0'
+  LastUpdated: June 3, 2021
+Product:
+  Name: Azure active directory service principal signin logs
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Authentication schema documentation
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+Description: |
+  This Query Parser maps Azure Active Directory Service Principal sign in logs (AADServicePrincipalSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
+ParserName: vimAuthenticationAADServicePrincipalSignInLogs
+ParserQuery: |
+  let AADSvcPrincipal=(){
+    AADServicePrincipalSignInLogs
+    | extend
+        EventVendor = 'Microsoft'
+        , EventProduct = 'AAD Service Principal'
+        , EventCount=1
+        , EventSchemaVersion='0.1.0'
+        , EventResult = iff (ResultType ==0, 'Success', 'Failure')
+        //, EventResultDetails= ResultType
+        , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
+        , EventStartTime = TimeGenerated
+        , EventEndTime= TimeGenerated
+        , EventType= 'Logon'
+        , Location = todynamic(LocationDetails)
+        , TargetAppId = ResourceIdentity 
+        , TargetAppName=ResourceDisplayName
+      , TargetUserType='ServicePrincipal'
+      , TargetUsername=ServicePrincipalName
+      , TargetUserId=ServicePrincipalId
+      , TargetUsernameType='Simple'
+      , TargetUserIdType='AADID'
+    | extend
+        SrcGeoCity=tostring(Location.city)
+        , SrcGeoCountry=tostring(Location.countryOrRegion)
+        , SrcGeoLatitude=tostring(Location.geoCoordinates.latitude)
+        , SrcGeoLongitude=tostring(Location.geoCoordinates.longitude)
+    | project-rename
+        EventOriginalUid =Id
+        , TargetSessionId=CorrelationId
+        , SrcDvcIpAddr=IPAddress
+        | lookup AADSTSErrorCodes on ResultType
+    | project-reorder
+        TimeGenerated
+        ,EventProduct
+        , EventOriginalUid
+        , EventResult
+        //, EventResultDetails
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , TargetSessionId
+        , SrcGeoCity
+        , SrcGeoCountry
+        , TargetAppId
+        // ** Aliases
+        | extend 
+          User=TargetUsername
+      , LogonTarget=ResourceIdentity
+      , Dvc=EventVendor};
+  AADSvcPrincipal

@@ -2,7 +2,7 @@
  ## Summary
 This is Crowdstrike base template which is used to generate access token and this is used in actual crowdstrike templates. This playbook gets triggered when a new Http request is created and this is being called from other Crowdstrike playbooks.
 
-![CrowdStrike_Base](./crowdstrikebase.png)
+![CrowdStrike_Base](./images/designerScreenshotLight.png)
 ### Prerequisites 
 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)

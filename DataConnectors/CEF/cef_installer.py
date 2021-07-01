@@ -11,7 +11,7 @@
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
 #       SUSE Linux Enterprise Server 12, 15
 #   32-bit
 #       CentOS 7 and 8

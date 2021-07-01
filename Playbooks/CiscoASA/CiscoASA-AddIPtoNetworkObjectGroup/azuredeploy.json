@@ -1,12 +1,31 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP - Cisco ASA", 
+        "description": "This playbook allows blocking/allowing of IPs in Cisco ASA, using a Network Object Group. The Network Object Group itself should be part of an Access Control Entry.",
+        "mainSteps": ["1.For each IP in the incident, check if IP are already a member of the Network Object Group.",
+             "2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to block/unblock the IPs by adding/removing them to the Network Object Group"],
+        "prerequisites": ["1. In Cisco ASA there needs to be a Network Object Group. You can create a Network Object Group using Cisco ASDM, [Configure a Network Object Group](https://www.cisco.com/c/en/us/td/docs/security/asa/asa96/asdm76/firewall/asdm-76-firewall-config/access-objects.html#ariaid-title6), or using the CLI, [Configuring a Network Object Group](https://www.cisco.com/c/en/us/td/docs/security/asa/asa90/configuration/guide/asa_90_cli_config/acl_objects.html#86292). The Network Object Group can be blocked using an access rule, [Configure Access Rules](https://www.cisco.com/c/en/us/td/docs/security/asa/asa96/asdm76/firewall/asdm-76-firewall-config/access-rules.html#ID-2124-00000152).", 
+            "2. Cisco ASA custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region.",
+            "3. To authenticate the connector, in Cisco ASA create a local user and allow it to use the REST API. Depending on the playbook used the user needs to be able to add members to a network object group or create access control entries, by default that requires privilege level 15."],
+        "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
+        "entities": ["Ip"], 
+        "tags": ["Remediation", "Teams bot"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Wortell"
+        }
+    },
     "parameters": {
-        "Playbook Name": {
+        "PlaybookName": {
             "defaultValue": "CiscoASA-AddIPtoNetworkObjectGroup",
             "type": "String",
             "metadata": {
-                "description": "Name of the Logic App/Playbook"
+                "description": "Name of the Logic Apps resource to be created"
             }
         },
         "Cisco ASA Connector name": {
@@ -24,9 +43,9 @@
         }
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-        "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]",
-        "CiscoASAConnectionName": "[concat('ciscoasaconnector-', parameters('Playbook Name'))]"
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+        "CiscoASAConnectionName": "[concat('ciscoasaconnector-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -68,13 +87,17 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('Playbook Name')]",
+            "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('CiscoASAConnectionName'))]"
             ],
+            "tags": {
+                "hidden-SentinelTemplateName": "BlockIP-CiscoASA-NetworkObjectGroup",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "properties": {
                 "state": "Enabled",
                 "definition": {

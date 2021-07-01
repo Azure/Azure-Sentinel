@@ -1,0 +1,138 @@
+Parser:
+  Title: Microsoft Windows Logon and Logoff
+  Version: '0.1.0'
+  LastUpdated: June 17, 2021
+Product:
+  Name: Microsoft Windows
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+      This Query Parser maps Windows Active Directory sign in logs (SecurityEvent) to the Azure Sentinel Information Model authenticaion schema.
+ParserName: vimAuthenticationWindowsSecurityEvent
+ParserQuery: |
+  let LogonEvents=dynamic([4624,4625]);
+  let LogoffEvents=dynamic([4634,4647]);
+  let LogonTypes=datatable(LogonType:int, EventSubType:string)[
+    2, 'Interactive',
+    3, 'Network',
+    4, 'Batch',
+    5, 'Service',
+    7, 'Unlock',
+    8, 'NetworkCleartext',
+    9, 'NewCredentials',
+    10, 'RemoteInteractive',
+    11, 'CachedInteractive'
+  ];
+  // https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000
+  let LogonStatus=datatable 
+    (EventStatus:string,EventOriginalResultDetails:string, EventResultDetails:string)[
+    '0x80090325', 'SEC_E_UNTRUSTED_ROOT','Other',
+    '0xc0000064', 'STATUS_NO_SUCH_USER','No such user or password',
+    '0xc000006f', 'STATUS_INVALID_LOGON_HOURS','Logon violates policy',
+    '0xc0000070', 'STATUS_INVALID_WORKSTATION','Logon violates policy',
+    '0xc0000071', 'STATUS_PASSWORD_EXPIRED','Password expired',
+    '0xc0000072', 'STATUS_ACCOUNT_DISABLED','User disabled',
+    '0xc0000133', 'STATUS_TIME_DIFFERENCE_AT_DC','Other',
+    '0xc000018d', 'STATUS_TRUSTED_RELATIONSHIP_FAILURE','Other',
+    '0xc0000193', 'STATUS_ACCOUNT_EXPIRED','Account expired',
+    '0xc0000380', 'STATUS_SMARTCARD_WRONG_PIN','Other',
+    '0xc0000381', 'STATUS_SMARTCARD_CARD_BLOCKED','Other',
+    '0xc0000382', 'STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED','Other',
+    '0xc0000383', 'STATUS_SMARTCARD_NO_CARD','Other',
+    '0xc0000384', 'STATUS_SMARTCARD_NO_KEY_CONTAINER','Other',
+    '0xc0000385', 'STATUS_SMARTCARD_NO_CERTIFICATE','Other',
+    '0xc0000386', 'STATUS_SMARTCARD_NO_KEYSET','Other',
+    '0xc0000387', 'STATUS_SMARTCARD_IO_ERROR','Other',
+    '0xc0000388', 'STATUS_DOWNGRADE_DETECTED','Other',
+    '0xc0000389', 'STATUS_SMARTCARD_CERT_REVOKED','Other',
+    '0x80090302', 'SEC_E_UNSUPPORTED_FUNCTION','Other',
+    '0x80090308', 'SEC_E_INVALID_TOKEN','Other',
+    '0x8009030e', 'SEC_E_NO_CREDENTIALS','Other',
+    '0xc0000008', 'STATUS_INVALID_HANDLE','Other',
+    '0xc0000017', 'STATUS_NO_MEMORY','Other',
+    '0xc0000022', 'STATUS_ACCESS_DENIED','Other',
+    '0xc0000034', 'STATUS_OBJECT_NAME_NOT_FOUND','Other',
+    '0xc000005e', 'STATUS_NO_LOGON_SERVERS','Other',
+    '0xc000006a', 'STATUS_WRONG_PASSWORD','Incorrect password',
+    '0xc000006d', 'STATUS_LOGON_FAILURE','Other',
+    '0xc000006e', 'STATUS_ACCOUNT_RESTRICTION','Logon violates policy',
+    '0xc0000073', 'STATUS_NONE_MAPPED','Other',
+    '0xc00000fe', 'STATUS_NO_SUCH_PACKAGE','Other',
+    '0xc000009a', 'STATUS_INSUFFICIENT_RESOURCES','Other',
+    '0xc00000dc', 'STATUS_INVALID_SERVER_STATE','Other',
+    '0xc0000106', 'STATUS_NAME_TOO_LONG','Other',
+    '0xc000010b', 'STATUS_INVALID_LOGON_TYPE','Logon violates policy',
+    '0xc000015b', 'STATUS_LOGON_TYPE_NOT_GRANTED','Logon violates policy',
+    '0xc000018b', 'STATUS_NO_TRUST_SAM_ACCOUNT','Logon violates policy',
+    '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',
+    '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',
+    '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];
+  let WinLogon=(){
+    SecurityEvent 
+    | where EventID in (LogonEvents) or 
+            EventID in (LogoffEvents)
+    | project-rename 
+       EventProduct = EventSourceName
+       , EventMessage = Activity
+       , ActorSessionId=SubjectLogonId
+       , TargetSessionId=TargetLogonId
+       , ActorUserId=SubjectUserSid
+       , TargetUserId =TargetUserSid
+       , TargetUserType=AccountType
+       , SrcDvcHostname = WorkstationName
+       , TargetDvcHostname = Computer
+       , EventOriginalUid = EventOriginId
+       , LogonProtocol=AuthenticationPackageName
+       , SrcDvcIpAddr=IpAddress
+    | extend EventOriginId=EventID | project-away EventID 
+    | extend EventResult = iff(EventOriginId == 4625, 'Failure', 'Success')
+      , EventCount=1
+      , EventSchemaVersion='0.1.0'
+      , ActorUserIdType='SID'
+      , TargetUserIdType='SID'
+      , EventVendor='Microsoft'  
+      , EventStartTime =TimeGenerated
+      , EventEndTime=TimeGenerated
+      , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')
+      , ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount)
+      , ActorUsernameType= iff(SubjectDomainName == '-','Simple', 'Windows' )
+      , TargetUsername = iff (TargetDomainName == '-', trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
+      , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
+      , SrcDvcOs = 'Windows'
+      , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
+    | lookup LogonStatus on EventStatus
+    | lookup LogonTypes  on LogonType
+    | project-reorder 
+        TimeGenerated
+        , EventProduct
+        , EventMessage
+        , EventResult
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , EventType
+        , EventSubType
+        , ActorSessionId
+        , TargetSessionId
+        , ActorUserId
+        , ActorUsername
+        , TargetUserId
+        , TargetUsername
+        , TargetUserType
+        , SrcDvcOs
+        , TargetDvcHostname
+        , LogonProtocol
+        , ImpersonationLevel
+    /// ** Aliases 
+    | extend
+         User=TargetUsername
+        , LogonTarget=TargetDvcHostname
+        , Dvc=SrcDvcHostname
+    };
+  WinLogon

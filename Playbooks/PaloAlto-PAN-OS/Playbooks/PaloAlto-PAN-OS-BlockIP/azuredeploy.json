@@ -2,17 +2,39 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "comments": "This playbook uses the PaloAlto connector to take necessary actions on IP address like Block IP/Unblock IP from predefined address group and also gives an option to close the incident.",
-    "author": "Sindhu Talluri, PAN-OS"
-  },
+    "title": "Block IP - Palo Alto PAN-OS", 
+    "description": "This playbook allows blocking/allowing of IPs in PAN-OS, using a address object group. The address object group itself should be attached to a pre-defined security policy rule.",
+    "mainSteps": ["1.For each IP in the incident, check if IP is already a member of a security policy rule or of the predefined object group.",
+         "2. If it isn't, an adaptive card is sent to a Teams channel with information about the incident and giving the option to block/unblock the IP by adding/removing it to/from the address object group."],
+    "prerequisites": ["1. Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region.",
+        "2. Generate an API key.[Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)",
+        "3. Address group should be created for PAN-OS, and supply as a deployment parameter."],
+    "prerequisitesDeployTemplateFile": "../../PaloAltoCustomConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
+    "entities": ["Ip"], 
+    "tags": ["Remediation", "Teams bot"], 
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    }
+},
   "parameters": {
-    "Playbook Name": {
+    "PlaybookName": {
       "defaultValue": "PaloAlto-PAN-OS-BlockIP",
       "type": "String",
       "metadata": {
-        "description": "Name of the Logic App/Playbook"
+        "description": "Name of the Logic Apps resource to be created."
       }
     },
+    "CustomConnectorName":{
+        "defaultValue": "PAN-OSCustomConnector",
+        "type": "string",
+        "metadata": {
+          "description": "Name of the custom connector which interacts with PAN-OS"
+        }
+      },
     "Teams GroupId": {
       "defaultValue": "TeamgroupId",
       "type": "String",
@@ -36,9 +58,9 @@
     }
   },
   "variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-    "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]",
-    "PaloAltoConnectorConnectionName": "[concat('PaloAltoConnector-', parameters('Playbook Name'))]"
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+    "PaloAltoConnectorConnectionName": "[concat('PaloAltoConnector-', parameters('PlaybookName'))]"
   },
   "resources": [
     {
@@ -50,7 +72,7 @@
       "properties": {
         "customParameterValues": {},
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/PaloAltoConnector')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
         }
       }
     },
@@ -81,8 +103,12 @@
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
-      "name": "[parameters('Playbook Name')]",
+      "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "BlockIP-PAN-OS-ResponseFromTeams",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
         "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
@@ -1026,7 +1052,7 @@
                              "PaloAltoConnector": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
                 "connectionName": "[variables('PaloAltoConnectorConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/PaloAltoConnector')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
               },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
