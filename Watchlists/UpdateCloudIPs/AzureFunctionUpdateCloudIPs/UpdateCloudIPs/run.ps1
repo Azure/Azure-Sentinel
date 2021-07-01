@@ -204,7 +204,7 @@ $requestHeaders = @{
     "Authorization" = "Bearer $accessToken"
     "Content-Type"  = "application/json"
 }
-$Date = (Get-Date).AddDays(7) | Get-Date -Format yyyy-MM-ddTHH:mm:ssZ -asUTC
+$Date = (Get-Date -AsUTC).AddDays(7) | Get-Date -Format yyyy-MM-ddTHH:mm:ssZ
 
 # Main
 if ($env:AWS -eq "Yes") {
