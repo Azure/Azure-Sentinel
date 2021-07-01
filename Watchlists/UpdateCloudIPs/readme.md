@@ -14,4 +14,9 @@ Following are the configuration steps to deploy Function App.
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
 
 ## Post Deployment Steps
-None
+1. Go to the resource group with the Azure Function.
+2. Click the **Azure Function**.
+3. Click **Identity** blade under **Settings**.
+4. Click **Azure Role Assignments**.
+6. Click **Add Role Assignment**.
+7. Set **Scope** to **Resource Group**, Select the **Subscription** and **resource group** that contains the **Azure Sentinel** workspace. Set **role** to **Azure Sentinel Contributor**. 
