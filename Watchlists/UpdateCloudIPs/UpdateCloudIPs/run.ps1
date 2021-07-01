@@ -132,6 +132,17 @@ function Add-WatchlistItem{
     $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
 }
 
+#Compare Watchlist Table to Ip Range Table
+function Compare-WatchlistToTable {
+    param (
+        $WatchlistTable,
+        $RangeTable,
+        $Property
+    )
+    $results = Compare-Object $WatchlistTable $RangeTable -Property $Property -IncludeEqual -PassThru
+    return $results
+}
+
 #Delete Watchlist Item
 function Remove-WatchlistItem{
     param (
@@ -184,17 +195,10 @@ $resourceURI = "https://management.azure.com"
 $tokenAuthURI = $env:IDENTITY_ENDPOINT + "?resource=$resourceURI&api-version=2019-08-01"
 $tokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER"="$env:IDENTITY_HEADER"} -Uri $tokenAuthURI
 $accessToken = $tokenResponse.access_token
-
-$subscriptionId = "1c61ccbf-70b3-45a3-a1fb-848ce46d70a6"
-$resourceGroupName = "cxe-yanivsh"
-$workspaceName = "Yanivsh-Sentinel"
-$accessToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Im5PbzNaRHJPRFhFSzFqS1doWHNsSFJfS1hFZyIsImtpZCI6Im5PbzNaRHJPRFhFSzFqS1doWHNsSFJfS1hFZyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuYXp1cmUuY29tIiwiaXNzIjoiaHR0cHM6Ly9zdHMud2luZG93cy5uZXQvNWYxMDYwZjItZDlhNC00ZjU5LWJmOWMtMWRkOGYzNjA0YTRiLyIsImlhdCI6MTYyNDg5ODAyMCwibmJmIjoxNjI0ODk4MDIwLCJleHAiOjE2MjQ5MDE5MjAsImFpbyI6IkUyWmdZRkQ3VnRoN2ZvTC96MTF1cXhWT1RHSDdBQUE9IiwiYXBwaWQiOiIwY2RjMTUxMy05ZGVjLTRhODItYmZlZS1kNWMyMzJmZGM3MDgiLCJhcHBpZGFjciI6IjEiLCJpZHAiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC81ZjEwNjBmMi1kOWE0LTRmNTktYmY5Yy0xZGQ4ZjM2MDRhNGIvIiwib2lkIjoiMTRjOTNjZjMtZTVlMy00NWNmLThiNGUtMWE2ZjYyYmRmMjAyIiwicmgiOiIwLkFXNEE4bUFRWDZUWldVLV9uQjNZODJCS1N4TVYzQXpzbllKS3YtN1Z3akw5eHdodUFBQS4iLCJzdWIiOiIxNGM5M2NmMy1lNWUzLTQ1Y2YtOGI0ZS0xYTZmNjJiZGYyMDIiLCJ0aWQiOiI1ZjEwNjBmMi1kOWE0LTRmNTktYmY5Yy0xZGQ4ZjM2MDRhNGIiLCJ1dGkiOiJOYk1IMjNBWnRFV2VjUDNmNUwyOUFBIiwidmVyIjoiMS4wIiwieG1zX3RjZHQiOjE1OTY3MzcyMTh9.n_pYCZKxmg_NtfZsFMLDYM6GUn9WFPKg5vNSiI8VU_qE6Pc5BPfu7wiqvqoNLjeLbQOnKT0-XfwDCdg5cgvVJYxXTbeYfg4_gOXFqOmBjq08scj6GZVOoLxSl7nYB_y4_MRhXOPIlrFLojhiyhD-lssU6DbbfUFwDs4e9-UFMhaGLMBdxZAVbb-l_ZpUsETVdeUGgjlEWTJLlzCLqv4NHV2qvkocqS3yWh7mhZscewB8PDUBk7VYs1Q-eCLTHKG8z1rSCwAshkeF41pdqQQE2yYS9PHs2aF6xktiBN9MJL-QHFvjI4FxdTIlHOQhqZKRIgeBwhR8OmsQ0NtxvnmoIA"
-
 $requestHeaders = @{
     "Authorization" = "Bearer $accessToken"
     "Content-Type"  = "application/json"
 }
-
 $Date = (Get-Date).AddDays(7) | Get-Date -Format yyyy-MM-ddTHH:mm:ssZ -asUTC
 
 # Main
@@ -272,7 +276,7 @@ if ($env:AWS -eq "Yes") {
         $WatchListItemsTable = Get-WatchlistItemTable -watchlistAlias $watchlistAlias
         
         #Compare Watchlist Table to Ip Range Table
-        $compareResults = Compare-Object $WatchListItemsTable $AWSIPRangesTable -Property IPRange -IncludeEqual -PassThru
+        $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $AWSIPRanges -Property "IPRange"
     
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
@@ -378,7 +382,7 @@ if ($env:GCP -eq "Yes") {
         $WatchListItemsTable = Get-WatchlistItemTable -watchlistAlias $watchlistAlias
         
         #Compare Watchlist Table to Ip Range Table
-        $compareResults = Compare-Object $WatchListItemsTable $GCPIPRangesTable -Property IPRange -IncludeEqual -PassThru
+        $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $GCPIPRangesTable -Property "IPRange"
     
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
@@ -497,7 +501,7 @@ if ($env:Azure -eq "Yes") {
         $WatchListItemsTable = Get-WatchlistItemTable -watchlistAlias $watchlistAlias
         
         #Compare Watchlist Table to Ip Range Table
-        $compareResults = Compare-Object $WatchListItemsTable $AzureIPRangesTable -Property IPRange -IncludeEqual -PassThru
+        $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $AzureIPRangesTable -Property "IPRange"
     
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
