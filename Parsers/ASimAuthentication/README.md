@@ -7,13 +7,13 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthDoc)
+- [Azure Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
 
 <br>
 
 To deploy all parsers to your workspace using ARM templates use the button below:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthenticationARM)
 
 <br>
 
