@@ -1,9 +1,9 @@
 Parser:
-  Title: Microsoft 365 Defender - FileEvent Parser
-  Version: '0.0'
+  Title: Microsoft 365 Defender - File Event Parser
+  Version: '0.1'
   LastUpdated: June 28, 2021
 Product:
-  Name: Microsoft Defender
+  Name: 'M365 Defender for EndPoint'
 Normalization:
   Schema: FileEvent
   Version: '1.0.0'
@@ -20,18 +20,15 @@ ParserName: vimFileEventMicrosoftSharePoint
 ParserQuery: |
   let M365DFileEvents=(){
     DeviceFileEvents
-    // Already exist
-    // TimeGenerated
-    //   , SensitivityLabel
     | project-rename
-         EventMessage =ActionType 
-        , SrcDvcIpAddr =RequestSourceIP
-        , DvcId=DeviceId 
-       , FilePath= FolderPath
-       , FileHashMD5=MD5
-       , FileHashSHA1 =SHA1
-       , FileHashSHA256 =SHA256
+         SrcDvcIpAddr =RequestSourceIP
+       , DvcId=DeviceId
+       , TargetFilePath= FolderPath
+       , TargetFileHashMD5=MD5
+       , TargetFileHashSHA1 =SHA1
+       , TargetFileHashSHA256 =SHA256
        , NetworkProtocol=RequestProtocol // [Unknown, Local, SMB, or NFS ]
+       , SrcFileOriginUrl=FileOriginUrl
        //
        //
        //
@@ -49,7 +46,7 @@ ParserQuery: |
           EventCount=int(1)
         , EventStartTime= TimeGenerated 
         , EventEndTime= TimeGenerated
-        , EventType=EventMessage // [FileCreated, FileDeleted, FileModified, FileRenamed] : This will break if MDE adds operation not in our enum
+        , EventType=ActionType // [FileCreated, FileDeleted, FileModified, FileRenamed] : This will break if MDE adds operation not in our enum
         , EventResult= 'Success' // Only logging success?
         , EventProduct='M365 Defender'
         , EventVendor='Microsoft'
@@ -65,8 +62,10 @@ ParserQuery: |
         , DvcOs='Windows' 
   //
   //
-       , PreviousFileName=coalesce(PreviousFileName,FileOriginUrl)  // Should I split the url to file and all the rest
-       , PreviousFilePath=coalesce(PreviousFolderPath, FileOriginIP)
+       , TargetFileFullPath=iff(ActionType=='FileDeletes', strcat(FolderPath, '\\', FileName), FolderPath)
+       , SrcFileName=coalesce(PreviousFileName,SrcFileOriginUrl)  // Should I split the url to file and all the rest
+       , SrcFilePath=coalesce(PreviousFolderPath, FileOriginIP)
+       , SrcFileFullPath=strcat(PreviousFolderPath,'\\', PreviousFileName)
     // Remove from schema, ActingProcessGuid ="aaaa"
     // Remove from schema, ActingProcessSessionId ="aaaa"
     // Remove from schema, ActingProcessIntegrityLevel ="aaaa"

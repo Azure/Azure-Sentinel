@@ -1,6 +1,6 @@
 Parser:
-  Title: Microsoft SharePoint File Operation - FileEvent Parser
-  Version: '0.0'
+  Title: Microsoft SharePoint File Operation - File Event Parser
+  Version: '0.1'
   LastUpdated: June 28, 2021
 Product:
   Name: Microsoft SharePoint
@@ -20,19 +20,20 @@ ParserName: vimFileEventMicrosoftSharePoint
 ParserQuery: |
   let SharepointFile=(){
     OfficeActivity
+    | where OfficeWorkload=='SharePoint' // Guessing the value...
+          and ItemType in ('File', 'Folder', 'DocumentLibrary', 'Page')
     | extend
-        EventMessage =Operation 
-        , EventCount=int(1)
+          EventCount=int(1)
         , EventStartTime= TimeGenerated // Start_Time ?
         , EventEndTime= TimeGenerated
         , EventType=Operation
         , EventResult=case(ResultStatus =='Succeeded', 'Success'
                             , ResultStatus == 'Failed', 'Failure'
                             , 'Partial')
-        , EventProduct='SharePoint'
+        , EventProduct='Office 365'
         , EventVendor='Microsoft'
         , EventSchemaVersion='0.1.0' 
-         , ActorUsername=UserId 
+        , ActorUsername=UserId 
         , ActorUsernameType='upn'
         , ActorUserId=UserKey
         , ActorUserIdType='Puid' //(PUID) for events performed by users in SharePoint, OneDrive
@@ -40,14 +41,19 @@ ParserQuery: |
         , HttpUserAgent=UserAgent
         , SrcDvcIpAddr =ClientIP
         /// If operation is copied/moved than SourceFile us the "Previous file". (what about FileRenamed?)
-       , FileName=iff(Operation in ('FileCopied', 'FileMoved'), DestinationFileName, SourceFileName) // need to see samples. Maybe use SourceFileName
-       , FilePath= iff(Operation in ('FileCopied', 'FileMoved'),strcat(Site_Url, '/', DestinationRelativeUrl), strcat(Site_Url, '/', SourceRelativeUrl))
+        , TargetFileFullPath=iff(Operation in ('FileCopied', 'FileMoved')
+                                , DestinationFileName
+                                , strcat(Site_Url, '/', SourceRelativeUrl,'/',SourceFileName)) // need to see samples. Maybe use SourceFileName
+        ,  TargetFileName=iff(Operation in ('FileCopied', 'FileMoved'), DestinationFileName, SourceFileName) // need to see samples. Maybe use SourceFileName
+        , TargetFilePath= iff(Operation in ('FileCopied', 'FileMoved'),strcat(Site_Url, '/', DestinationRelativeUrl), strcat(Site_Url, '/', SourceRelativeUrl))
      // , SensitivityLabel:string // ? 
-       , PreviousFileName=iff(Operation in ('FileCopied', 'FileMoved'), SourceFileName,'')
-       , PreviousFilePath=iff(Operation in ('FileCopied', 'FileMoved'), strcat(Site_Url, '/', SourceRelativeUrl),'')
+       , SrcFileName=iff(Operation in ('FileCopied', 'FileMoved'), SourceFileName,'')
+       , SrcFilePath=iff(Operation in ('FileCopied', 'FileMoved'), strcat(Site_Url, '/', SourceRelativeUrl),'')
+       , TargetAppName='SharePoint'
      // Aliases
      | extend 
         User=ActorUsername
+        , File=TargetFileName
         // ***************** Missing columns
         // ActingAppId
         // ActingAppName
