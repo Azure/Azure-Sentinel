@@ -286,17 +286,17 @@ if ($env:AWS -eq "Yes") {
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
                 #Update Expiration since it was in both lists
-                Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
+                #Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
                 Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
             }
             elseif (($compareresult.SideIndicator) -eq "<=") {
                 # Detele the item as its no longer in the ip ranges
-                Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
+                #Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
                 Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
             }
             elseif (($compareresult.SideIndicator) -eq "=>") {
                 # Add new item 
-                Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
+                #Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
                 Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
             }
             
@@ -392,17 +392,17 @@ if ($env:GCP -eq "Yes") {
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
                 #Update Expiration since it was in both lists
-                Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
+                #Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
                 Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
             }
             elseif (($compareresult.SideIndicator) -eq "<=") {
                 # Detele the item as its no longer in the ip ranges
-                Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
+                #Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
                 Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
             }
             elseif (($compareresult.SideIndicator) -eq "=>") {
                 # Add new item 
-                Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
+                #Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
                 Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
             }
             
@@ -511,17 +511,17 @@ if ($env:Azure -eq "Yes") {
         foreach ($compareresult in $compareResults) {
             if (($compareresult.SideIndicator) -eq "==") {
                 #Update Expiration since it was in both lists
-                Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
+                #Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
                 Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
             }
             elseif (($compareresult.SideIndicator) -eq "<=") {
                 # Detele the item as its no longer in the ip ranges
-                Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
+                #Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
                 Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
             }
             elseif (($compareresult.SideIndicator) -eq "=>") {
                 # Add new item 
-                Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
+                #Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
                 Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
             }
             
