@@ -1,0 +1,53 @@
+Parser:
+  Title: ASIM GCP DNS Query Parser
+  Version: '0.1.0'
+  LastUpdated: June 22, 2021
+Vendor:
+  Name: GCP
+Product:
+  Name: DNS
+Normalization:
+  Schema: DNS
+  Version: '0.1.0'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/AzSentinelDNSDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+      This Query Parser maps GCP DNS logs (GCP_DNS_CL) to the Azure Sentinel Information Model DNS query schema.
+ParserName: vimDnsGcpDns
+ParserQuery: |
+      let DNSQuery_GcpDns=(){
+          GCP_DNS_CL
+          | where resource_type_s == "dns_query"
+          | project-rename
+             Query=payload_queryName_s, 
+             QueryTypeName=payload_queryType_s,
+             ResponseName=payload_rdata_s, 
+             EventResultDetails=payload_responseCode_s,
+             NetworkProtocol=payload_protocol_s, 
+             SrcIpAddr=payload_sourceIP_s,
+             EventOriginalUid=insert_id_s,
+             EventSeverity=severity_s
+         
+          | extend
+             EventCount=int(1),
+             EventProduct='Cloud DNS',
+             EventVendor='GCP',
+             EventSchemaVersion="0.1.0",
+             Dvc="GCPDNS" ,
+             EventType = iif (resource_type_s == "dns_query", "lookup", resource_type_s)
+             EventResult=iff(payload_responseCode_s=~'NOERROR','Success','Failure'),
+             EventSubType='response',
+             EventEndTime=todatetime(Timestamp_t)
+           
+          // -- Aliases
+          | extend 
+             ResponseCodeName=EventResultDetails, 
+             Domain=Query,
+             IpAddr=SrcIpAddr
+             EventStartTime = EventEndTime
+       
+             };
+      DNSQuery_GcpDns
