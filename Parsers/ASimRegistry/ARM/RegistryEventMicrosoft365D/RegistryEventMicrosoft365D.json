@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimRegistryEventMicrosoft365D",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM M365 Defender for Endpoint Registry Events Parser",
+            "category": "Security",
+            "FunctionAlias": "vimRegistryEventMicrosoft365D",
+            "query": "let RegistryType = datatable (TypeCode:string,TypeName:string)\n  [\n    \"None\", \"Reg_None\",\n    \"String\",\t\"Reg_Sz\",\n    \"ExpandString\",\t\"Reg_Expand_Sz\",\n    \"Binary\",\t\"Reg_Binary\",\n    \"Dword\",\t\"Reg_DWord\",\n    \"MultiString\",\t\"Reg_Multi_Sz\",\n    \"QWord\",\t\"Reg_QWord\"\n  ];\n\nlet RegistryEvents_M365D=()\n{\n  DeviceRegistryEvents\n  | extend\n    // Event\n    EventOriginalUid = tostring(ReportId), \n    EventCount = int(1), \n    EventProduct = 'M365 Defender for Endpoint', \n    EventVendor = 'Microsoft', \n    EventSchemaVersion = '0.1.0', \n    EventStartTime = todatetime(TimeGenerated), \n    EventEndTime = todatetime(TimeGenerated), \n    EventType = ActionType,\n\n    // Registry\n    RegistryKey = iff (ActionType in (\"RegistryKeyDeleted\", \"RegistryValueDeleted\"), PreviousRegistryKey, RegistryKey),\n    RegistryValue = iff (ActionType == \"RegistryValueDeleted\", PreviousRegistryValueName, RegistryValueName),\n    // RegistryValueType -- original name is fine \n    // RegistryValueData -- original name is fine \n    RegistryKeyModified = iff (ActionType == \"RegistryKeyRenamed\", PreviousRegistryKey, \"\"),\n    RegistryValueModified = iff (ActionType == \"RegistryValueSet\", PreviousRegistryValueName, \"\"),\n    // RegistryValueTypeModified -- Not provided by Defender\n    RegistryValueDataModified = PreviousRegistryValueData\n  | lookup RegistryType on $left.RegistryValueType == $right.TypeCode | extend RegistryValueType = TypeName\n  | project-away TypeName, PreviousRegistryKey, PreviousRegistryValueName, PreviousRegistryValueData\n\n    // Device\n  | extend\n    DvcHostname = DeviceName, \n    DvcId = DeviceId, \n    DvcOs = 'Windows', \n    Dvc = DeviceName \n\n    // Users\n  | extend\n    ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\\\', InitiatingProcessAccountName)), \n    ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'), \n    ActorUserIdType = 'SID'\n  | project-away InitiatingProcessAccountDomain, InitiatingProcessAccountName\n\n  | project-rename\n    ActorUserId = InitiatingProcessAccountSid, \n\n    ActorUserAadId = InitiatingProcessAccountObjectId, \n    ActorUserUpn = InitiatingProcessAccountUpn\n\n    // Processes\n  | extend\n    ActingProcessId = tostring(InitiatingProcessId), \n    ParentProcessId = tostring(InitiatingProcessParentId) \n  | project-away InitiatingProcessId, InitiatingProcessParentId\n\n  | project-rename\n    ParentProcessName = InitiatingProcessParentFileName, \n\n    ParentProcessCreationTime = InitiatingProcessParentCreationTime, \n\n    ActingProcessName = InitiatingProcessFolderPath, \n    ActingProcessFileName = InitiatingProcessFileName,\n    ActingProcessCommandLine = InitiatingProcessCommandLine, \n\n    ActingProcessMD5 = InitiatingProcessMD5, \n    ActingProcessSHA1 = InitiatingProcessSHA1, //OK\n    ActingProcessSHA256 = InitiatingProcessSHA256, \n    ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel, \n    ActingProcessTokenElevation = InitiatingProcessTokenElevation, \n    ActingProcessCreationTime = InitiatingProcessCreationTime \n\n    // -- aliases\n  | extend \n    Username = ActorUsername,\n    UserId = ActorUserId,\n    UserIdType = ActorUserIdType,\n    User = ActorUsername,\n    CommandLine = ActingProcessCommandLine,\n    Process = ActingProcessName\n\n\n };\n RegistryEvents_M365D",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
