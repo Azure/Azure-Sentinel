@@ -186,12 +186,17 @@ function Update-WatchlistItem{
 
 
 #Prepare Variables
-$AzureWebJobsStorage = $env:AzureWebJobsStorage
 $subscriptionId = $env:SubscriptionId
 $resourceGroupName = $env:ResourceGroupName
 $workspaceName = $env:workspaceName
-$watchlistAlias = $env:watchlistAlias
-$resourceURI = "https://management.azure.com"
+$resourceURI = $env:resourceURI
+if (-Not [string]::IsNullOrEmpty($resourceURI)){
+	if($LAURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "UpdateCloudIPs: Invalid resource Uri." -ErrorAction Stop
+		Exit
+	}
+}
 $tokenAuthURI = $env:IDENTITY_ENDPOINT + "?resource=$resourceURI&api-version=2019-08-01"
 $tokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER"="$env:IDENTITY_HEADER"} -Uri $tokenAuthURI
 $accessToken = $tokenResponse.access_token
