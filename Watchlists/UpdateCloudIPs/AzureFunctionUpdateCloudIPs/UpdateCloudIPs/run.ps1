@@ -191,13 +191,6 @@ $subscriptionId = $env:SubscriptionId
 $resourceGroupName = $env:ResourceGroupName
 $workspaceName = $env:workspaceName
 $resourceURI = $env:resourceURI
-if (-Not [string]::IsNullOrEmpty($resourceURI)){
-	if($resourceURI.Trim() -notmatch 'https:\/\/management\.azure.([a-zA-Z\.]+)$')
-	{
-		Write-Error -Message "UpdateCloudIPs: Invalid resource Uri." -ErrorAction Stop
-		Exit
-	}
-}
 $tokenAuthURI = $env:IDENTITY_ENDPOINT + "?resource=$resourceURI&api-version=2019-08-01"
 $tokenResponse = Invoke-RestMethod -Method Get -Headers @{"X-IDENTITY-HEADER"="$env:IDENTITY_HEADER"} -Uri $tokenAuthURI
 $accessToken = $tokenResponse.access_token
