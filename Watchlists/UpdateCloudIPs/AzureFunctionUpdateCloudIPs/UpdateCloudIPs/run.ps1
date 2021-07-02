@@ -22,6 +22,7 @@ function Check-Watchlist {
         [string]$workspaceName = $workspaceName
         
     )
+
     $Uri = $resourceURI + "/subscriptions/" + $subscriptionId + "/resourceGroups/" + $resourceGroupName + "/providers/Microsoft.OperationalInsights/workspaces/" + $workspaceName + "/providers/Microsoft.SecurityInsights/watchlists/" + $watchlistAlias + "?api-version=2021-03-01-preview"
     $new = $false
     try {
@@ -231,7 +232,7 @@ if ($env:AWS -eq "Yes") {
         }
         Write-Host "$b entries with total of $totalCount GCP IP Ranges"
         
-        #Write to Azure Watchlist
+        #Write to Watchlist
         $body = @{
             "properties" = @{
                 "displayName" = "AWSIPRanges"
@@ -246,9 +247,12 @@ if ($env:AWS -eq "Yes") {
         $body = $body | ConvertTo-Json
         $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"?api-version=2021-03-01-preview"
         $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
-        #add error handling?
-        Write-Host "Created new GCP IP watchlist with all ranges."
-        
+        if (($response.id) -ne "" -or ($response.id) -ne $null) {
+            Write-Host "Created new AWS IP watchlist with all ranges."
+        }
+        else {
+            Write-Host "Creation of the watchlist may have errored"
+        }        
     }
     elseif ($new -eq $false) {
         Write-Host "Found existing AWS watchlist"
@@ -281,26 +285,36 @@ if ($env:AWS -eq "Yes") {
         $WatchListItemsTable = Get-WatchlistItemTable -watchlistAlias $watchlistAlias
         
         #Compare Watchlist Table to Ip Range Table
-        $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $AWSIPRanges -Property "IPRange"
-    
+        $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $AWSIPRangesTable -Property "IPRange"
+        
+        $rawContent = "IPRange,Expiration,Notes`r`n"
         foreach ($compareresult in $compareResults) {
-            if (($compareresult.SideIndicator) -eq "==") {
+            if (($compareresult.SideIndicator) -eq "==" -or ($compareresult.SideIndicator) -eq "=>") {
                 #Update Expiration since it was in both lists
                 #Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
-                Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
-            }
-            elseif (($compareresult.SideIndicator) -eq "<=") {
-                # Detele the item as its no longer in the ip ranges
-                #Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
-                Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
-            }
-            elseif (($compareresult.SideIndicator) -eq "=>") {
-                # Add new item 
-                #Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
-                Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
-            }
-            
+                $rawContent += "$($compareresult.IpRange),$Date,$($compareresult.Notes)`r`n"             
+            }          
         }
+        $body = @{
+            "properties" = @{
+                "displayName" = "AWSIPRanges"
+                "provider" = "AWS"
+                "source" = "https://ip-ranges.amazonaws.com/ip-ranges.json"
+                "itemsSearchKey" = "IPRange"
+                "rawContent" = "$rawContent"
+                "contentType" = "Text/csv"
+                "numberOfLinesToSkip" = 0
+            }
+        }
+        $body = $body | ConvertTo-Json
+        $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"?api-version=2021-03-01-preview"
+        $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
+        if (($response.id) -ne "" -or ($response.id) -ne $null) {
+            Write-Host "Updated AWS IP watchlist."
+        }
+        else {
+            Write-Host "Updating of the watchlist may have errored"
+        } 
     }
 }
 if ($env:GCP -eq "Yes") {
@@ -333,7 +347,7 @@ if ($env:GCP -eq "Yes") {
         }
         Write-Host "$b entries with total of $totalCount GCP IP Ranges"
         
-        #Write to Azure Watchlist
+        #Write to Watchlist
         $body = @{
             "properties" = @{
                 "displayName" = "GCPIPRanges"
@@ -348,8 +362,12 @@ if ($env:GCP -eq "Yes") {
         $body = $body | ConvertTo-Json
         $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"?api-version=2021-03-01-preview"
         $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
-        #add error handling?
-        Write-Host "Created new GCP IP watchlist with all ranges."
+        if (($response.id) -ne "" -or ($response.id) -ne $null) {
+            Write-Host "Created new GCP IP watchlist with all ranges."
+        }
+        else {
+            Write-Host "Creation of the watchlist may have errored"
+        }
     }
     elseif ($new -eq $false) {
         Write-Host "Found existing GCP watchlist"
@@ -389,23 +407,33 @@ if ($env:GCP -eq "Yes") {
         #Compare Watchlist Table to Ip Range Table
         $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $GCPIPRangesTable -Property "IPRange"
     
+        $rawContent = "IPRange,Expiration,Notes`r`n"
         foreach ($compareresult in $compareResults) {
-            if (($compareresult.SideIndicator) -eq "==") {
+            if (($compareresult.SideIndicator) -eq "==" -or ($compareresult.SideIndicator) -eq "=>") {
                 #Update Expiration since it was in both lists
                 #Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
-                Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
+                $rawContent += "$($compareresult.IpRange),$Date,$($compareresult.Notes)`r`n"             
+            }          
+        }
+        $body = @{
+            "properties" = @{
+                "displayName" = "GCPIPRanges"
+                "provider" = "Goolge"
+                "source" = "https://www.gstatic.com/ipranges/cloud.json"
+                "itemsSearchKey" = "IPRange"
+                "rawContent" = "$rawContent"
+                "contentType" = "Text/csv"
+                "numberOfLinesToSkip" = 0
             }
-            elseif (($compareresult.SideIndicator) -eq "<=") {
-                # Detele the item as its no longer in the ip ranges
-                #Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
-                Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
-            }
-            elseif (($compareresult.SideIndicator) -eq "=>") {
-                # Add new item 
-                #Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
-                Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
-            }
-            
+        }
+        $body = $body | ConvertTo-Json
+        $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"?api-version=2021-03-01-preview"
+        $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
+        if (($response.id) -ne "" -or ($response.id) -ne $null) {
+            Write-Host "Updated GCP IP watchlist with all ranges."
+        }
+        else {
+            Write-Host "Updating of the watchlist may have errored"
         }
     }
 }
@@ -465,19 +493,18 @@ if ($env:Azure -eq "Yes") {
         else {
             Write-Host "Creation of the watchlist may have errored"
         }
-        
     }
     elseif ($new -eq $false) {
         Write-Host "Found existing Azure watchlist"
         #build tables
-        $AzureIPRanges = Get-AzureIPRanges
+        $AzureIPRanges = (Get-AzNetworkServiceTag -location centralus).Values
         $AzureIPRangesTable = @()
         $totalCount = $AzureIPRanges.Count
         $a = 0
         $b = 0
         $c = 0
         foreach($item in $AzureIPRanges){
-            if(($item.properties.region) -eq ""){
+            if(($item.properties.Region) -eq ""){
                 If(($item.properties.systemService) -eq ""){
                     $serviceName = $item.Id
                 }
@@ -496,7 +523,7 @@ if ($env:Azure -eq "Yes") {
             $a++
             $b++
             if($a -eq 100){
-                #Write-Host "$b entries of $totalCount processed"
+                Write-Host "$b entries of $totalCount processed"
                 $a = 0
             }
         }
@@ -508,23 +535,34 @@ if ($env:Azure -eq "Yes") {
         #Compare Watchlist Table to Ip Range Table
         $compareResults = Compare-WatchlistToTable -WatchlistTable $WatchListItemsTable -RangeTable $AzureIPRangesTable -Property "IPRange"
     
+        $rawContent = "IPRange,Expiration,Notes`r`n"
         foreach ($compareresult in $compareResults) {
-            if (($compareresult.SideIndicator) -eq "==") {
+            if (($compareresult.SideIndicator) -eq "==" -or ($compareresult.SideIndicator) -eq "=>") {
                 #Update Expiration since it was in both lists
                 #Write-Host "Updating expiration for $($compareresult.IPRange)" -ForegroundColor Blue
-                Update-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)             
+                $rawContent += "$($compareresult.IpRange),$Date,$($compareresult.Notes)`r`n"             
+            }          
+        }
+        $body = @{
+            "properties" = @{
+                "displayName" = "AzureIPRanges"
+                "provider" = "Microsoft"
+                "source" = "https://docs.microsoft.com/en-us/rest/api/virtualnetwork/service-tags/list"
+                "itemsSearchKey" = "IPRange"
+                "rawContent" = "$rawContent"
+                "contentType" = "Text/csv"
+                "numberOfLinesToSkip" = 0
             }
-            elseif (($compareresult.SideIndicator) -eq "<=") {
-                # Detele the item as its no longer in the ip ranges
-                #Write-Host "Removing $($compareresult.IPRange)" -ForegroundColor Yellow
-                Remove-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem ($compareresult.ItemId)
-            }
-            elseif (($compareresult.SideIndicator) -eq "=>") {
-                # Add new item 
-                #Write-Host "Adding new range $($compareresult.IPRange)" -ForegroundColor Green
-                Add-WatchlistItem -watchlistAlias $watchlistAlias -watchlistitem (New-Guid) -Notes ($compareresult.Notes)
-            }
-            
+        }
+        $body = $body | ConvertTo-Json
+        #create function
+        $Uri = $resourceURI+"/subscriptions/"+$subscriptionId+"/resourceGroups/"+$resourceGroupName+"/providers/Microsoft.OperationalInsights/workspaces/"+$workspaceName+"/providers/Microsoft.SecurityInsights/watchlists/"+$watchlistAlias+"?api-version=2021-03-01-preview"
+        $response = Invoke-RestMethod -Method Put -Headers $requestHeaders -Uri $Uri -Body $body
+        if (($response.id) -ne "" -or ($response.id) -ne $null) {
+            Write-Host "Updated Azure IP watchlist with all ranges."
+        }
+        else {
+            Write-Host "Updating of the watchlist may have errored"
         }
     }
 }
