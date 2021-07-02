@@ -192,7 +192,7 @@ $resourceGroupName = $env:ResourceGroupName
 $workspaceName = $env:workspaceName
 $resourceURI = $env:resourceURI
 if (-Not [string]::IsNullOrEmpty($resourceURI)){
-	if($LAURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	if($resourceURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
 	{
 		Write-Error -Message "UpdateCloudIPs: Invalid resource Uri." -ErrorAction Stop
 		Exit
@@ -205,7 +205,7 @@ $requestHeaders = @{
     "Authorization" = "Bearer $accessToken"
     "Content-Type"  = "application/json"
 }
-$Date = (Get-Date -AsUTC).AddDays(7) | Get-Date -Format yyyy-MM-ddTHH:mm:ssZ
+$Date = (Get-Date).AddDays(7) | Get-Date -Format yyyy-MM-ddT00:00:00Z
 
 # Main
 if ($env:AWS -eq "Yes") {
