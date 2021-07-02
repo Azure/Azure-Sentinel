@@ -68,7 +68,8 @@
     "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
     "StorageAccountName": "[concat(substring(variables('FunctionName'), 0, 20), 'sa')]",
     "StorageSuffix": "[environment().suffixes.storage]",
-    "resourceURI": "[environment().resourceManager]"
+    "resourceURI": "[environment().resourceManager]",
+    "HostingPlanName":"[concat('ASP-',substring(variables('FunctionName'), 0, 22))]"
   },
   "resources": [
     {
@@ -174,6 +175,25 @@
       }
     },
     {
+      "apiVersion": "2018-02-01",
+      "name": "[variables('HostingPlanName')]",
+      "type": "Microsoft.Web/serverfarms",
+      "location": "[resourceGroup().location]",
+      "kind": "elastic",
+      "tags": {},
+      "dependsOn": [],
+      "properties": {
+        "targetWorkerCount": "1",
+        "targetWorkerSizeId": "3",
+        "reserved": true,
+        "maximumElasticWorkerCount": "20"
+      },
+      "sku": {
+        "tier": "ElasticPremium",
+        "name": "EP1"
+      }
+    },
+    {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2018-11-01",
       "name": "[variables('FunctionName')]",
@@ -181,7 +201,8 @@
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
         "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
-        "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+        "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+        "[concat('Microsoft.Web/serverfarms/', variables('HostingPlanName'))]"
       ],
       "kind": "functionapp",
       "identity": {
@@ -189,10 +210,11 @@
       },
       "properties": {
         "name": "[variables('FunctionName')]",
-        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+        "serverFarmId": "[concat('/subscriptions/', subscription().subscriptionId,'/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/serverfarms/', variables('HostingPlanName'))]",
         "httpsOnly": true,
         "clientAffinityEnabled": true,
         "alwaysOn": true,
+        "reserved": true,
         "siteConfig": {
           "powerShellVersion": "~7"
         }

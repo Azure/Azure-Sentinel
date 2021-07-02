@@ -87,7 +87,7 @@ function Get-WatchlistItemTable {
             $WatchListItemsCollection += $WatchListItems.value
         }
         $a++
-        write-host "Fetching another 100, this is number $($a) time"
+        #write-host "Fetching another 100, this is number $($a) time"
     } until ($nextLink -eq $false)
 
     #Build Table from all the results
@@ -271,7 +271,7 @@ if ($env:AWS -eq "Yes") {
             $b++
             $c++
             if($a -eq 100){
-                Write-Host "$b entries of $totalCount processed"
+                #Write-Host "$b entries of $totalCount processed"
                 $a = 0
             }
         }
@@ -377,7 +377,7 @@ if ($env:GCP -eq "Yes") {
             $b++
             $c++
             if($a -eq 100){
-                Write-Host "$b entries of $totalCount processed"
+                #Write-Host "$b entries of $totalCount processed"
                 $a = 0
             }
         }
@@ -496,7 +496,7 @@ if ($env:Azure -eq "Yes") {
             $a++
             $b++
             if($a -eq 100){
-                Write-Host "$b entries of $totalCount processed"
+                #Write-Host "$b entries of $totalCount processed"
                 $a = 0
             }
         }
