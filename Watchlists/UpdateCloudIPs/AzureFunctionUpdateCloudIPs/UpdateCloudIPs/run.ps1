@@ -436,7 +436,7 @@ if ($env:Azure -eq "Yes") {
     $new = Check-Watchlist -watchlistAlias $watchlistAlias
     if ($new -eq $true) {
         Write-Host "No existing Azure IP watchlist found, building it"
-        $AzureIPRanges = Get-AzureIPRanges
+        $AzureIPRanges = (Get-AzNetworkServiceTag -location centralus).Values
         $totalCount = $AzureIPRanges.Count
         $a = 0
         $b = 0

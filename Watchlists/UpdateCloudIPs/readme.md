@@ -19,4 +19,5 @@ Following are the configuration steps to deploy Function App.
 3. Click **Identity** blade under **Settings**.
 4. Click **Azure Role Assignments**.
 6. Click **Add Role Assignment**.
-7. Set **Scope** to **Resource Group**, Select the **Subscription** and **resource group** that contains the **Azure Sentinel** workspace. Set **role** to **Azure Sentinel Contributor**. 
+7. Set **Scope** to **Resource Group**, Select the **Subscription** and **resource group** that contains the **Azure Sentinel** workspace. Set **role** to **Azure Sentinel Contributor**.
+8. Add another role assignment this time giving the identity **Reader** permissions at the subscription level.  
