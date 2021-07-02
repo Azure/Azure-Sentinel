@@ -469,7 +469,7 @@ if ($env:Azure -eq "Yes") {
             "properties" = @{
                 "displayName" = "AzureIPRanges"
                 "provider" = "Microsoft"
-                "source" = "https://docs.microsoft.com/en-us/rest/api/virtualnetwork/service-tags/list"
+                "source" = "https://docs.microsoft.com/rest/api/virtualnetwork/service-tags/list"
                 "itemsSearchKey" = "IPRange"
                 "rawContent" = "$rawContent"
                 "contentType" = "Text/csv"
