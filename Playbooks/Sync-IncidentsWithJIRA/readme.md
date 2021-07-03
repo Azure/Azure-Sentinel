@@ -145,12 +145,10 @@ A lot of JIRA Custom fields are used within these Logic Apps. It's important to 
 For more information about the different custom fields used, please check the JIRA Configuration.
 
 ### Sync Incidents from Sentinel to JIRA 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Incidents.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Incidents.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Incidents.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Incidents.json)
+
 This Logic App will create a new incident in JIRA when an incident in Sentinel is created.
 It uses the 'Incident Trigger' from Sentinel and is triggered by an Automation Rule (see Sentinel Configuration).
 This Logic App does the following:
@@ -170,12 +168,10 @@ If you do not use organizations in JIRA, you can remove the switch.
 ![Switch](Images/Azure%20-%20Switch%20Organization.png)
 
 ### Sync status from JIRA to Sentinel
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json)
+
 This Logic App will change the status in Sentinel when the status has been changed in JIRA.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule.
 It's important you use the same closure reason in JIRA as the ones in Sentinel, otherwise the sync will fail.
@@ -184,12 +180,10 @@ It uses one connections:
 * One connection to Sentinel through a Service Principal (to be configured when deploying the Logic App)
 
 ### Sync assigned user from JIRA to Sentinel
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-AssignedUser.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-AssignedUser.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-AssignedUser.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-AssignedUser.json)
+
 When a incident is assigned in JIRA, this will assign the correct user inside of Azure Sentinel.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule when the assigned user of an incident is changed.
 
@@ -200,12 +194,10 @@ There is a check built-in to make sure that JIRA provides the assigned user. Som
 * One connection to a Key Vault to retrieve the Secret for the Service Principal with AAD permissions (also configured when deploying the Logic App)
 
 ### Add a link to the JIRA incident to the Sentinel incident
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FAdd-JIRALinkComment.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FAdd-JIRALinkComment.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FAdd-JIRALinkComment.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FAdd-JIRALinkComment.json)
+
 This Logic App will add a URL to the JIRA incident as a comment to the Sentinel Incident.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule.
 
@@ -214,12 +206,10 @@ It uses one connections:
 * One connection to Sentinel through a Service Principal (to be configured when deploying the Logic App)
 
 ## 5. Deploy Azure Function
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FPlaybooks%2FSync-Status.json)
+
 To sync incident comments from JIRA to Azure Sentinel an Azure Function is used. This Function App contains one Powershell Function.
 There are two types of comments in JIRA: internal and public comments. This script will only sync the public comments, so that customers don't have access to the internal ones.
 
