@@ -1,5 +1,5 @@
 Parser:
-  Title: ASIM M365 Defender DeviceLogonEvent Authentication parser
+  Title: ASIM Microsoft 365 Defender DeviceLogonEvent Authentication parser
   Version: '0.1.0'
   LastUpdated: July 1, 2021
 Product:
@@ -13,112 +13,76 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AzSentinelNormalization
 Description: |
-      This Query Parser maps M365 Defender Device File Events (DeviceFileEvents) to the Azure Sentinel Information Model authenticaion schema.
+      This Query Parser maps M365 Defender Device Logon Events (DeviceLogonEvents) to the Azure Sentinel Information Model authenticaion schema.
 ParserName: vimAuthenticationM365Defender
 ParserQuery: |
   let FaliureReason=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[
-    'InvalidUserNameOrPassword','No such user or password' 
-    // What other will we find here?
+    'InvalidUserNameOrPassword','No such user or password'
     ];
   let AuthM365D=(){
     DeviceLogonEvents 
-    // ---   Already mapped
-    // // TimeGenerated - exists
     //
     | project-rename 
        EventOriginalResultDetails=FailureReason 
-       , EventSubType=LogonType
     | extend 
-    //
-       // ----  Untouched
-       TimeGenerated
-    // 
-      // ----  Event
+    // ----  Event
+        EventSubType=iff(LogonType=='Remote interactive (RDP) logons','RemoteInteractive',LogonType)
        , EventCount=int(1)
        , EventStartTime=TimeGenerated
        , EventEndTime=TimeGenerated
-       , EventOriginalType = EventSubType // Previously:LogonType
+       , EventOriginalType = LogonType
        , EventProduct='M365 Defender for EndPoint'
-      ,  EventResult = case(ActionType =='LogonSuccess', 'Success'
+       ,  EventResult = case(ActionType =='LogonSuccess', 'Success'
                             , ActionType=='LogonFailed', 'Failure'
-                            , ActionType=='LogonAttempted', 'NA' //// Not sure what this is
+                            , ActionType=='LogonAttempted', 'NA'
                             , 'NA')
       , EventSchemaVersion='0.1.0'
       , EventType='Logon'
       , EventVendor ='Microsoft'
-    //    -   No Data
-    //  EventOriginalUid 
-    //  EventProductVersion 
-    //  EventReportUrl
-    //  EventMessage 
-    //  
-    //  
-    //  ----   Target and Actor Users
+     //  ----   Target and Actor Users
      | project-rename 
          TargetUserId=AccountSid
        , ActorUserId =InitiatingProcessAccountSid
        , ActorUserUpn=InitiatingProcessAccountUpn
        , ActorUserObjectId=InitiatingProcessAccountObjectId
       | extend 
-         TargetUserIdType ='UserSid'
+         TargetUserIdType ='SID'
        , TargetUsername = strcat(AccountDomain,'\\',AccountName)
        , TargetUsernameType='Windows'
-    //    -  No Data
-      // TargetUserType 
-    // 
-    // ActingAppName 
-    // ActingAppType 
-    // ActorSessionId 
-      , ActorUserIdType='SID'
-    // ActorUserType 
-      , ActorUsername=coalesce(ActorUserUpn, strcat(InitiatingProcessAccountDomain,'\\',InitiatingProcessAccountName)) // InitiatingProcessAccountName
-      , ActorUsernameType=case(isnotempty( ActorUserUpn), 'Upn/Email'
+       , ActorUserIdType='SID'
+       , ActorUsername=coalesce(ActorUserUpn, strcat(InitiatingProcessAccountDomain,'\\',InitiatingProcessAccountName)) // InitiatingProcessAccountName
+       , ActorUsernameType=case(isnotempty( ActorUserUpn), 'Upn/Email'
                                 , isnotempty(InitiatingProcessAccountDomain), 'Windows'
                                 , 'Simple')
-     //, AdditionalFields:already exists
       | project-rename 
         DvcHostname=DeviceName
       , LogonProtocol=Protocol
       , TargetDvcId=DeviceId
       , TargetDvcIpAddr=RemoteIP
       , OriginalEventUid=ReportId
-    // No Data
-    // DvcIpAddr 
-    // HttpUserAgent 
-    // LogonMethod 
-    //
       , SrcDvcHostname=RemoteDeviceName 
-      // SrcDvcHostnameType == Requires calculation. not sure it is worth it
-    // SrcDvcId 
-    // SrcDvcIpAddr 
-    // SrcDvcOs 
-    // SrcDvcType 
-    // SrcGeo fields 
     //
-    // TargetAppId 
-    // TargetAppName 
-    // TargetAppType 
-    // TargetDvc
-    //
-    //, ActingProcessCommandLine = InitiatingProcessCommandLine
-    //, ActingProcessCreationTime=InitiatingProcessCreationTime
+    , ActingProcessCommandLine = InitiatingProcessCommandLine
+    , ActingProcessCreationTime=InitiatingProcessCreationTime
     , ActingProcessPath=InitiatingProcessFolderPath
     , ActingProcessId=InitiatingProcessId
-    //, ActingProcessMD5=InitiatingProcessMD5
-    //, ActingProcessSHA1=InitiatingProcessSHA1
-    //, ActingProcessSHA256= InitiatingProcessSHA256
+    , ActingProcessMD5=InitiatingProcessMD5
+    , ActingProcessSHA1=InitiatingProcessSHA1
+    , ActingProcessSHA256= InitiatingProcessSHA256
+    , ActingProcessIntegrityLevel= InitiatingProcessIntegrityLevel
+    , ActingProcessTokenElevation=InitiatingProcessTokenElevation
+    , ParentProcessName=InitiatingProcessParentFileName
+    , ParentProcessId=InitiatingProcessParentId
+    , ParentProcessCreationTime=InitiatingProcessParentCreationTime
       | extend 
-          ActingProcessFileName=iff(ActingProcessPath hassuffix InitiatingProcessFileName
+          ActingProcessName=iff(ActingProcessPath hassuffix InitiatingProcessFileName
                             , ActingProcessPath
                             , strcat(ActingProcessPath,'\\',InitiatingProcessFileName))
-        , TargetDvcHostname=DvcHostname
-        ,  TargetDvcHostnameType='FQDN'
-        , TargetDvcIdType='MDE'
-    // TargetDvcOs
-    // TargetDvcType
+      , TargetDvcHostname=DvcHostname
+      ,  TargetDvcHostnameType='FQDN'
+      , TargetDvcIdType='Windows'
       , TargetPortNumber=RemotePort
       , TargetSessionId =LogonId
-      // EventResultDetails
       | lookup FaliureReason on EventOriginalResultDetails 
     // TargetUrl 
     // -----------  Alias
@@ -126,6 +90,4 @@ ParserQuery: |
         User=TargetUsername 
         , LogonTarget=TargetDvcHostname
         , Dvc=TargetDvcHostname
-    // No data
-        // // _ResourceId - no data 
         };AuthM365D
