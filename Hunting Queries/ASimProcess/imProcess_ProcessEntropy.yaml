@@ -46,9 +46,9 @@ query: |
   | where TargetProcessFilePath !has ':\\Windows\\servicing\\trustedinstaller.exe' 
   | where ActingProcessFileName !has ':\\Program Files\\Microsoft Dependency Agent\\bin\\MicrosoftDependencyAgent.exe' 
   | where ActingProcessFileName !has ':\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe'
-  | project TimeGenerated, EventID, DvcHostName, ActorUserId, Account, AccountType, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId, EventVendor, EventProduct;
+  | project TimeGenerated, EventID, DvcHostname, ActorUserId, Account, AccountType, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId, EventVendor, EventProduct;
   let Exclude = SecEvents 
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(DvcHostName), ExcludeProcCount = count() by TargetProcessFileName 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(DvcHostname), ExcludeProcCount = count() by TargetProcessFileName 
   // Removing general limit for noise in one day 
   | extend timediff = iff(datetime_diff('day', EndTime, StartTime) > 0, datetime_diff('day', EndTime, StartTime), 1) 
   // Default exclude of 48 (2 per hour) or more executions in 24 hours on a given machine 
@@ -57,16 +57,16 @@ query: |
   | extend compRatio = ExcludeCompCount/toreal(ExcludeProcCount) 
   | where compRatio == 0 or (ExcludeCompCount > excludeThreshold and compRatio < ratioHighCount) or (ExcludeCompCount between (2 .. excludeThreshold) and compRatio < ratioMidCount);
   let AllSecEvents =  
-  SecEvents | project DvcHostName, TargetProcessFileName , EventVendor, EventProduct
+  SecEvents | project DvcHostname, TargetProcessFileName , EventVendor, EventProduct
   | join kind= leftanti (  
   SecEvents 
   // Removing general limit for noise in one day 
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), procCount = count() by DvcHostName, TargetProcessFileName 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), procCount = count() by DvcHostname, TargetProcessFileName 
   | extend timediff = iff(datetime_diff('day', EndTime, StartTime) > 0, datetime_diff('day', EndTime, StartTime), 1) 
   // Default exclude 48 (2 per hour) or more executions in 24 hours on a given machine to remove them from overall comparison list 
   | where procCount > procLimit*timediff 
-  ) on DvcHostName, TargetProcessFileName 
-  | project DvcHostName, TargetProcessFileName , EventVendor, EventProduct;
+  ) on DvcHostname, TargetProcessFileName 
+  | project DvcHostname, TargetProcessFileName , EventVendor, EventProduct;
   // Removing noisy process from full list 
   let Include = materialize(AllSecEvents 
   | join kind= leftanti ( 
@@ -74,36 +74,36 @@ query: |
   ) on TargetProcessFileName);
   // Identifying prevalence for a given process in the environment 
   let DCwPC = materialize(Include 
-  | summarize DistinctHostsProcessCount = dcount(DvcHostName) by TargetProcessFileName 
+  | summarize DistinctHostsProcessCount = dcount(DvcHostname) by TargetProcessFileName 
   | join kind=inner ( 
   Include 
   ) on TargetProcessFileName 
-  | distinct DvcHostName, TargetProcessFileName, DistinctHostsProcessCount);
+  | distinct DvcHostname, TargetProcessFileName, DistinctHostsProcessCount);
   // Getting the Total process count on each host to use as the denominator in the entropy calc 
   let AHPC = materialize(Include 
-  | summarize AllHostsProcessCount = count() by DvcHostName 
+  | summarize AllHostsProcessCount = count() by DvcHostname 
   | join kind=inner ( 
   Include 
-  ) on DvcHostName 
-  | distinct DvcHostName, TargetProcessFileName, AllHostsProcessCount 
+  ) on DvcHostname 
+  | distinct DvcHostname, TargetProcessFileName, AllHostsProcessCount 
   //Getting a decimal value for later computation 
   | extend AHPCValue = todecimal(AllHostsProcessCount));
   // Need the count of each class in my bucket or also said as count of ProcName(Class) per Host(Bucket) for use in the entropy calc 
   let PCoH = Include 
-  | summarize ProcessCountOnHost = count() by DvcHostName, TargetProcessFileName 
+  | summarize ProcessCountOnHost = count() by DvcHostname, TargetProcessFileName 
   | join kind=inner ( 
   Include 
-  ) on DvcHostName,TargetProcessFileName 
-  | distinct DvcHostName, TargetProcessFileName, ProcessCountOnHost 
+  ) on DvcHostname,TargetProcessFileName 
+  | distinct DvcHostname, TargetProcessFileName, ProcessCountOnHost 
   //Getting a decimal value for later computation 
   | extend PCoHValue = todecimal(ProcessCountOnHost); 
   let Combined = DCwPC 
   | join ( 
   AHPC 
-  ) on DvcHostName, TargetProcessFileName 
+  ) on DvcHostname, TargetProcessFileName 
   | join ( 
   PCoH 
-  ) on DvcHostName, TargetProcessFileName;
+  ) on DvcHostname, TargetProcessFileName;
   let Results = Combined 
   // Entropy calculation 
   | extend ProcessEntropy = -log2(PCoHValue/AHPCValue)*(PCoHValue/AHPCValue) 
@@ -111,17 +111,17 @@ query: |
   | extend Weight = toreal(ProcessEntropy*ProcessCountOnHost*DistinctHostsProcessCount) 
   // Remove or increase value to see processes with low entropy, meaning more common. 
   | where Weight <= 100
-  | project DvcHostName, TargetProcessFileName, Weight , ProcessEntropy, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount; 
+  | project DvcHostname, TargetProcessFileName, Weight , ProcessEntropy, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount; 
   // Join back full entry 
   Results 
   | join kind= inner ( 
   SecEvents
-  | project TimeGenerated, EventID, DvcHostName, ActorUserId, Account, AccountType, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId , EventVendor, EventProduct
-  ) on DvcHostName, TargetProcessFileName 
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResultCount = count() by EventID, DvcHostName, ActorUserId, Account, AccountType, Weight, ProcessEntropy,  
+  | project TimeGenerated, EventID, DvcHostname, ActorUserId, Account, AccountType, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId , EventVendor, EventProduct
+  ) on DvcHostname, TargetProcessFileName 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResultCount = count() by EventID, DvcHostname, ActorUserId, Account, AccountType, Weight, ProcessEntropy,  
   TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, DvcId , EventVendor, EventProduct
-  | project-reorder StartTime, EndTime, ResultCount, EventID, EventVendor, EventProduct, DvcHostName, ActorUserId, Account, AccountType, Weight, ProcessEntropy,TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, DvcId
+  | project-reorder StartTime, EndTime, ResultCount, EventID, EventVendor, EventProduct, DvcHostname, ActorUserId, Account, AccountType, Weight, ProcessEntropy,TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, DvcId
   | sort by Weight asc, ProcessEntropy asc, TargetProcessFilePath asc 
-  | extend timestamp = StartTime, HostCustomEntity = DvcHostName, AccountCustomEntity = Account
+  | extend timestamp = StartTime, HostCustomEntity = DvcHostname, AccountCustomEntity = Account
   
 
