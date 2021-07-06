@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationSigninLogs",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Azure active directory authentication",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationSigninLogs",
+            "query": "let AADSigninLogs=(){\nSigninLogs\n| extend\n  EventVendor = 'Microsoft'\n  , EventProduct = 'AAD Sign In Logs'\n  , EventCount=1\n  , EventSchemaVersion='0.1.0'\n  , EventResult = iff (ResultType ==0, 'Success', 'Failure')\n  , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)\n  , EventStartTime = TimeGenerated\n  , EventEndTime= TimeGenerated\n  , EventType= 'Logon'\n  , SrcDvcId=tostring(DeviceDetail.deviceId)\n  , SrcDvcHostname =tostring(DeviceDetail.displayName)\n  , SrcDvcOs=tostring(DeviceDetail.operatingSystem)\n  // , SrcBrowser= tostring(DeviceDetail.browser)\n  , Location = todynamic(LocationDetails)\n  , TargetUsernameType='Upn'\n  , TargetUserIdType='AADID'\n| extend\n      SrcGeoCity=tostring(Location.city)\n      , SrcGeoCountry=tostring(Location.countryOrRegion)\n      , SrcGeoLatitude=tostring(Location.geoCoordinates.latitude)\n      , SrcGeoLongitude=tostring(Location.geoCoordinates.longitude)\n | lookup AADSTSErrorCodes on ResultType\n | project-rename\n     EventOriginalUid =Id\n     , LogonMethod  = AuthenticationRequirement\n     , HttpUserAgent=UserAgent\n     , TargetSessionId=CorrelationId\n     , TargetUserId = UserId\n     , TargetUsername=UserPrincipalName\n     , TargetUserType=UserType\n     , TargetAppId = ResourceIdentity\n     , TargetAppName=ResourceDisplayName\n | project-reorder\n     TimeGenerated\n     ,EventProduct\n     , EventOriginalUid\n     , EventResult\n     , EventOriginalResultDetails\n     , EventStartTime\n     , EventEndTime\n     , LogonMethod \n     , TargetSessionId\n     , TargetUserId\n     , TargetUsername\n     , SrcDvcId\n     , SrcDvcHostname \n     , SrcDvcOs\n     , HttpUserAgent \n     , SrcGeoCity\n     , SrcGeoCountry\n     , TargetAppId\n     , TargetAppName\n     // ** Aliases\n      | extend \n        User=TargetUsername\n      , LogonTarget=TargetAppName\n      , Dvc=EventVendor};\n     AADSigninLogs",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
