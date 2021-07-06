@@ -18,116 +18,111 @@ Description: |
   This is a Query Parser that is used to map SharePoint File Operation (OfficeActivity) to the Azure Sentinel Information Model FileEvent schema.
 ParserName: vimFileEventMicrosoftSharePoint
 ParserQuery: |
-  let FaliureReason=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[
-    'InvalidUserNameOrPassword','No such user or password' 
-    // What other will we find here?
-    ];
-  let AuthM365D=(){
-    DeviceLogonEvents 
-    // ---   Already mapped
-    // // TimeGenerated - exists
+  let M365DFileEvents=(){
+    DeviceFileEvents
+    | project-rename
+         SrcDvcIpAddr =RequestSourceIP
+       , DvcId=DeviceId
+       , TargetFilePath= FolderPath
+       , TargetFileHashMD5=MD5
+       , TargetFileHashSHA1 =SHA1
+       , TargetFileHashSHA256 =SHA256
+       , NetworkProtocol=RequestProtocol // [Unknown, Local, SMB, or NFS ]
+       , SrcFileOriginUrl=FileOriginUrl
+       //
+       //
+       //
+      , ActingProcessCommandLine=InitiatingProcessCommandLine
+      , ActingProcessFileName =InitiatingProcessFileName
+      , ActingProcessFilePath = InitiatingProcessFolderPath
+      , ActingProcessId = InitiatingProcessId
+      , ActingProcessMD5 =InitiatingProcessMD5
+      , ActingProcessSHA1 =InitiatingProcessSHA1
+      , ActingProcessSHA256 =InitiatingProcessSHA256
+      , ActingProcessParentFileName = InitiatingProcessParentFileName
+      , ActingProcessCreationTime =InitiatingProcessCreationTime
+      , ActingProcessParentCreationTime =InitiatingProcessParentCreationTime
+      // Missing in Sentinel    , ActingProcessCompany =InitiatingProcessVersionInfoCompanyName
+      // Missing in Sentinel    , ActingProcessFileDescription =InitiatingProcessVersionInfoFileDescription	
+      // Missing in Sentinel    , ActingProcessFileProduct =InitiatingProcessVersionInfoProductName
+    | extend
+          EventCount=int(1)
+        , EventStartTime= TimeGenerated 
+        , EventEndTime= TimeGenerated
+        , EventType=ActionType // [FileCreated, FileDeleted, FileModified, FileRenamed] : This will break if MDE adds operation not in our enum
+        , EventResult= 'Success' // Only logging success?
+        , EventProduct='M365 Defender'
+        , EventVendor='Microsoft'
+        , EventSchemaVersion='0.1.0' 
     //
-    | project-rename 
-       EventOriginalResultDetails=FailureReason 
-       , EventSubType=LogonType
-    | extend 
-    //
-       // ----  Untouched
-       TimeGenerated
-    // 
-      // ----  Event
-       , EventCount=int(1)
-       , EventStartTime=TimeGenerated
-       , EventEndTime=TimeGenerated
-       , EventOriginalType = EventSubType // Previously:LogonType
-       , EventProduct='M365 Defender for EndPoint'
-      ,  EventResult = case(ActionType =='LogonSuccess', 'Success'
-                            , ActionType=='LogonFailed', 'Failure'
-                            , ActionType=='LogonAttempted', 'NA' //// Not sure what this is
-                            , 'NA')
-      , EventSchemaVersion='0.1.0'
-      , EventType='Logon'
-      , EventVendor ='Microsoft'
-    //    -   No Data
-    //  EventOriginalUid 
-    //  EventProductVersion 
-    //  EventReportUrl
-    //  EventMessage 
-    //  
-    //  
-    //  ----   Target and Actor Users
-     | project-rename 
-         TargetUserId=AccountSid
-       , ActorUserId =InitiatingProcessAccountSid
-       , ActorUserUpn=InitiatingProcessAccountUpn
-       , ActorUserObjectId=InitiatingProcessAccountObjectId
-      | extend 
-         TargetUserIdType ='UserSid'
-       , TargetUsername = strcat(AccountDomain,'\\',AccountName)
-       , TargetUsernameType='Windows'
-    //    -  No Data
-      // TargetUserType 
-    // 
-    // ActingAppName 
-    // ActingAppType 
-    // ActorSessionId 
-      , ActorUserIdType='SID'
-    // ActorUserType 
-      , ActorUsername=coalesce(ActorUserUpn, strcat(InitiatingProcessAccountDomain,'\\',InitiatingProcessAccountName)) // InitiatingProcessAccountName
-      , ActorUsernameType=case(isnotempty( ActorUserUpn), 'Upn/Email'
-                                , isnotempty(InitiatingProcessAccountDomain), 'Windows'
-                                , 'Simple')
-     //, AdditionalFields:already exists
-      | project-rename 
-        DvcHostname=DeviceName
-      , LogonProtocol=Protocol
-      , TargetDvcId=DeviceId
-      , TargetDvcIpAddr=RemoteIP
-      , OriginalEventUid=ReportId
-    // No Data
-    // DvcIpAddr 
-    // HttpUserAgent 
-    // LogonMethod 
-    //
-      , SrcDvcHostname=RemoteDeviceName 
-      // SrcDvcHostnameType == Requires calculation. not sure it is worth it
-    // SrcDvcId 
-    // SrcDvcIpAddr 
-    // SrcDvcOs 
-    // SrcDvcType 
-    // SrcGeo fields 
-    //
-    // TargetAppId 
-    // TargetAppName 
-    // TargetAppType 
-    // TargetDvc
-    //
-    //, ActingProcessCommandLine = InitiatingProcessCommandLine
-    //, ActingProcessCreationTime=InitiatingProcessCreationTime
-    , ActingProcessPath=InitiatingProcessFolderPath
-    , ActingProcessId=InitiatingProcessId
-    //, ActingProcessMD5=InitiatingProcessMD5
-    //, ActingProcessSHA1=InitiatingProcessSHA1
-    //, ActingProcessSHA256= InitiatingProcessSHA256
-      | extend 
-          ActingProcessFileName=iff(ActingProcessPath hassuffix InitiatingProcessFileName
-                            , ActingProcessPath
-                            , strcat(ActingProcessPath,'\\',InitiatingProcessFileName))
-        , TargetDvcHostname=DvcHostname
-        ,  TargetDvcHostnameType='FQDN'
-        , TargetDvcIdType='MDE'
-    // TargetDvcOs
-    // TargetDvcType
-      , TargetPortNumber=RemotePort
-      , TargetSessionId =LogonId
-      // EventResultDetails
-      | lookup FaliureReason on EventOriginalResultDetails 
-    // TargetUrl 
-    // -----------  Alias
-      | extend 
-        User=TargetUsername 
-        , LogonTarget=TargetDvcHostname
-        , Dvc=TargetDvcHostname
-    // No data
-        // // _ResourceId - no data 
-        };AuthM365D
+        , ActorUsername=coalesce(InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain,'\\', InitiatingProcessAccountName))
+        , ActorUsernameType=iff(isempty(InitiatingProcessAccountUpn),'Windows','Upn') // Is 'Windows' the right term?
+        , ActorUserId=coalesce(InitiatingProcessAccountSid, InitiatingProcessAccountObjectId)
+        , ActorUserIdType=iff(isempty(InitiatingProcessAccountSid),'AADId','Sid') 
+        , DvcIdType='MDE'//////////////////////////////// 'MDE'??
+        , DvcHostname =DeviceName
+        , DvcHostnameType='Fqdn'
+        , DvcOs='Windows' 
+  //
+  //
+       , TargetFileFullPath=iff(ActionType=='FileDeletes', strcat(TargetFilePath, '\\', FileName), TargetFilePath)
+       , SrcFileName=coalesce(PreviousFileName,SrcFileOriginUrl)  // Should I split the url to file and all the rest
+       , SrcFilePath=coalesce(PreviousFolderPath, FileOriginIP)
+       , SrcFileFullPath=strcat(PreviousFolderPath,'\\', PreviousFileName)
+    // , ActingProcessGuid
+    // , ActingProcessSessionId
+       , ActingProcessIntegrityLevel =InitiatingProcessIntegrityLevel
+       , ActingProcessParentFilePath = ActingProcessParentFileName /// 
+      // Aliases
+     | extend 
+        User=ActorUsername
+       , Dvc=DvcHostname
+       , ActingProcessHash=coalesce(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5)
+    // Summary of missing schema columns:     
+         // _ResourceId
+        // ActingAppId
+        // ActingAppName
+        // ActingProcessIntegrityLevel
+        //        ParentFilePath
+        //        ParentGuid
+        //        ParentIntegrityLevel
+        //        ParentMD5
+        //        ParentParentId
+        //        ParentSessionId
+        //        Parent Hash columns
+        //        SessionId
+        // ActorUserType
+        // DstDvcIpAddr
+        // DvcIpAddr
+        // DvcMacAddr
+        // DvcOsVersion
+        // EventOriginalUid
+        // EventProductVersion
+        // EventReportUrl
+        // EventResultDetails
+        // HttpUserAgent
+        // PreviousFileHashMD5\SHA1\256
+        // PreviousFileSize
+        // SessionId
+        // SrcDvcHostname
+        // SrcDvcHostnameType
+        // SrcDvcId
+        // SrcDvcOs
+        // SrcDvcType
+        // SrcGeo columnsa 
+        // SrcIsp
+        // SrcPortNumber
+        // Should be romved from schema: WebsiteOriginalUrl
+        //   , ActingProcessParentCompany 
+        //   , ActingProcessParentFileDescription
+        //   , ActingProcessParentFileProduct 
+        //   , ActingProcessParentFileVersion "
+        //   ,  ActingProcessParentIsHidden
+        //   ,  ActingProcessParentInjectedAddress
+        //  ActingProcessFileVersion 
+        //  ActingProcessIsHidden 
+        //  ActingProcessInjectedAddress 
+        //  , ActingProcessParentGuid 
+        //  , ActingProcessParentSessionId 
+        //  , ActingProcessParentIntegrityLevel 
+          };M365DFileEvents
