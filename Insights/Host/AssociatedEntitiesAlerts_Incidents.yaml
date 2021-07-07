@@ -1,0 +1,179 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityAlert
+  - DataType: SecurityIncident
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  let AlertQuery = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string)
+  {
+  let matchType = 'HostName';
+  let Host_Name = iff(isnotempty(v_Host_Name), v_Host_Name, "v_Host_Name_NA");
+  let Host_NTDomain = iff(isnotempty(v_Host_NTDomain), v_Host_NTDomain, "v_Host_NTDomain_NA");
+  let Host_DnsDomain = iff(isnotempty(v_Host_DnsDomain), v_Host_DnsDomain, "v_Host_DnsDomain_NA");
+  let Host_AzureID = iff(isnotempty(v_Host_AzureID), v_Host_AzureID, "v_Host_AzureID_NA");
+  let Host_OMSAgentID = iff(isnotempty(v_Host_OMSAgentID), v_Host_OMSAgentID, "v_Host_OMSAgentID_NA");
+  //Collect only alerts with the related entity included and assign a unique ID, then expand the entities
+  let entStore = SecurityAlert
+  | where Entities has matchType
+  | where (Entities has Host_Name and (Entities has Host_DnsDomain or Entities has Host_NTDomain)) or Entities has Host_AzureID or Entities has Host_OMSAgentID
+  | extend alertUniqueID = hash_many(WorkspaceSubscriptionId, VendorOriginalId, SystemAlertId, AlertType, TimeGenerated)
+  | extend Ent = todynamic(Entities)
+  | mv-expand Ent;
+  //Now match distinctly for matchType and specific names as the initial filtering could include non-exact matches
+  let matchEnt = materialize(entStore
+  | where Ent has matchType
+  | where (tostring(Ent.HostName) =~ Host_Name and (tostring(Ent.DnsDomain) =~ Host_DnsDomain or tostring(Ent.NTDomain) =~ Host_NTDomain)) or tostring(Ent.AzureID) =~ Host_AzureID or tostring(Ent.OMSAgentID) =~ Host_OMSAgentID);
+  // Get list of unique IDs to filter back full list from entStore
+  let IDs = matchEnt | summarize make_set(alertUniqueID);
+  let onlyMatch = materialize(entStore | where alertUniqueID in (IDs));
+  // get incident list
+  let secInc = SecurityIncident | project IncidentTimeGenerated = TimeGenerated, IncidentTitle = Title, IncidentName, AlertIds, IncidentUrl;
+  let secIncAlerts = secInc | project AlertIds | mv-expand AlertIds | summarize make_set(AlertIds);
+  // now parse only the entity values we are interested in - HostName, DnsDomain, DisplayName(Account), Address(IP), AzureID, OMSAgent
+  let expEnt = onlyMatch
+  | where SystemAlertId in~ (secIncAlerts)
+  | project TimeGenerated, StartTime, EndTime, alertUniqueID, AlertName, Ent, Tactics, SystemAlertId
+  | evaluate bag_unpack(Ent)
+  | extend entType = column_ifexists("Type", "")
+  | where entType in ('host', 'account', 'ip')
+  | extend Address = column_ifexists("Address", ""),
+  HostName = column_ifexists("HostName", ""),
+  DnsDomain = column_ifexists("DnsDomain", ""),
+  DisplayName = column_ifexists("DisplayName", ""),
+  NetBiosName = column_ifexists("NetBiosName", ""),
+  AzureID = column_ifexists("AzureID", ""),
+  OMSAgentID = column_ifexists("OMSAgentID", "")
+  | extend NetBiosName = case(
+  isempty(NetBiosName) and isnotempty(HostName) and isnotempty(DnsDomain), toupper(strcat(HostName,'.',DnsDomain)),
+  isempty(NetBiosName) and isnotempty(HostName) and isempty(DnsDomain), toupper(HostName),
+  toupper(NetBiosName))
+  | where (HostName !~ Host_Name and DnsDomain !~ Host_DnsDomain) or NetBiosName !~ strcat(Host_Name,'.',Host_DnsDomain)
+  | summarize 
+  IPAddress = make_set_if(Address, isnotempty(Address)), 
+  Account = make_set_if(DisplayName, isnotempty(DisplayName)), 
+  Host = make_set_if(NetBiosName, isnotempty(NetBiosName)), 
+  AzureID = make_set_if(AzureID, isnotempty(AzureID)), 
+  OMSAgentID = make_set_if(OMSAgentID, isnotempty(OMSAgentID)) 
+  by TimeGenerated, StartTime, EndTime, AlertName, Tactics, alertUniqueID, SystemAlertId
+  // join back the full entity set to keep context
+  | join kind=inner (onlyMatch | distinct alertUniqueID, Entities) on alertUniqueID
+  | project-away alertUniqueID1
+  | project-rename AlertTimeGenerated = TimeGenerated, FullEntities = Entities, AlertStartTime = StartTime, AlertEndTime = EndTime;
+  expEnt | lookup (secInc | mv-expand AlertIds | extend AlertIds = tostring(AlertIds)) on $left.SystemAlertId == $right.AlertIds
+  | project-reorder AlertTimeGenerated, AlertStartTime, AlertEndTime, AlertName, SystemAlertId, Tactics, IPAddress, Host, Account, AzureID, OMSAgentID, IncidentTimeGenerated, IncidentTitle, IncidentUrl, IncidentName, FullEntities
+  };
+  AlertQuery('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+# The queries for the insights.
+Insights:
+ Id: 82006817-d380-4129-9a86-917f28582dce
+ DisplayName: Associated Entities Alerts and Incidents
+ Description: |
+   Summary of associated ip addresses, hosts and accounts that are identified in alerts or incidents for this host.
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: Associated Entity
+    OutputType: String
+    SupportDeepLink: false
+  - Header: Alert Count
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: Incident Count
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+
+  ####STILL NEED TO COMPLETE BELOW
+
+  # UserAddedToPrivilegedGroups
+  - Filter:    "where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded) by Computer"
+    Project:   "project Title = 'Privileged', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: UsersAddedCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToRemoteDesktopGroup
+  - Filter:    "where TargetSid in ('S-1-5-32-555')"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded) by Computer"
+    Project:   "project Title = 'Remote Desktop', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UserAddedToPrivilegedGroupsExcludeRDP
+  - Filter:    "where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID | where TargetSid !in ('S-1-5-32-555')"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded) by Computer"
+    Project:   "project Title = 'Privileged(non-RDP)', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+  # UsersAddedToGroups
+  - Filter:    "order by GroupName"
+    Summarize: "summarize GroupCount = dcount(GroupName), UsersAddedCount = dcount(MemberAdded) by Computer"
+    Project:   "project Title = 'All', GroupCount, UsersAddedCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: GroupCount
+      Query: "{{BaseQuery}}"
+
+ ChartQuery: 
+  Title: "Group additions per hour"
+  DataSets: 
+   - Query: "summarize Count = count() by bin(TimeGenerated, 1h) | extend Legend = 'Total'"
+     XColumnName: "TimeGenerated"
+     YColumnName: "Count"
+     LegendColumnName: "Legend"
+  Type: LineChart
+
+ AdditionalQuery:
+  Text: "See all group additions"
+  Query: "project TimeGenerated, EventID, Activity, Computer, MemberAdded, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid, WellKnownGroupSID, WellKnownLocalSID, _ResourceId, SourceComputerId, timestamp, HostCustomEntity | order by TimeGenerated desc"
+
+Activities:
+ EnabledByDefault: true
+ Items:
+   - Id: b880ad94-f905-4ba8-8a3f-9088b19b12fa
+     Description: Account added to local Administrators group
+     Title: "An account was added to the local Administrators group"
+     Content: "On '{{Computer}}' the user '{{MemberAdded}}' was added by '{{AddedBy}}' to group: '{{GroupName}}'"
+     QueryDefinitions:
+       Filter: where TargetSid == 'S-1-5-32-544'
+       SummarizeBy: "Computer, MemberAdded, AddedBy, GroupName"
+   - Id: aaad22c3-be50-465f-b258-8570d629c3db
+     Description: Account added to the Domain Admins group
+     Title: "An account was added to the Domain Admins group"
+     Content: "On '{{Computer}}' the user '{{MemberAdded}}' was added by '{{AddedBy}}' to group: '{{GroupName}}'"
+     QueryDefinitions:
+       Filter: where TargetSid matches regex 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-512$'
+       SummarizeBy: "Computer, MemberAdded, AddedBy, GroupName"
+   - Id: cf3469b3-f64c-4ae2-9900-289617443d74
+     Description: Account added to the Enterprise Admins group
+     Title: "An account was added to the Enterprise Admins group"
+     Content: "On '{{Computer}}' the user '{{MemberAdded}}' was added by '{{AddedBy}}' to group: '{{GroupName}}'"
+     QueryDefinitions:
+       Filter: where TargetSid matches regex 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-519$'
+       SummarizeBy: "Computer, MemberAdded, AddedBy, GroupName"
+   - Id: 5ba7b064-c667-4bb9-b8ac-7e87872ae479
+     Description: Account added to privileged group.
+     Title: "Account added to a privileged group"
+     Content: "On '{{Computer}}' the user '{{MemberAdded}}' was added by '{{AddedBy}}' to group: '{{GroupName}}'"
+     QueryDefinitions:
+       Filter: where (TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID) and TargetSid != 'S-1-5-32-544' and not(TargetSid matches regex 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-512$') and not(TargetSid matches regex 'S-1-5-21-[0-9]*-[0-9]*-[0-9]*-519$')
+       SummarizeBy: "Computer, MemberAdded, AddedBy, GroupName"
+version: 1.0.0
