@@ -1,0 +1,71 @@
+id: 860a8df2-8d19-4c60-bf61-de1c02422797
+name: Storage Alerts Correlation with CommonSecurityLogs & AuditLogs
+description: |
+  'This query combines different Storage alerts with CommonSecurityLogs and AuditLogs helping analysts /investigate any possible storage related attacks faster
+   thus reducing MTTR'
+requiredDataConnectors:
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - CommandAndControl
+  - Impact
+relevantTechniques:
+  - T1090
+  - TA0005
+  - T1078
+query: |
+
+  let TimeFrame = ago(01d);
+  SecurityAlert
+  | where AlertName has_any ('Access from  a suspicious IP to a storage file share','Access from a TOR exit node to a storage file share')
+  | extend TimeGenerated1 = TimeGenerated
+  | extend EntitiesDynamicArray = parse_json(Entities) | mv-expand EntitiesDynamicArray
+  // Parsing relevant entity column extract hostname and IP address
+  | extend EntityType = tostring(parse_json(EntitiesDynamicArray).Type), EntityAddress = tostring(EntitiesDynamicArray.Address)
+  | extend IpAddress = iif(EntityType == 'ip', EntityAddress, '')
+  //| summarize count(),make_set(AlertName) by IpAddress
+  //| extend number_alerts = array_length(set_AlertName)
+  | join kind=inner (
+  CommonSecurityLog 
+  | where DeviceVendor has "Fortinet"
+  | where ApplicationProtocol has_any ("SSL","RDP")
+  | where LogSeverity has_any ("2","3")
+  | where isnotempty(SourceIP) and isnotempty(DestinationIP) and SourceIP != "0.0.0.0"
+  | where DeviceAction !in ("close", "client-rst", "server-rst", "deny") and DestinationPort != 161
+  | extend TimeGenerated2 = TimeGenerated
+  | project DeviceProduct,LogSeverity,DestinationPort,DestinationIP,Message,SourceIP,SourcePort,Activity,SentBytes,ReceivedBytes,TimeGenerated2
+  ) on $left.IpAddress == $right.SourceIP
+  | join kind=inner (
+    AuditLogs
+    | where LoggedByService =~ "Core Directory"
+    | where Category =~ "RoleManagement"
+        | mv-expand TargetResources
+    | extend modProps = parse_json(TargetResources).modifiedProperties
+    | mv-expand bagexpansion=array modProps
+    | evaluate bag_unpack(modProps)
+      | extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user
+    | extend AppId = initByApp.appId,
+      ServicePrincipalId = initByApp.servicePrincipalId,
+    ServicePrincipalName = initByApp.servicePrincipalName,
+    UserId = initByUser.id,
+    IpAddress = tostring(initByUser.ipAddress),
+    UserRoles = initByUser.roles,
+    UserPrincipalName = initByUser.userPrincipalName
+    | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId,  ServicePrincipalId, ServicePrincipalName,UserId,IpAddress, UserRoles, UserPrincipalName
+    ) on IpAddress
+       | summarize count () by timestamp = TimeGenerated,tostring(UserId),tostring(UserRoles),IPCustomEntity = IpAddress,
+       SentBytes,ReceivedBytes,SourcePort,DestinationPort,AccountCustomEntity =tostring(UserPrincipalName)
+     
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
