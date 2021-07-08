@@ -8,7 +8,7 @@ version: 2.2
 This playbook will assign an Incident to an owner based on the Shifts schedule in Microsoft Teams.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIncident-Assignment-Shifts%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIncident-Assignment-Shifts%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIncident-Assignment-Shifts%2Fazuredeploy.json)
 
 
 
@@ -32,7 +32,7 @@ Ensure you have the following details:
 
 - The Shifts schedule must be published (**Share with team**).
 
-  <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts/media/pic2.png" width="700" height="350">
+  <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic2.png" width="700" height="350">
 
 ### 3. User account with Owner role in Microsoft Teams
 - Create or use an existing user account or managed identity with **Owner** role in a Team.
@@ -56,12 +56,12 @@ Ensure you have the following details:
 - Once deployed, go to the Logic App's blade and click on **Identity** under Settings.
 - Select **On** under the **System assigned** tab. Click **Save** and select **Yes** when prompted.
 
-  <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/Pic8.png" width="900" height="360">
+  <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic8.png" width="900" height="360">
    <br />    
    
 - Click on **Azure role assignments** to assign role to the Managed Identity.
 
- <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/Pic9.png" width="900" height="280">
+ <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic9.png" width="900" height="280">
    <br />  
    
 - Click on **+ Add role assignment**. 
@@ -71,7 +71,7 @@ Ensure you have the following details:
 
 ### 2. Configure connections
 - Edit the Logic App or go to Logic app designer.
-- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/pic1.png" width="30" height="30">. 
+- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic1.png" width="30" height="30">. 
   1. Incident Trigger
   2. Update Incident
   3. Add comment to incident
@@ -85,12 +85,12 @@ Ensure you have the following details:
 - Edit the Logic App or go to Logic app designer.
 - Find the **List all shifts** connector, click on the **X** sign next to Team field for the drop-down list to appear.
     
-   <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/Pic3.png" width="500" height="140">
+   <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic3.png" width="500" height="140">
    <br />    
    
 - Select the Teams channel with your Shifts schedule from the drop-down list. 
    
-   <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/Pic7.png" width="500" height="200">
+   <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic7.png" width="500" height="200">
    
     
 - Save the Logic App once you have completed the above steps.
@@ -108,7 +108,7 @@ Incidents are assigned to users based on the following criteria:
   
   You can change this value by modifying the below variable:
 
-    <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/pic4.png" width="500" height="180">
+    <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic4.png" width="500" height="180">
 
 - User with the least incidents assigned on the current Shift will be assigned incident first.
 
@@ -119,6 +119,6 @@ Incidents are assigned to users based on the following criteria:
 - When an incident is assigned, the incident owner will be notified via email.
 - Below is the sample email notification:
 
-   <img src="https://github.com/tatecksi/SentinelPlaybooks/blob/master/Sentinel_Incident_Assignment_Shifts_V2/media/pic6.png" width="500" height="240">
+   <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic6.png" width="500" height="240">
 
 - The email body has a banner with colour mapped to incident's severity (High=red, Medium=orange, Low=yellow and Informational=grey).

@@ -376,5 +376,4 @@ else
 	exit 1
 fi
 # Docker Configurations
-sudo chown -R  $USER:$USER ~/.docker >/dev/null
 newgrp docker 

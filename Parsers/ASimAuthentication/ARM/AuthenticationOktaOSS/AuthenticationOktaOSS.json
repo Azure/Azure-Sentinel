@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationOktaSSO",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Okta identity management authentication parser",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationOktaSSO",
+            "query": "let OktaSignin=(){\n  let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);\n  let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);\n  let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);\n  // https://developer.okta.com/docs/reference/api/event-types/#catalog\n  Okta_CL\n  | where eventType_s_s in (OktaSigninEvents)\n  | extend \n      EventProduct='Okta'\n      , EventVendor='Okta'\n      , EventCount=1\n      , EventSchemaVersion='0.1.0'\n      , EventResult = case (outcome_result_s_s in (OktaSuccessfulOutcome), 'Success',outcome_result_s_s in (OktaFailedOutcome),'Failure', 'Partial')\n      , EventStartTime=TimeGenerated\n      , EventEndTime=TimeGenerated\n      , EventType=iff(eventType_s_s hassuffix 'start', 'Logon', 'Logoff')\n      , EventSubType=legacyEventType_s_s\n      , TargetUserIdType='OktaId'\n      , TargetUsernameType='Upn'\n      , SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d_s)\n      , SrcGeoLongitude=toreal(client_geographicalContext_geolocation_lon_d_s)\n      , ActingAppType = \"Browser\"\n  | project-rename \n      EventMessage=displayMessage_s_s\n      ,EventOriginalResultDetails=outcome_reason_s_s\n      , LogonMethod = authenticationContext_credentialType_s_s\n      , TargetSessionId=authenticationContext_externalSessionId_s_s\n      , TargetUserId= actor_id_s_s\n      , TargetUsername=actor_alternateId_s_s\n      , TargetUserType=actor_type_s_s\n      , SrcDvcOs=client_userAgent_os_s_s\n      , HttpUserAgent=client_userAgent_rawUserAgent_s_s\n      , ActingAppName = client_userAgent_browser_s_s\n      , SrcIsp=securityContext_isp_s_s\n      , SrcGeoCity=client_geographicalContext_city_s_s\n      , SrcGeoCountry=client_geographicalContext_country_s_s\n      , EventOriginalUid = uuid_g_g\n  | project-reorder\n      EventProduct\n      , EventOriginalUid\n      , TimeGenerated\n      , EventMessage\n      , EventResult\n      , EventOriginalResultDetails\n      , EventStartTime\n      , EventEndTime\n      , EventType\n      , EventSubType\n      , LogonMethod\n      , TargetSessionId\n      , TargetUserId\n      , TargetUsername\n      , TargetUserType\n      , SrcDvcOs\n      , HttpUserAgent\n      , SrcIsp\n      , SrcGeoCity\n      , SrcGeoCountry\n      , SrcGeoLongitude\n      , SrcGeoLatitude\n      // ** Aliases\n      | extend \n        User=TargetUsername\n        , Dvc=EventVendor\n  };\nOktaSignin\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

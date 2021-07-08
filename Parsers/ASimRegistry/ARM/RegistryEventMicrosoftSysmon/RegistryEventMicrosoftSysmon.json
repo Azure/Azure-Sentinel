@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimRegistryEventMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Sysmon/Event Registry Creation Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimRegistryEventMicrosoftSysmon",
+            "query": "let RegistryAction = datatable (EventType:string, NewEventType:string)\n[\n  \"CreateKey\", \"RegistryKeyCreated\",\n  \"DeleteKey\",\t\"RegistryKeyDeleted\",\n  \"DeleteValue\",  \"RegistryValueDeleted\", \n  \"SetValue\",\t\"RegistryValueSet\",\n  \"RenameKey\",\t\"RegistryKeyRenamed\"\n];     \nlet Hives = datatable (KeyPrefix:string,Hive:string)\n[\n  \"HKLM\", \"HKEY_LOCAL_MACHINE\",\n  \"HKU\", \"HKEY_USERS\", \n  \"HKCR\", \"HKEY_LOCAL_MACHINE\\\\Classes\" \n];\nlet ParsedRegistryEvent=(){\n    // Create the raw table from the raw XML file structure\n    Event \n    | where Source == \"Microsoft-Windows-Sysmon\" and EventID in (12, 13, 14)\n    | parse EventData with \n          * '<Data Name=\"RuleName\">'RuleName // parsing the XML using the original fields name - for readibliy \n          '</Data><Data Name=\"EventType\">'EventType\n          '</Data><Data Name=\"UtcTime\">'UtcTime\n          '</Data><Data Name=\"ProcessGuid\">{'ProcessGuid\n          '}</Data><Data Name=\"ProcessId\">'ProcessId\n          '</Data><Data Name=\"Image\">'Image\n          '</Data><Data Name=\"TargetObject\">'TargetObject\n          '</Data>' EventDataRemainder \n    | parse EventDataRemainder with * '\">' Parameter '</Data>' *\n    | project-away EventDataRemainder\n    // End of XML parse\n    | extend \n          EventStartTime = todatetime(TimeGenerated), \n          EventEndTime = todatetime(TimeGenerated), \n          EventCount = int(1), \n          EventVendor = \"Microsoft\",\n          EventSchemaVersion = \"0.1.0\", \n          EventProduct = \"Sysmon\",\n          DvcOs = \"Windows\",\n          ActorUsernameType = \"Windows\"\n    | project-rename \n          EventMessage = RenderedDescription, \n          DvcHostName = Computer, \n          EventOriginalType = EventID, \n          ActorUsername = UserName,\n          ActingProcessId = ProcessId, \n          ActingProcessGuid = ProcessGuid, \n          ActingProcessName = Image \n\n    // Lookup Event Type\n    | lookup RegistryAction on EventType \n    | project-rename EventOriginalSubType = EventType\n    | project-rename EventType = NewEventType\n\n\n    // Normalize Key Hive\n    | parse TargetObject with KeyPrefix \"\\\\\" KeyMain\n    | lookup Hives on KeyPrefix\n    | extend Key = strcat (Hive, \"\\\\\", KeyMain)\n    | parse Parameter with KeyPrefix \"\\\\\" KeyMain\n    | lookup Hives on KeyPrefix\n    | extend NewName = strcat (Hive, \"\\\\\", KeyMain)\n    | project-away KeyPrefix, KeyMain\n\n   // Split Key and Value for relevant events \n    | extend ParsedKey = extract_all (@\"^(.+)\\\\(.+)$\", Key)\n    | extend Key = iff (EventType in (\"RegistryValueSet\", \"RegistryValueDeleted\"), ParsedKey[0][0], TargetObject)\n    | extend Value = iff (EventType in (\"RegistryValueSet\", \"RegistryValueDeleted\"), ParsedKey[0][1], \"\")\n    | extend ParsedKey = extract_all (@\"^(.+)\\\\(.+)$\", NewName)\n    | extend NewKey = ParsedKey[0][0]\n    | extend NewValue = ParsedKey[0][1]\n    | project-away ParsedKey, TargetObject\n    \n    // Set normalizde registry fields\n    | extend\n          RegistryKey = iff (EventType == \"RegistryKeyRenamed\", NewKey, Key),\n          RegistryKeyModified = iff (EventType in (\"RegistryKeyRenamed\", \"RegistryValueSet\"), Key, \"\"),\n          RegistryValue = iff (EventType in (\"RegistryValueSet\", \"RegistryValueDeleted\"), Value, \"\"),\n          RegistryValueModified = iff (EventType == \"RegistryValueSet\", Value, \"\"),\n          RegistryValueData = iff (EventType == \"RegistryValueSet\", Parameter, \"\")\n\n    | extend // aliases\n          User = ActorUsername,\n          Process = ActingProcessName,\n          Dvc = DvcHostName\n\n    | project-away\n        Parameter, Value, Key, NewKey \n\n    }; ParsedRegistryEvent",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
