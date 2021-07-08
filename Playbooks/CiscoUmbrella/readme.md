@@ -5,11 +5,11 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Deploy Custom Connectors + 3 Playbook templates](#deployall)
+1. [Custom Connectors + 3 Playbook templates deployment](#deployall)
 1. [Authentication](#importantnotes)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
-1. [Post Deployment Steps](#postdeployment)
+1. [Post-Deployment Steps](#postdeployment)
 1. [References](#references)
 1. [Known issues and limitations](#limitations)
 
@@ -21,7 +21,7 @@ Cisco Umbrella is a Cloud driven Secure Internet Gateway that provides protectio
 
 <a name="deployall">
 
-## Deploy Custom Connectors + 3 Playbook templates
+## Custom Connectors + 3 Playbook templates deployment
 
 This package includes:
 
@@ -30,12 +30,12 @@ This package includes:
 * [Logic Apps custom connector for Cisco Umbrella Management API](./CiscoUmbrellaManagementAPIConnector)
 * [Logic Apps custom connector for Cisco Umbrella Network Device Management API](./CiscoUmbrellaNetworkDeviceManagementAPIConnector)
 
-* Three playbook templates leverage Cisco Umbrella custom connectors:
-  * [Response – assign policy to identity](./Playbooks/CiscoUmbrella-AssignPolicyToIdentity) - assigns a new DNS or web policy (provided on the playbook deplyment step) to an identity.
+* These three playbook templates leverage Cisco Umbrella custom connectors:
+  * [Response – assign policy to identity](./Playbooks/CiscoUmbrella-AssignPolicyToIdentity) - assigns a new DNS or a web policy (provided on the playbook deplyment step) to an identity.
   * [Response - block domain](./Playbooks/CiscoUmbrella-BlockDomain) - add domains to a customer's domain lists.
-  * [Enrichment - add security info about domain to incident](./Playbooks/CiscoUmbrella-GetDomainInfo) - collect security information about domains and post it as incident comment.
+  * [Enrichment - add security info about domain to incident](./Playbooks/CiscoUmbrella-GetDomainInfo) - collects security information about domains and post it as an incident comment.
 
-You can choose to deploy the whole package: connectors + all three playbook templates, or each one seperately from it's specific folder.
+You can choose to deploy the whole package: connectors + all three playbook templates, or each one seperately from its specific folder.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fcisco_umbrella_playbooks%2FPlaybooks%2FCiscoUmbrella%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fcisco_umbrella_playbooks%2FPlaybooks%2FCiscoUmbrella%2Fazuredeploy.json)
 
@@ -45,20 +45,20 @@ You can choose to deploy the whole package: connectors + all three playbook temp
 
 ## Authentication
 
-Each Logic Apps custom connector uses different type of authentication. Check documentation of each connector.
+Each Logic Apps Custom Connector uses different type of authentication. Check documentation for each connector.
 
 <a name="prerequisites">
 
 ### Prerequisites in Cisco Umbrella
 
-Each Logic Apps custom connector requires different type of credentials. Check documentation of each connector.
+Each Logic Apps Custom Connector requires different type of credentials. Check documentation for each connector.
 
 <a name="deployment">
 
 ### Deployment instructions 
 
-1. Deploy the Custom Connectors and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-2. Fill in the required parameters for deploying custom connectors and playbooks
+1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
+2. Fill in the required parameters for deploying Custom Connectors and Playbooks
 
 | Parameters | Description |
 |----------------|--------------|
@@ -75,7 +75,7 @@ Each Logic Apps custom connector requires different type of credentials. Check d
 
 #### a. Authorize connections
 
-Once deployment is complete, you will need to authorize each connection.
+Once deployment is complete, authorize each connection.
 
 1. Click the Azure Sentinel connection resource
 2. Click edit API connection
@@ -86,7 +86,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 #### b. Configurations in Sentinel
 
-Each playbook requires different type of configuration. Check documentation of each playbook.
+Each Playbook requires a different type of configuration. Check documentation for each Playbook.
 
 <a name="limitations">
 

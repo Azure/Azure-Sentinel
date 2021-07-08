@@ -1,20 +1,20 @@
 # Cisco Umbrella Network Device Management API Logic Apps Custom connector
 
-This custom connector connects to Cisco Umbrella Network Device Management API.
+This Custom Connector is used for connection to Cisco Umbrella Network Device Management API.
 
-### Authentication methods this connector supports
+### Authentication methods supported by this connector
 
 * Basic authentication
 
 ### Prerequisites in Cisco Umbrella
 
-To get Cisco Umbrella Network Device Management API credentials follow the instructions:
+To get Cisco Umbrella Network Device Management API credentials, follow the instructions:
 
-1. Login to your Cisco Umbrella dashboard.
+1. Log in to your Cisco Umbrella dashboard.
 2. Navigate to Admin > API Keys and click Create.
 3. Select Umbrella Network Devices and click Create.
 4. Expand Umbrella Network Devices, copy Your Key and Your Secret.
-5. Click *To keep it secure, ...* check box and then click Close.
+5. Click *To keep it secure, ...* checkbox, and then click Close.
 
 ## Actions supported by Cisco Umbrella Network Device Management API custom connector
 
@@ -28,6 +28,6 @@ To get Cisco Umbrella Network Device Management API credentials follow the instr
 
 ### Deployment instructions
 
-1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. To deploy Custom Connector, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fcisco_umbrella_playbooks%2FPlaybooks%2FCiscoUmbrella%2FCiscoUmbrellaNetworkDeviceManagementAPIConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fcisco_umbrella_playbooks%2FPlaybooks%2FCiscoUmbrella%2FCiscoUmbrellaNetworkDeviceManagementAPIConnector%2Fazuredeploy.json)

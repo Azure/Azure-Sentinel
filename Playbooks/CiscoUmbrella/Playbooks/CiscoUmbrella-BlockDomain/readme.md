@@ -2,7 +2,7 @@
 
 ## Summary
 
-When a new sentinal incident is created, this playbook gets triggered and performs below actions
+When a new sentinel incident is created, this playbook gets triggered and performs the following actions
 
 1. Obtains domains from URL entities in the incident.
 2. Optionally adds these domains to a customer's domain lists using [Cisco Umbrella Enforcement API](https://developer.cisco.com/docs/cloud-security/#!enforcement-overview/overview).
@@ -12,12 +12,12 @@ When a new sentinal incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites
 
-1. Cisco Umbrella Enforcement Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+1. Prior to the deployment of this playbook, Cisco Umbrella Enforcement Connector needs to be deployed under the same subscription.
 2. Obtain Cisco Umbrella API credentials. Refer to Cisco Umbrella Enforcement Custom Connector documentation.
 
 ### Deployment instructions
 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
 
@@ -27,16 +27,16 @@ When a new sentinal incident is created, this playbook gets triggered and perfor
 
 #### a. Authorize connections
 
-Once deployment is complete, you will need to authorize each connection.
+Once deployment is complete, authorize each connection.
 
 1. Click the Azure Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for Cisco Umbrella Enforcement connector API Connection (For authorizing, the key and the secret need to be provided.)
+6. Repeat steps for Cisco Umbrella Enforcement connector API Connection. Provide your key and the secret for authorizing.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel analytical rules should be configured to trigger an incident with malicious URL. In the *Entity maping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/en-us/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Azure sentinel, analytical rules should be configured to trigger an incident with a malicious URL. In the *Entity maping* section of the analytics rule creation workflow, malicious URL should be mapped to **Url** identitfier of the **URL** entity type. Check the [documentation](https://docs.microsoft.com/en-us/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.
