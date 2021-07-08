@@ -1,8 +1,8 @@
 # ProofpointTAP-CheckAccountInVAP
  ## Summary
- Once a new sentinal incident is created, this playbook gets triggered and performs the following actions:
- 1. Get [Very Attacked People](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/People_API#.2Fv2.2Fpeople.2Fvap) on the latest 14 days. 
- 2. Enrich the incident with information whether incident's users are in VAP list and change incident severity.
+ Once a new sentinel incident is created, this playbook gets triggered and performs the following actions:
+ 1. Gets [Very Attacked People](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/People_API#.2Fv2.2Fpeople.2Fvap) for the latest 14 days. 
+ 2. Enriches the incident with information whether incident's users are in VAP list and changes incident severity.
 
 <img src="./playbook_screenshot.png" width="80%"/><br>
 
@@ -11,7 +11,7 @@
 2. Obtain ProofpointTAP API credentials. Refer to ProofpointTAP Custom Connector documentation.
 
 ### Deployment instructions 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
 
@@ -20,13 +20,13 @@
 
 ### Post-Deployment instructions 
 #### a. Authorize connections
-Once deployment is complete, you will need to authorize each connection.
+Once deployment is complete, authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for Proofpoint TAP connector API Connection (For authorizing, the Service Principal and the secret need to be provided.)
+6.	Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules have to be configured to trigger an incident with risky user account. In the *Entity maping* section of the analytics rule creation workflow, user's email has to be mapped to **FullName** identitfier of the **Account** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities. 
+1. In Azure sentinel, analytical rules have to be configured to trigger an incident with risky user account. In the *Entity maping* section of the analytics rule creation workflow, user's email has to be mapped to **FullName** identitfier of the **Account** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities. 
 2. Configure the automation rules to trigger the playbook.

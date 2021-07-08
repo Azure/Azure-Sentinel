@@ -6,11 +6,11 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Deploy Custom Connector + 3 Playbook templates](#deployall)
+1. [Custom Connector + 3 Playbook templates deployment](#deployall)
 1. [Authentication](#importantnotes)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
-1. [Post Deployment Steps](#postdeployment)
+1. [Post-Deployment Steps](#postdeployment)
 1. [References](#references)
 1. [Known issues and limitations](#limitations)
 
@@ -19,15 +19,15 @@
 
 # Overview
 
-Proofpoint is a cybersecurity platform aimed to protect workers and data from advanced cybersecurity criminals that target email, social media and mobile devices. Proofpoint offers a wide variety of products, in addition to email protection to enhance a company's security.
+Proofpoint is a cybersecurity platform aimed to protect workers and data from advanced cybersecurity criminals that target email, social media, and mobile devices. Proofpoint offers a wide variety of products, in addition to email protection to enhance a company's security.
 
 <a name="deployall">
 
-## Deploy Custom Connector + 3 Playbook templates
+## Custom Connector + 3 Playbook templates deployment
 This package includes:
 * [Logic Apps custom connector for Proofpoint TAP](./ProofpointTAPConnector)
 
-* Three playbook templates leverage Proofpoint TAP custom connector:
+* These three playbook templates leverage Proofpoint TAP custom connector:
   * [Enrichment – add information to incidents](./Playbooks/ProofpointTAP-CheckAccountInVAP) - check if user is in the Very Attacked People list. Post information about the incident as a comment to the incident.
   * [Enrichment - add forensics info to incident](./Playbooks/ProofpointTAP-AddForensicsInfoToIncident) - collect information about the threat campaign and post it as incident comment.
 
@@ -49,7 +49,7 @@ This connector supports Basic authentication. When creating the connection for t
 
 ### Prerequisites in Proofpoint TAP
 To get Proofpoint TAP API credentials follow the instructions:
-1. Login to your Proofpoint TAP dashboard.
+1. Log in to your Proofpoint TAP dashboard.
 2. Click the *Settings* tab.
 3. Click *Connected Applications*.
 4. In the *Name* section, select *Create New Credential*.
@@ -59,8 +59,8 @@ To get Proofpoint TAP API credentials follow the instructions:
 <a name="deployment">
 
 ### Deployment instructions 
-1. Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-2. Fill in the required parameters for deploying custom connector and playbooks
+1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
+2. Fill in the required parameters for deploying custom connector and playbooks.
 
 | Parameters | Description |
 |----------------|--------------|
@@ -73,15 +73,15 @@ To get Proofpoint TAP API credentials follow the instructions:
 
 ### Post-Deployment instructions 
 #### a. Authorize connections
-Once deployment is complete, you will need to authorize each connection.
+Once deployment is complete, authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for Proofpoint TAP connector API Connection (For authorizing, the Service Principal and the secret need to be provided.)
+6.	Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
+1. In Azure sentinel, analytical rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
 
 

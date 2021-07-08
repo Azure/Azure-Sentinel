@@ -1,8 +1,8 @@
 # ProofpointTAP-AddForensicsInfoToIncident
  ## Summary
  Once a new sentinal incident is created, this playbook gets triggered and performs the following actions:
- 1. [Get Forensics](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/Forensics_API) by the *campaignId*, provided in the alert custom entities. 
- 2. Enrich the incident with Forensics info.
+ 1. [Gets Forensics](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/Forensics_API) by the *campaignId*, provided in the alert custom entities. 
+ 2. Enriches the incident with Forensics info.
 
 <img src="./playbook_screenshot.png" width="80%"/><br>
 ### Prerequisites 
@@ -10,7 +10,7 @@
 2. ProofpointTAP API credentials are required. Refer to ProofpointTAP Custom Connector documentation.
 
 ### Deployment instructions 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
 
@@ -19,13 +19,13 @@
 
 ### Post-Deployment instructions 
 #### a. Authorize connections
-Once deployment is complete, you will need to authorize each connection.
+Once deployment is complete, authorize each connection.
 1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for Proofpoint TAP connector API Connection (For authorizing, the Service Principal and the secret need to be provided.)
+6.	Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident. An incident should have *campaignId* custom entity (obtained from *campaignId_s* field in ProofpointTAP logs). Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents. 
+1. In Azure sentinel, analytical rules should be configured to trigger an incident. An incident should have *campaignId* custom entity (obtained from *campaignId_s* field in ProofpointTAP logs). Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents. 
 2. Configure the automation rules to trigger the playbook.
