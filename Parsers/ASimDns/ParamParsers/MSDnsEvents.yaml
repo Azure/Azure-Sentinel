@@ -38,7 +38,9 @@ ParserQuery: |
    , 21,'BADALG'
    , 22,'BADTRUNC'
    , 23,'BADCOOKIE'];
-  let pmDNSQuery_MS=(starttime=datetime(null), endtime=datetime(null), srcipaddr='*',domain='*'){
+  let pmDNSQuery_MS=(starttime=datetime(null), endtime=datetime(null), srcipaddr='*',domain='*', eventresult='*', responsecodename='*'){
+    let INVALID_CODE=99999;
+    let responsecode=coalesce(toscalar(RCodeTable| where ResponseCodeName==responsecodename | project ResponseCode),INVALID_CODE);
     DnsEvents 
       // ******************************************************************
       //  Pre-parsing filterring:
@@ -46,7 +48,9 @@ ParserQuery: |
           (isnull(starttime) or TimeGenerated > starttime)
           and (isnull(endtime) or TimeGenerated < endtime) 
           and (srcipaddr=='*' or ClientIP==srcipaddr)
-          and (domain='*' or Name==domain)
+          and (domain=='*' or Name==domain)
+          and (eventresult=='*' or eventresult==iff(EventId==257 and ResponseCode==0 ,'Success','Failure'))
+          and (responsecodename=='*' or ResultCode=responsecode)
       // *****************************************************************
   |  where EventId in (257,258)
   | project-rename
@@ -69,7 +73,7 @@ ParserQuery: |
          EventEndTime=TimeGenerated,
          EventSubType='response',
          EventSeverity = tostring(Severity),
-         EventType = lookup,
+         EventType = 'lookup',
          DvcHostname = Dvc,
          EventResult = iff(EventId==257 and ResponseCode==0 ,'Success','Failure')
      | lookup RCodeTable on ResponseCode

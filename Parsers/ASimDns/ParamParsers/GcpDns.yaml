@@ -18,7 +18,7 @@ Description: |
       This Query Parser maps GCP DNS logs (GCP_DNS_CL) to the Azure Sentinel Information Model DNS query schema.
 ParserName: pmDnsGcpDns
 ParserQuery: |
-  let pmDNSQuery_GcpDns=(starttime=datetime(null), endtime=datetime(null), srcipaddr='*',domain='*'){ 
+  let pmDNSQuery_GcpDns=(starttime=datetime(null), endtime=datetime(null), srcipaddr='*',domain='*', eventresult='*', responsecodename='*'){
     GCP_DNS_CL
       // ******************************************************************
       //  Pre-parsing filterring:
@@ -26,9 +26,11 @@ ParserQuery: |
           (isnull(starttime) or TimeGenerated > starttime)
           and (isnull(endtime) or TimeGenerated < endtime) 
           and (srcipaddr=='*' or payload_sourceIP_s==srcipaddr)
-          and (domain='*' or payload_queryName_s==domain)
+          and (domain=='*' or payload_queryName_s==domain)
+          and (eventresult=='*' or eventresult==iff(payload_responseCode_s=~'NOERROR','Success','Failure'))
+          and (responsecodename=='*' or payload_responseCode_s=responsecodename)
       // *****************************************************************
-      | where resource_type_s == 'dns_query'
+      | where resource_type_s == "dns_query"
       | project-rename
           Query=payload_queryName_s, 
           QueryTypeName=payload_queryType_s,
@@ -43,9 +45,9 @@ ParserQuery: |
           EventCount=int(1),
           EventProduct='Cloud DNS',
           EventVendor='GCP',
-          EventSchemaVersion='0.1.0',
-          Dvc='GCPDNS' ,
-          EventType = iif (resource_type_s == 'dns_query', 'lookup', resource_type_s)
+          EventSchemaVersion="0.1.0",
+          Dvc="GCPDNS" ,
+          EventType = iif (resource_type_s == "dns_query", "lookup", resource_type_s)
           EventResult=iff(payload_responseCode_s=~'NOERROR','Success','Failure'),
           EventSubType='response',
           EventEndTime=todatetime(Timestamp_t)

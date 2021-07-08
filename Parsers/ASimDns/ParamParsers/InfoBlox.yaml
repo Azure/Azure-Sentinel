@@ -16,15 +16,21 @@ Description: |
   This is a Query Parser that is used to map Infoblox NIOX Dns Events (Syslog) to the Azure Sentinel Information Model Dns schema.
 ParserName: pmDnsInfobloxNIOS
 ParserQuery: |
-  let pmInfoblox=(starttime=datetime(null), endtime=datetime(null), srcipaddr='*',domain='*'){ 
+  let pmInfoblox=(starttime=datetime(null), endtime=datetime(null), srcipaddr='*',domain='*', eventresult='*', responsecodename='*'){
     let RawData = Syslog     
-      // ******************************************************************
+      // *****************************************************************
       //  Pre-parsing filterring:
+      // This filtering is not accurate. Further filtering down the line
         | where
           (isnull(starttime) or TimeGenerated > starttime)
           and (isnull(endtime) or TimeGenerated < endtime) 
-          and (srcipaddr=='*' or SyslogMessage has srcipaddr)
-          and (domain='*' or SyslogMessage has domain)
+          and (srcipaddr=='*' or  has_ipv4( SyslogMessage ,srcipaddr))
+          and (domain=='*' or SyslogMessage has_ipv4 (domain) )
+          and (eventresult=='*' 
+               or (eventresult=='Sucess' and     SyslogMessage has_any ('request','NOERROR'))
+               or (eventresult=='Failure'and not SyslogMessage has_any ('request','NOERROR')) 
+               )
+          and (responsecodename=='*' or SyslogMessage has responsecodename)
       // *****************************************************************
       | where ProcessName == "named" and SyslogMessage has "client"
       | where Computer in ("datasource") and Facility == "local6"
@@ -44,6 +50,17 @@ ParserQuery: |
                 , extract_all(@'^(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+):? query: (\S+) (\S+) (\S+) ([+-]) \(([0-9.]+)\)',dnsdata)[0])
     | extend
     // ******************* Mandatory
+         SrcIpAddr = tostring(dnsclient[1]),
+         Query = iff (EventSubType=='response',tostring(dnsclient[5]), tostring(dnsclient[3])),
+         EventResult=iff(EventSubType=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),
+         ResponseCodeName = iff (EventSubType=='response',tostring(dnsclient[8]),"")
+    // Filtering accurately now that message is parsed
+   | where
+         (srcipaddr=='*' or  SrcIpAddr==srcipaddr)
+          and (domain=='*' or Query==domain) 
+          and (eventresult=='*' or eventresult==EventResult)
+          and (responsecodename=='*' or ResponseCodeName==responsecodename)
+    | extend
          EventCount=int(1),
          EventStartTime=todatetime(TimeGenerated),
          EventProduct="Infoblox DNS",
@@ -51,18 +68,14 @@ ParserQuery: |
          EventSchemaVersion="0.0.1",
          Dvc=Computer,
          EventType="lookup", 
-        EventResult=iff(EventSubType=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),
-         EventResultDetails=iff (EventSubType=='response',tostring(dnsclient[8]),""),
+        EventResultDetails=iff (EventSubType=='response',tostring(dnsclient[8]),""),
          // TimeGenerated, // not handled by schema, but we need to preserve it
-         SrcIpAddr = tostring(dnsclient[1]),
          EventSubType=iff(dnsclient has "response:", "response","request"), 
         // 
         SrcPortNumber = toint(dnsclient[2]),
         NetworkProtocol = iff (EventSubType=='reaponse', tostring(dnsclient[3]),""),        
-        Query = iff (EventSubType=='response',tostring(dnsclient[5]), tostring(dnsclient[3])),
         QueryClassName = iff (EventSubType=='response',tostring(dnsclient[6]),tostring(dnsclient[4])),
         QueryTypeName = iff (EventSubType=='response',tostring(dnsclient[7]),tostring(dnsclient[5])),
-        ResponseCodeName = iff (EventSubType=='response',tostring(dnsclient[8]),""),
         Flags =iff (EventSubType=='response', tostring(dnsclient[9]),tostring(dnsclient[6])),
         // 
         EventMessage = iff (EventSubType=='response',tostring(dnsclient[-2]),""),
