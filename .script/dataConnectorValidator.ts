@@ -16,7 +16,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
     if(isPotentialConnectorJson(jsonFile))
     {
-      if(!jsonFile.dataTypes[0].name.includes("Events"))
+      if(!jsonFile.dataTypes[0].name.includes("Event"))
       {
         let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
         let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/"+ connectorCategory +"_ConnectorSchema.json", "utf8"));
