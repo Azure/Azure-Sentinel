@@ -66,6 +66,8 @@ To get Cisco ISE ERS API credentials [follow the instructions](https://developer
 |**CiscoISE-FalsePositivesClearPolicies Playbook Name** | Enter the playbook name here (e.g. CiscoISE-FalsePositivesClearPolicies)|
 |**CiscoISE-SuspendGuestUser Playbook Name** | Enter the playbook name here (e.g. CiscoISE-SuspendGuestUser)|
 |**CiscoISE-TakeEndpointActionFromTeams Playbook Name** | Enter the playbook name here (e.g. CiscoISE-TakeEndpointActionFromTeams)|
+|**WatchlistName** | Value of WatchlistName parameter in CiscoISE-FalsePositivesClearPolicies playbook. Name of the Watchlist that contains safe MAC addresses list|
+|**WatchlistFieldName** | Value of WatchlistFieldName parameter in CiscoISE-FalsePositivesClearPolicies playbook. Watchlist field name that contains MAC address|
 |**TeamsGroupId** | Value of TeamsGroupId parameter in CiscoISE-TakeEndpointActionFromTeams playbook. Id of the Teams Group where the adaptive card will be posted.|
 |**TeamsChannelId** | Value of TeamsChannelId parameter in CiscoISE-TakeEndpointActionFromTeams playbook. Id of the Teams Channel where the adaptive card will be posted.|
 |**PolicyName** | Value of PolicyName parameter in CiscoISE-TakeEndpointActionFromTeams playbook. Policy name to be assigned to an identity.|
