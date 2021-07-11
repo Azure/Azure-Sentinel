@@ -1,0 +1,63 @@
+// Title:           Tenable Assets API
+// Author:          Netrix LLC - Rich Lilly
+// Version:         1.0
+// Last Updated:    3/10/2021
+// Comment:         Initial Release
+//  
+// DESCRIPTION:
+// This parser takes raw Tenable logs from the Assets Cloud API and parses the logs into a normalized schema.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    It is recommended to name the Function Alias, as Tenable_Assets_List
+// 3. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+//
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//{
+//      "id": "d3aa697a-7734-41cd-913f-dcd1f9736b4b",
+//      "has_agent": false,
+//      "last_seen": "2021-03-02T20:04:36.534Z",
+//      "last_scan_target": "AD01.contoso.com",
+//      "sources": [
+//        {
+//          "name": "NESSUS_SCAN",
+//          "first_seen": "2021-03-02T16:30:19.729Z",
+//          "last_seen": "2021-03-02T20:04:36.534Z"
+//        }
+//      ],
+//      "ipv4": [
+//        "10.104.10.5"
+//      ],
+//      "ipv6": [],
+//      "fqdn": [
+//        "AD01.contoso.com"
+//      ],
+//      "netbios_name": [
+//        "AD01"
+//      ],
+//      "operating_system": [
+//        "Microsoft Windows 10 Pro"
+//      ],
+//      "agent_name": [],
+//      "aws_ec2_name": [],
+//      "security_protection_level": null,
+//      "security_protections": [],
+//      "exposure_confidence_value": null,
+//      "mac_address": []
+//    }
+//
+Tenable_Assets_List_CL
+| extend IP = extract("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}",0, ipv4_s)
+| extend Last_seen = last_seen_t 
+| summarize arg_max(last_seen_t, *) by id_g
+| extend AssetID = id_g 
+| where IP != ""
+| extend Detection_source = extract(".*: \"(.*)\",",1, sources_s)
+| extend Operating_system = extract("\"(.*)\"",1, operating_system_s)
+| extend FQDN = extract("\"(.*)\"",1, fqdn_s)
+| project TimeGenerated, Last_seen, AssetID, IP, Operating_system, FQDN, Detection_source
