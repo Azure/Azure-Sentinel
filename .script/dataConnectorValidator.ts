@@ -60,6 +60,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("Event"))
+  {
+    return ConnectorCategory.Event;
+  }
   else if(dataTypes[0].name.endsWith("_CL"))
   {
     let isAzureFunction:boolean = false;
