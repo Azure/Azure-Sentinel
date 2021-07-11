@@ -7,6 +7,7 @@ import { ArmTemplate, ArmTemplateResource } from "./utils/playbookCheckers/Model
 import { PlaybookTemplateMetadata } from "./utils/playbookCheckers/Models/playbookTemplateMetadata";
 import { validateTemplateParameters } from "./utils/playbookCheckers/playbookArmTemplateParametersChecker";
 import { getTemplatePlaybookResources } from "./utils/playbookCheckers/playbookARMTemplateUtils";
+import { validateTemplateAPIConnections } from "./utils/playbookCheckers/playbookArmTemplateAPIConnectionsChecker";
 import { validatePlaybookResource } from "./utils/playbookCheckers/playbookResourceChecker";
 
 export async function IsValidTemplate(filePath: string): Promise<ExitCode> {
@@ -31,6 +32,7 @@ function validateARMTemplateSchema(playbookARMTemplate: ArmTemplate<PlaybookTemp
 
 function validateARMTemplateWithPlaybookResource(filePath: string, playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata>): void {
     validateTemplateParameters(filePath, playbookARMTemplate);
+    validateTemplateAPIConnections(filePath, playbookARMTemplate);
     validatePlaybookResource(filePath, playbookARMTemplate);
 }
 

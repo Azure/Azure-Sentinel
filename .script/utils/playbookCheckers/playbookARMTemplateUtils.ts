@@ -9,7 +9,10 @@ export const PlaybookNameParameter = "PlaybookName";
 export const ResourceLocationFromResourceGroupValue = "[resourceGroup().location]";
 
 export function getTemplatePlaybookResources(armTemplate: ArmTemplate<any>): ArmTemplateResource[] {
-    return armTemplate?.resources.filter((resource: ArmTemplateResource) => resource.type === "Microsoft.Logic/workflows");
+    return armTemplate?.resources.filter((resource: ArmTemplateResource) => resource.type.toLowerCase() === "Microsoft.Logic/workflows".toLowerCase());
+}
+export function getTemplateAPIConnectionResources(armTemplate: ArmTemplate<any>): ArmTemplateResource[] {
+    return armTemplate?.resources.filter((resource: ArmTemplateResource) => resource.type.toLowerCase() === "Microsoft.Web/connections".toLowerCase());
 }
 
 export function isNullOrUndefined(value: any): boolean {

@@ -22,6 +22,18 @@ describe("Playbooks validator", () => {
     await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithHardcodedPlaybookLocation.json");
   });
 
+  it(`Should throw an exception when playbook parameter has no description`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithNoParameterDescription.json");
+  });
+
+  it(`Should throw an exception when API connection resource name references a variable that doesn't exist`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/PlaybookTemplateWithAPIConnectionWithNameVariableThatDoesntExist.json");
+  });
+
+  it(`Should throw an exception when API connection resource has resource name not taken from template variables`, async () => {
+    await checkInvalid(".script/tests/playbooksValidatorTest/testFiles/PlaybookTemplateWithAPIConnectionWithHardcodedName.json");
+  });
+  
   async function checkInvalid(filePath: string): Promise<Chai.PromisedAssertion> {
     await expect(IsValidTemplate(filePath)).eventually.rejectedWith(Error).and.have.property("name", "PlaybookValidationError");
   }
