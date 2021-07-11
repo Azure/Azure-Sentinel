@@ -1,0 +1,35 @@
+Id: 9c45beeb-5155-4326-8c76-25baf3fa2f6f
+DisplayName: "Subscriptions transitively owned by the user via Azure Service Principals"
+Description: "Returns all subscriptions owned transitively by the user via Azure Service Principals"
+InputEntityType: Account 
+InputFields:
+  - AadUserId 
+OutputEntityTypes:
+  - AzureResource  
+QueryPeriodBefore: 7d 
+QueryPeriodAfter: 0
+DataSources:
+  - UserAccessAnalytics
+Tactics:
+  - LateralMovement 
+query: |  
+    let GetUserOwnedSubsViaSPN = (v_Account_AadUserId:string) { 
+        let UserSPNAccess = UserAccessAnalytics
+            | where SourceEntityId =~ v_Account_AadUserId
+            | where TargetEntityType == "ServicePrincipal"
+            | project TimeGenerated, ServicePrincipalId = TargetEntityId, ServicePrincipalName = TargetEntityName
+            | summarize arg_max(TimeGenerated, *) by ServicePrincipalId, ServicePrincipalName;
+        let SPNSubsAccess = UserAccessAnalytics
+            | where TargetEntityType == "AzureSubscription" 
+            | where AccessLevel == "Owner"
+            | project TimeGenerated, ServicePrincipalId = SourceEntityId, ServicePrincipalName = SourceEntityName,AzureResource_Aux_SubsName = TargetEntityName, AzureResource_ResourceId = strcat("/subscriptions/", TargetEntityId), AzureResource_SubscriptionId = TargetEntityId
+            | summarize arg_max(TimeGenerated, *) by ServicePrincipalId, ServicePrincipalName, AzureResource_Aux_SubsName, AzureResource_ResourceId, AzureResource_SubscriptionId; 
+        UserSPNAccess
+            | join kind = inner
+            SPNSubsAccess
+            on ServicePrincipalId   
+            | project AzureResource_ResourceId, AzureResource_SubscriptionId, AzureResource_Aux_SubsName, ServicePrincipalId, ServicePrincipalName
+            | summarize AzureResource_Aux_SPNIds=make_set(ServicePrincipalId), AzureResource_Aux_SPNNames= make_set(ServicePrincipalName) by AzureResource_ResourceId, AzureResource_SubscriptionId, AzureResource_Aux_SubsName
+            | order by array_length(AzureResource_Aux_SPNIds) asc   
+    };
+    GetUserOwnedSubsViaSPN("{{Account_AadUserId}}")
