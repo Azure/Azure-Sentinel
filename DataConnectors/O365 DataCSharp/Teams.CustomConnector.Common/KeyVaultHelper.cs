@@ -1,5 +1,5 @@
-﻿using Microsoft.Azure.KeyVault;
-using Microsoft.Azure.KeyVault.Models;
+﻿using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using Microsoft.Azure.Services.AppAuthentication;
 using System;
 using System.Runtime.Caching;
@@ -59,15 +59,15 @@ namespace Teams.CustomConnector.Common
             try
             {
                 var baseUrl = Environment.GetEnvironmentVariable(Constants.KeyVaultBaseUrl);
-                KeyVaultClient keyVaultClient = new KeyVaultClient(new KeyVaultClient.AuthenticationCallback(new AzureServiceTokenProvider().KeyVaultTokenCallback));
-                SecretBundle secretBundle = null;
+                SecretClient secretClient = new SecretClient(new Uri(baseUrl), new DefaultAzureCredential());
+                KeyVaultSecret keyVaultSecret = null;
 
                 await retryWithExponentialBackoff.RunAsync(async () =>
                 {
-                    secretBundle = await keyVaultClient.GetSecretAsync($"{baseUrl}/secrets/{key}");
+                    keyVaultSecret = await secretClient.GetSecretAsync(key);
                 });
 
-                return secretBundle?.Value;
+                return keyVaultSecret?.Value;
             }
             catch (System.Exception ex)
             {
