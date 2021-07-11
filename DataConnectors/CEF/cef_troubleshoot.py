@@ -30,6 +30,7 @@ import sys
 import select
 import subprocess
 import time
+import re
 
 daemon_port = "514"
 agent_port = "25226"
@@ -43,6 +44,7 @@ oms_agent_plugin_securiy_config = '/opt/microsoft/omsagent/plugin/security_lib.r
 oms_agent_field_mapping_configuration = '/opt/microsoft/omsagent/plugin/filter_syslog_security.rb'
 oms_agent_omsconfig_directory = "/etc/opt/omi/conf/omsconfig/"
 oms_agent_selinux_documentation = "https://docs.microsoft.com/azure/azure-monitor/platform/agent-linux"
+oms_agent_extract_ws_id_url = "/etc/opt/microsoft/omsagent/"
 syslog_log_dir = ["/var/log/syslog", "/var/log/messages"]
 red_hat_rsyslog_security_enhanced_linux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/index"
 red_hat_security_enhanced_permanent_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
@@ -689,6 +691,27 @@ def check_portal_auto_sync():
     return True
 
 
+def validate_workspace(workspace_id):
+    """
+    Validate if the workspace id given as parameter is the same as what the omsagent is installed to
+    """
+
+    grep1 = subprocess.Popen(["grep", "-ri", "WORKSPACE_ID=", oms_agent_extract_ws_id_url], stdout=subprocess.PIPE)
+    grep2 = subprocess.Popen(["grep", "-v", "%"], stdin=grep1.stdout, stdout=subprocess.PIPE)
+    o, e = grep2.communicate()
+    output_decoded = o.decode(encoding='UTF-8')
+    if e is not None:
+        print_error("Failed to validate workspace parameter")
+    elif output_decoded is not None and output_decoded != "":
+        # Extract the workspace id from the agent configuration
+        current_ws_id = re.search("(?<=WORKSPACE_ID=).*", output_decoded).group(0)
+        if current_ws_id != workspace_id:
+            print_error("This server already has an omsagent installed and connected to a different workspace- {} \n"
+                        "Failing to run the troubleshooting script on this workspace: {}"
+                        .format(current_ws_id, workspace_id))
+            sys.exit()
+
+
 def print_full_disk_warning():
     warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
@@ -717,6 +740,7 @@ def main():
     # test the oms agent is installed
     check_oms_agent_status()
     # test oms agent configuration
+    validate_workspace(workspace_id=workspace_id)
     security_config_omsagent_test(workspace_id=workspace_id)
     omsagent_security_event_conf_validation(workspace_id=workspace_id)
     check_omsagent_cisco_asa_configuration(workspace_id=workspace_id)

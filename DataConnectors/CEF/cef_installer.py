@@ -125,7 +125,7 @@ def handle_error(e, error_response_str):
 
 def check_multi_homing(workspace_id):
     """
-    Check if there is already an agent install and connected to a different worksapce
+    Check if there is already an agent install and connected to a different workspace
     """
 
     grep1 = subprocess.Popen(["grep", "-ri", "WORKSPACE_ID=", oms_agent_extract_ws_id_url], stdout=subprocess.PIPE)
