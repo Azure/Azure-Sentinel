@@ -1,0 +1,29 @@
+name: AccountAddedtoPrivilegedPIMGroup
+description: |
+  'Identifies accounts that have been added to a PIM managed privileged group'
+requiredDataConnectors:
+  - connectorId: Azure Active Directory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1548
+query: |
+AuditLogs
+| where TimeGenerated > ago(1d)
+| where ActivityDisplayName =~ "Add eligible member to role in PIM requested (timebound)"
+| where AADOperationType =~ "CreateRequestEligibleRole"
+| where TargetResources contains "-PRIV"
+or TargetResources contains "Administrator"
+or TargetResources contains "Security"
+| extend BuiltinGroup= tostring(parse_json(TargetResources[0].displayName))
+| extend CustomGroup= tostring(parse_json(TargetResources[3].displayName))
+| extend TargetAccount_ = tostring(parse_json(TargetResources[2].displayName))
+| extend Initiatedby = tostring(parse_json(Identity))
+| project TimeGenerated,Initiatedby,TargetAccount_,BuiltinGroup,CustomGroup,ActivityDisplayName
+| sort by TimeGenerated desc 
+
+
