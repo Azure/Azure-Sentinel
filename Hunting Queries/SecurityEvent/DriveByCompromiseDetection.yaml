@@ -1,0 +1,26 @@
+Author: Akshay Anbalagan (akshay.anbalagan@gmail.com)
+id: NA
+name: DriveByCompromise Detection
+description: |
+  'Finds suspicious execution behaviors from browsers which are the victim of Drive By Compromise'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Initial Access
+relavant Technique:
+ - Drive by Compromise (T1189)
+query: |
+
+//first we are defining the browser processes to investigate. You can add more if you are using anything different
+let browserName = pack_array("chrome.exe", "iexplorer.exe", "msedge.exe", "firefox.exe");
+//second we are defining what child processes would be suspicious if they are called from the parent i.e. the browser process
+let suspiciousProc = pack_array("powershell.exe", "powershell_ise.exe", "cscript.exe", "wscript.exe", "mshta.exe", "cmd.exe");
+SecurityEvent
+| where TimeGenerated > ago(30d)
+| where EventID == 4688
+| project TimeGenerated, Computer, UserName=SubjectUserName, Domain=SubjectDomainName, CommandLine, ParentProcessName, ChildProcess=tostring(split(NewProcessName, '\\')[-1])
+//checking from the list of child process against our tobe suspicious process where their parent process could be any browsers
+| where ChildProcess has_any(suspiciousProc) and ParentProcessName has_any(browserName)
+| project Computer, SubjectUserName, ParentProcess=tostring(split(ParentProcessName, '\\')[-1]), ChildProcess, CommandLine
