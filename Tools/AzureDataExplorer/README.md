@@ -11,7 +11,10 @@ To learn about architectural options please refer to my colleague's [Javier Sori
 1. **Create an ADX Cluster in the same region as your Log Analytics Workspace**  
 	https://docs.microsoft.com/azure/data-explorer/create-cluster-database-portal
 
-2. Create ADX Database
+2. Create ADX Database  
+
+3. Please verify ADXSupportedTables.json file with [SupportedTables Section] (https://docs.microsoft.com/en-us/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)  
+   **Note**: If supported table is not listed in ADXSupportedTables.json, please updated your local file
 
 ## Azure Data Explorer Architecture
 
