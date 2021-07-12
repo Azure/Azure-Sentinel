@@ -5,7 +5,7 @@
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
 1. For each MAC address (*MACAddress* provided in the alert custom entities) in the incident checks if it is was rejected in Cisco ISE.
-2. If MAC address was rejected, checks if it is in the safe list (safe list is a custom [Watchlist](https://docs.microsoft.com/en-us/azure/sentinel/watchlists) that contains safe MAC addresses).
+2. If MAC address was rejected, checks if it is in the safe list (safe list is a custom [Watchlist](https://docs.microsoft.com/azure/sentinel/watchlists) that contains safe MAC addresses).
 If it is in safe list, releases endpoint with this MAC address in Cisco ISE.
 3. Adds comment to the incident with information about the released endpoints.
 
@@ -15,7 +15,7 @@ If it is in safe list, releases endpoint with this MAC address in Cisco ISE.
 
 1. Prior to the deployment of this playbook, Cisco ISE Connector needs to be deployed under the same subscription.
 2. Obtain Cisco ISE ERS API credentials. Refer to Cisco ISE Custom Connector documentation.
-3. [Watchlist](https://docs.microsoft.com/en-us/azure/sentinel/watchlists) with safe MAC addresses list needs to be created.
+3. [Watchlist](https://docs.microsoft.com/azure/sentinel/watchlists) with safe MAC addresses list needs to be created.
 
 ### Deployment instructions
 

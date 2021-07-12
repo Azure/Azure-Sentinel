@@ -8,7 +8,9 @@ This custom connector connects to Cisco ISE External RESTful Services (ERS) API.
 
 ### Prerequisites in Cisco ISE
 
-To get Cisco ISE ERS API credentials [follow the instructions](https://developer.cisco.com/docs/identity-services-engine/#!setting-up)
+To get Cisco ISE ERS API credentials [follow the instructions](https://developer.cisco.com/docs/identity-services-engine/#!setting-up).
+
+Cisco ISE connector uses [On-Premises Data Gateway](https://docs.microsoft.com/data-integration/gateway/service-gateway-onprem). Therefore [installation of the On-Premises Data Gateway](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-install) and [creation of the On-Premises Data Gateway resource](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-connection#create-azure-gateway-resource) are required.
 
 ## Actions supported by Cisco Umbrella Management API custom connector
 
