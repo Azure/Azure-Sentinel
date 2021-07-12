@@ -1,17 +1,17 @@
 Parser:
   Title: InfoBlox
   Version: '0.0'
-  LastUpdated: May 10, 2021
+  LastUpdated: July 7, 2021
 Product:
   Name: Infoblox
 Normalization:
   Schema: Dns
-  Version: '1.0.0'
+  Version: '0.1.1'
 References:
-- Title: Using functions
-  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
-- Title: Dns schema documentation
+- Title: ASIM DNS Schema
   Link: https://aka.ms/AzSentinelDnsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
 Description: |
   This is a Query Parser that is used to map Infoblox NIOX Dns Events (Syslog) to the Azure Sentinel Information Model Dns schema.
 ParserName: vimDnsInfobloxNIOS
@@ -19,8 +19,7 @@ ParserQuery: |
   let Infoblox=(){
     let RawData = Syslog | where ProcessName == "named" and SyslogMessage has "client"
       | where Computer in ("datasource") and Facility == "local6"
-      | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)
-      | mv-expand todynamic(Parser)
+      | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
       | extend ResponseTime = todatetime(Parser[0]),
                Log_Type = tostring(Parser[1]),
                RawData_subString = tostring(Parser[3])
@@ -42,12 +41,12 @@ ParserQuery: |
          EventVendor="Infoblox",
          EventSchemaVersion="0.0.1",
          Dvc=Computer,
-         EventType="lookup", /// ???
+         EventType="lookup", 
         EventResult=iff(EventSubType=='request' or tostring(dnsclient[8])=='NOERROR','Success','Failure'),
-         EventResultDetails=iff (EventSubType=='response',tostring(dnsclient[8]),""), // => ResponseCodeNames
+         EventResultDetails=iff (EventSubType=='response',tostring(dnsclient[8]),""),
          // TimeGenerated, // not handled by schema, but we need to preserve it
          SrcIpAddr = tostring(dnsclient[1]),
-         EventSubType=iff(dnsclient has "response:", "response","request"), ///????
+         EventSubType=iff(dnsclient has "response:", "response","request"), 
         // 
         SrcPortNumber = toint(dnsclient[2]),
         NetworkProtocol = iff (EventSubType=='reaponse', tostring(dnsclient[3]),""),        
