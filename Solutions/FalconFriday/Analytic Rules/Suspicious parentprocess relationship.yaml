@@ -1,0 +1,52 @@
+id: 5ee34fa1-64ed-48c7-afa2-794b244f6c60
+name: Suspicious parentprocess relationship - Office child processes. 
+description: |
+  The attacker sends a spearphishing email to a user. The email contains a link, which points to a website that eventually 
+  presents the user a download of an MS Office document. This document contains a malicious macro. The macro spawns a new child process
+  providing initial access. 
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Initial Access
+relevantTechniques:
+  - T1566.002
+query: |
+  let browsers = dynamic(["iexplore.exe", "chrome.exe", "firefox.exe", "msedge.exe"]); //customize this list for your environment
+  let officeApps = dynamic(["winword.exe", "excel.exe", "powerpnt.exe"]); //consider adding other office applications such as publisher, visio and access. 
+  //this is a whitelist of the most common child processes. This is a quick and dirty solution. Consider whitelisting the full process path instead of filename
+  //also make this list as short as possible. Remove anything from this list if it doesn't occur in your organization. 
+  let whitelist = dynamic(["MSOSYNC.exe", "splwow64.exe", "csc.exe", "outlook.exe", "AcroRd32.exe", "Acrobat.exe", "explorer.exe", "DW20.exe", 
+  "Microsoft.Mashup.Container.Loader.exe", "Microsoft.Mashup.Container.NetFX40.exe", "WerFault.exe", "CLVIEW.exe"]); 
+  DeviceProcessEvents
+  | where InitiatingProcessParentFileName in~ (browsers) and InitiatingProcessFileName in~ (officeApps) and 
+  FileName !in~ (officeApps) and FileName !in~ (browsers) and FileName !in~ (whitelist)
+  | project-rename ProcessStart_Timestamp = Timestamp
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+      - identifier: FullName
+        columnName: AccountUpn
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+
+
