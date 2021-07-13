@@ -8,10 +8,8 @@ Ingest all the SecurityHub findings returned by SecurityHub API, ingests only fr
 
 ## Deploy AWS SecurityHub Data connector
 
-1. Click  "Deploy To Azure" (For both Commercial & Azure GOV) 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-S3-AzureFunction%2Fazuredeploy_awss3.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-S3-AzureFunction%2Fazuredeploy_awss3.json)
-
+1. Click  "Deploy To Azure" (For both Commercial & Azure GOV)  
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-SecurityHubFindings%2Fazuredeploy_awssecurityhub.json)
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
    **Note**  
