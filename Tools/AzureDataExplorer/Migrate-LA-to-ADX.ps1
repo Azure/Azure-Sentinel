@@ -69,6 +69,7 @@ param(
 [string]$KustoConnectionString = "$AdxEngineUrl;Fed=True"
 [string]$NuGetIndex = "https://api.nuget.org/v3/index.json"
 [string]$NuGetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+$nugetPackageLocation = "$($env:USERPROFILE).nuget\packages"
 
 #endregion StaticValues
 
@@ -264,7 +265,7 @@ function Invoke-KustoCLI {
             }
             
             Write-Log -Message "Installing Kusto Tools Package" -LogFileName $LogFileName -Severity Information
-            &.\nuget.exe install $kustoToolsPackage -Source $nugetIndex
+            &.\nuget.exe install $kustoToolsPackage -Source $nugetIndex -OutputDirectory $nugetPackageLocation
         }
 
         $KustoExe = $KustoToolsDir + @(Get-ChildItem -Recurse -Path $KustoToolsDir -Name kusto.cli.exe)[-1]
