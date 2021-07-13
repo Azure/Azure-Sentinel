@@ -56,12 +56,12 @@ Ensure you have the following details:
 - Once deployed, go to the Logic App's blade and click on **Identity** under Settings.
 - Select **On** under the **System assigned** tab. Click **Save** and select **Yes** when prompted.
 
-  <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic8.png" width="900" height="360">
+  <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic8.png" width="900" height="360">
    <br />    
    
 - Click on **Azure role assignments** to assign role to the Managed Identity.
 
- <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic9.png" width="900" height="280">
+ <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic9.png" width="900" height="280">
    <br />  
    
 - Click on **+ Add role assignment**. 
@@ -71,7 +71,7 @@ Ensure you have the following details:
 
 ### 2. Configure connections
 - Edit the Logic App or go to Logic app designer.
-- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/images/Pic1.png" width="30" height="30">. 
+- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic1.png" width="30" height="30">. 
   1. Incident Trigger
   2. Update Incident
   3. Add comment to incident
