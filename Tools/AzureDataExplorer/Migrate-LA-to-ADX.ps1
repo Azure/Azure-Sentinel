@@ -253,6 +253,7 @@ function Invoke-KustoCLI {
         $KustoToolsDir = "$env:USERPROFILE\.nuget\packages\$KustoToolsPackage\"
         $CurrentDir = Get-Location
         Set-Location $ScriptDir
+        
 
         if (!(Test-Path $KustoToolsDir)) {        
 				 
@@ -263,7 +264,7 @@ function Invoke-KustoCLI {
             }
             
             Write-Log -Message "Installing Kusto Tools Package" -LogFileName $LogFileName -Severity Information
-            &.\nuget.exe install $kustoToolsPackage -Source $nugetIndex -OutputDirectory $nugetPackageLocation
+            &.\nuget.exe install $kustoToolsPackage -Source $nugetIndex
         }
 
         $KustoExe = $KustoToolsDir + @(Get-ChildItem -Recurse -Path $KustoToolsDir -Name kusto.cli.exe)[-1]
@@ -298,7 +299,8 @@ function New-AdxRawMappingTables {
 
     [CmdletBinding()]
     param (        
-        [parameter(Mandatory = $true)] $LaTables        
+        [parameter(Mandatory = $true)] $LaTables,
+        [parameter(Mandatory = $true)] $decision        
     )
 
 
@@ -710,7 +712,7 @@ else {
 }
 
 $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
-New-AdxRawMappingTables -LaTables $ResultsAllTables
+New-AdxRawMappingTables -LaTables $ResultsAllTables -decision $LaTablesQuestionDecision
 #endregion
 
 #region EventHubsCreation
