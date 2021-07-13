@@ -1,0 +1,684 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "comments": "Enrich IronNet Alerts based on the corresponding Sentinel Incident updates via IronNet Endpoints",
+    "author": "IronNet"
+  },
+  "parameters": {
+    "IronApiUsername": {
+      "type": "String",
+      "metadata": {
+        "description": "Username used to authenticate to IronAPI"
+      }
+    },
+    "IronApiPassword": {
+      "type": "SecureString",
+      "metadata": {
+        "description": "Password used to authenticate to IronAPI"
+      }
+    },
+    "IronDefenseUrl": {
+      "type": "String",
+      "metadata": {
+        "description": "IronNet URL used to authenticate to IronAPI"
+      }
+    },
+    "Playbook Name": {
+      "type": "String",
+      "metadata": {
+        "description": "Playbook name to test the IronNet API's"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('Playbook Name')]",
+      "location": "eastus",
+      "properties": {
+        "state": "Disabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "IronNetUrl": {
+              "defaultValue": "[parameters('IronDefenseUrl')]",
+              "type": "SecureString"
+            },
+            "Password": {
+              "defaultValue": "[parameters('IronApiPassword')]",
+              "type": "SecureString"
+            },
+            "Username": {
+              "defaultValue": "[parameters('IronApiUsername')]",
+              "type": "SecureString"
+            }
+          },
+          "triggers": {
+            "IronNet_Login": {
+              "recurrence": {
+                "frequency": "Month",
+                "interval": 1
+              },
+              "correlation": {
+                "clientTrackingId": "login"
+              },
+              "type": "Http",
+              "inputs": {
+                "authentication": {
+                  "password": "@parameters('Password')",
+                  "type": "Basic",
+                  "username": "@parameters('Username')"
+                },
+                "body": {},
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "method": "POST",
+                "uri": "@{parameters('IronNetUrl')}/IronApi/Login"
+              },
+              "conditions": [],
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Fetch_token": {
+              "runAfter": {
+                "Initialize_EventId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()",
+                "schema": {
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "Initialize_AlertId": {
+              "runAfter": {
+                "Initialize_EndpointConnectivity": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AlertId",
+                    "type": "string",
+                    "value": "816546532a7d4f0a98f905394ccd3680"
+                  }
+                ]
+              }
+            },
+            "Initialize_EndpointConnectivity": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "EndpointConnectivity",
+                    "type": "boolean",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            "Initialize_EventId": {
+              "runAfter": {
+                "Initialize_AlertId": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "EventId",
+                    "type": "string",
+                    "value": "65c121960e7e4304a55507e098bfac73"
+                  }
+                ]
+              }
+            },
+            "Ironnet_API_Connectivity": {
+              "actions": {
+                "Display_Endpoint_Responses": {
+                  "runAfter": {},
+                  "type": "Compose",
+                  "inputs": "GetAlert Response:\n@{body('GetAlerts_API_call')}\nRateAlert Response:\n@{body('RateAlert_API_call')}\nCommentOnAlert Response:\n@{body('CommentOnAlert_API_call')}\nSetAlertStatus Response:\n@{body('SetAlertStatus_API_call')}\nGetEvents Response:\n@{body('GetEvents_API_call')}\nGetEvent Response:\n@{body('GetEvent_API_call')}\nGetAlertIronDomeInformation Response:\n@{body('GetAlertIronDomeInformation_API_call')}\nReportObservedBadActivity Response:\n@{body('ReportObservedBadActivity_API_call')}\n"
+                }
+              },
+              "runAfter": {
+                "Testing_Ironnet_API_Connectivity": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Error_Message": {
+                    "runAfter": {},
+                    "type": "Compose",
+                    "inputs": "Error in connectivity. Please try again..."
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@variables('EndpointConnectivity')",
+                      true
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "Testing_Ironnet_API_Connectivity": {
+              "actions": {
+                "CommentOnAlert_API_call": {
+                  "runAfter": {
+                    "GetAlerts_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "alert_id": "@variables('AlertId')",
+                      "comment": "commenting on alert for ironapi postman test",
+                      "share_comment_with_irondome": true
+                    },
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/CommentOnAlert"
+                  }
+                },
+                "GetAlertIronDomeInformation_API_call": {
+                  "runAfter": {
+                    "Ironnet_Login_Connectivity_Succeeded": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "alert_id": "@variables('AlertId')"
+                    },
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/GetAlertIronDomeInformation"
+                  }
+                },
+                "GetAlerts_API_call": {
+                  "runAfter": {
+                    "Ironnet_Login_Connectivity_Succeeded": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {},
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/GetAlerts"
+                  }
+                },
+                "GetEvents_API_call": {
+                  "runAfter": {
+                    "Ironnet_Login_Connectivity_Succeeded": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "alert_id": "816546532a7d4f0a98f905394ccd3680"
+                    },
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/GetEvents"
+                  }
+                },
+                "Ironnet_Login_Connectivity_Succeeded": {
+                  "runAfter": {},
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "EndpointConnectivity",
+                    "value": true
+                  }
+                },
+                "RateAlert_API_call": {
+                  "runAfter": {
+                    "GetAlerts_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "alert_id": "@variables('AlertId')",
+                      "analyst_expectation": "EXP_UNEXPECTED",
+                      "analyst_severity": "SEVERITY_MALICIOUS",
+                      "comment": "IronAPI Postman Test Comment",
+                      "share_comment_with_irondome": true
+                    },
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+                  }
+                },
+                "ReportObservedBadActivity_API_call": {
+                  "runAfter": {
+                    "Ironnet_Login_Connectivity_Succeeded": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "activity_end_time": "2021-01-15T14:05:00.000Z",
+                      "activity_start_time": "2021-01-15T14:05:00.000Z",
+                      "description": "Some thing bad happend with computer?",
+                      "domain": "some.computer2.com",
+                      "ip": "173.17.0.120",
+                      "name": "Bad Thing with Computers @{utcNow()}"
+                    },
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/ReportObservedBadActivity"
+                  }
+                },
+                "SetAlertStatus_API_call": {
+                  "runAfter": {
+                    "GetAlerts_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "alert_id": "@variables('AlertId')",
+                      "comment": "updating status for ironapi postman test",
+                      "share_comment_with_irondome": true,
+                      "status": "STATUS_AWAITING_REVIEW"
+                    },
+                    "headers": {
+                      "Authorization": "Bearer @{body('Fetch_token')?['token']} ",
+                      "Content-Type": "application/json"
+                    },
+                    "method": "POST",
+                    "uri": "@{parameters('IronNetUrl')}/IronApi/SetAlertStatus"
+                  }
+                },
+                "Testing_CommentOnAlert_API_Connectivity": {
+                  "actions": {
+                    "CommentOnAlert_Connectivity_Succeeded": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EndpointConnectivity",
+                        "value": true
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "CommentOnAlert_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "CommentOnAlert_Connectivity_Failed": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "EndpointConnectivity",
+                          "value": false
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Testing_GetAlertIronDomeInformation_API_Connectivity": {
+                  "actions": {
+                    "GetAlertIronDomeInformation_Connectivity_Succeeded": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EndpointConnectivity",
+                        "value": true
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "GetAlertIronDomeInformation_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "GetAlertIronDomeInformation_Connectivity_Failed": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "EndpointConnectivity",
+                          "value": false
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('GetAlertIronDomeInformation_API_call')['statusCode']",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Testing_GetEvents_API_Connectivity": {
+                  "actions": {
+                    "GetEvent_API_call": {
+                      "runAfter": {
+                        "GetEvents_Connectivity_Succeeded": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "body": {
+                          "event_id": "@variables('EventId')"
+                        },
+                        "headers": {
+                          "Authorization": "Bearer @{body('Fetch_token')?['token']}",
+                          "Content-Type": "application/json"
+                        },
+                        "method": "POST",
+                        "uri": "@{parameters('IronNetUrl')}/IronApi/GetEvent"
+                      }
+                    },
+                    "GetEvents_Connectivity_Succeeded": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EndpointConnectivity",
+                        "value": true
+                      }
+                    },
+                    "Testing_GetEvent_API_Connectivity": {
+                      "actions": {
+                        "GetEvent_Connectivity_Succeeded": {
+                          "runAfter": {},
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "EndpointConnectivity",
+                            "value": true
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "GetEvent_API_call": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "GetEvent_Connectivity_Failed": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "EndpointConnectivity",
+                              "value": false
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@outputs('GetEvent_API_call')['statusCode']",
+                              200
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    }
+                  },
+                  "runAfter": {
+                    "GetEvents_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "GetEvents_Connectivity_Failed": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "EndpointConnectivity",
+                          "value": false
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('GetEvents_API_call')['statusCode']",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Testing_RateAlert_API_Connectivity": {
+                  "actions": {
+                    "RateAlert_Connectivity_Succeeded": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EndpointConnectivity",
+                        "value": true
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "RateAlert_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "RateAlert_Connectivity_Failed": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "EndpointConnectivity",
+                          "value": false
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('RateAlert_API_call')['statusCode']",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Testing_ReportObservedBadActivity_API_Connectivity": {
+                  "actions": {
+                    "ReportObservedBadActivity_Connectivity_Succeeded": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EndpointConnectivity",
+                        "value": true
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "ReportObservedBadActivity_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "ReportObservedBadActivity_Connectivity_Failed": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "EndpointConnectivity",
+                          "value": false
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('ReportObservedBadActivity_API_call')['statusCode']",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Testing_SetAlertStatus_API_Connectivity": {
+                  "actions": {
+                    "SetAlertStatus_Connectivity_Succeeded": {
+                      "runAfter": {},
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EndpointConnectivity",
+                        "value": true
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "SetAlertStatus_API_call": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "SetAlertStatus_Connectivity_Failed": {
+                        "runAfter": {},
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "EndpointConnectivity",
+                          "value": false
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('SetAlertStatus_API_call')['statusCode']",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Fetch_token": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "GetAlerts_Connectivity_Failed": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "EndpointConnectivity",
+                      "value": false
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@triggerOutputs()['statusCode']",
+                      200
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ]
+}
