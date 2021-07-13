@@ -4,6 +4,6 @@
   [String] $IPToBeBlocked
 )
 
-Import-Module 'C:\Program Files\Microsoft\Exchange Server\V15\bin\RemoteExchange.ps1'; Connect-ExchangeServer -auto -ClientApplication:ManagementShell
+Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
 
 Add-IPBlockListEntry -IPAddress $IPToBeBlocked
