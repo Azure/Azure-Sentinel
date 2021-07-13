@@ -55,37 +55,8 @@
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
-                            }
-                        }
-                    },
                     "actions": {
                         "Add_comment_to_incident_(V3)": {
-                            "runAfter": {
-                                "Create_html_tag_with_Cisco_logo": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
@@ -98,15 +69,15 @@
                                 },
                                 "method": "post",
                                 "path": "/Incidents/Comment"
-                            }
-                        },
-                        "Create_HTML_table_with_not_suspended_users": {
+                            },
                             "runAfter": {
-                                "Create_HTML_table_with_suspended_users": [
+                                "Create_html_tag_with_Cisco_logo": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Table",
+                            "type": "ApiConnection"
+                        },
+                        "Create_HTML_table_with_not_suspended_users": {
                             "inputs": {
                                 "columns": [
                                     {
@@ -116,15 +87,15 @@
                                 ],
                                 "format": "HTML",
                                 "from": "@variables('not suspended users')"
-                            }
-                        },
-                        "Create_HTML_table_with_suspended_users": {
+                            },
                             "runAfter": {
-                                "For_each_Account_in_incident": [
+                                "Create_HTML_table_with_suspended_users": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Table",
+                            "type": "Table"
+                        },
+                        "Create_HTML_table_with_suspended_users": {
                             "inputs": {
                                 "columns": [
                                     {
@@ -134,20 +105,24 @@
                                 ],
                                 "format": "HTML",
                                 "from": "@variables('suspended users')"
-                            }
+                            },
+                            "runAfter": {
+                                "For_each_Account_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
                         },
                         "Create_html_tag_with_Cisco_logo": {
+                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Playbooks/CiscoISE/cisco-logo.png\"  width=\"32\" height=\"32\">",
                             "runAfter": {
                                 "Create_HTML_table_with_not_suspended_users": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Compose",
-                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Playbooks/CiscoISE/cisco-logo.png\"  width=\"32\" height=\"32\">"
+                            "type": "Compose"
                         },
                         "Entities_-_Get_Accounts": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
@@ -157,40 +132,40 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/account"
-                            }
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
                         },
                         "For_each_Account_in_incident": {
-                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "actions": {
                                 "Append_user_to_\"not_suspended_users\"": {
-                                    "runAfter": {
-                                        "Append_user_to_\"suspended_users\"": [
-                                            "Skipped"
-                                        ]
-                                    },
-                                    "type": "AppendToArrayVariable",
+                                    "description": "Append user to \" not suspended users\" if API call was not successful",
                                     "inputs": {
                                         "name": "not suspended users",
                                         "value": "@item()['Name']"
                                     },
-                                    "description": "Append user to \" not suspended users\" if API call was not successful"
-                                },
-                                "Append_user_to_\"suspended_users\"": {
                                     "runAfter": {
                                         "Suspend_guest_user_by_name": [
-                                            "Succeeded"
+                                            "Failed",
+                                            "TimedOut"
                                         ]
                                     },
-                                    "type": "AppendToArrayVariable",
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "Append_user_to_\"suspended_users\"": {
+                                    "description": "Append user to \"suspended users\" if API call was successful",
                                     "inputs": {
                                         "name": "suspended users",
                                         "value": "@item()['Name']"
                                     },
-                                    "description": "Append user to \"suspended users\" if API call was successful"
+                                    "runAfter": {
+                                        "Append_user_to_\"not_suspended_users\"": [
+                                            "Skipped"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
                                 },
                                 "Suspend_guest_user_by_name": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
                                     "inputs": {
                                         "headers": {
                                             "Accept": "application/json",
@@ -204,9 +179,12 @@
                                         },
                                         "method": "put",
                                         "path": "/ers/config/guestuser/suspend/name/@{encodeURIComponent(item()['Name'])}"
-                                    }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
                                 }
                             },
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "runAfter": {
                                 "Initialize_variable_\"not_suspended_users\"": [
                                     "Succeeded"
@@ -215,12 +193,7 @@
                             "type": "Foreach"
                         },
                         "Initialize_variable_\"not_suspended_users\"": {
-                            "runAfter": {
-                                "Initialize_variable_\"suspended_users\"": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
+                            "description": "This varaible will contain users that are not suspended.",
                             "inputs": {
                                 "variables": [
                                     {
@@ -229,15 +202,15 @@
                                     }
                                 ]
                             },
-                            "description": "This varaible will contain users that are not suspended."
-                        },
-                        "Initialize_variable_\"suspended_users\"": {
                             "runAfter": {
-                                "Entities_-_Get_Accounts": [
+                                "Initialize_variable_\"suspended_users\"": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_\"suspended_users\"": {
+                            "description": "This varaible will contain users that are suspended.",
                             "inputs": {
                                 "variables": [
                                     {
@@ -246,10 +219,38 @@
                                     }
                                 ]
                             },
-                            "description": "This varaible will contain users that are suspended."
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
                         }
                     },
-                    "outputs": {}
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
                 },
                 "parameters": {
                     "$connections": {
