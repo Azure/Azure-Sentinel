@@ -34,7 +34,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 12 July 2021
+        LASTEDIT: 14 July 2021
 
     .EXAMPLE
         .\Migrate-LA-to-ADX.ps1 -LogAnalyticsResourceGroup la-resgrp1 -LogAnalyticsWorkspaceName la-workspace-1 `
@@ -288,7 +288,7 @@ function New-AdxRawMappingTables {
     [CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $LaTables,
-        [parameter(Mandatory = $true)] $decision        
+        [parameter(Mandatory = $true)] $LaMappingDecision        
     )
 
     if (!(Test-Path "$PSScriptRoot\KustoQueries" -PathType Container)) { 
@@ -304,7 +304,7 @@ function New-AdxRawMappingTables {
     }
   
     foreach ($table in $LaTables) {
-        if ($decision -eq 0) {
+        if ($LaMappingDecision -eq 0) {
             $TableName = $table.'$table'
         }
         else {
@@ -685,7 +685,7 @@ else {
 }
 
 $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
-New-AdxRawMappingTables -LaTables $ResultsAllTables -decision $LaTablesQuestionDecision
+New-AdxRawMappingTables -LaTables $ResultsAllTables -LaMappingDecision $LaTablesQuestionDecision
 #endregion
 
 #region EventHubsCreation
