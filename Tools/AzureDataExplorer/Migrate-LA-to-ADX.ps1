@@ -69,7 +69,7 @@ param(
 [string]$KustoConnectionString = "$AdxEngineUrl;Fed=True"
 [string]$NuGetIndex = "https://api.nuget.org/v3/index.json"
 [string]$NuGetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
-$nugetPackageLocation = "$($env:USERPROFILE)\.nuget\packages"
+[string]$nugetPackageLocation = "$($env:USERPROFILE)\.nuget\packages"
 
 #endregion StaticValues
 
