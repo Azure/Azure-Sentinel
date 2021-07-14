@@ -5,16 +5,12 @@
  2. Sends an adaptive card to the SOC Teams channel, let the analyst decide on action:
     Quarantine the device or Update the policy based on SOC action
 
-    ![card example](./adaptiveCard.png)
+    ![card example](./images/adaptiveCard.png)
 
  3. Add a comment to the incident with the information collected from the carbon black, summary of the actions taken and close the incident
-     ![Comment example](./Incident_Comment.png)
+     ![Comment example](./images/Incident_Comment.png)
 
 
-**Playbook overview**
-
-![CarbonBlack-Enrich Incident With devices information](./CarbonBlack-TakeDeviceActionFromTeams.png
-)
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)

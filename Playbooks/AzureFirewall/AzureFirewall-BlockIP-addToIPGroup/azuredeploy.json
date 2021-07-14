@@ -1,16 +1,41 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
-   "metadata": {
-    "comments": "This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident",
-    "author": "Dharma Reddy, Azure Firewall"
-  },
+  "metadata": {
+    "title": "Block IP - Azure Firewall IP groups", 
+    "description": "This playbook allows blocking/allowing IPs in Azure Firewall. It allows to make changes on IP groups, which are attached to rules, instead of make direct changes on Azure Firewall. It also allows using the same IP group for multiple firewalls. [Learn more about IP Groups in Azure Firewall](https://docs.microsoft.com/azure/firewall/ip-groups)",
+    "mainSteps:": ["When a new Sentinel incident is created:",
+      "1. An adaptive card is sent to the SOC channel providing IP address, Virus Total report, showing list of existing firewalls in the Resource group and providing an option to add IP Address to IPGroups or Ignore.", 
+      "2. If SOC user confirms yes, the IP Address gets added to IPGroups under IPAddress section and incident will get updates with endpoint information, summary of the action taken and virus total scan report.",
+      "3. Else, incident will get updates with endpoint information and summary of the action taken."],
+    "prerequisites": ["1. Create IP Groups and attach them to Azure Firewall rules.", 
+      "2. Create a Service Principal which the Azure Firewall connector will use, and grant Contributor permissions to it on the IP groups. ['Detailed instructions'](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewallConnector#azure-active-directory-service-principal)",
+      "3. Deploy Azure Firewall Logic Apps custom connector under the same resource group (see link below). **Permissions required for this playbook** This playbook **Gets** and **Updates** IP groups.", 
+      "4. To use VirusTotal connector in this playbook, get your [Virus Total API key](https://developers.virustotal.com/v3.0/reference#getting-started). Otherwise, erase these steps or replace them with other TI sources."],
+    "prerequisitesDeployTemplateFile": "../AzureFirewallConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
+    "entities": ["Ip"], 
+    "tags": ["Remediation", "Teams bot"], 
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    }
+},
   "parameters": {
-    "Playbook Name": {
+    "PlaybookName": {
       "defaultValue": "AzureFirewall-BlockIP-addToIPGroup",
       "type": "string",
       "metadata": {
-        "description": "Name of the Logic App/Playbook"
+        "description": "Name of the Logic Apps resource to be created"
+      }
+    },
+    "CustomConnectorName":{
+      "defaultValue": "AzureFirewallConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Azure Firewall. Cannot contain spaces."
       }
     },
     "Teams GroupId": {
@@ -37,10 +62,10 @@
     }
   },
   "variables": {
-    "OAuthConnection": "[concat('OAuthConnection-', parameters('Playbook Name'))]",
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-    "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]",
-    "VirusTotalConnectionName": "[concat('VirusTotal-', parameters('Playbook Name'))]"
+    "OAuthConnection": "[concat('AzureFirewall-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+    "VirusTotalConnectionName": "[concat('VirusTotal-', parameters('PlaybookName'))]"
   },
   "resources": [
     {
@@ -57,7 +82,7 @@
           "token:grantType": "client_credentials"
         },
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/AzureFirewallConnector')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
         }
       }
     },
@@ -109,7 +134,7 @@
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
-       "name": "[parameters('Playbook Name')]",
+      "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
@@ -117,6 +142,10 @@
         "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
         "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]"
       ],
+      "tags": {
+        "hidden-SentinelTemplateName": "BlockIP-AzureFirewall-IPGroups",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
       "properties": {
         "state": "Enabled",
         "definition": {
@@ -129,7 +158,7 @@
             }
           },
           "triggers": {
-            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
               "type": "ApiConnectionWebhook",
               "inputs": {
                 "body": {
@@ -438,7 +467,7 @@
               "AzureFirewallConnector": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
                 "connectionName": "[variables('OAuthConnection')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/AzureFirewallConnector')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
               },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",

@@ -2,15 +2,35 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "comments": "This playbook used to quarantine device or assigned policy via CarbonBlack connector.",
-    "author": "Dharma Reddy, CarbonBlack"
-  },
+    "title": "Endpoint take action from Teams - Carbon Black", 
+    "description": "This playbook sends an adaptive card to the SOC Teams channel, lets the analyst decide on action: Quarantine the device or Update the policy. It posts a comment on the incident with the information collected from the Carbon Black and summary of the actions taken, and closes the incident if required.",
+    "prerequisites": ["1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.", 
+      "2. Generate an API key. Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)", 
+      "3. [Find Organziation key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)"],
+    "prerequisitesDeployTemplateFile": "../../CarbonBlackConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
+    "entities": ["Host"], 
+    "tags": ["Remediation", "Teams bot"], 
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    }
+},
   "parameters": {
-    "Playbook Name": {
-      "defaultValue": "CarbonBlack-TakeDeviceActionFromTeams",
+    "PlaybookName": {
+      "defaultValue": "EndpointTakeActionFromTeams-CarbonBlack",
       "type": "string",
       "metadata": {
-        "description": "Name of the Logic App/Playbook"
+        "description": "Name of the Logic Apps resource to be created"
+      }
+    },
+    "CustomConnectorName":{
+      "defaultValue": "CarbonBlackCloudConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Carbon Black"
       }
     },
     "OrganizationKey": {
@@ -43,9 +63,9 @@
     }
   },
   "variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-    "CarbonBlackConnectionName": "[concat('CarbonBlackCloudConnector-', parameters('Playbook Name'))]",
-    "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]"
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "CarbonBlackConnectionName": "[concat('CarbonBlackCloudConnector-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]"
   },
   "resources": [
     {
@@ -56,7 +76,7 @@
       "properties": {
         "customParameterValues": {},
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/CarbonBlackCloudConnector')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
         }
       }
     },
@@ -87,13 +107,17 @@
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
-      "name": "[parameters('Playbook Name')]",
+      "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
         "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
         "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
       ],
+      "tags": {
+        "hidden-SentinelTemplateName": "EndpointResponseTeams-CarbonBlack",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
       "properties": {
         "state": "Enabled",
         "definition": {
@@ -1701,7 +1725,7 @@
               "CarbonBlackCloudConnector": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
                 "connectionName": "[variables('CarbonBlackConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/CarbonBlackCloudConnector')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
               },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",

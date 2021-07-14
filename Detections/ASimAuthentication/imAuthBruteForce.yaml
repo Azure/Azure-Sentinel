@@ -1,0 +1,43 @@
+id: a6c435a2-b1a0-466d-b730-9f8af69262e8
+name: Brute force attack against user credentials (Uses Authentication Normalization)
+description: |
+  'Identifies evidence of brute force activity against a user highlighting multiple authentication failures 
+  and by a successful authentication within a given time window. 
+  (The query does not enforce any sequence - eg requiring the successful authentication to occur last.)
+  Default Failure count is 10, Default Success count is 1 and default Time Window is 20 minutes.
+  To use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelAuthentication)'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+tags:
+  - Id: 28b42356-45af-40a6-a0b4-a554cdfd5d8a
+  - version: 1.0.0
+query: |
+  let failureCountThreshold = 10;
+  let successCountThreshold = 1;
+  let authenticationWindow = 20m;
+  imAuthentication
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddress = make_set(SrcDvcIpAddr)
+            , FailureCount = countif(EventResult=='Failure')
+            , SuccessCount = countif(EventResult=='Success') 
+            // might be improved by counting FailReason:Outdated as Success.
+  by bin(TimeGenerated, authenticationWindow), TargetUserId, TargetUsername, TargetUserType 
+  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0

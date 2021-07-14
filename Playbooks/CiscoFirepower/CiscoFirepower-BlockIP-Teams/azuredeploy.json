@@ -1,12 +1,32 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP - Take Action from Teams - Cisco Firepower", 
+        "description": "This playbook sends an adaptive card to the SOC Teams Channel to allow analyst response on Cisco Firepower.",
+        "mainSteps":  ["1. For each IP in the incident, check if it is already selected for the Network Group object.",
+            "2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depdening on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object",
+            "3. The chosen changes are applied to the Network Group object", 
+            "4. Comment is added to Azure Sentinel incident"],
+        "prerequisites": ["1. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)",
+            "2. Cisco Firepower custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the [connector doc](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/CiscoFirepower/CustomConnector#deployment-instructions)"],
+        "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
+        "entities": ["Ip"], 
+        "tags": ["Remediation", "Teams bot"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Wortell"
+        }
+    },
     "parameters": {
-        "Playbook Name": {
+        "PlaybookName": {
             "defaultValue": "CiscoFirepower-BlockIP-Teams",
             "type": "String",
             "metadata": {
-                "description": "Name of the Logic App/Playbook"
+                "description": "Name of the Logic Apps resource to be created"
             }
         },
         "Cisco Firepower Connector name": {
@@ -24,9 +44,9 @@
         }
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-        "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]",
-        "CiscoFirepowerConnectionName": "[concat('ciscofirepowerconnector-', parameters('Playbook Name'))]"
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+        "CiscoFirepowerConnectionName": "[concat('ciscofirepowerconnector-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -68,13 +88,18 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('Playbook Name')]",
+            "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('CiscoFirepowerConnectionName'))]"
             ],
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "BlockIP-Firepower-Teams",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "properties": {
                 "state": "Enabled",
                 "definition": {

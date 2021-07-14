@@ -1,14 +1,14 @@
-# Crowdstrike_ContainHost
+# Crowdstrike ContainHost
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
  1. Fetches the device information from Crowdstrike
  2. Contain host if it is not already contained
  3. Enrich the incident with device information from Crowdstrike
-    ![Comment example](./Incident_Comment.png)
+    ![Comment example](./images/Incident_Comment.png)
 
  4. Close the incident if contained the host
 
-![Crowdstrike_ContainHost](./ContainHost.png)
+![Crowdstrike_ContainHost](./images/designerOverviewLight.png)
 ### Prerequisites 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)
 2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment
@@ -17,7 +17,7 @@
 
 
 ### Deployment instructions 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.<br>
    [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2FPlaybooks%2FCrowdStrike_ContainHost%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2FPlaybooks%2FCrowdStrike_ContainHost%2Fazuredeploy.json)
 
 3. Fill in the required parameters:
