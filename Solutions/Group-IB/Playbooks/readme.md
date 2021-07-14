@@ -7,6 +7,16 @@ There are a number of pre-configuration steps required before deploying the play
 
 ## Group-IB Sentinel Playbooks Collections Detailed Description
 
+0. "GIBIndicatorProcessor" Playbook<br>
+This playbook is used to send indicators to Microsoft Security Graph API from all other GIB playbooks.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
+<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+</a>  
+
 1. "GIBTIA_APT_Threats" Playbook<br>
 a. Collection: apt/threat<br>
 b. Has Indicators: Yes<br>
