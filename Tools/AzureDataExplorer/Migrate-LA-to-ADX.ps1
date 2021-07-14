@@ -69,6 +69,7 @@ param(
 [string]$KustoConnectionString = "$AdxEngineUrl;Fed=True"
 [string]$NuGetIndex = "https://api.nuget.org/v3/index.json"
 [string]$NuGetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+[string]$nugetPackageLocation = "$($env:USERPROFILE)\.nuget\packages"
 
 #endregion StaticValues
 
@@ -245,6 +246,7 @@ function Invoke-KustoCLI {
         $KustoToolsDir = "$env:USERPROFILE\.nuget\packages\$KustoToolsPackage\"
         $CurrentDir = Get-Location
         Set-Location $ScriptDir
+        
 
         if (!(Test-Path $KustoToolsDir)) {				 
             if (!(Test-Path nuget)) {
@@ -285,7 +287,8 @@ function New-AdxRawMappingTables {
     #>
     [CmdletBinding()]
     param (        
-        [parameter(Mandatory = $true)] $LaTables        
+        [parameter(Mandatory = $true)] $LaTables,
+        [parameter(Mandatory = $true)] $decision        
     )
 
     if (!(Test-Path "$PSScriptRoot\KustoQueries" -PathType Container)) { 
@@ -682,7 +685,7 @@ else {
 }
 
 $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
-New-AdxRawMappingTables -LaTables $ResultsAllTables
+New-AdxRawMappingTables -LaTables $ResultsAllTables -decision $LaTablesQuestionDecision
 #endregion
 
 #region EventHubsCreation
