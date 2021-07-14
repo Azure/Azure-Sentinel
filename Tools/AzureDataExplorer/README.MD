@@ -13,7 +13,7 @@ To learn about architectural options please refer to my colleague's [Javier Sori
 
 2. Create ADX Database  
 
-3. Please verify ADXSupportedTables.json file with [SupportedTables Section] (https://docs.microsoft.com/en-us/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)  
+3. Please verify ADXSupportedTables.json file with [SupportedTables Section] (https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)    
    **Note**: If supported table is not listed in ADXSupportedTables.json, please updated your local file
 
 ## Azure Data Explorer Architecture
