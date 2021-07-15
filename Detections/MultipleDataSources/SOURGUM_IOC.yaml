@@ -1,0 +1,182 @@
+id: 94749332-1ad9-49dd-a5ab-5ff2170788fc
+name: SOURGUM Actor IOC - July 2021
+description: | 
+  'Identifies a match across IOC's related to an actor tracked by Microsoft as SOURGUM'
+severity: High 
+requiredDataConnectors: 
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoASA
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes: 
+      - CommonSecurityLog
+  - connectorId: CEF
+    dataTypes: 
+      - CommonSecurityLog               
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceRegistryEvents
+      - DeviceFileEvents
+      - DeviceEvents
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+  - connectorId: WindowsFirewall
+    dataTypes:
+      - WindowsFirewall      
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1546
+tags:
+  - SOURGUM
+query:  |
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/SOURGUM.csv"] with (format="csv", ignoreFirstRecord=True);
+  let domains = (iocs | where Type =~ "domainname"| project IoC);
+  let sha256Hashes = (iocs | where Type =~ "sha256" | project IoC);
+  let file_path1 = (iocs | where Type =~ "filepath1" | project IoC);
+  let file_path2 = (iocs | where Type =~ "filepath2" | project IoC);
+  let file_path3 = (iocs | where Type =~ "filepath3" | project IoC);
+  let reg_key = (iocs | where Type =~ "regkey" | project IoC);
+   (union isfuzzy=true
+  (CommonSecurityLog
+  | where DestinationHostName has_any (domains) or RequestURL has_any (domains) or Message has_any (domains)
+  | parse Message with * '(' DNSName ')' *
+  | project TimeGenerated, Message, SourceUserID, RequestURL, DestinationHostName, Type, SourceIP, DestinationIP, DNSName
+  | extend  Alert = 'SOURGUM IOC detected'
+  | extend timestamp = TimeGenerated, AccountCustomEntity = SourceUserID, UrlCustomEntity = RequestURL , IPCustomEntity = DestinationIP, DNSCustomEntity = DNSName
+  ),
+  (DnsEvents
+  | where Name in~ (domains)
+  | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
+  | extend DNSName = Name, Host = Computer , Alert = 'SOURGUM IOC detected'
+  | extend timestamp = TimeGenerated, HostCustomEntity = Host, DNSCustomEntity = DNSName, IPCustomEntity = IPAddresses
+  ),
+  (VMConnection
+  | where  RemoteDnsCanonicalNames has_any (domains)
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | project TimeGenerated, Computer, Direction, RemoteDnsCanonicalNames, ProcessName, SourceIp, DestinationIp, DestinationPort, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIp, HostCustomEntity = Computer, ProcessCustomEntity = ProcessName, DNSCustomEntity = DNSName, Alert = 'SOURGUM IOC detected'
+  ),
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"], Image = EventDetail.[4].["#text"]
+  | where Image has_any (file_path1) or Image has_any (file_path3)
+  | project TimeGenerated, SourceIP, DestinationIP, Image, UserName, Computer, EventDetail, Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, ProcessCustomEntity = split(Image, '\\', -1)[-1], HostCustomEntity = Computer , IPCustomEntity = DestinationIP, Alert = 'SOURGUM IOC detected'
+  ),  
+  (DeviceNetworkEvents
+  | where (RemoteUrl has_any (domains))  or (InitiatingProcessSHA256 in (sha256Hashes) and InitiatingProcessFolderPath has_any (file_path1)) or InitiatingProcessFolderPath has_any (file_path3)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, LocalIP, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName,  Alert = 'SOURGUM IOC detected', UrlCustomEntity =RemoteUrl
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | project TimeGenerated,Resource, msg_s, Type
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (domains)
+  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP, Alert = 'SOURGUM IOC detected'
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | project TimeGenerated,Resource, msg_s
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where DestinationHost has_any (domains)  
+  | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost, Alert = 'SOURGUM IOC detected'
+  ),
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | parse EventDetail with * 'SHA256=' SHA256 '",' *
+  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"]
+  | where (SHA256 has_any (sha256Hashes) and Image has_any (file_path1)) or (Image has_any (file_path3)) or ( CommandLine has_any (file_path3)) or ( CommandLine has_any (file_path1)) or ( CommandLine has 'reg add' and CommandLine has_any (reg_key) and CommandLine has_any (file_path2)) 
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256, CommandLine, Image
+  | extend Type = strcat(Type, ": ", Source), Alert = 'SOURGUM IOC detected'
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = split(Image, '\\', -1)[-1], FileHashCustomEntity = SHA256
+  ),
+  (DeviceRegistryEvents
+  | where RegistryKey has_any (reg_key) and RegistryValueData has_any (file_path2)
+  |  project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type 
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = InitiatingProcessSHA256,  Alert = 'SOURGUM IOC detected'
+  ),
+  (DeviceProcessEvents
+  | where  ( InitiatingProcessCommandLine has_any (file_path1)) or ( InitiatingProcessCommandLine has_any (file_path3)) or ( InitiatingProcessCommandLine has 'reg add' and InitiatingProcessCommandLine has_any (reg_key) and InitiatingProcessCommandLine has_any (file_path2)) or (InitiatingProcessFolderPath has_any (file_path1)) or (InitiatingProcessFolderPath has_any (file_path3)) or (FolderPath  has_any (file_path1)) or (FolderPath has_any (file_path3))
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = InitiatingProcessSHA256, Alert = 'SOURGUM IOC detected'
+  ),
+  (DeviceFileEvents
+  | where  (InitiatingProcessSHA256 has_any (sha256Hashes) and InitiatingProcessFolderPath has_any (file_path1)) or (InitiatingProcessFolderPath has_any (file_path3)) or (FolderPath  has_any (file_path1)) or (FolderPath  has_any (file_path3)) or ( InitiatingProcessCommandLine has_any (file_path1)) or ( InitiatingProcessCommandLine has_any (file_path3))
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RequestAccountName, RequestSourceIP, InitiatingProcessSHA256, FolderPath, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = RequestAccountName, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = InitiatingProcessSHA256,  Alert = 'SOURGUM IOC detected'
+  ),
+  (DeviceEvents
+  | where  ( InitiatingProcessCommandLine has_any (file_path1)) or ( InitiatingProcessCommandLine has_any (file_path3)) or ( InitiatingProcessCommandLine has 'reg add' and InitiatingProcessCommandLine has_any (reg_key) and InitiatingProcessCommandLine has_any (file_path2)) or (InitiatingProcessFolderPath has_any (file_path1)) or (InitiatingProcessFolderPath has_any (file_path3)) or (FolderPath  has_any (file_path1)) or (FolderPath has_any (file_path3))
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
+  | extend CommandLine = InitiatingProcessCommandLine, Alert = 'SOURGUM IOC detected'
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = InitiatingProcessSHA256
+  ),
+  (  SecurityEvent
+  | where EventID == 4688
+  | where ( CommandLine has_any (file_path1)) or ( CommandLine has_any (file_path3)) or ( CommandLine has 'reg add' and CommandLine has_any (reg_key) and CommandLine has_any (file_path2)) or (NewProcessName has_any (file_path1)) or (NewProcessName has_any (file_path3)) or (ParentProcessName has_any (file_path1)) or (ParentProcessName has_any (file_path3))
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName, Alert = 'SOURGUM IOC detected'
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity 
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: SHA256
+      - identifier: Value
+        columnName: FileHashCustomEntity
+version: 1.0.0
