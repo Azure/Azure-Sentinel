@@ -41,4 +41,14 @@ NOTE: The secret is displayed only once, so make sure you copy and save it NOW s
 Back on the application that was registered in Step 1, copy the Directory (tenant) ID and the Application (client) ID
 
 ![screenshot](./images/IDs.JPG)
+
+# Modifying time interval
+
+Certain situations may dictate Security Operations to lower the frequency of the synchronization of comments from Azure Sentinel to M365 Defender. The following steps can be followed if changing the frequency of comments sync is required:
+
+1. After the LogicApp has been deployed, you could modify the Recurrence trigger to a lower time interval. The default when the LogicApp is deployed is 1 day.
+
+![screenshot](./images/Trigger.JPG)
+
+Also, you could add more parameters for the triggers such as Time zone and/or the Start (or Trigger) time.
 -------------------------------------------------------------------------------------------

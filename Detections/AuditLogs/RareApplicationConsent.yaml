@@ -43,13 +43,17 @@ query: |
   // Gather current period of audit data
   let RecentConsent = AuditLogs | where TimeGenerated >= ago(current)
   | where OperationName has "Consent to application"
-  | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
-  tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend IpAddress = case(
+  isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
+  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),
+  'Not Available')
   | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
   tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
   | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
   | parse TargetResources.[0].modifiedProperties with * "ConsentType: " ConsentType "]" *
-  | project TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType , CorrelationId, Type;
+  | mv-expand AdditionalDetails
+  | extend UserAgent = iff(AdditionalDetails.key == "User-Agent",tostring(AdditionalDetails.value),"")
+  | project TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, UserAgent, CorrelationId, Type;
   // Exclude previously seen audit activity for "Consent to application" that was seen in the lookback period
   // First for rare InitiatedBy
   let RareConsentBy = RecentConsent | join kind= leftanti AuditTrail on OperationName, InitiatedBy 
@@ -58,7 +62,7 @@ query: |
   let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetResourceName
   | extend Reason = "Previously unseen app granted consent";
   RareConsentBy | union RareConsentApp
-  | summarize Reason = makeset(Reason) by TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, CorrelationId, Type
+  | summarize Reason = makeset(Reason) by TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, UserAgent, CorrelationId, Type
   | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatedBy, HostCustomEntity = TargetResourceName, IPCustomEntity = IpAddress
 entityMappings:
   - entityType: Account
@@ -73,4 +77,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.1.0

@@ -71,7 +71,8 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
 {
     throw "OKTASSO: Invalid Log Analytics Uri."
 }
-
+$resource = "/api/logs"
+$logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
 $storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
@@ -143,7 +144,7 @@ do {
         }
         $method="POST"
         $contentType = "application/json"
-        $resource = "/api/logs"
+        
         $rfc1123date = [DateTime]::UtcNow.ToString("r")
         
         $body = ([System.Text.Encoding]::UTF8.GetBytes($json))
@@ -157,7 +158,7 @@ do {
             -contentType $contentType `
             -resource $resource
 
-        $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
+        
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;

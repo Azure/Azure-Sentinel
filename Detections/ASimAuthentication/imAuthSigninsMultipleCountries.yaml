@@ -1,0 +1,38 @@
+id: 09ec8fa2-b25f-4696-bfae-05a7b85d7b9e
+name: User login from different countries within 3 hours. (Uses Authentication Normalization)
+description: |
+  'This query searches for successful user logins from different countries within 3 hours.\n
+   This is a normaliztion version of alert rule: 2954d424-f786-4677-9ffc-c24c44c6e7d5
+   To use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelAuthentication)'
+severity: High
+requiredDataConnectors: []
+queryFrequency: 3h
+queryPeriod: 3h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess 
+relevantTechniques:
+  - T1078
+tags:
+  - Id: 2954d424-f786-4677-9ffc-c24c44c6e7d5
+  - version: 1.0.0
+query: |
+  let timeframe = ago(3h);
+  let threshold = 2;
+  imAuthentication
+  | where TimeGenerated > timeframe
+  | where EventType=='Logon' and EventResult=='Success'
+  | where isnotempty(SrcGeoCountry)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Vendors=make_set(EventVendor), Products=make_set(EventVendor)
+    , NumOfCountries = dcount(SrcGeoCountry)
+    by TargetUserId, TargetUsername, TargetUserType
+  | where NumOfCountries >= threshold
+  | extend timestamp = StartTime, AccountCustomEntity = TargetUsername
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0

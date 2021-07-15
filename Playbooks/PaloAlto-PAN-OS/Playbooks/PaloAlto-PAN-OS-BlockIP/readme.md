@@ -14,10 +14,10 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ![PaloAlto-PAN-OS-BlockIP](./designerscreenshot.PNG)<br>
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore:**<br><br>
-![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
+![Adaptive Card example](./images/AdaptiveCardtoBlockorUnblock.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration:**<br><br>
-![Consolidated Adaptive Card example](./SummarizedAdaptiveCard.PNG)<br>
+![Consolidated Adaptive Card example](./images/SummarizedAdaptiveCard.PNG)<br>
 
 ### Prerequisites 
 1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.

@@ -65,6 +65,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Parsers": [],
   "Hunting Queries": [],
   "Data Connectors": [],
+  "Watchlists": [],
   "BasePath": "{Path to Solution Content}",
   "Version": "1.0.0"
 }

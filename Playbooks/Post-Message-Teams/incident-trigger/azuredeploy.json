@@ -1,0 +1,150 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Post Message Teams",
+        "description": "This playbook will post a message in a Microsoft Teams channel when an Incident is created in Azure Sentinel.",
+        "prerequisites": "MS teams Account that allow to post messages",
+        "lastUpdateTime": "2021-06-10T10:00:15.123Z",
+        "entities": [],
+        "tags": [ "Basics", "Notification" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Yaniv Shasha"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "PostMessageTeams",
+            "type": "string",
+            "metadata": {
+                "description": "Incident trigger"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+    "type": "Microsoft.Web/connections",
+    "apiVersion": "2016-06-01",
+    "name": "[variables('AzureSentinelConnectionName')]",
+    "location": "[resourceGroup().location]",
+    "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+    }
+},
+{
+    "type": "Microsoft.Web/connections",
+    "apiVersion": "2016-06-01",
+    "name": "[variables('TeamsConnectionName')]",
+    "location": "[resourceGroup().location]",
+    "properties": {
+        "displayName": "[variables('TeamsConnectionName')]",
+        "customParameterValues": {
+        },
+        "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+    }
+},
+{
+    "type": "Microsoft.Logic/workflows",
+    "apiVersion": "2017-07-01",
+    "name": "[parameters('PlaybookName')]",
+    "location": "[resourceGroup().location]",
+    "tags": {
+        "hidden-SentinelTemplateName": "PostMessageTeams",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
+    "identity": {
+        "type": "SystemAssigned"
+    },
+    "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+    ],
+    "properties": {
+        "state": "Enabled",
+        "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Post_a_message_(V3)": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "body": {
+                                        "content": "<p>Severity: @{triggerBody()?['object']?['properties']?['severity']}<br>\nTItle: @{triggerBody()?['object']?['properties']?['title']}<br>\nStatus: @{triggerBody()?['object']?['properties']?['status']}<br>\nID: @{triggerBody()?['object']?['properties']?['incidentNumber']}<br>\nURL:@{triggerBody()?['object']?['properties']?['incidentUrl']}<br>\n</p>",
+                                        "contentType": "html"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v3/beta/teams/@{encodeURIComponent('d05ba55c-593e-4bfa-8011-26e0626b5c14')}/channels/@{encodeURIComponent('19:8e52aee721394ab78563596463c067dc@thread.skype')}/messages"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                              "connectionName": "[variables('AzureSentinelConnectionName')]",
+                              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                              "connectionProperties": {
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity"
+                                }
+                            }
+                            },
+                            "teams": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                              "connectionName": "[variables('TeamsConnectionName')]",
+                              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

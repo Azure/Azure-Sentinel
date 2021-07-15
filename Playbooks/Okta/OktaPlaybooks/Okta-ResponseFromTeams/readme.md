@@ -9,7 +9,7 @@ When a new sentinal incident is created,this playbook gets triggered and perform
 ![Playbook Designer view](./Okta-ResponseFromTeams.PNG)<br>
 
 **This is the adaptive card SOC will recieve when playbook is triggered:**<br><br>
-![Adaptive Card example](./AdaptiveCardtoSOCuser.PNG)<br><br>
+![Adaptive Card example](./images/AdaptiveCardtoSOCuser.PNG)<br><br>
 
 
 
