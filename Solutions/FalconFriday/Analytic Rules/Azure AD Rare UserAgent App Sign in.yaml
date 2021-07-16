@@ -1,8 +1,8 @@
 id: 87d5cd18-211d-4fd4-9b86-65d23fed87ea
 name: Azure AD Rare UserAgent App Sign-in
 description: |
-  ​​​The query establishes a base-line of the type of UserAgent (i.e. browser, office application, etc) that is typically used for a particular application by looking back for a number of days. 
-  It then searches the current day for any deviations from this pattern, i.e. types of UserAgents not seen before in combination with this app.
+  ​​​This query establishes a baseline of the type of UserAgent (i.e. browser, office application, etc) that is typically used for a particular application by looking back for a number of days. 
+  It then searches the current day for any deviations from this pattern, i.e. types of UserAgents not seen before in combination with this application.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -24,8 +24,7 @@ query: |
   let timeframe = 1d;
   let lookback_timeframe= 7d;
   let ExtractBrowserTypeFromUA=(ua:string) {
-      // Note these are in a specific order since for example Edge contains based
-      // Chrome/ and Edge/ strings
+      // Note: these are in a specific order since, for example, Edge contains "Chrome/" and "Edge/" strings.
       case(
           ua contains "Edge/", dynamic({"AgentType": "Browser", "AgentName": "Edge"}),
           ua contains "Edg/", dynamic({"AgentType": "Browser", "AgentName": "Edge"}),
@@ -63,7 +62,7 @@ query: |
           pack("AgentType","Other","AgentName", extract(@"^([^/]*)/",1,ua))
       )
   };
-  // Query to obtain 'simplified' user agents in a given timespan
+  // Query to obtain 'simplified' user agents in a given timespan.
   let QueryUserAgents = (start_time:timespan, end_time:timespan) {
       union withsource=tbl_name AADNonInteractiveUserSignInLogs, SigninLogs
       | where TimeGenerated >= ago(start_time)
@@ -77,7 +76,7 @@ query: |
       | where not(isempty(UserAgent))
       | where not(isempty(AppId))
   };
-  // Get baseline usage per app
+  // Get baseline usage per application.
   let BaselineUserAgents=materialize(
       QueryUserAgents(lookback_timeframe+timeframe, timeframe)
       | summarize RequestCount=count() by AppId, AppDisplayName, SimpleUserAgent
@@ -90,13 +89,13 @@ query: |
   | summarize count() by AppId, AppDisplayName, UserAgent, SimpleUserAgent
   | join kind=leftanti BaselineUserAgents on AppId, AppDisplayName, SimpleUserAgent
   | join BaselineSummarizedAgents on AppId, AppDisplayName
-  | where BaselineRequestCount > minimumAppThreshold // Search only for actively used apps
-  // Get back full original requests
+  | where BaselineRequestCount > minimumAppThreshold // Search only for actively used applications.
+  // Get back full original requests.
   | join QueryUserAgents(timeframe, 0d) on AppId, UserAgent
   | project-away ParsedUserAgent, UserAgentName
   | project-reorder TimeGenerated, AppDisplayName, UserPrincipalName, UserAgent, BaselineUAs
-  // Begin whitelist
-  // End whitelist
+  // Begin allow-list.
+  // End allow-list.
   | summarize count() by UserPrincipalName, AppDisplayName, AppId, UserAgentType, SimpleUserAgent, UserAgent
 entityMappings:
   - entityType: Account

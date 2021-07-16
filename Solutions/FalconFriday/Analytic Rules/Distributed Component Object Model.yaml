@@ -1,8 +1,8 @@
 id: d58035ff-0bac-4c61-a7f4-f58939ff9764
 name: Distributed Component Object Model
 description: |
-  This detection works by detecting close time proximity between incoming network traffic on RPC/TCP followed by creation of a DCOM object, followed by a creation of the child process of the DCOM object. 
-  The query first identifies incoming network traffic over RPC/TCP followed by the creation of a DCOM object (process) within 2 seconds, followed by the creation of a child process of this DCOM object. 
+  This detection looks for cases of close-time proximity between incoming network traffic on RPC/TCP, followed by the creation of a DCOM object, followed by the creation of a child process of the DCOM object. 
+  The query first identifies incoming network traffic over RPC/TCP, followed by the creation of a DCOM object (process) within 2 seconds, followed by the creation of a child process of this DCOM object. 
 severity: Medium
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
@@ -31,10 +31,10 @@ query: |
   let RemoteDcomProcs = materialize(rpcNetwEvents
   | join kind=inner dcomProcEvents on DeviceId 
   | join kind=leftouter lastBootTime on DeviceId
-  | where TimestampProcEvent > LastBootTime+5m //Ignore first 5 min after boot
-  //avoiding < 2 since if the time between netw and proc creation is negative, they can't be related. Network event must come first. 
+  | where TimestampProcEvent > LastBootTime+5m // Ignore first 5 min after boot.
+  // Avoiding < 2 since if the time between netw and proc creation is negative, they can't be related. Network event must come first. 
   | where datetime_diff("second", TimestampProcEventExact, TimestampNetwEventExact) between (0 .. 2) 
-  //whitelisting some usual suspects which create lot of noise. This is dangerous though...huge gap for bypass. 
+  // Allow-listing some usual suspects which create lot of noise. This is dangerous though...huge gap for bypass. 
   | where DCOMFileName  !in ("TiWorker.exe", "dllhost.exe", "backgroundTaskHost.exe", "mobsync.exe", "WmiPrvSE.exe", 
       "RuntimeBroker.exe", "smartscreen.exe", "SppExtComObj.Exe", "usocoreworker.exe", "browser_broker.exe", "ssoncom.exe"));
   RemoteDcomProcs
@@ -43,7 +43,8 @@ query: |
       | where InitiatingProcessParentFileName =~ "svchost.exe" and InitiatingProcessFileName in ((RemoteDcomProcs | project DCOMFileName))) 
   on $left.DCOMHostPID == $right.InitiatingProcessParentId, DeviceId, $left.DCOMPID == $right.InitiatingProcessId
   | where InitiatingProcessParentFileName =~ "svchost.exe" and InitiatingProcessFileName =~ DCOMFileName 
-  | where FileName !in~ ("csc.exe") //whitelisting the black magic of Defender.
+  // Allow-listing the magic of Defender.
+  | where FileName !in~ ("csc.exe") 
   | summarize make_set(ProcessCommandLine) by TimestampNetwEventExact, TimestampProcEventExact, DeviceId, DeviceName, InitiatingProcessId, LocalIP, RemoteIP, LastBootTime, DCOMCmdLine
 entityMappings:
   - entityType: Host

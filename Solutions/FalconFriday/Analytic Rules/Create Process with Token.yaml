@@ -1,8 +1,8 @@
 id: 8df80270-b4fa-4a7a-931e-8d17c0b321ae
 name: Access Token Manipulation - Create Process with Token
 description: |
-  This rule detects the use of the runas command and checks whether the account used to elevate privileges isn't the users own admin account. 
-  Additionally it wil match this event to the logon events to chech wether it has been successful as well as augment the event with the new SID.
+  This query detects the use of the runas command and checks whether the account used to elevate privileges isn't the user's own admin account. 
+  Additionally, it wil match this event to the logon events - to check wether it has been successful as well as augment the event with the new SID.
 severity: Medium
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
@@ -21,19 +21,19 @@ relevantTechniques:
 query: |
   let RunAsProcess=DeviceProcessEvents
       | where FileName =~ "runas.exe" 
-      // You can chose to filter out the local admin account. This is based on convention. Here, we assume that localadmin accounts
-      // end with _ladmin (RID 500 / LAPS)
+      // You can choose to filter out the local admin account. This is based on convention. Here, we assume that localadmin accounts
+      // end with _ladmin (RID 500 / LAPS).
       | where not(AccountName has_any("_ladmin"))
-      // de-obfuscate the commandline used 
+      // De-obfuscate the commandline used. 
       | extend CleanProcessCommandLine=parse_command_line(tostring(ProcessCommandLine), "windows")
-      // exclude a user running something on their system through their admin account
-      | where CleanProcessCommandLine !contains strcat(AccountName, "_adm") //replace this with your admin account naming convention
-      // exclude local admin account activities by for instance the servicedesk, that uses the LAPS provisioned account. This is optional. 
-      // disable the line below if the number of false positives is acceptable. 
-      | where not(CleanProcessCommandLine has_any (":_ladmin")) //replace this with your local RID500/LAPS account
-      // extract the username for the elevation action
+      // Exclude a user running something on their system through their admin account.
+      | where CleanProcessCommandLine !contains strcat(AccountName, "_adm") // Replace this with your admin account naming convention.
+      // Exclude local admin account activities by, for instance, the servicedesk that uses the LAPS provisioned account. This is optional. 
+      // Disable the line below if the number of false positives is acceptable. 
+      | where not(CleanProcessCommandLine has_any (":_ladmin")) // Replace this with your local RID500/LAPS account.
+      // Extract the username for the elevation action.
       | extend ElevatedAccountName=extract("user:([a-zA-Z0-9\\\\]+)",1,tostring(CleanProcessCommandLine))
-      // strip the domain suffix
+      // Strip the domain suffix.
       | extend CleanElevatedAccountName= trim("(.*\\\\)",ElevatedAccountName);
   RunAsProcess
   | join kind=leftouter ( 

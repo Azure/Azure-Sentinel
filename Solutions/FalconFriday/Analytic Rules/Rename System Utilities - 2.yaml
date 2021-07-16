@@ -2,8 +2,8 @@ id: 19fe93fc-f58d-4d4c-9321-c18a8908934a
 name: Rename System Utilities - 2
 description: |
   Attackers often use LOLBINs that are renamed to avoid detection rules that are based on filenames.
-  This rule detects renamed LOLBINs by making use of two arrays. The first contains all the filenames of the most common LOLBins, the second contains all known original filenames that can be embedded in the PE header that are different from the filename itself.
-  Next step is to concatenate these two arrays and use that as a base to match all executed processes against.
+  This rule detects renamed LOLBINs by using two arrays. The first contains all the filenames of the most common LOLBins, the second contains all known original filenames that can be embedded in the PE header that are different from the filename itself.
+  The next step is to concatenate these two arrays and use that as a base to match all executed processes against.
   This query is really heavy on resources. Use it with care.
 severity: Medium
 requiredDataConnectors:
@@ -22,7 +22,7 @@ query: |
   let timeframe=7d;
   let lolbins = dynamic(["at.exe", "atbroker.exe", "bash.exe", "bitsadmin.exe", "certreq.exe", "certutil.exe", "cmd.exe", "cmdkey.exe", "cmstp.exe", "control.exe", "csc.exe", "cscript.exe", "desktopimgdownldr.exe", "dfsvc.exe", "diantz.exe", "diskshadow.exe", "dnscmd.exe", "esentutl.exe", "eventvwr.exe", "expand.exe", "extexport.exe", "extrac32.exe", "findstr.exe", "forfiles.exe", "ftp.exe", "gfxdownloadwrapper.exe", "gpscript.exe", "hh.exe", "ie4uinit.exe", "ieexec.exe", "ilasm.exe", "infdefaultinstall.exe", "installutil.exe", "jsc.exe", "makecab.exe", "mavinject.exe", "microsoft.workflow.compiler.exe", "mmc.exe", "mpcmdrun.exe", "msbuild.exe", "msconfig.exe", "msdt.exe", "mshta.exe", "msiexec.exe", "netsh.exe", "odbcconf.exe", "pcalua.exe", "pcwrun.exe", "pktmon.exe", "presentationhost.exe", "print.exe", "psr.exe", "rasautou.exe", "reg.exe", "regasm.exe", "regedit.exe", "regini.exe", "register-cimprovider.exe", "regsvcs.exe", "regsvr32.exe", "replace.exe", "rpcping.exe", "rundll32.exe", "runonce.exe", "runscripthelper.exe", "sc.exe", "schtasks.exe", "scriptrunner.exe", "syncappvpublishingserver.exe", "ttdinject.exe", "tttracer.exe", "vbc.exe", "verclsid.exe", "wab.exe", "wmic.exe", "wscript.exe", "wsreset.exe", "xwizard.exe", "agentexecutor.exe", "appvlp.exe", "bginfo.exe", "cdb.exe", "csi.exe", "devtoolslauncher.exe", "dnx.exe", "dotnet.exe", "dxcap.exe", "excel.exe", "mftrace.exe", "msdeploy.exe", "msxsl.exe", "ntdsutil.exe", "powerpnt.exe", "rcsi.exe", "sqldumper.exe", "sqlps.exe", "sqltoolsps.exe", "squirrel.exe", "te.exe", "tracker.exe", "vsjitdebugger.exe", "winword.exe", "wsl.exe"]);
   let binaries_of_interest = dynamic(["net.exe", "net1.exe", "whoami.exe", "ipconfig.exe", "tasklist.exe", "quser.exe", "tracert.exe", "route.exe", "runas.exe", "klist.exe", "wevtutil.exe", "wmiprvse.exe", "powershell.exe", "bash.exe", "qwinsta.exe", "rwinsta.exe", "replace.exe", "findstr.exe", "icacls.exe", "cacls.exe", "xcopy.exe", "robocopy.exe", "takeown.exe", "vssadmin.exe", "nltest.exe", "nltestk.exe", "sctasks.exe", "nbtstat.exe", "nbtinfo.exe", "mofcomp.exe", "nltestrk.exe", "dnscmd.exe", "registercimprovider.exe", "registercimprovider2.exe", "procdump", "ru.exe", "pspasswd.exe", "psexec.c", "psexec.exe", "pslist.exe", "regsize", "pskill.exe", "pkill.exe", "wsmprovhost.exe", "fltmc.exe", "sdbinst.exe"]);
-  // Merge both lists into one reference list
+  // Merge both lists into one reference list.
   let original_file_name_set=array_concat(lolbins,binaries_of_interest);
   DeviceProcessEvents
   | where Timestamp > ago(timeframe)
@@ -30,20 +30,20 @@ query: |
   | extend original_file_name=tolower(ProcessVersionInfoOriginalFileName)
   | where original_file_name in (original_file_name_set)
   | where original_file_name != ""
-  // filter some known mismatches between PE header FileName and the binary FileName
+  // Filter some known mismatches between PE header FileName and the binary FileName.
   | where not(process_name=="schtasks.exe" and original_file_name=="sctasks.exe" and (FolderPath=~@"C:\Windows\System32\schtasks.exe" or FolderPath=~@"C:\Windows\SysWOW64\schtasks.exe"))
   | where not(process_name=="nbtstat.exe" and original_file_name=="nbtinfo.exe" and FolderPath=~@"C:\Windows\System32\nbtstat.exe")
   | where not(process_name=="bginfo64.exe" and original_file_name=="bginfo.exe" and (FolderPath=~@"C:\Windows\System32\Bginfo64.exe" or FolderPath =~@"C:\Program Files\SysInternals BGInfo\Bginfo64.exe"))
-  // filter MS Excel file format converter
+  // Filter MS Excel file format converter.
   | where not(process_name=="excelcnv.exe" and original_file_name=="excel.exe" and (FolderPath startswith @"C:\Program Files\Microsoft Office Web Apps\ExcelServicesEcs\" or FolderPath  startswith @"C:\Program Files\Microsoft Office\" or FolderPath startswith @"C:\Program Files (x86)\Microsoft Office\"))
-  // optionally filter this (when psexec is actually common in your environment)
+  // Optionally filter psexec (when psexec is actually common in your environment)
   //| where not(process_name=="psexec.exe" and original_file_name=="psexec.c")
   //| where not(process_name=="psexec64.exe" and original_file_name=="psexec.c")
   | where process_name != original_file_name
   | project Timestamp,DeviceName,AccountName,process_name, original_file_name, FolderPath, ProcessCommandLine, InitiatingProcessFileName, InitiatingProcessVersionInfoOriginalFileName, InitiatingProcessCommandLine, InitiatingProcessParentFileName, ReportId
-  // optionally start filters with a prevalence check
+  // Optionally start filters with a prevalence check.
   // | summarize count() by process_name, original_file_name, FolderPath, InitiatingProcessFileName, InitiatingProcessVersionInfoOriginalFileName
-  // environment specific filters here, for example
+  // Environment-specific filters here, for example
   //| where not(process_name=="[FILL]" and original_file_name=="[FILL]" and (FolderPath=~@"[FILL]" or FolderPath =~@"[FILL]"))
 entityMappings:
   - entityType: Host
