@@ -2,11 +2,11 @@
 
 The following table lists the SAP Log change requests that you must configure in order to support ingesting specific SAP logs into Azure Sentinel.
    
-   For a typical installation on SAP Basis 7.5+  install NPLK900131
+   For a typical installation on SAP Basis 7.5+  install NPLK900141
    
-   For a typical installation on SAP Basis 7.4  install NPLK900132
+   For a typical installation on SAP Basis 7.4  install NPLK900142
    
-   For the  role creation (any version) install NPLK900114
+   For the  role creation (any version) install NPLK900140
 
 <u><b>SAP notes required for version below SAP Basis 7.5 SP13:</u></b>
 
