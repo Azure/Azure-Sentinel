@@ -21,7 +21,7 @@ The following table lists the SAP Log change requests that you must configure in
 
 | Log | Change Request | Latest Update in Version  | 
 | --- | -------------- | -------------------------- |
-| **All Logs** | NPLK900131 | 0.0.21 <br> <br>Use the complete package<br> <br>Basis>=7.5 |
-| **All Logs** | NPLK900132 | 0.0.21 <br> <br>Use the complete package<br> <br>Basis<7.5 |
-| **Sample Authorizations Role** | NPLK900114 | 0.0.14 | 
+| **All Logs** | NPLK900142 | 0.0.23 <br> <br>Use the complete package<br> <br>Basis>=7.5 |
+| **All Logs** | NPLK900141 | 0.0.23 <br> <br>Use the complete package<br> <br>Basis<7.5 |
+| **Sample Authorizations Role** | NPLK900140 | 0.0.15 | 
 
