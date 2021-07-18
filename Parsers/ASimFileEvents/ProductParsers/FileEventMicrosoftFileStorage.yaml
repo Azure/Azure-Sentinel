@@ -16,17 +16,91 @@ Description: |
   This is a Query Parser that is used to map Azure Storage Analytics (StorageFileLogs) to the Azure Sentinel Information Model FileEvent schema.
 ParserName: vimFileEventAzureFileStorage
 ParserQuery: |
-  // https://docs.microsoft.com/en-us/rest/api/storageservices/storage-analytics-logged-operations-and-status-messages
+    // https://docs.microsoft.com/en-us/rest/api/storageservices/storage-analytics-logged-operations-and-status-messages
     let fileoperations=datatable(OperationName:string, EventType:string)[
-      "DeleteFile", "FileDeleted"
-      , "DeleteDirectory", "FileDeleted"
-      , "CopyFile", "FileCopied"
-      , "CreateFileSnapshot", "FileCreated"
-      , "CreateDirectory", "FileCreated"
-      , "CreateFile", "FileCreated"
-      , "CreateShare", "FileCreated"
-      , "DeleteShare", "FileDeleted"
-      ];
+    "DeleteFile", "FileDeleted"
+    , "DeleteDirectory", "FileDeleted"
+    , "CopyFile", "FileCopied"
+    , "CreateFileSnapshot", "FileCreated"
+    , "CreateDirectory", "FileCreated"
+    , "CreateFile", "FileCreated"
+    , "CreateShare", "FileCreated" // Creates a folder
+    , "DeleteShare", "FileDeleted"
+    , "PutRange", "FileModified"
+    ];
+    StorageFileLogs
+    // **** relevant data filtering;
+    | where OperationName in (fileoperations)
+    //
+    | extend 
+          EventCount=int(1)
+        , EventStartTime=TimeGenerated
+        , EventEndTime=TimeGenerated
+    //	, EventType :string  ---> see lookup below
+        , EventResult=iff(StatusText == 'Success', 'Success', 'Failure') 
+      	, EventOriginalUid = CorrelationId
+        , EventOriginalType=OperationName
+        , EventProduct='Azure File Storage' 
+        , EventVendor='Microsoft'
+        , EventSchemaVersion='0.1.0'
+    	, ActorUsername=AccountName
+    	, ActorUsernameType='Simple'
+    	, ActorUserType='Other' // Storage account? The account name of the service owner.
+    	, TargetFilePath=tostring(split(Uri,'?')[0]) /// ????
+    	, TargetFilePathFormat='URL'
+      	, TargetUrl=Uri
+        ,  SrcIpAddr=tostring(split(CallerIpAddress,':')[0])
+        ,  SrcPortNumber=tostring(split(CallerIpAddress,':')[0])  //// Can use parse. SrcPortNumber is not in schema doc. should I map this?
+      	, HttpUserAgent=UserAgentHeader
+    | extend TargetFileName=tostring(split(TargetFilePath,'/')['-1'])
+    //	EventMessage :string ,
+    //	, TargetFileCreationTime :datetime,
+    //	, TargetFileMimeType :string ,
+    //	, TargetFileSize :int,
+    //	, TargetFileMD5 :string ,
+    //	, TargetFileSHA1 :string ,
+    //	, TargetFileSHA256 :string ,
+    //	, TargetFileSHA512 :string ,
+    //	, Hash :string ,
+     // ----------------------------------------------------------
+    //	, EventProductVersion :string ,
+    //	, ActorUserId :string ,
+    //	, ActorUserIdType :string ,
+    //	, Process :string ,
+    //	, ActingProcessId :int,
+    //	, ActingProcessGuid :string ,
+    //	, ActingProcessCommandLine :string ,
+    // No rename operation
+        //	, SrcFilePath :string ,
+    //	, SrcFilePathFormat :string ,
+    //	, SrcFileName :string ,
+    //	, SrcFileExtension :string ,
+    //	, SrcFileDirecory :string ,
+    //	, SrcFileCreationTime :datetime,
+    //	, SrcFileMimeType :string ,
+    //	, SrcFileSize :int,
+    //	, SrcFileMD5 :string ,
+    //	, SrcFileSHA1 :string ,
+    //	, SrcFileSHA256 :string ,
+    //	, SrcFileSHA512 :string ,
+    //	, ActorOriginalUserType :string ?
+    //	, ActingProcessName :string ,
+        //	, EventReportUrl :string ,
+    //	, Dvc :string ,
+    //	, DvcIpAddr :string ,
+    //	, DvcHostname :string ,
+    //	, DvcId :string ,
+    //	, DvcMacAddr :string ,
+    //	, DvcOs :string ,
+    //	, DvcOsVersion :string ,
+    //	, AdditionalFields :dynamic,
+    //
+    | lookup fileoperations on OperationName
+    // Aliases
+    | extend User=ActorUsername
+      , FilePath=TargetFilePath
+
+    /// Unsupported Operations:
     // Other non supported 
     // fileoperations=datatable(x:string, y:string)[ "AbortCopyFile"
     // , "AcquireFileLease"
@@ -61,7 +135,6 @@ ParserQuery: |
     // , "ListHandles"
     // , "ListShares"
     // , "PutFilePermission"
-    // , "PutRange"
     // , "GetFilePermission"
     // , "GetFileProperties"
     // , "GetFileServiceProperties"
@@ -77,71 +150,3 @@ ParserQuery: |
     // , "SetShareMetadata"
     // , "SetShareProperties"
     // , "SnapshotShare];
-    StorageFileLogs
-    // **** relevant data filtering;
-    | where OperationName in (fileoperations)
-    //
-    | extend 
-    //	EventMessage :string ,
-      , EventCount=int(1)
-      , EventStartTime=TimeGenerated
-      , EventEndTime=TimeGenerated
-    //	, EventType :string  ---> see lookup below
-      , EventResult=iff(StatusText == 'Success', 'Success', 'Failure') 
-    //	, EventOriginalUid :string ,
-      , EventOriginalType=OperationName
-      , EventProduct='Azure File Storage' 
-    //	, EventProductVersion :string ,
-      , EventVendor='Microsoft'
-      , EventSchemaVersion='0.1.0'
-    //	, EventReportUrl :string ,
-    //	, Dvc :string ,
-    //	, DvcIpAddr :string ,
-    //	, DvcHostname :string ,
-    //	, DvcId :string ,
-    //	, DvcMacAddr :string ,
-    //	, DvcOs :string ,
-    //	, DvcOsVersion :string ,
-    //	, AdditionalFields :dynamic,
-    //	, ActorUsername :string ,
-    //	, User :string ,
-    //	, ActorUsernameType :string ,
-    //	, ActorUserId :string ,
-    //	, ActorUserIdType :string ,
-    //	, ActorUserType :string ,
-    //	, ActorOriginalUserType :string ,
-    //	, ActingProcessName :string ,
-    //	, Process :string ,
-    //	, ActingProcessId :int,
-    //	, ActingProcessGuid :string ,
-    //	, ActingProcessCommandLine :string ,
-    //	, TargetFilePath :string ,
-    //	, FilePath :string ,
-    //	, TargetFilePathFormat :string ,
-    //	, TargetFileName :string ,
-    //	, TargetFileExtension :string ,
-    //	, TargetFileDirecory :string ,
-    //	, TargetFileCreationTime :datetime,
-    //	, TargetFileMimeType :string ,
-    //	, TargetFileSize :int,
-    //	, TargetFileMD5 :string ,
-    //	, TargetFileSHA1 :string ,
-    //	, TargetFileSHA256 :string ,
-    //	, TargetFileSHA512 :string ,
-    //	, Hash :string ,
-    //	, SrcFilePath :string ,
-    //	, SrcFilePathFormat :string ,
-    //	, SrcFileName :string ,
-    //	, SrcFileExtension :string ,
-    //	, SrcFileDirecory :string ,
-    //	, SrcFileCreationTime :datetime,
-    //	, SrcFileMimeType :string ,
-    //	, SrcFileSize :int,
-    //	, SrcFileMD5 :string ,
-    //	, SrcFileSHA1 :string ,
-    //	, SrcFileSHA256 :string ,
-    //	, SrcFileSHA512 :string ,
-    //	, TargetUrl:string ,
-    //	, SrcIpAddr:string ,
-    //	, HttpUserAgent  :string
-    | lookup fileoperations on OperationName
