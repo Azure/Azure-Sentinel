@@ -62,7 +62,7 @@
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p><strong></strong><strong>@{outputs('Create_logo')}</strong><strong> CiscoUmbrella-AssignPolicyToIdentity</strong><br>\nThe following origin ids were assigned to policy @{variables('policyId')} for organization @{variables('organizationId')}:<br>\n@{body('Create_HTML_table')}</p>"
+                                    "message": "<p><strong></strong><strong>@{outputs('Create_logo')}</strong><strong> CiscoUmbrella-AssignPolicyToIdentity</strong><br>\nThe following origin ids were assigned to policy @{variables('policyId')} for organization @{variables('organizationId')}:<br>\n@{body('Create_HTML_table_with_updated_origin_IDs')}<br>\nThe following origin ids were not assigned because of errors:<br>\n@{body('Create_HTML_table_with_not_updated_origin_IDs')}</p>"
                                 },
                                 "host": {
                                     "connection": {
@@ -79,7 +79,25 @@
                             },
                             "type": "ApiConnection"
                         },
-                        "Create_HTML_table": {
+                        "Create_HTML_table_with_not_updated_origin_IDs": {
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "originId",
+                                        "value": "@item()"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@variables('not_updated_oridinIds_array')"
+                            },
+                            "runAfter": {
+                                "Create_HTML_table_with_updated_origin_IDs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Create_HTML_table_with_updated_origin_IDs": {
                             "inputs": {
                                 "columns": [
                                     {
@@ -101,9 +119,9 @@
                             "type": "Table"
                         },
                         "Create_logo": {
-                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Solutions/CiscoUmbrella/Playbooks/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                            "inputs": "<img src=\"https://github.com/socprime/Azure-Sentinel/raw/cisco_umbrella_playbooks/Playbooks/CiscoUmbrella/cisco-logo.png\"  width=\"32\" height=\"32\">",
                             "runAfter": {
-                                "Create_HTML_table": [
+                                "Create_HTML_table_with_not_updated_origin_IDs": [
                                     "Succeeded"
                                 ]
                             },
@@ -177,14 +195,27 @@
                         },
                         "For_each_originId_assign_policy_to_originId": {
                             "actions": {
+                                "Append_originId_to_not_updated_originIds_array_variable_in_case_of_error": {
+                                    "inputs": {
+                                        "name": "not_updated_oridinIds_array",
+                                        "value": "@items('For_each_originId_assign_policy_to_originId')"
+                                    },
+                                    "runAfter": {
+                                        "Assign_a_policy_to_an_identity": [
+                                            "Failed",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
                                 "Append_originId_to_updated_originIds_array_variable": {
                                     "inputs": {
                                         "name": "updated_oridinIds_array",
                                         "value": "@items('For_each_originId_assign_policy_to_originId')"
                                     },
                                     "runAfter": {
-                                        "Assign_a_policy_to_an_identity": [
-                                            "Succeeded"
+                                        "Append_originId_to_not_updated_originIds_array_variable_in_case_of_error": [
+                                            "Skipped"
                                         ]
                                     },
                                     "type": "AppendToArrayVariable"
@@ -222,11 +253,27 @@
                                 "path": "/v1/organizations"
                             },
                             "runAfter": {
-                                "Initialize_variable_updated_oridinIds_array": [
+                                "Initialize_variable_not_updated_oridinIds_array": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection"
+                        },
+                        "Initialize_variable_not_updated_oridinIds_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "not_updated_oridinIds_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_updated_oridinIds_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
                         },
                         "Initialize_variable_organizationId": {
                             "inputs": {
