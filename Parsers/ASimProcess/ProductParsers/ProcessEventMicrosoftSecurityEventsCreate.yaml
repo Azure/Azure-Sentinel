@@ -1,0 +1,95 @@
+Parser:
+  Title: ASIM Security Events Process Creation Event Parser
+  Version: '0.1'
+  LastUpdated: June 23, 2021
+Product:
+  Name: Microsoft Windows Security Events
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Security Events Process Creation Event Parser (event number 4688)
+ParserName: vimProcessCreateMicrosoftSecurityEvents
+ParserQuery: | 
+              let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)
+                [
+                  'S-1-16-0', '0x00000000', 'SECURITY_MANDATORY_UNTRUSTED_RID', 'Untrusted',
+                  'S-1-16-4096', '0x00001000', 'SECURITY_MANDATORY_LOW_RID', 'Low integrity',
+                  'S-1-16-8192', '0x00002000', 'SECURITY_MANDATORY_MEDIUM_RID', 'Medium integrity',
+                  'S-1-16-8448', '0x00002100', 'SECURITY_MANDATORY_MEDIUM_PLUS_RID', 'Medium high integrity',
+                  'S-1-16-12288', '0X00003000', 'SECURITY_MANDATORY_HIGH_RID', 'High integrity',
+                  'S-1-16-16384', '0x00004000', 'SECURITY_MANDATORY_SYSTEM_RID', 'System integrity',
+                  'S-1-16-20480', '0x00005000', 'SECURITY_MANDATORY_PROTECTED_PROCESS_RID', 'Protected process'
+                ];
+              let ProcessEvents=(){
+              SecurityEvent
+              // -- Filter
+              | where EventID == 4688
+
+              // -- Map
+              | extend
+                // Event
+                  EventCount = int(1),
+                  EventVendor = 'Microsoft',
+                  EventProduct = 'Security Events',
+                  EventSchemaVersion = '0.1.0',
+                  EventStartTime = todatetime(TimeGenerated),
+                  EventEndTime = todatetime(TimeGenerated),
+                  EventType = 'ProcessCreated',
+                  EventOritingalType = EventID,
+                  EventOriginalUid = EventOriginId, 
+
+                // Device
+                  DvcId = SourceComputerId,
+                  DvcHostname = Computer,
+                  DvcOs = 'Windows',
+
+                // Users
+                  ActorUserId = SubjectUserSid,
+                  ActorUserIdType = 'SID',
+                  ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount),
+                  ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows'),
+                  ActorSessionId = SubjectLogonId,
+                  ActorType = AccountType, // Add?
+                  ActorDomainName = SubjectDomainName,
+
+                  TargetUserId =TargetUserSid, 
+                  TargetUserIdType = 'SID',
+                  TargetUsername = iff (TargetDomainName == '-', TargetUserName, TargetAccount),
+                  TargetUsernameType = iff (TargetDomainName == '-', 'Simple', 'Windows'),
+                  TargetUserSessionId = TargetLogonId,
+              
+                // Processes 
+                  ActingProcessId = ProcessId,
+                  ActingProcessName = ParentProcessName,
+
+                  TargetProcessId = NewProcessId,
+                  TargetProcessName = NewProcessName,
+                  TargetProcessCommandLine = CommandLine,
+                  TargetProcessTokenElevation = TokenElevationType
+
+                | lookup MandatoryLabelLookup on MandatoryLabel 
+
+              // -- Aliases
+                | extend
+                  User = TargetUsername,
+                  Dvc = DvcHostname,
+                  Process = TargetProcessName
+
+              // -- Remove potentially confusing
+                | project-away 
+                    ParentProcessName, 
+                    ProcessId, 
+                    SubjectUserSid,
+                    SubjectDomainName,
+                    SubjectUserName,
+                    SubjectAccount,
+                    TargetUserSid,
+                    TargetDomainName,
+                    TargetUserName,
+                    TargetAccount
+              }; ProcessEvents

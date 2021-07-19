@@ -1,0 +1,51 @@
+Parser:
+  Title: ASIM Sysmon/Event Process Termination Event Parser
+  Version: '0.1.0'
+  LastUpdated: June 23, 2021
+Product:
+  Name: Microsoft Windows Events Sysmon
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Sysmon/Event Process Termination Event Parser (event number 5)
+ParserName: vimProcessTermianteMicrosoftSysmon
+ParserQuery: | 
+            let ParsedProcessEvent=(){
+                // Create the raw table from the raw XML file structure
+                Event 
+                | where Source == "Microsoft-Windows-Sysmon" and EventID==5
+                | parse EventData with * '<Data Name="RuleName">'RuleName'</Data>'
+                         '<Data Name="UtcTime">'UtcTime'</Data>'
+                         '<Data Name="ProcessGuid">{'ProcessGuid'}</Data>'
+                         '<Data Name="ProcessId">'ProcessId'</Data>'
+                         '<Data Name="Image">'Image'</Data>' *
+                | extend 
+                        EventType = "ProcessTerminated",
+                        EventStartTime = todatetime(TimeGenerated),
+                        EventEndTime = todatetime(TimeGenerated),
+                        EventCount = int(1),
+                        EventVendor = "Microsoft",
+                        EventSchemaVersion = "0.1.0",
+                        EventProduct = "Event",
+                        DvcOs = "Windows",
+                        ActorUsernameType = "Windows"
+                | project-rename
+                        DvcHostname = Computer,
+                        ActorUsername = UserName,
+
+                        TargetProcessName = Image,
+                        TargetProcessId = ProcessId,
+                        TargetProcessGuid = ProcessGuid,
+                        EventOriginalId=EventID
+
+                 //***** Aliases ******
+                | extend
+                       User = ActorUsername,
+                       Process = TargetProcessName,
+                       Dvc = DvcHostname
+                }; ParsedProcessEvent
