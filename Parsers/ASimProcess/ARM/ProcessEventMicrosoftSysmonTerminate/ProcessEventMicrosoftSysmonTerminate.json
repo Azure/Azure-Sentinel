@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTermianteMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Sysmon/Event Process Termination Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessTermianteMicrosoftSysmon",
+            "query": "let ParsedProcessEvent=(){\n    // Create the raw table from the raw XML file structure\n    Event \n    | where Source == \"Microsoft-Windows-Sysmon\" and EventID==5\n    | parse EventData with * '<Data Name=\"RuleName\">'RuleName'</Data>'\n             '<Data Name=\"UtcTime\">'UtcTime'</Data>'\n             '<Data Name=\"ProcessGuid\">{'ProcessGuid'}</Data>'\n             '<Data Name=\"ProcessId\">'ProcessId'</Data>'\n             '<Data Name=\"Image\">'Image'</Data>' *\n    | extend \n            EventType = \"ProcessTerminated\",\n            EventStartTime = todatetime(TimeGenerated),\n            EventEndTime = todatetime(TimeGenerated),\n            EventCount = int(1),\n            EventVendor = \"Microsoft\",\n            EventSchemaVersion = \"0.1.0\",\n            EventProduct = \"Event\",\n            DvcOs = \"Windows\",\n            ActorUsernameType = \"Windows\"\n    | project-rename\n            DvcHostname = Computer,\n            ActorUsername = UserName,\n\n            TargetProcessName = Image,\n            TargetProcessId = ProcessId,\n            TargetProcessGuid = ProcessGuid,\n            EventOriginalId=EventID\n\n     //***** Aliases ******\n    | extend\n           User = ActorUsername,\n           Process = TargetProcessName,\n           Dvc = DvcHostname\n    }; ParsedProcessEvent\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

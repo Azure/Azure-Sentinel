@@ -1,0 +1,360 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "Perform automated actions on the Azure Sentinel Incidents based on RiskIQ Reputation data.",
+        "author": "Brandon Dixon, RiskIQ"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Sentinel-Incident-Action-RiskIQ-Reputation-Domain",
+            "type": "string"
+        },
+        "RiskiqEmail": {
+            "defaultValue": "<your-email-here@example.com>",
+            "type": "string"
+        },
+        "RiskiqApiKey": {
+            "defaultValue": "<your-api-key-here>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "RiskIQConnectionName": "[concat('riskiqpassivetotal-', parameters('PlaybookName'))]"
+    },
+    "resources": [{
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('RiskIQConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+            "displayName": "[parameters('PlaybookName')]",
+            "parameterValues": {
+                "username": "[parameters('RiskiqEmail')]",
+                "password": "[parameters('RiskiqApiKey')]"
+            },
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+            }
+        }
+    }, {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('AzureSentinelConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+            "customParameterValues": {},
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+            }
+        }
+    }, {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[parameters('PlaybookName')]",
+        "location": "[resourceGroup().location]",
+        "tags": {
+            "LogicAppsCategory": "security"
+        },
+        "dependsOn": [
+            "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]",
+            "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+        ],
+        "properties": {
+            "state": "Enabled",
+            "definition": {
+                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                "actions": {
+                    "Alert_-_Get_incident": {
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "method": "get",
+                            "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                    },
+                    "Entities_-_Get_Hosts": {
+                        "inputs": {
+                            "body": "@triggerBody()?['Entities']",
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "path": "/entities/host"
+                        },
+                        "runAfter": {
+                            "Init_Classification_Bit": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection"
+                    },
+                    "For_each_Host": {
+                        "actions": {
+                            "Add_comment_to_incident_(V3)": {
+                                "inputs": {
+                                    "body": {
+                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                        "message": "<p>RiskIQ Reputation: @{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}<br>\nClassification: @{body('Get_reputation_for_host')?['classification']} (@{body('Get_reputation_for_host')?['score']})<br>\n@{body('Create_Host_HTML_table')}</p>"
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/Incidents/Comment"
+                                },
+                                "runAfter": {
+                                    "Create_Host_HTML_table": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ApiConnection"
+                            },
+                            "Append_host_classification": {
+                                "inputs": {
+                                    "name": "classification_bit",
+                                    "value": "@body('Get_reputation_for_host')?['classification']"
+                                },
+                                "runAfter": {
+                                    "Set_host_variable": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "AppendToArrayVariable"
+                            },
+                            "Create_Host_HTML_table": {
+                                "inputs": {
+                                    "format": "HTML",
+                                    "from": "@variables('result_output_host')"
+                                },
+                                "runAfter": {
+                                    "Append_host_classification": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Table"
+                            },
+                            "Get_reputation_for_host": {
+                                "inputs": {
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['riskiqpassivetotal']['connectionId']"
+                                        }
+                                    },
+                                    "method": "get",
+                                    "path": "/reputation",
+                                    "queries": {
+                                        "query": "@{items('For_each_Host')?['HostName']}.@{items('For_each_Host')?['DnsDomain']}"
+                                    }
+                                },
+                                "runAfter": {},
+                                "type": "ApiConnection"
+                            },
+                            "Set_host_variable": {
+                                "inputs": {
+                                    "name": "result_output_host",
+                                    "value": "@body('Get_reputation_for_host')?['rules']"
+                                },
+                                "runAfter": {
+                                    "Get_reputation_for_host": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "SetVariable"
+                            }
+                        },
+                        "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                        "runAfter": {
+                            "Init_Result_Host": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "Init_Classification_Bit": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "classification_bit",
+                                    "type": "array"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Alert_-_Get_incident": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    },
+                    "Init_Result_Host": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "result_output_host",
+                                    "type": "array"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Entities_-_Get_Hosts": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    },
+                    "Malicious_or_Suspicious": {
+                        "actions": {
+                            "Condition_2": {
+                                "actions": {
+                                    "Update_incident": {
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                "owner": "@body('Alert_-_Get_incident')?['properties']?['owner']?['objectId']",
+                                                "ownerAction": "Unassign",
+                                                "severity": "High",
+                                                "status": "Active",
+                                                "tagsToAdd": {
+                                                    "TagsToAdd": [
+                                                        {
+                                                            "Tag": "RiskIQ Malicious"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Incidents"
+                                        },
+                                        "runAfter": {},
+                                        "type": "ApiConnection"
+                                    }
+                                },
+                                "else": {
+                                    "actions": {
+                                        "Update_incident_2": {
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "owner": "@body('Alert_-_Get_incident')?['properties']?['owner']?['objectId']",
+                                                    "ownerAction": "Unassign",
+                                                    "severity": "Medium",
+                                                    "status": "Active",
+                                                    "tagsToAdd": {
+                                                        "TagsToAdd": [
+                                                            {
+                                                                "Tag": "RiskIQ Suspicious"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    }
+                                },
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "contains": [
+                                                "@variables('classification_bit')",
+                                                "MALICIOUS"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "runAfter": {},
+                                "type": "If"
+                            }
+                        },
+                        "expression": {
+                            "or": [
+                                {
+                                    "contains": [
+                                        "@variables('classification_bit')",
+                                        "MALICIOUS"
+                                    ]
+                                },
+                                {
+                                    "contains": [
+                                        "@variables('classification_bit')",
+                                        "SUSPICIOUS"
+                                    ]
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "For_each_Host": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "If"
+                    }
+                },
+                "contentVersion": "1.0.0.0",
+                "outputs": {},
+                "parameters": {
+                    "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                        "inputs": {
+                            "body": {
+                                "callback_url": "@{listCallbackUrl()}"
+                            },
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                            },
+                            "path": "/subscribe"
+                        },
+                        "type": "ApiConnectionWebhook"
+                    }
+                }
+            },
+            "parameters": {
+                "$connections": {
+                    "value": {
+                        "azuresentinel": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                            "connectionName": "[variables('AzureSentinelConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                        },
+                        "riskiqpassivetotal": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]",
+                            "connectionName": "[variables('RiskIQConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+                        }
+                    }
+                }
+            }
+        }
+    }]
+}

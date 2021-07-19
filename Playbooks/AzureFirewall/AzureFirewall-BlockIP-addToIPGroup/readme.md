@@ -14,7 +14,7 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 ![Add IP Address to IP Groups](./images/designerScreenshotLight.PNG)<br>
 
 **This is the adaptive card SOC will recieve when playbook is triggered:**<br><br>
-![Adaptive Card example](./images/IPGroupsAdaptiveCard.png)
+![Adaptive Card example](./images/IPGroupsAdaptiveCardDark.png)
 
 **Comment example:**<br><br>
 ![Comment example](./images/Incident_Comment.png)

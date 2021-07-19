@@ -1,30 +1,33 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-        "metadata":{
-        "comments": "This playbook uses Watchlist to close incidents which has only safe IPs.",
-        "author": "Lior Tamir"
+    "metadata": {
+        "title": "Watchlist - close incidents with safe IPs ", 
+        "description": "This playbook levarages Azure Sentinel Watchlists in order to close incidents which include IP addresses considered safe.",
+        "prerequisites": ["[Create a watchlist](https://docs.microsoft.com/azure/sentinel/watchlists#create-a-new-watchlist) for safe IPs with ip column named 'ipaddress' (can be changed in 'Run query' step). Watchlist should be located in the same workspace of the incidents."],
+        "lastUpdateTime": "2021-05-30T10:00:00.000Z", 
+        "entities": ["Ips"], 
+        "tags": ["Triage"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Lior Tamir"
+        }
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Watchlist-CloseIncidentKnownIPs",
-            "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
-            "type": "string"
-        },
-        "AzureSentinelWorkspaceName": {
-            "defaultValue": "The Azure Sentinel workspace name",
-            "type": "string"
-        },
-        "AzureSentinelResourceGroup": {
-            "defaultValue": "The resource group where the Sentinel workspace is under",
-            "type": "string"
+            "defaultValue": "Watchlist-CloseIncidentSafeIPs",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook (Logic Apps resource) which will be created"
+              }
         },
         "WatchlistName": {
-            "defaultValue": "Name of watchlist that stores safe IP addresses",
-            "type": "string"
+            "type": "string",
+            "metadata": {
+                "description": "Name of watchlist that stores safe IP addresses. Should have a column 'ipaddress' which the ips are under."
+              }
         }
     },
     "variables": {
@@ -37,10 +40,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {
-                },
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -52,7 +56,7 @@
             "name": "[variables('AzureMonitorLogsConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
@@ -64,10 +68,17 @@
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Watchlist-CloseIncidentSafeIps",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",            
                 "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
             ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -80,8 +91,7 @@
                         }
                     },
                     "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
-                            "type": "ApiConnectionWebhook",
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -91,40 +101,44 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
-                            }
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V2)": {
-                            "runAfter": {
-                                "Create_HTML_table_-_not_safe": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
+                        "Add_comment_to_incident_(V3)": {
                             "inputs": {
                                 "body": {
-                                    "Value": "## Safe Ips\n### The following IPs were found in the Watchlist  @{variables('WatchlistName')} :\n@{body('Create_HTML_table_-_safe')}\n\n ## Not safe Ips\n### The following IPs were not found in the Watchlist  @{variables('WatchlistName')} :\n@{body('Create_HTML_table_-_not_safe')}"
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>A playbook ran to check if the IPs in this incident are part of the Safe IPs watchlist (@{variables('WatchlistName')}).<br>\nThe following IPs &nbsp;found:<br>\n@{body('Create_HTML_table_-_safe')}<br>\n@{body('Create_HTML_table_-_not_safe')}</p>"
                                 },
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "method": "put",
-                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            }
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_HTML_table_-_not_safe": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
                         },
                         "Condition": {
                             "actions": {
-                                "Change_incident_status": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
+                                "Update_incident": {
                                     "inputs": {
                                         "body": {
-                                            "CloseReason": "BenignPositive",
-                                            "CloseReasonText": "All containing IPs found in  watchlist of safe IPs: @{variables('WatchlistName')}\n@{join(variables('SafeIPs'), ',')}"
+                                            "classification": {
+                                                "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
+                                                "ClassificationReasonText": "All the IPs in this incident were found in safe Ips wathclist @{variables('WatchlistName')}\n@{join(variables('SafeIPs'), ',')}"
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "status": "Closed"
                                         },
                                         "host": {
                                             "connection": {
@@ -132,15 +146,13 @@
                                             }
                                         },
                                         "method": "put",
-                                        "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/Status/@{encodeURIComponent('Closed')}"
-                                    }
+                                        "path": "/Incidents"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
                                 }
                             },
-                            "runAfter": {
-                                "Add_comment_to_incident_(V2)": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "description": "This condition checks if all IPs involved in this alert are safe (found in watchlist)",
                             "expression": {
                                 "and": [
                                     {
@@ -151,42 +163,40 @@
                                     }
                                 ]
                             },
-                            "type": "If",
-                            "description": "This condition checks if all IPs involved in this alert are safe (found in watchlist)"
+                            "runAfter": {
+                                "Add_comment_to_incident_(V3)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
                         },
                         "Create_HTML_table_-_not_safe": {
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('notSafeIPs')"
+                            },
                             "runAfter": {
                                 "Create_HTML_table_-_safe": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Table",
-                            "inputs": {
-                                "format": "HTML",
-                                "from": "@variables('notSafeIPs')"
-                            }
+                            "type": "Table"
                         },
                         "Create_HTML_table_-_safe": {
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('SafeIPs')"
+                            },
                             "runAfter": {
                                 "For_each": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Table",
-                            "inputs": {
-                                "format": "HTML",
-                                "from": "@variables('SafeIPs')"
-                            }
+                            "type": "Table"
                         },
                         "Entities_-_Get_IPs": {
-                            "runAfter": {
-                                "Initialize_variable_-_not_safe_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -194,40 +204,41 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/ip"
-                            }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_not_safe_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
                         },
                         "For_each": {
-                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
                             "actions": {
                                 "Condition_-_if_IP_found_in_watchlist": {
                                     "actions": {
                                         "Append_to_array_variable_-_add_to_safe_list": {
-                                            "runAfter": {},
-                                            "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "SafeIPs",
-                                                "value":  {
+                                                "value": {
                                                     "SafeIPs": "@{items('For_each')?['Address']}"
                                                 }
-                                            }
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable"
                                         }
                                     },
-                                    "runAfter": {
-                                        "Run_query_and_list_results": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                    "description": "This condition returns true if IP was found in watchlist, and false if ip was not found.",
                                     "else": {
                                         "actions": {
                                             "Append_to_array_variable_-_add_to_not_safe_list": {
-                                                "runAfter": {},
-                                                "type": "AppendToArrayVariable",
                                                 "inputs": {
                                                     "name": "notSafeIPs",
                                                     "value": {
-                                                            "NotSafeIPs": "@{items('For_each')?['Address']}"
-                                                        }
-                                                }
+                                                        "NotSafeIPs": "@{items('For_each')?['Address']}"
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable"
                                             }
                                         }
                                     },
@@ -241,12 +252,15 @@
                                             }
                                         ]
                                     },
-                                    "type": "If",
-                                    "description": "This condition returns true if IP was found in watchlist, and false if ip was not found."
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
                                 },
                                 "Run_query_and_list_results": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
+                                    "description": "Check if IP address is in watchlist",
                                     "inputs": {
                                         "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| where ipaddress == \"@{items('For_each')?['Address']}\"",
                                         "host": {
@@ -257,16 +271,18 @@
                                         "method": "post",
                                         "path": "/queryData",
                                         "queries": {
-                                            "resourcegroups": "@variables('ResourceGroupName')",
-                                            "resourcename": "@variables('WorkspaceName')",
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
                                             "resourcetype": "Log Analytics Workspace",
-                                            "subscriptions": "@variables('subscriptionid')",
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
                                             "timerange": "Last 12 hours"
                                         }
                                     },
-                                    "description": "Check if IP address is in watchlist"
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
                                 }
                             },
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
                             "runAfter": {
                                 "Entities_-_Get_IPs": [
                                     "Succeeded"
@@ -274,77 +290,20 @@
                             },
                             "type": "Foreach"
                         },
-                        "Initialize_variable_-_Resource_Group": {
-                            "runAfter": {
-                                "Initialize_variable_-_Workspace_Name": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ResourceGroupName",
-                                        "type": "string",
-                                        "value": "[parameters('AzureSentinelResourceGroup')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_-_Subscription_ID": {
-                            "runAfter": {
-                                "Initialize_variable_-_Resource_Group": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "subscriptionid",
-                                        "type": "string",
-                                        "value": "[subscription().subscriptionId]"                                        
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_variable_-_Watchlist_name": {
-                            "runAfter": {
-                                "Initialize_variable_-_Subscription_ID": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
                                         "name": "WatchlistName",
                                         "type": "string",
-                                        "value": "[parameters('WatchlistName')]"                                        
+                                        "value": "safeips"
                                     }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_-_Workspace_Name": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "WorkspaceName",
-                                        "type": "string",
-                                        "value": "[parameters('AzureSentinelWorkspaceName')]"                                        
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_-_not_safe_IPs": {
-                            "runAfter": {
-                                "Initialize_variable_-_safe_IPs": [
-                                    "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_-_not_safe_IPs": {
                             "inputs": {
                                 "variables": [
                                     {
@@ -352,15 +311,15 @@
                                         "type": "array"
                                     }
                                 ]
-                            }
-                        },
-                        "Initialize_variable_-_safe_IPs": {
+                            },
                             "runAfter": {
-                                "Initialize_variable_-_Watchlist_name": [
+                                "Initialize_variable_-_safe_IPs": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_-_safe_IPs": {
                             "inputs": {
                                 "variables": [
                                     {
@@ -368,7 +327,13 @@
                                         "type": "array"
                                     }
                                 ]
-                            }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Watchlist_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
                         }
                     },
                     "outputs": {}
@@ -379,7 +344,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "azuremonitorlogs": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",

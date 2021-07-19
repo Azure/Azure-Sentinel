@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateMicrosoftSecurityEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Security Events Process Termination Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessTerminateMicrosoftSecurityEvents",
+            "query": "let ProcessEvents=(){\n SecurityEvent\n // -- Filter\n | where EventID == 4689\n\n // -- Map\n | extend\n   // Event\n     EventCount = int(1),\n     EventVendor = \"Microsoft\",\n     EventProduct = \"Security Events\",\n     EventSchemaVersion = \"0.1.0\",\n     EventStartTime = todatetime(TimeGenerated),\n     EventEndTime = todatetime(TimeGenerated),\n     EventType = \"ProcessTerminated\",\n     EventOritingalType = EventID,\n     EventOriginalUid = EventOriginId,\n     EventResultDetails = Status,\n     EventOriginalResultDetails = Status, \n\n   // Device\n     DvcId = SourceComputerId,\n     DvcHostname = Computer,\n     DvcOs = \"Windows\",\n\n   // Users\n     ActorUserId = SubjectUserSid,\n     ActorUserIdType = \"SID\",\n     ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount),\n     ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows'),\n     ActorSessionId = SubjectLogonId,\n     ActorDomainName = SubjectDomainName,\n\n\n \n   // Processes \n\n     TargetProcessId = ProcessId,\n     TargetProcessName = ProcessName,\n     TargetProcessCommandLine = CommandLine,\n     TargetProcessTokenElevation = TokenElevationType,\n\n     Process = ProcessName\n   \n   // Aliases\n   | extend \n     User = ActorUsername,\n     Dvc = DvcHostname,\n     Process = TargetProcessName\n\n }; ProcessEvents\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

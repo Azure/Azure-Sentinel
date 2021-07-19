@@ -1,0 +1,348 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "Automatically bring RiskIQ Intelligence into Azure Sentinel via the Microsoft Security Graph.",
+        "author": "Brandon Dixon, RiskIQ"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Sentinel-Intel-Action-RiskIQ-Intel-Article-Ingest",
+            "type": "string"
+        },
+        "RiskiqEmail": {
+            "defaultValue": "<your-email-here@example.com>",
+            "type": "string"
+        },
+        "RiskiqApiKey": {
+            "defaultValue": "<your-api-key-here>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftGraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
+        "RiskIQConnectionName": "[concat('riskiqpassivetotal-', parameters('PlaybookName'))]"
+    },
+    "resources": [{
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('RiskIQConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+            "displayName": "[parameters('PlaybookName')]",
+            "parameterValues": {
+                "username": "[parameters('RiskiqEmail')]",
+                "password": "[parameters('RiskiqApiKey')]"
+            },
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+            }
+        }
+    }, {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('MicrosoftGraphSecurityConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+            "customParameterValues": {},
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+            }
+        }
+    }, {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[parameters('PlaybookName')]",
+        "location": "[resourceGroup().location]",
+        "tags": {
+            "LogicAppsCategory": "security"
+        },
+        "dependsOn": [
+            "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]",
+            "[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]"
+        ],
+        "properties": {
+            "state": "Enabled",
+            "definition": {
+                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                "actions": {
+                    "For_each_indicator_type": {
+                        "actions": {
+                            "Switch": {
+                                "cases": {
+                                    "Domain_Case": {
+                                        "actions": {
+                                            "For_each_domain": {
+                                                "actions": {
+                                                    "Append_to_domains": {
+                                                        "inputs": {
+                                                            "name": "domains",
+                                                            "value": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@body('Get_article_details')?['link']",
+                                                                "description": "@body('Get_article_details')?['title']",
+                                                                "domainName": "@items('For_each_domain')",
+                                                                "expirationDateTime": "@addDays(utcNow(), 30)",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "green"
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable"
+                                                    }
+                                                },
+                                                "foreach": "@items('For_each_indicator_type')?['values']",
+                                                "runAfter": {},
+                                                "type": "Foreach"
+                                            },
+                                            "Submit_multiple_domain_tiIndicators": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "value": "@variables('domains')"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/beta/security/tiIndicators/submitTiIndicators"
+                                                },
+                                                "runAfter": {
+                                                    "For_each_domain": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
+                                            }
+                                        },
+                                        "case": "domain"
+                                    },
+                                    "IP_Case": {
+                                        "actions": {
+                                            "For_each_ip": {
+                                                "actions": {
+                                                    "Append_to_ip_addresses": {
+                                                        "inputs": {
+                                                            "name": "ip",
+                                                            "value": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@body('Get_article_details')?['link']",
+                                                                "description": "@body('Get_article_details')?['title']",
+                                                                "expirationDateTime": "@addDays(utcNow(), 30)",
+                                                                "networkDestinationIPv4": "@items('For_each_ip')",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "green"
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable"
+                                                    }
+                                                },
+                                                "foreach": "@items('For_each_indicator_type')?['values']",
+                                                "runAfter": {},
+                                                "type": "Foreach"
+                                            },
+                                            "Submit_multiple_ip_tiIndicators": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "value": "@variables('ip')"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/beta/security/tiIndicators/submitTiIndicators"
+                                                },
+                                                "runAfter": {
+                                                    "For_each_ip": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
+                                            }
+                                        },
+                                        "case": "ip"
+                                    },
+                                    "URLs_Case": {
+                                        "actions": {
+                                            "For_each_url": {
+                                                "actions": {
+                                                    "Append_to_urls": {
+                                                        "inputs": {
+                                                            "name": "urls",
+                                                            "value": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@body('Get_article_details')?['link']",
+                                                                "description": "@body('Get_article_details')?['title']",
+                                                                "expirationDateTime": "@addDays(utcNow(), 30)",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "green",
+                                                                "url": "@items('For_each_url')"
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable"
+                                                    }
+                                                },
+                                                "foreach": "@items('For_each_indicator_type')?['values']",
+                                                "runAfter": {},
+                                                "type": "Foreach"
+                                            },
+                                            "Submit_multiple_url_tiIndicators": {
+                                                "inputs": {
+                                                    "body": {
+                                                        "value": "@variables('urls')"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/beta/security/tiIndicators/submitTiIndicators"
+                                                },
+                                                "runAfter": {
+                                                    "For_each_url": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
+                                            }
+                                        },
+                                        "case": "url"
+                                    }
+                                },
+                                "default": {
+                                    "actions": {}
+                                },
+                                "expression": "@items('For_each_indicator_type')?['type']",
+                                "runAfter": {},
+                                "type": "Switch"
+                            }
+                        },
+                        "foreach": "@body('Get_article_details')?['indicators']",
+                        "runAfter": {
+                            "Init_domains": [
+                                "Succeeded"
+                            ],
+                            "Init_ip_addresses": [
+                                "Succeeded"
+                            ],
+                            "Init_urls": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Foreach"
+                    },
+                    "Get_article_details": {
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['riskiqpassivetotal']['connectionId']"
+                                }
+                            },
+                            "method": "get",
+                            "path": "/articles/@{encodeURIComponent(triggerBody()?['guid'])}"
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                    },
+                    "Init_domains": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "domains",
+                                    "type": "array"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Get_article_details": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    },
+                    "Init_ip_addresses": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "ip",
+                                    "type": "array"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Get_article_details": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    },
+                    "Init_urls": {
+                        "inputs": {
+                            "variables": [
+                                {
+                                    "name": "urls",
+                                    "type": "array"
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Get_article_details": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "InitializeVariable"
+                    }
+                },
+                "contentVersion": "1.0.0.0",
+                "outputs": {},
+                "parameters": {
+                    "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "manual": {
+                        "inputs": {
+                            "schema": {
+                                "properties": {
+                                    "guid": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "kind": "Http",
+                        "type": "Request"
+                    }
+                }
+            },
+            "parameters": {
+                "$connections": {
+                    "value": {
+                        "microsoftgraphsecurity": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]",
+                            "connectionName": "[variables('MicrosoftGraphSecurityConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                        },
+                        "riskiqpassivetotal": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]",
+                            "connectionName": "[variables('RiskIQConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+                        }
+                    }
+                }
+            }
+        }
+    }]
+}
