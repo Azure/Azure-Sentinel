@@ -4,10 +4,10 @@ description: |
   'Identifies a match across various data feeds for domains IOCs related to the Barium activity group.
    References: https://www.justice.gov/opa/pr/seven-international-cyber-defendants-including-apt41-actors-charged-connection-computer'
 severity: High 
-requiredDataConnectors: 
-  - connectorId: DNS 
-    dataTypes: 
-      - DnsEvents 
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
   - connectorId: AzureMonitor(VMInsights)  
     dataTypes: 
       - VMConnection 
@@ -19,7 +19,10 @@ requiredDataConnectors:
       - CommonSecurityLog 
   - connectorId: MicrosoftThreatProtection
     dataTypes: 
-      - DeviceNetworkEvents 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics 
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -104,6 +107,11 @@ query:  |
   | where DNSName  in~ (DomainNames) 
   | extend IPAddress =  ClientIP 
   ), 
+  (imDns  
+  | where isnotempty(DnsQuery) and DnsQuery in~ (DomainNames)
+  | extend DNSName = DnsQuery 
+  | extend IPAddress =  SrcIpAddr, Computer = Dvc
+  ), 
   (VMConnection  
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' * 
   | where isnotempty(DNSName) 
@@ -116,6 +124,23 @@ query:  |
   | where RemoteUrl  in~ (DomainNames)  
   | extend IPAddress = RemoteIP 
   | extend Computer = DeviceName 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   ) 
   ) 
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress 
@@ -132,3 +157,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.1.0

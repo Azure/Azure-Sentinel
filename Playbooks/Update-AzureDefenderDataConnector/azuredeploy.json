@@ -1,0 +1,335 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+        "metadata":{
+        "comments": "This Logic App will act as a 15min synchronizer between new Azure subscriptions created and your Azure Sentinel Azure Defender Data Connector being enabled for the new Azure subscriptions to generate Azure Defender alerts into Azure Sentinel",
+        "author": "Sean Stark, Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Update-AzureDefenderDataConnector",
+            "type": "String"
+        },
+        "AzureSentinelSubscriptionID": {
+            "defaultValue": "<AZURE SENTINEL - SUBSCRIPTION ID>",
+            "type": "string"
+        },
+        "AzureSentinelResourceGroup": {
+            "defaultValue": "<AZURE SENTINEL - RESOURCEGROUP>",
+            "type": "string"
+        },
+        "AzureSentinelWorkspaceName": {
+            "defaultValue": "<AZURE SENTINEL - WORKSPACE NAME>",
+            "type": "string"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "SentinelRGName": {
+                            "defaultValue": "[parameters('AzureSentinelResourceGroup')]",
+                            "type": "String"
+                        },
+                        "SentinelSubID": {
+                            "defaultValue": "[parameters('AzureSentinelSubscriptionId')]",
+                            "type": "String"
+                        },
+                        "SentinelWorkspaceName": {
+                            "defaultValue": "[parameters('AzureSentinelWorkspaceName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 15
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Filter_AzureDefenderConnectorSubscriptions": {
+                            "runAfter": {
+                                "GET_AzureDefender_DataConnector": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('GET_AzureDefender_DataConnector')?['value']",
+                                "where": "@equals(item()?['kind'], 'AzureSecurityCenter')"
+                            },
+                            "description": "Filter on Azure Defender for Subscription Sentinel Data Connectors "
+                        },
+                        "Filter_AzureSubscriptions": {
+                            "runAfter": {
+                                "Get_AzureSubscriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Get_AzureSubscriptions')?['value']",
+                                "where": "@not(equals(item()?['displayName'], 'Access to Azure Active Directory'))"
+                            },
+                            "description": "filter out the Access to Azure Active Directory subscriptions that may be tied to AAD"
+                        },
+                        "For_each": {
+                            "foreach": "@body('Filter_AzureSubscriptions')",
+                            "actions": {
+                                "Condition_2": {
+                                    "actions": {},
+                                    "runAfter": {
+                                        "For_each_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_array_variable_EnableSubsArray": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "EnableSubsArray",
+                                                    "value": "@items('For_each')?['subscriptionId']"
+                                                },
+                                                "description": "Append subscription not found into a new array to enable the data connector"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@variables('InSubscriptionList')",
+                                                    "yes"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Logic check within Azure Sub was it found in Azure Defender Data Connector ? If True then do nothing if it was not found then append into a new array"
+                                },
+                                "For_each_2": {
+                                    "foreach": "@body('Filter_AzureDefenderConnectorSubscriptions')",
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Set_variable_InSubscriptionList": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "InSubscriptionList",
+                                                        "value": "yes"
+                                                    },
+                                                    "description": "Set logic check that sub was found so that it will not be added to a new array for enablement"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@items('For_each_2')?['properties']?['subscriptionId']",
+                                                            "@items('For_each')?['subscriptionId']"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "logic check is each azure subscription found within azure defender connector"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach",
+                                    "description": "condition check the subscription of each azure defender data connector"
+                                },
+                                "Set_variable_InSubscriptionList_null": {
+                                    "runAfter": {
+                                        "Condition_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "InSubscriptionList",
+                                        "value": "@null"
+                                    },
+                                    "description": "reset logic check for next subscription to check in loop"
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_AzureDefenderConnectorSubscriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "Azure Subscription check if it was already enabled in data connector for Azure Defender",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "For_each_3": {
+                            "foreach": "@variables('EnableSubsArray')",
+                            "actions": {
+                                "PUT_DataConnector": {
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://management.azure.com/",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "id": null,
+                                            "kind": "AzureSecurityCenter",
+                                            "properties": {
+                                                "dataTypes": {
+                                                    "alerts": {
+                                                        "state": "enabled"
+                                                    }
+                                                },
+                                                "subscriptionId": "@{items('For_each_3')}"
+                                            }
+                                        },
+                                        "method": "PUT",
+                                        "uri": "https://management.azure.com/subscriptions/@{parameters('SentinelSubID')}/resourceGroups/@{parameters('SentinelRGName')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('SentinelWorkspaceName')}/providers/Microsoft.SecurityInsights/dataConnectors/@{variables('DataConnectorGUID')}?api-version=2019-01-01-preview"
+                                    },
+                                    "description": "Update the Azure Sentinel Azure Defender Data Connector and add the subscription so Azure Defender alerts are sent into Azure Sentinel for the new subscription"
+                                },
+                                "Set_variable": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "DataConnectorGUID",
+                                        "value": "@{guid()}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "GET_AzureDefender_DataConnector": {
+                            "runAfter": {
+                                "Filter_AzureSubscriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://management.azure.com",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions/@{parameters('SentinelSubID')}/resourceGroups/@{parameters('SentinelRGName')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('SentinelWorkspaceName')}/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2019-01-01-preview"
+                            },
+                            "description": "Get all Data Connectors in Azure Sentinel"
+                        },
+                        "Get_AzureSubscriptions": {
+                            "runAfter": {
+                                "Initialize_variable_SubConnectorGUID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://management.azure.com",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions?api-version=2020-01-01"
+                            },
+                            "description": "Get all azure subscriptions"
+                        },
+                        "Initialize_variable_EnableSubsArray": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EnableSubsArray",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "description": "Final array of subs to enable for Defender Connector"
+                        },
+                        "Initialize_variable_InSubscriptionList": {
+                            "runAfter": {
+                                "Initialize_variable_EnableSubsArray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InSubscriptionList",
+                                        "type": "string",
+                                        "value": "@null"
+                                    }
+                                ]
+                            },
+                            "description": "logic check final value to see if subscription is already in defender connector"
+                        },
+                        "Initialize_variable_SubConnectorGUID": {
+                            "runAfter": {
+                                "Initialize_variable_InSubscriptionList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DataConnectorGUID",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            },
+                            "description": "variable for a new guid generated for connector - needed for API"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}
