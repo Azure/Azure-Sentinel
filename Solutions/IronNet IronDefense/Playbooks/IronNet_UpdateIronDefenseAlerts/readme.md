@@ -29,3 +29,8 @@ this playbook.<br>
 2. Click the "Automated Response" tab and select this playbook to run when new
    alerts are generated.
 
+## Playbook Execution
+1. The Playbook execution begins at configured intervals to check if the Sentinel 
+   Incidents has been updated
+2. Using the IronAPI for an updated Sentinel Incident, the status along with its 
+   classification will be updated to the corresponding IronDefense Alert
