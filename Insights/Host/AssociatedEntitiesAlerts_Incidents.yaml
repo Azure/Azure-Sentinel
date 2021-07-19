@@ -1,0 +1,150 @@
+SchemaVersion: 1.0
+DataTypes:
+  - DataType: SecurityAlert
+  - DataType: SecurityIncident
+Type: KQL
+Provider: Sentinel
+EntitiesFilter: 
+ Host_OsFamily:
+  - Windows
+RequiredInputFieldsSets: 
+ - - Host_HostName
+   - Host_NTDomain
+ - - Host_HostName
+   - Host_DnsDomain
+ - - Host_AzureID
+ - - Host_OMSAgentID
+BaseQuery: |
+  let AlertQuery = (v_Host_Name:string, v_Host_NTDomain:string, v_Host_DnsDomain:string, v_Host_AzureID:string, v_Host_OMSAgentID:string){
+  // get match values
+  let matchType = 'HostName';
+  let Host_Name = iff(isnotempty(v_Host_Name), v_Host_Name, 'v_Host_Name_NA');
+  let Host_NTDomain = iff(isnotempty(v_Host_NTDomain), v_Host_NTDomain, 'v_Host_NTDomain_NA');
+  let Host_DnsDomain = iff(isnotempty(v_Host_DnsDomain), v_Host_DnsDomain, 'v_Host_DnsDomain_NA');
+  let Host_AzureID = iff(isnotempty(v_Host_AzureID), v_Host_AzureID, 'v_Host_AzureID_NA');
+  let Host_OMSAgentID = iff(isnotempty(v_Host_OMSAgentID), v_Host_OMSAgentID, 'v_Host_OMSAgentID_NA');
+  // get incident list
+  let secInc = SecurityIncident | project IncidentTitle = Title, IncidentName, AlertIds, IncidentUrl;
+  // get summary list of entities from alerts
+  let ents = materialize(
+  SecurityAlert
+  | project Ent = todynamic(Entities), Entities, AlertName, Description, AlertProvidername = ProviderName, SystemAlertId
+  | mv-expand Ent
+  | where Ent.Type in~ ('host', 'account', 'ip')
+  | evaluate bag_unpack(Ent)
+  | extend entType = column_ifexists('Type', '')
+  | project entType, AlertName, AlertProvidername, SystemAlertId, 
+  HostName = toupper(column_ifexists('HostName', '')), DnsDomain = toupper(column_ifexists('DnsDomain', '')), NetBiosName = toupper(column_ifexists('NetBiosName', '')), FQDN = toupper(column_ifexists('FQDN', '')), OMSAgentID = tostring(column_ifexists('OMSAgentID', '')), AzureID = tostring(column_ifexists('AzureID', '')), MdatpDeviceId = column_ifexists('MdatpDeviceId', ''), OSFamily = column_ifexists('OSFamily', ''), OSVersion = column_ifexists('OSVersion', ''),
+  Name = tolower(column_ifexists('Name', '')), UserSid = tolower(column_ifexists('Sid', '')), AccountName = tolower(column_ifexists('AccountName', '')), UserPrincipalName = tolower(column_ifexists('UserPrincipalName', '')), DisplayName = tolower(column_ifexists('DisplayName', '')), UPNSuffix = tolower(column_ifexists('UPNSuffix', '')), NTDomain = tolower(column_ifexists('NTDomain', '')), AadUserId = tostring(column_ifexists('AadUserId', '')), 
+  Address = tostring(column_ifexists('Address', '')), LastIpAddress = tostring(column_ifexists('LastIpAddress', '')), LastExternalIpAddress = tostring(column_ifexists('LastExternalIpAddress', ''))
+  | distinct *
+  | extend Name = iff(Name has @'[', tostring(todynamic(Name)[0]), Name), UPNSuffix = iff(UPNSuffix has @'[', tostring(todynamic(UPNSuffix)[0]), UPNSuffix)
+  | extend Host = case(
+  FQDN has_any (@'.', @'\'), strcat('FQDN','|',FQDN), 
+  isnotempty(HostName) and HostName !has @'.' and isnotempty(DnsDomain), strcat('HostName_DnsDomain','|', HostName, @'.', DnsDomain),
+  isnotempty(NetBiosName), strcat('NetBiosName','|',NetBiosName),
+  isnotempty(AzureID), strcat('AzureID','|',AzureID),
+  isnotempty(OMSAgentID), strcat('OMSAgentID','|',OMSAgentID),
+  isnotempty(MdatpDeviceId), strcat('MdatpDeviceId','|',MdatpDeviceId),
+  isnotempty(HostName), strcat('HostName','|', HostName),
+  'Not Available')
+  | extend Account = case(
+  UserPrincipalName has @'@', strcat('UserPrincipalName','|', UserPrincipalName),
+  Name has_any (@'@', @'\'), strcat('Name','|', Name),
+  DisplayName has_any (@'@', @'\'), strcat('DisplayName','|', DisplayName),
+  isnotempty(UPNSuffix) and isnotempty(Name) and not(Name has_any (@'@', @'\')), strcat('Name_UPNSuffix','|', Name, @'@', UPNSuffix),
+  isnotempty(NTDomain) and isnotempty(Name) and not(Name has_any (@'@', @'\')), strcat('NTDomain_Name','|', NTDomain, @'\', Name),
+  isnotempty(AadUserId), strcat('AadUserId','|', AadUserId),
+  isnotempty(Name), strcat('Name','|', Name),
+  'Not Available')
+  | extend Address = case(
+  isnotempty(Address), strcat('Address','|', Address),
+  isnotempty(LastIpAddress), strcat('LastIpAddress','|', LastIpAddress),
+  isnotempty(LastExternalIpAddress), strcat('LastExternalIpAddress','|', LastExternalIpAddress),
+  'Not Available')
+  )
+  ;
+  //Get primary host alerts and alert ids
+  let hostAlerts = ents
+  | where (Host has Host_Name and (Host has Host_DnsDomain or Host has Host_NTDomain))
+  or AzureID has Host_AzureID
+  or OMSAgentID has Host_OMSAgentID
+  | distinct SystemAlertId;
+  //Get associated entities only from primary host alert ids
+  let entLists = hostAlerts | join kind=inner ents on SystemAlertId 
+  | where (Host !has Host_Name and (Host !has Host_DnsDomain or Host !has Host_NTDomain))
+  and AzureID !has Host_AzureID
+  and OMSAgentID !has Host_OMSAgentID
+  | summarize 
+  Host_Set = make_set_if(Host, isnotempty(Host) and entType =~ 'host'), 
+  Account_Set = make_set_if(Account, isnotempty(Account) and entType =~ 'account'),
+  IP_Set = make_set_if(Address, isnotempty(Address) and entType =~ 'ip');
+  //Check each associated entities for Alerts and provide count
+  let hostList = entLists | project Host_Set;
+  let acctList = entLists | project Account_Set;
+  let ipList = entLists | project IP_Set;
+  let entMatch = ents
+  | where Host has_any (hostList) or Account has_any (acctList) or Address has_any (ipList)
+  ;
+  // now include Incident matches to get Incident count per associated entity
+  let incMatch = 
+  entMatch
+  | join kind = leftouter (secInc | mv-expand AlertIds | extend SystemAlertId = tostring(AlertIds)) on SystemAlertId | project-away SystemAlertId1, AlertIds
+  ;
+  incMatch
+  | extend Entity = case(
+  isnotempty(Host) and Host !~ 'NOT AVAILABLE', Host,
+  isnotempty(Account) and Account !~ 'NOT AVAILABLE', Account,
+  isnotempty(Address) and Address !~ 'NOT AVAILABLE', Address,
+  'NOT AVAILABLE')
+  | extend AssociatedEntity = tostring(pack("Host_Name", Host_Name, "Host_NTDomain", Host_NTDomain, "Host_DnsDomain", Host_DnsDomain, "Host_AzureID", Host_AzureID, "Host_OMSAgentID", Host_OMSAgentID))
+  | distinct *
+  };
+  AlertQuery('{{Host_HostName}}', '{{Host_NTDomain}}', '{{Host_DnsDomain}}', '{{Host_AzureID}}', '{{Host_OMSAgentID}}')
+# The queries for the insights.
+Insights:
+ Id: 82006817-d380-4129-9a86-917f28582dce
+ DisplayName: Associated Entities Alerts and Incidents (Top 5)
+ Description: |
+   Summary of associated ip addresses, hosts and accounts that are identified in this entities alerts (Top 5).
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: Source Field
+    OutputType: String
+    SupportDeepLink: false
+  - Header: Associated Entity
+    OutputType: String
+    SupportDeepLink: false
+  - Header: Alert Count
+    OutputType: Number
+    SupportDeepLink: true
+  - Header: Incident Count
+    OutputType: Number
+    SupportDeepLink: true
+  QueriesDefinitions:
+  # AlertCount
+  - Filter:    "project-reorder Entity, entType, Host, Account, Address, AlertName, AlertProvidername, SystemAlertId"
+    Summarize: "summarize AlertCount = dcount(AlertName), SystemAlertIdCount = dcount(SystemAlertId), IncidentCount = dcount(IncidentName), make_set(AlertName, 50), make_set(SystemAlertId, 50), make_set(IncidentTitle, 50) by Entity, entType | top 5 by SystemAlertIdCount"
+    Project:   "project SourceField = tostring(split(Entity,'|')[0]), Entity = tostring(split(Entity,'|')[1]), SystemAlertIdCount, IncidentCount"
+    LinkColumnsDefinitions:
+    - ProjectedName: Alert Count
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: Incident Count
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "All Associated Entity Count"
+  DataSets: 
+   - Query: "summarize Count = dcount(Entity) by entType | as counts | extend Xcol = 1000*toscalar((counts | summarize dcount(entType)))"
+     XColumnName: "Xcol"
+     YColumnName: "Count"
+     LegendColumnName: "entType"
+  Type: BarChart
+
+ AdditionalQuery:
+  Text: "See all associated entities"
+  Query: "extend SourceField = tostring(split(Entity, '|')[0]), Entity = tostring(split(Entity, '|')[1]) | project-reorder SourceField, Entity, entType, Host, Account, Address, AlertName, AlertProvidername, SystemAlertId, AssociatedEntity"
+version: 1.0.0
