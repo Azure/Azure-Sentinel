@@ -61,8 +61,7 @@ query:  |
   let process = (iocs | where Type =~ "process" | project IoC);
   let parentprocess = (iocs | where Type =~ "parentprocess" | project IoC);
   let IPList = toscalar((iocs | where Type =~ "ip"| summarize make_set(IoC)));
-  let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
-  let IPRegexGroup = '([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3})';
+  let IPRegex = '([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3})';
   (union isfuzzy=true
   (CommonSecurityLog
   | where SourceIP in (IPList) or DestinationIP in (IPList) or RequestURL has_any (IPList) or Message has_any (IPList)
@@ -79,8 +78,8 @@ query:  |
   ),
   (imDns
   | where has_any_ipv4 (DnsResponseName, IPList)
-  | extend IPAddresses = set_intersect(IPList,extract_all(IPRegexGroup, ResponseName))
-  | project TimeGenerated, Dvc, DnsResponseName, DnsQuery, SrcIpAddr, DnsQueryTypeName, IPAddresses
+  | extend IPAddresses = set_intersect(IPList,extract_all(IPRegex, ResponseName))
+  | project TimeGenerated, Dvc, DnsResponseName, DnsQuery, SrcIpAddr, IPAddresses, Type
   | extend DestinationIPAddress = IPAddresses[0], DNSName = DnsQuery, Host = Dvc
   | extend IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
   ),
@@ -175,11 +174,11 @@ query:  |
   | extend HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName, IPCustomEntity = CommandLineIP
   ),
   (imProcessCreate
-  | where has_any_ipv4 (TargetProcessCommandLine, IPList) or (TargetProcessName has_any (process) and ActingProcessName has_any (parentprocess))
-  | extend CommandLineAddresses = extract_all(IPRegexGroup, TargetProcessCommandLine)
-  | extend IPAddresses = set_intersect(IPList,CommandLineAddresses)
-  | project TimeGenerated, Dvc, TargetProcessName, ActingProcessName, TargetUsername, TargetProcessId, Type, TargetProcessCommandLine , IPAddresses, TargetProcessSHA256
-  | extend HostCustomEntity = Dvc , AccountCustomEntity = TargetUsername, ProcessCustomEntity = TargetProcessName, IPCustomEntity = IPAddresses[0], FileHashCustomEntity = TargetProcessSHA256)
+  | where has_any_ipv4 (CommandLine, IPList) or (Process has_any (process) and ActingProcessName has_any (parentprocess))
+  | extend IPAddresses = set_intersect(IPList,extract_all(IPRegex, TargetProcessCommandLine))
+  | project TimeGenerated, Dvc, Process, ActingProcessName, User, TargetProcessId, Type, CommandLine , IPAddresses, TargetProcessSHA256
+  | extend HostCustomEntity = Dvc , AccountCustomEntity = User, ProcessCustomEntity = Process, IPCustomEntity = IPAddresses[0], FileHashCustomEntity = TargetProcessSHA256
+  )
   )
   | extend timestamp = TimeGenerated, AlertDetail = 'Dev-0322 IOC match'
 entityMappings:
