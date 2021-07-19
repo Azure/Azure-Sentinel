@@ -30,4 +30,5 @@ this playbook.<br>
    the Sentinel Incident's status, classification and severity respectively
 7. The Sentinel Incident's "custom details" will be consisting of IronDefense Analyst rating, 
    AlertCreatedTime and IronDefenseAlertId fields
+8. The Sentinel Incident's comments will be updated with the comments raised by users for IronDome Notifications
 
