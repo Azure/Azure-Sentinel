@@ -31,22 +31,9 @@ To implement this solution, a few different steps need to be done:
 5. Deploy Azure Function for comment sychronization and add the Powershell code (check the Functions)
 6. Create Sentinel Automation Rule
 
-## 1. Create Service Principals
-The tool requires a couple of service principals for authentication to different services:
-* Authentication to Azure Sentinel
-* Authentication to Key Vault to retrieve secrets
-* Authentication to AAD to retrieve user ID's (for assignin incidents in Sentinel)
-
-### Azure Sentinel Service Principal
-This Service Principal needs to have at least Azure Sentinel Operator permissions and it used in the following:
-* All Logic Apps
-* Comment Sync Function
-  
-### Key Vault ServicePrincipal
-This Service Principal needs to have the 'Secret - Get' Permission on the Key Vault holding all the secrets.
-This Service Principal is used in:
-* All Logic Apps
-* Comment Sync Function
+## 1. Create Service Principal
+The tool requires a service principals for authentication to different services:
+* Authentication to AAD to retrieve user ID's (for assigning incidents in Sentinel)
   
 ### AAD Service Principal
 This Service Principal needs to have User.Read.All application permissions.
@@ -159,8 +146,8 @@ This Logic App does the following:
 * Create JIRA ticket through an API call
 
 It uses two connections:
-* One connection to Sentinel through a Service Principal (to be configured when deploying the Logic App)
-* One connection to a Key Vault to retrieve the JIRA API Key (also configured when deploying the Logic App)
+* One connection to Sentinel through a Managed Identity
+* One connection to a Key Vault to retrieve the JIRA API Key (Managed Identity)
 
 In order to correlate the right add the incident in JIRA to the correct Organization, we use a switch and determine the correct organization based on the originate Subscription ID.
 Add a case per customer and add the right Subscription ID, Customer name and Organization ID.
@@ -177,7 +164,7 @@ It uses an HTTP trigger which is triggered from a JIRA Automation Rule.
 It's important you use the same closure reason in JIRA as the ones in Sentinel, otherwise the sync will fail.
 
 It uses one connections:
-* One connection to Sentinel through a Service Principal (to be configured when deploying the Logic App)
+* One connection to Sentinel through a Managed Identity.
 
 ### Sync assigned user from JIRA to Sentinel
 
@@ -190,7 +177,7 @@ It uses an HTTP trigger which is triggered from a JIRA Automation Rule when the 
 It will retrieve the client secret for the service principal with permissions to retrieve users in your Azure Active Directory. With this, it will query the user and retrieve the AAD Object ID from that user. Wit this information, we will update the incident in Azure Sentinel.
 
 There is a check built-in to make sure that JIRA provides the assigned user. Sometimes it does not and then we don't need to update the incident in Sentinel.
-* One connection to Sentinel through a Service Principal (to be configured when deploying the Logic App)
+* One connection to Sentinel through a Managed Identity
 * One connection to a Key Vault to retrieve the Secret for the Service Principal with AAD permissions (also configured when deploying the Logic App)
 
 ### Add a link to the JIRA incident to the Sentinel incident
@@ -203,7 +190,7 @@ It uses an HTTP trigger which is triggered from a JIRA Automation Rule.
 
 It will add the link to the JIRA Customer Portal, which enables a customer to view the details of an incident inside JIRA.
 It uses one connections:
-* One connection to Sentinel through a Service Principal (to be configured when deploying the Logic App)
+* One connection to Sentinel through a Managed Identity
 
 ## 5. Deploy Azure Function
 
@@ -213,11 +200,12 @@ It uses one connections:
 To sync incident comments from JIRA to Azure Sentinel an Azure Function is used. This Function App contains one Powershell Function.
 There are two types of comments in JIRA: internal and public comments. This script will only sync the public comments, so that customers don't have access to the internal ones.
 
-The code for this function can be found [in this repository](Functions/Sync-Comment.ps1).
+The code for this function can be found [in this repository](Sync-Comments/Sync-Comment.ps1).
 This Function uses a managed identity to authenticate to the Key Vault.
 
-Deploy a new Powershell Azure Function app and create one Function with an HTTP trigger.
-Paste the code from the PS1 file in the Function and change the following variables:
+Either deployment the Function App through the ARM template linked above or deploy a Function app manually and paste the ps1 code
+
+After deployment, configure the parameters in the Powershell file.
 * jiraUser => Used for authentication to JIRA
 * jiraSecretURL => The URL to the JIRA Secret in our Key Vault
 * sentinelSecretURL => The URL to the Sentinel Secret in our Key Vault
