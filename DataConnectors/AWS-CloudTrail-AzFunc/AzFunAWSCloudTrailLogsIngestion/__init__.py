@@ -13,6 +13,7 @@ import json
 import hashlib
 import hmac
 import base64
+import re
 from threading import Thread
 from io import StringIO
 
@@ -25,8 +26,19 @@ aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 aws_s3_bucket = os.environ.get('S3Bucket')
 aws_region_name = os.environ.get('AWSRegionName')
+cloud_trail_folder = os.environ.get('CloudTrailFolderName')
 sentinel_log_type = os.environ.get('LogAnalyticsCustomLogName')
 fresh_event_timestamp = os.environ.get('FreshEventTimeStamp')
+
+logAnalyticsUri = os.environ.get('LAURI')
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("AWSCloudTrailAzFunc: Invalid Log Analytics Uri.")
 
 # Boolean Values
 isCoreFieldsAllTable = os.environ.get('CoreFieldsAllTable')
@@ -135,9 +147,6 @@ def main(mytimer: func.TimerRequest) -> None:
                     groupEvents[logEventSource].append(log)
                 else: 
                     groupEvents[logEventSource].append(log)
-                                     
-                    
-                    
 
             for col in eventobjectlist:
                 if col in log:
@@ -149,7 +158,7 @@ def main(mytimer: func.TimerRequest) -> None:
         file_events = 0
         t0 = time.time()    
         for event in coreEvents:
-            sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL' , queue_size=10000, bulks_number=10)
+            sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL' , queue_size=10000, bulks_number=10)
             with sentinel:
                 sentinel.send(event)
             file_events += 1 
@@ -159,7 +168,7 @@ def main(mytimer: func.TimerRequest) -> None:
         for resource_type in eventSources:
             resource_type_events_collection = groupEvents[resource_type]
             for resource_type_event in resource_type_events_collection:
-                sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_' + resource_type, queue_size=10000, bulks_number=10)
+                sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_' + resource_type, queue_size=10000, bulks_number=10)
                 with sentinel:
                     sentinel.send(resource_type_event)       
         
@@ -167,7 +176,7 @@ def main(mytimer: func.TimerRequest) -> None:
         file_events = 0
         t0 = time.time()
         for event in coreEvents:
-            sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL', queue_size=10000, bulks_number=10)
+            sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL', queue_size=10000, bulks_number=10)
             with sentinel:
                 sentinel.send(event)
             file_events += 1
@@ -180,7 +189,7 @@ def main(mytimer: func.TimerRequest) -> None:
         for resource_type in eventSources:
             resource_type_events_collection = groupEvents[resource_type]
             for resource_type_event in resource_type_events_collection:
-                sentinel = AzureSentinelConnector(sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_' + resource_type, queue_size=10000, bulks_number=10)
+                sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_' + resource_type, queue_size=10000, bulks_number=10)
                 with sentinel:
                     sentinel.send(resource_type_event)
                 file_events += 1
@@ -188,12 +197,13 @@ def main(mytimer: func.TimerRequest) -> None:
                 successfull_sent_events_number += sentinel.successfull_sent_events_number                      
         
     if failed_sent_events_number:
-        logging.error('{} events have not been sent'.format(failed_sent_events_number))
+        logging.info('{} events have not been sent'.format(failed_sent_events_number))
 
-    logging.info('Program finished. {} events have been sent. {} events have not been sent'.format(successfull_sent_events_number, failed_sent_events_number))
+    if successfull_sent_events_number:
+        logging.info('Program finished. {} events have been sent.'.format(successfull_sent_events_number))
 
     if successfull_sent_events_number == 0 and failed_sent_events_number == 0:
-        logging.info('No CloudTrail Events')
+        logging.info('No Fresh CloudTrail Events')
 
 
 class S3Client:
@@ -271,17 +281,15 @@ class S3Client:
             raise Exception
 
     def get_files_list(self, ts_from, ts_to):
-        files = []        
-        aws_acct_id = self._get_aws_account_id()
-        ct_folder = 'AWSLogs/'+ aws_acct_id +'/CloudTrail'
-        folders = [ct_folder]
-        if self.aws_s3_prefix:
-            folders = [self.aws_s3_prefix + folder for folder in folders]
+        files = []
+        folders = self.s3.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')        
+       
 
         marker_end = (ts_from - datetime.timedelta(minutes=60)).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
         
-        for folder in folders:
-            marker = folder + marker_end            
+        for o in folders.get('CommonPrefixes'):        
+            marker = o.get('Prefix') + cloud_trail_folder + marker_end   
+            folder = o.get('Prefix') + cloud_trail_folder           
             while True:                
                 response = self._make_objects_list_request(marker=marker, prefix=folder)
                 for file_obj in response.get('Contents', []):
@@ -349,7 +357,8 @@ class S3Client:
 
 
 class AzureSentinelConnector:
-    def __init__(self, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+    def __init__(self, log_analytics_uri, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
+        self.log_analytics_uri = log_analytics_uri
         self.customer_id = customer_id
         self.shared_key = shared_key
         self.log_type = log_type
@@ -416,8 +425,8 @@ class AzureSentinelConnector:
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-        uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
-
+        uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
+        
         headers = {
             'content-type': content_type,
             'Authorization': signature,
