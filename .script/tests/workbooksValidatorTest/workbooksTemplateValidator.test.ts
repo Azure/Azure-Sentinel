@@ -14,6 +14,10 @@ describe("Workbooks template validator", () => {
     await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/workbooksTemplateFiles/invalidValueForFromTemplateId.json", "WorkbookTemplatesValidationError");
   });
 
+  it(`Should throw an exception when workbook template contains info of a resource"`, async () => {
+    await checkInvalid(".script/tests/workbooksValidatorTest/testFiles/workbooksTemplateFiles/containsResourceInfoTemplate.json", "WorkbookTemplatesValidationError");
+  });
+
   async function checkInvalid(filePath: string, expectedError: string): Promise<Chai.PromisedAssertion> {
     await expect(IsValidWorkbookTemplate(filePath)).eventually.rejectedWith(Error).and.have.property("name", expectedError);
   }

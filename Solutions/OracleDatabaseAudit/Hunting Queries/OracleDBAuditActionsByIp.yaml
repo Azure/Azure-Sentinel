@@ -1,0 +1,35 @@
+id: b43e074f-b630-4a16-80e5-138f4b6b64fb
+name: OracleDBAudit - Action by Ip
+description: |
+  'Query searches sources from which DbActions were made.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - Collection
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1005
+  - T1119
+  - T1078
+query: |
+  let lbtime = 24h;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime)
+  | where isnotempty(DbAction)
+  | where isnotempty(SrcIpAddr)
+  | where DbAction in~ ('SELECT', 'DROP', 'INSERT')
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where TableName !~ 'select'
+  | summarize TablesAffected = makeset(TableName) by SrcIpAddr, DbAction
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

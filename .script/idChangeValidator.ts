@@ -10,27 +10,31 @@ const templateIdRegex:string = `(id: ${guidRegex}(.|\n)*){2}`;
 const git: SimpleGit = gitP(workingDir);
 
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
-  filePath = workingDir + '/' + filePath;
-  const pr = await GetPRDetails();
-  console.log(filePath);
-  
-  if (typeof pr === "undefined") {
-    console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
-    return ExitCode.ERROR;
-  }
-  
-  let options = [pr.targetBranch, pr.sourceBranch, filePath];
-  let diffSummary = await git.diff(options);
-  let idHasChanged = diffSummary.search(templateIdRegex) > 0;
-  if (idHasChanged){
-      throw new Error();
+
+  if(filePath.includes("Detections") || filePath.includes("Analytic Rules"))
+  {
+    filePath = workingDir + '/' + filePath;
+    const pr = await GetPRDetails();
+    console.log(filePath);
+    
+    if (typeof pr === "undefined") {
+      console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
+      return ExitCode.ERROR;
+    }
+    
+    let options = [pr.targetBranch, pr.sourceBranch, filePath];
+    let diffSummary = await git.diff(options);
+    let idHasChanged = diffSummary.search(templateIdRegex) > 0;
+    if (idHasChanged){
+        throw new Error();
+    }
   }
   return ExitCode.SUCCESS;
 }
 
 let fileKinds = ["Modified"];
 let fileTypeSuffixes = ["yaml", "yml", "json"];
-let filePathFolderPrefixes = ["Detections"];
+let filePathFolderPrefixes = ["Detections", "Solutions"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return IsIdHasChanged(filePath);

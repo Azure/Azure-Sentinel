@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessCreateMicrosoftSecurityEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Security Events Process Creation Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessCreateMicrosoftSecurityEvents",
+            "query": "let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)\n  [\n    'S-1-16-0', '0x00000000', 'SECURITY_MANDATORY_UNTRUSTED_RID', 'Untrusted',\n    'S-1-16-4096', '0x00001000', 'SECURITY_MANDATORY_LOW_RID', 'Low integrity',\n    'S-1-16-8192', '0x00002000', 'SECURITY_MANDATORY_MEDIUM_RID', 'Medium integrity',\n    'S-1-16-8448', '0x00002100', 'SECURITY_MANDATORY_MEDIUM_PLUS_RID', 'Medium high integrity',\n    'S-1-16-12288', '0X00003000', 'SECURITY_MANDATORY_HIGH_RID', 'High integrity',\n    'S-1-16-16384', '0x00004000', 'SECURITY_MANDATORY_SYSTEM_RID', 'System integrity',\n    'S-1-16-20480', '0x00005000', 'SECURITY_MANDATORY_PROTECTED_PROCESS_RID', 'Protected process'\n  ];\nlet ProcessEvents=(){\nSecurityEvent\n// -- Filter\n| where EventID == 4688\n\n// -- Map\n| extend\n  // Event\n    EventCount = int(1),\n    EventVendor = 'Microsoft',\n    EventProduct = 'Security Events',\n    EventSchemaVersion = '0.1.0',\n    EventStartTime = todatetime(TimeGenerated),\n    EventEndTime = todatetime(TimeGenerated),\n    EventType = 'ProcessCreated',\n    EventOritingalType = EventID,\n    EventOriginalUid = EventOriginId, \n\n  // Device\n    DvcId = SourceComputerId,\n    DvcHostname = Computer,\n    DvcOs = 'Windows',\n\n  // Users\n    ActorUserId = SubjectUserSid,\n    ActorUserIdType = 'SID',\n    ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount),\n    ActorUsernameType = iff(SubjectDomainName == '-','Simple', 'Windows'),\n    ActorSessionId = SubjectLogonId,\n    ActorType = AccountType, // Add?\n    ActorDomainName = SubjectDomainName,\n\n    TargetUserId =TargetUserSid, \n    TargetUserIdType = 'SID',\n    TargetUsername = iff (TargetDomainName == '-', TargetUserName, TargetAccount),\n    TargetUsernameType = iff (TargetDomainName == '-', 'Simple', 'Windows'),\n    TargetUserSessionId = TargetLogonId,\n\n  // Processes \n    ActingProcessId = ProcessId,\n    ActingProcessName = ParentProcessName,\n\n    TargetProcessId = NewProcessId,\n    TargetProcessName = NewProcessName,\n    TargetProcessCommandLine = CommandLine,\n    TargetProcessTokenElevation = TokenElevationType\n\n  | lookup MandatoryLabelLookup on MandatoryLabel \n\n// -- Aliases\n  | extend\n    User = TargetUsername,\n    Dvc = DvcHostname,\n    Process = TargetProcessName\n\n// -- Remove potentially confusing\n  | project-away \n      ParentProcessName, \n      ProcessId, \n      SubjectUserSid,\n      SubjectDomainName,\n      SubjectUserName,\n      SubjectAccount,\n      TargetUserSid,\n      TargetDomainName,\n      TargetUserName,\n      TargetAccount\n}; ProcessEvents\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

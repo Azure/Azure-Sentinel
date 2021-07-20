@@ -1,0 +1,39 @@
+id: 7498594f-e3a7-4e02-9280-a07be9cfd38a
+name: Dynamics 365 Activity After Azure AD Alerts
+description: |
+  'This hunting query looks for users conducting Dynamics 365 activity shortly after Azn Azure AD Identity Protection alert for that user. The query only looks for users not seen before or conducting Dynamics activity not previously seen.'
+requiredDataConnectors:
+  - connectorId: Dynamics365
+    dataTypes:
+      - Dynamics365Activity
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let match_window = 1h;
+  let analysis_window = 1d;
+  let lookback_window = 7d;
+  SecurityAlert
+  | where TimeGenerated > ago(analysis_window)
+  | where ProviderName == 'IPC'
+  | extend UserName = tostring(parse_json(ExtendedProperties).["User Account"])
+  | extend UserName = tolower(UserName)
+  | extend TimeKey = bin(TimeGenerated, match_window)
+  | join kind=inner(Dynamics365Activity
+  | where TimeGenerated > ago(analysis_window)
+  | extend UserName = tolower(UserId)
+  | extend TimeKey = bin(TimeGenerated, match_window))
+  on UserName, TimeKey
+  | join kind=leftanti(Dynamics365Activity
+  | where TimeGenerated between(ago(lookback_window)..ago(analysis_window))
+  | extend UserName = tolower(UserId))
+  on UserName, OriginalObjectId
+  | summarize Actions = make_set(OriginalObjectId), MostRecentAction = max(TimeGenerated1), IPs = make_set(split(tostring(ClientIP), ':')[0]), AADAlerts=make_set(Description), MostRecentAlert = max(TimeGenerated) by UserName
+  | extend timestamp = MostRecentAction, AccountCustomEntity = UserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+

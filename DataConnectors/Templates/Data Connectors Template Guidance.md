@@ -89,7 +89,8 @@ A data connector can have multiple data types and these can be represented by co
 3. **permissions** – Represents the required permissions needed for the data connector to be enabled or connected. For e.g. write permissions to the workspace is needed for connector to be enabled, etc. These appear in the connector UX in the prerequisites section. This property value need **not** be updated and can remain as-is.
 4. **instructionSteps** – These are the specific instructions to connect to the data connector.
   * For CEF and Syslog, leverage the existing text as-is and add anything custom as needed.
-  * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Azure Sentinel **or** provide detailed guidance for customers to send data to Azure Sentinel.<p>
+  * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Azure Sentinel **or** provide detailed guidance for customers to send data to Azure Sentinel.
+  * If Connector is dependent on Kusto Function (Parser), **additionalRequirementBanner** and **instruction step** about Parser need to be added in Connector. <p>
   
 # What is the format for redirection/Short links?
 1. Redirection link for **Parser** - https://aka.ms/sentinel-[connectorid]-parser

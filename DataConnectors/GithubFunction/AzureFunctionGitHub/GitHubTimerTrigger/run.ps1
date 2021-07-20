@@ -1,11 +1,10 @@
 <#  
     Title:          GitHub Repo Logs Data Connector
     Language:       PowerShell
-    Version:        1.1
+    Version:        1.2
     Author:         Nicholas Dicola, Sreedhar Ande
-    Last Modified:  12/11/2020
-    Comment:        Inital Release
-
+    Last Modified:  03/29/2021
+    
     DESCRIPTION
     This Function App calls the GitHub REST API (https://api.github.com/) to pull the GitHub
     Audit, Repo and Vulnerability logs. The response from the GitHub API is recieved in JSON format. This function will build the signature and authorization header 
@@ -37,13 +36,20 @@ $AzureWebJobsStorage = $env:AzureWebJobsStorage
 $personalAccessToken = $env:PersonalAccessToken
 $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
+$LAURI = $env:LAURI
 $storageAccountContainer = "github-repo-logs"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
-#The AzureTenant variable is used to specify other cloud environments like Azure Gov(.us) etc.,
-$AzureTenant = $env:AZURE_TENANT
 
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
+
+if (-Not [string]::IsNullOrEmpty($LAURI)){
+	if($LAURI.Trim() -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+	{
+		Write-Error -Message "DocuSign-SecurityEvents: Invalid Log Analytics Uri." -ErrorAction Stop
+		Exit
+	}
+}
 
 function Write-OMSLogfile {
     <#
@@ -119,12 +125,13 @@ function Write-OMSLogfile {
             -contentType $ContentType `
             -resource $resource
         
-		# Compatible with Commercial and Gov Tenants
-		if ([string]::IsNullOrEmpty($AzureTenant)){
-			$uri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+		# Compatible with previous version
+		if ([string]::IsNullOrEmpty($LAURI)){
+			$LAURI = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 		}
-		else{		
-			$uri = "https://" + $CustomerId + ".ods.opinsights.azure" +$AzureTenant + $resource + "?api-version=2016-04-01"
+		else
+		{
+			$LAURI = $LAURI + $resource + "?api-version=2016-04-01"
 		}
 		
         $headers = @{
@@ -133,7 +140,7 @@ function Write-OMSLogfile {
             "x-ms-date"            = $rfc1123date
             "time-generated-field" = $dateTime
         }
-        $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $ContentType -Headers $headers -Body $Body -UseBasicParsing
+        $response = Invoke-WebRequest -Uri $LAURI -Method $method -ContentType $ContentType -Headers $headers -Body $Body -UseBasicParsing
         Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
         return $response.statuscode
     }
@@ -150,11 +157,11 @@ function Write-OMSLogfile {
     $logdata | Add-Member -MemberType NoteProperty -Name "DateTime" -Value $dateTime
 
     #Build the JSON file
-    $logMessage = ConvertTo-Json $logdata -Depth 20
+    $logMessage = ($logdata | ConvertTo-Json -Depth 20)
     Write-Verbose -Message $logMessage
 
     #Submit the data
-    $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body ([System.Text.Encoding]::UTF8.GetBytes($logMessage)) -Type $type
+    $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body $logMessage -Type $type
     Write-Verbose -Message "Post Statement Return Code $returnCode"
     return $returnCode
 }
@@ -195,8 +202,8 @@ $headers = @{
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $checkBlob = Get-AzStorageBlob -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext
 if($checkBlob -ne $null){
-    Get-AzStorageBlobContent -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\orgs.json" -Force
-    $githubOrgs = Get-Content "$env:TMPDIR\orgs.json" | ConvertFrom-Json
+    Get-AzStorageBlobContent -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\orgs.json" -Force
+    $githubOrgs = Get-Content "$env:temp\orgs.json" | ConvertFrom-Json
 }
 else{
     Write-Error "No ORGS.json file, exiting"
@@ -215,8 +222,8 @@ foreach($org in $githubOrgs){
     $checkBlob = Get-AzStorageBlob -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext
     if($checkBlob -ne $null){
         #Blob found get data
-        Get-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\lastrun-Audit.json" -Force
-        $lastRunAuditContext = Get-Content "$env:TMPDIR\lastrun-Audit.json" | ConvertFrom-Json
+        Get-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\lastrun-Audit.json" -Force
+        $lastRunAuditContext = Get-Content "$env:temp\lastrun-Audit.json" | ConvertFrom-Json
     }
     else {
         #no blob create the context
@@ -228,7 +235,7 @@ foreach($org in $githubOrgs){
 "lastContext": ""
 }
 "@
-        $lastRunAudit | Out-File "$env:TMPDIR\lastrun-Audit.json"
+        $lastRunAudit | Out-File "$env:temp\lastrun-Audit.json"
         $lastRunAuditContext = $lastRunAudit | ConvertFrom-Json
     }
 
@@ -250,7 +257,7 @@ foreach($org in $githubOrgs){
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
             #write to log A to be added later           
-            SendToLogA -gitHubData ($results.data.organization.auditLog.edges |  Convertto-json -depth 20) -customLogName $AuditLogTable
+            SendToLogA -gitHubData ($results.data.organization.auditLog.edges) -customLogName $AuditLogTable
         }
         $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
         $lastRunContext.lastContext = $results.data.organization.auditLog.pageInfo.endCursor
@@ -273,8 +280,8 @@ foreach($org in $githubOrgs){
 			$lastRunContext.org = $orgName
             $lastRunContext.lastContext = $lastRunContext.lastContext
             $lastRunContext.lastRun = $currentStartTime
-            $lastRunAuditContext | ConvertTo-Json | Out-File "$env:TMPDIR\lastrun-Audit.json"
-            Set-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-Audit.json" -Force
+            $lastRunAuditContext | ConvertTo-Json | Out-File "$env:temp\lastrun-Audit.json"
+            Set-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-Audit.json" -Force
         }
     } until ($hasNextPage -eq $false)
     
@@ -315,73 +322,96 @@ foreach($org in $githubOrgs){
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/referrers"
             $referrerLogs = $null
             $referrerLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $referrerLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
-            #Send to log A;
-            SendToLogA -gitHubData $referrerLogs -customLogName $RepoLogTable
+            if ($referrerLogs.Length -gt 0){
+                $referrerLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $referrerLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Referrers
+                #Send to log A;
+                SendToLogA -gitHubData $referrerLogs -customLogName $RepoLogTable
+            }
             
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
             $pathLogs = $null
             $pathLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $pathLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
-            #Send to log A;
-            SendToLogA -gitHubData $pathLogs -customLogName $RepoLogTable
+            if ($pathLogs.Length -gt 0){
+                $pathLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $pathLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Paths
+                #Send to log A;
+                SendToLogA -gitHubData $pathLogs -customLogName $RepoLogTable
+            }
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
             $viewLogs = $null
             $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $viewLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
-            #Send to log A
-            SendToLogA -gitHubData $viewLogs -customLogName $RepoLogTable            
+            if ($viewLogs.Length -gt 0){
+                $viewLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $viewLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Views
+                #Send to log A
+                SendToLogA -gitHubData $viewLogs -customLogName $RepoLogTable
+            }
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
             $cloneLogs = $null
             $cloneLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $cloneLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
-            #Send to log A
-            SendToLogA -gitHubData $cloneLogs -customLogName $RepoLogTable            
+            if ($cloneLogs.Length -gt 0){
+                $cloneLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
+                #Send to log A
+                SendToLogA -gitHubData $cloneLogs -customLogName $RepoLogTable
+            }        
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
             $commitLogs = $null
             $commitLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $commitLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
-            #Send to log A
-            SendToLogA -gitHubData $commitLogs -customLogName $RepoLogTable
+            if ($commitLogs.Length -gt 0){
+                $commitLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $commitLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Commits
+                #Send to log A
+                SendToLogA -gitHubData $commitLogs -customLogName $RepoLogTable
+            }
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
             $collaboratorLogs = $null
             $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $collaboratorLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
-            #Send to log A
-            SendToLogA -gitHubData $collaboratorLogs -customLogName $RepoLogTable            
+            if ($collaboratorLogs.Length -gt 0){
+                $collaboratorLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
+                #Send to log A
+                SendToLogA -gitHubData $collaboratorLogs -customLogName $RepoLogTable
+            }        
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
             $forkLogs = $null
             $forkLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-            $forkLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
-            $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
-            $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
-            #Send to log A
-            SendToLogA -gitHubData $forkLogs -customLogName $RepoLogTable            
-        }
+            if ($forkLogs.Length -gt 0){
+                $forkLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $forkLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Forks
+                #Send to log A
+                SendToLogA -gitHubData $forkLogs -customLogName $RepoLogTable
+            }
+
+			$uri = "https://api.github.com/repos/$orgName/$repoName/secret-scanning/alerts"
+            $secretscanningalerts = $null
+            $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            if ($secretscanningalerts.Length -gt 0){
+                $secretscanningalerts | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
+                $secretscanningalerts | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
+                $secretscanningalerts | Add-Member -NotePropertyName LogType -NotePropertyValue SecretScanningAlerts
+                #Send to log A
+                SendToLogA -gitHubData $secretscanningalerts -customLogName $RepoLogTable
+            }      
+        }		 
         else {
             Write-Host "$repoName is empty"
             Write-Verbose "$repoName is empty"
-        }
-        
-        
+        }       
     }
     
     # get blobs for last run
@@ -390,8 +420,8 @@ foreach($org in $githubOrgs){
     foreach($repo in $repoList){
         $repoName = $repo.name
         if($blobs.Name -contains "lastrun-$orgName-$repoName.json"){
-            Get-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
-            $lastRunVulnContext = Get-Content "$env:TMPDIR\lastrun-$orgName-$repoName.json" | ConvertFrom-Json
+            Get-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\lastrun-$orgName-$repoName.json" -Force
+            $lastRunVulnContext = Get-Content "$env:temp\lastrun-$orgName-$repoName.json" | ConvertFrom-Json
         }
         else {
             $lastRun = $currentStartTime
@@ -401,9 +431,9 @@ foreach($org in $githubOrgs){
 "lastContext": ""
 }
 "@
-            $lastRunVuln| Out-File "$env:TMPDIR\lastrun-$orgName-$repoName.json"
+            $lastRunVuln| Out-File "$env:temp\lastrun-$orgName-$repoName.json"
             $lastRunVulnContext = $lastRunVuln | ConvertFrom-Json
-            Set-AzStorageBlobContent -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
+            Set-AzStorageBlobContent -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-$orgName-$repoName.json" -Force
         }
 
         #Build the query based on previous context or not
@@ -446,11 +476,13 @@ foreach($org in $githubOrgs){
             else {
                 $lastRunVulnContext.lastContext = $lastRunContext
                 $lastRunVulnContext.lastRun = $currentStartTime
-                $lastRunVulnContext | ConvertTo-Json | Out-File "$env:TMPDIR\lastrun-$orgName-$repoName.json"
-                Set-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:TMPDIR\lastrun-$orgName-$repoName.json" -Force
+                $lastRunVulnContext | ConvertTo-Json | Out-File "$env:temp\lastrun-$orgName-$repoName.json"
+                Set-AzStorageBlobContent -Blob "lastrun-$orgName-$repoName.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-$orgName-$repoName.json" -Force
             }
         } until ($hasNextPage -eq $false)
     }
     #clear the repo list for next org
     $repoList = @()
+	#clear the temp folder
+	Remove-Item $env:temp\* -Recurse -Force -ErrorAction SilentlyContinue
 }

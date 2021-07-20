@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationAADNonInteractiveUserSignInLogs",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Azure active directory non interactive authentication",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationAADNonInteractiveUserSignInLogs",
+            "query": "let AADNIAuthentication=(){\n  AADNonInteractiveUserSignInLogs\n  | extend\n      EventVendor = 'Microsoft'\n      , EventProduct = 'AAD Non Interactive'\n      , EventSchemaVersion='0.1.0'\n      , EventCount=1\n      , EventResult = iff (ResultType ==0, 'Success', 'Failure')\n      , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)\n      , EventStartTime = TimeGenerated\n      , EventEndTime= TimeGenerated\n      , EventType= 'Logon'\n      , SrcDvcId=tostring(todynamic(DeviceDetail).deviceId)\n      , SrcDvcHostname =tostring(todynamic(DeviceDetail).displayName)\n      , SrcDvcOs=tostring(todynamic(DeviceDetail).operatingSystem)\n      , Location = todynamic(LocationDetails)\n      , TargetAppId = ResourceIdentity \n      , TargetUserType='NonInteractive'\n      , TargetUsernameType='Upn'\n      , TargetUserIdType='AADID'\n      , TargetAppName=ResourceDisplayName\n  | extend\n      SrcGeoCity=tostring(Location.city)\n      , SrcGeoCountry=tostring(Location.countryOrRegion)\n      , SrcGeoLatitude=tostring(Location.geoCoordinates.latitude)\n      , SrcGeoLongitude=tostring(Location.geoCoordinates.longitude)\n  | project-rename\n      EventOriginalUid =Id\n      , LogonMethod = AuthenticationRequirement\n      , HttpUserAgent=UserAgent\n      , TargetSessionId=CorrelationId\n      , TargetUserId = UserId\n      , TargetUsername=UserPrincipalName\n      , SrcDvcIpAddr=IPAddress\n      | lookup AADSTSErrorCodes on ResultType\n  | project-reorder\n      TimeGenerated\n      ,EventProduct\n      , EventOriginalUid\n      , EventResult\n      , EventOriginalResultDetails\n      , EventStartTime\n      , EventEndTime\n      , LogonMethod \n      , TargetSessionId\n      , TargetUserId\n      , TargetUsername\n      , SrcDvcId\n      , SrcDvcHostname \n      , SrcDvcOs\n      , HttpUserAgent \n      , SrcGeoCountry\n      , SrcGeoCity\n      , TargetAppId\n      , TargetAppName\n      // ** Aliases\n      | extend \n        User=TargetUsername\n      , LogonTarget=ResourceIdentity\n      , Dvc=EventVendor};\nAADNIAuthentication",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

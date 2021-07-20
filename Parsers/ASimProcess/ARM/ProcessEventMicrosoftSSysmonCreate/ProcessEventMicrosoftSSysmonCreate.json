@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessCreateMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Sysmon/Event Process Creation Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessCreateMicrosoftSysmon",
+            "query": "let ParsedProcessEvent=(){\n                   // Create the raw table from the raw XML file structure\n                   Event \n                   | where Source == \"Microsoft-Windows-Sysmon\" and EventID==1\n                   | parse EventData with * '<Data Name=\"RuleName\">'RuleName // parsing the XML using the original fields name - for readibliy \n                                       '</Data><Data Name=\"UtcTime\">'UtcTime\n                                       '</Data><Data Name=\"ProcessGuid\">{'ProcessGuid\n                                       '}</Data><Data Name=\"ProcessId\">'ProcessId\n                                       '</Data><Data Name=\"Image\">'Image\n                                       '</Data><Data Name=\"FileVersion\">'FileVersion\n                                       '</Data><Data Name=\"Description\">'Description\n                                       '</Data><Data Name=\"Product\">'Product\n                                       '</Data><Data Name=\"Company\">'Company'</Data>' *\n                   |extend  OriginalFileName = extract (@'\"OriginalFileName\">([^<]+)<',1,EventData) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure\n                   | parse EventData with *\n                                       '<Data Name=\"CommandLine\">'CommandLine'</Data>'\n                                       '<Data Name=\"CurrentDirectory\">'CurrentDirectory\n                                       '</Data><Data Name=\"User\">'User\n                                       '</Data><Data Name=\"LogonGuid\">{'LogonGuid\n                                       '}</Data><Data Name=\"LogonId\">'LogonId\n                                       '</Data><Data Name=\"TerminalSessionId\">'TerminalSessionId\n                                       '</Data><Data Name=\"IntegrityLevel\">'IntegrityLevel\n                                       '</Data><Data Name=\"Hashes\">'Hashes\n                                       '</Data><Data Name=\"ParentProcessGuid\">{'ParentProcessGuid\n                                       '}</Data><Data Name=\"ParentProcessId\">'ParentProcessId\n                                       '</Data><Data Name=\"ParentImage\">'ParentImage\n                                       '</Data><Data Name=\"ParentCommandLine\">'ParentCommandLine\n                                       '</Data>' *\n                   | extend    TargetProcessSHA1=extract(@'SHA1=(\\w+)',1, tostring(Hashes)),\n                               TargetProcessSHA256=extract(@'SHA256=(\\w+)',1, tostring(Hashes)),\n                               TargetProcessIMPHASH=extract(@'IMPHASH=(\\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file\n                               TargetProcessMD5=extract(@'MD5=(\\w+)',1, tostring(Hashes))\n                       // End of XML parse\n                   | extend \n                               EventType = \"ProcessCreated\",\n                               EventStartTime = todatetime(TimeGenerated),\n                               EventEndTime = todatetime(TimeGenerated),\n                               EventCount = int(1),\n                               EventVendor = \"Microsoft\",\n                               EventSchemaVersion = \"0.1.0\",\n                               EventProduct = \"Event\",\n                               DvcOs = \"Windows\",\n                               TargetUserSessionId = toint(LogonId)  ,           \n                               TargetUsernameType = \"Windows\",\n                               ActorUsernameType = \"Windows\",\n                               TargetUsername = User,\n                               TargetProcessCommandLine = CommandLine\n\n                   | project-rename \n                               EventMessage = RenderedDescription,\n                               DvcHostname = Computer,\n\n                               EventOriginalId = EventID,\n                               TargetUserSessionGuid = LogonGuid, \n\n                               TargetProcessId = ProcessId,\n                               TargetProcessGuid = ProcessGuid,\n                               TargetProcessName = Image,\n                               TargetProcessIntegrityLevel = IntegrityLevel,\n                               \n                               TargetProcessCompany = Company,\n                               TargetProcessFileDescription = Description,\n                               TargetProcessFileVersion = FileVersion,\n                               TargetProcessFileProduct = Product,\n                               \n                               ActingProcessId = ParentProcessId,\n                               ActingProcessGuid = ParentProcessGuid,                          \n                               ActingProcessCommandLine = ParentCommandLine,\n                               ActingProcessName = ParentImage,\n\n                               ActorUsername = UserName\n\n                   | extend // aliases\n                               // User = TargetUserName,\n                               Process = TargetProcessName,\n                               Dvc = DvcHostname,\n                               Hash = coalesce(TargetProcessSHA256, TargetProcessSHA1, TargetProcessMD5) // which appears first - will be aliases to \"Hash\"\n                   }; ParsedProcessEvent",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
