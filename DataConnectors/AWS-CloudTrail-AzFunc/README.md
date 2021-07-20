@@ -1,5 +1,7 @@
-# Azure native Data connector to ingest AWS CloudTrail Logs
-Azure native Sentinel Data connector to ingest AWS CloudTrail Logs
+# Azure native Data connector to ingest AWS CloudTrail Logs  
+**Author: Sreedhar Ande**  
+
+Azure native Sentinel Data connector to ingest AWS CloudTrail Logs from centralized AWS S3 bucket - Receiving CloudTrail Log Files from Multiple Accounts 
 
 AWS CloudTrail logs are audit type events from all/any AWS resources in a tenancy. Each AWS resource has a unique set of Request and Response Parameters. Azure Log Analytics has a column per table limit of 500, (plus some system columns) the aggregate of AWS parameter fields will exceed this quickly leading to potential loss of event records
 
