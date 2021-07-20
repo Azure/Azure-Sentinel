@@ -21,13 +21,13 @@ To avoid additional billing and duplication:
 ## **Function Flow process**
 **CloudTrail Logs --> AWS S3 --> Azure Function --> Azure Log Analytics**
 ![AWSCloudTrailAzFun](./images/AWSCloudTrailAzFun.PNG)
+
 ## Installation / Setup Guide
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-CloudTrail-AzFunc%2Fazuredeploy_awscloudtrail.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-</a>
+1. Click  Deploy To Azure/Deploy to Azure Gov  
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-CloudTrail-AzFunc%2Fazuredeploy_awscloudtrail.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-CloudTrail-AzFunc%2Fazuredeploy_awscloudtrail.json)
 
-1. Click  "Deploy To Azure"/ "Deploy to Azure Gov"
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
    **Note**  
