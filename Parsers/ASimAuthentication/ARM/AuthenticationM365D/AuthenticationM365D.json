@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationM365Defender",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM M365 Defender DeviceLogonEvent Authentication parser",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationM365Defender",
+            "query": "let FaliureReason=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[\n  'InvalidUserNameOrPassword','No such user or password'\n  ];\nlet AuthM365D=(){\n  DeviceLogonEvents \n  //\n  | project-rename \n     EventOriginalResultDetails=FailureReason \n  | extend \n  // ----  Event\n      EventSubType=iff(LogonType=='Remote interactive (RDP) logons','RemoteInteractive',LogonType)\n     , EventCount=int(1)\n     , EventStartTime=TimeGenerated\n     , EventEndTime=TimeGenerated\n     , EventOriginalType = LogonType\n     , EventProduct='M365 Defender for EndPoint'\n     ,  EventResult = case(ActionType =='LogonSuccess', 'Success'\n                          , ActionType=='LogonFailed', 'Failure'\n                          , ActionType=='LogonAttempted', 'NA'\n                          , 'NA')\n    , EventSchemaVersion='0.1.0'\n    , EventType='Logon'\n    , EventVendor ='Microsoft'\n   //  ----   Target and Actor Users\n   | project-rename \n       TargetUserId=AccountSid\n     , ActorUserId =InitiatingProcessAccountSid\n     , ActorUserUpn=InitiatingProcessAccountUpn\n     , ActorUserObjectId=InitiatingProcessAccountObjectId\n    | extend \n       TargetUserIdType ='SID'\n     , TargetUsername = strcat(AccountDomain,'\\\\',AccountName)\n     , TargetUsernameType='Windows'\n     , ActorUserIdType='SID'\n     , ActorUsername=coalesce(ActorUserUpn, strcat(InitiatingProcessAccountDomain,'\\\\',InitiatingProcessAccountName)) // InitiatingProcessAccountName\n     , ActorUsernameType=case(isnotempty( ActorUserUpn), 'Upn/Email'\n                              , isnotempty(InitiatingProcessAccountDomain), 'Windows'\n                              , 'Simple')\n     , TargetDvcHostname=tostring(split(DeviceName,'.')[0])\n     , TargetDvcFQDN=DeviceName\n    | project-rename \n      LogonProtocol=Protocol\n    , TargetDvcId=DeviceId\n    , SrcDvcIpAddr=RemoteIP\n    , OriginalEventUid=ReportId\n    , SrcDvcHostname=RemoteDeviceName \n  //\n  , ActingProcessCommandLine = InitiatingProcessCommandLine\n  , ActingProcessCreationTime=InitiatingProcessCreationTime\n  , ActingProcessPath=InitiatingProcessFolderPath\n  , ActingProcessId=InitiatingProcessId\n  , ActingProcessMD5=InitiatingProcessMD5\n  , ActingProcessSHA1=InitiatingProcessSHA1\n  , ActingProcessSHA256= InitiatingProcessSHA256\n  , ActingProcessIntegrityLevel= InitiatingProcessIntegrityLevel\n  , ActingProcessTokenElevation=InitiatingProcessTokenElevation\n  , ParentProcessName=InitiatingProcessParentFileName\n  , ParentProcessId=InitiatingProcessParentId\n  , ParentProcessCreationTime=InitiatingProcessParentCreationTime\n    | extend \n        ActingProcessName=iff(ActingProcessPath hassuffix InitiatingProcessFileName\n                          , ActingProcessPath\n                          , strcat(ActingProcessPath,'\\\\',InitiatingProcessFileName))\n        ,  TargetDvcHostnameType='FQDN'\n    , TargetDvcIdType='MDE'\n    , TargetPortNumber=RemotePort\n    , TargetSessionId =LogonId\n    | lookup FaliureReason on EventOriginalResultDetails \n  // TargetUrl \n  // -----------  Alias\n    | extend \n      User=TargetUsername \n      , LogonTarget=TargetDvcHostname\n      , Dvc=TargetDvcHostname\n      };AuthM365D\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
