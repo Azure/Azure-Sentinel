@@ -1,0 +1,361 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "AWSCloudTrail",
+            "type": "string",
+			"metadata": {
+				"description": "Specifies the name of the Function App."
+			}
+        },		
+        "WorkspaceID": {
+            "type": "string",            
+			"metadata": {
+				"description": "Specifies the Log Analytics Workspace Id."
+			}
+        },
+        "WorkspaceKey": {
+            "type": "securestring",            
+			"metadata": {
+				"description": "Specifies the Log Analytics Workspace Key."
+			}
+        },
+        "AWSAccessKeyId": {
+            "type": "string",            
+			"metadata": {
+				"description": "Specifies AWS Access Key Id."
+			}
+        },
+        "AWSSecretAccessKey": {
+            "type": "securestring",            
+			"metadata": {
+				"description": "Specifies AWS Secret Access Key."
+			}
+        },
+        "AWSRegionName": {
+            "type": "string",            
+			"metadata": {
+				"description": "Specifies AWS Region"
+			}
+        },
+		"S3BucketURI": {
+            "type": "string",            
+			"metadata": {
+				"description": "Specifies AWS Bucket URI. Ex: s3://<<S3 Bucket Name>>/AWSLogs/"
+			}
+        },
+		"CloudTrailFolderName": {
+			"type": "string",            
+			"metadata": {
+				"description": "Specifies CloudTrail Folder Name"
+			}
+		},
+		"LogAnalyticsCustomLogName": {
+            "type": "string",            
+			"metadata": {
+				"description": "Specifies Azure Log Analytics Workspace Table Name."
+			}
+        },
+		"CoreFieldsAllTable": {
+            "type": "string",
+            "defaultValue": "true",
+			"metadata": {
+				"description": "You can set this table by providing boolean value true/false"
+			}
+        },
+		"SplitAWSResourceTypes": {
+            "type": "string",
+            "defaultValue": "true",
+			"metadata": {
+				"description": "You can set this table by providing boolean value true/false"
+			}
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+		"StorageAccountName":"[substring(variables('FunctionName'), 0, 22)]",
+		"KeyVaultName": "[substring(variables('FunctionName'), 0, 22)]",
+		"LogAnalyticsWorkspaceKey": "LogAnalyticsWorkspaceKey",
+		"HostingPlanName":"[concat('ASP-',substring(variables('FunctionName'), 0, 22))]",
+		"AWSAccessKeyId":"AWSAccessKeyId",
+		"AWSSecretAccessKey":"AWSSecretAccessKey",
+		"StorageSuffix":"[environment().suffixes.storage]",
+		"LogAnaltyicsUri":"[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceId')), '.ods.opinsights'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2015-05-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('StorageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+		{
+            "apiVersion": "2018-02-01",
+            "name": "[variables('HostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "kind": "elastic",
+            "tags": {},
+            "dependsOn": [],
+            "properties": {
+                "targetWorkerCount": "2",
+                "targetWorkerSizeId": "3",                
+                "reserved": true,
+                "maximumElasticWorkerCount": "20"
+            },
+            "sku": {
+                "tier": "ElasticPremium",
+                "name": "EP1"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+				"[concat('Microsoft.Web/serverfarms/', variables('HostingPlanName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+				"serverFarmId": "[concat('/subscriptions/', subscription().subscriptionId,'/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/serverfarms/', variables('HostingPlanName'))]"
+            },
+            
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]",
+						"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]",
+						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('AWSAccessKeyId'))]",            
+						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('LogAnalyticsWorkspaceKey'))]",
+						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('AWSSecretAccessKey'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~3",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",                        
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('StorageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+						"WorkspaceID": "[parameters('WorkspaceID')]",
+                        "WorkspaceKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('LogAnalyticsWorkspaceKey')).secretUriWithVersion, ')')]",                        
+                        "AWSAccessKeyId": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('AWSAccessKeyId')).secretUriWithVersion, ')')]",
+                        "AWSSecretAccessKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('AWSSecretAccessKey')).secretUriWithVersion, ')')]",
+                        "AWSRegionName": "[parameters('AWSRegionName')]",
+						"LogAnalyticsCustomLogName":"[parameters('LogAnalyticsCustomLogName')]",
+						"S3Bucket": "[parameters('S3BucketURI')]",
+						"CoreFieldsAllTable":"[parameters('CoreFieldsAllTable')]",
+						"SplitAWSResourceTypes":"[parameters('SplitAWSResourceTypes')]",
+						"Schedule":"0 */10 * * * *",
+						"FreshEventTimeStamp":"10",
+						"LAURI": "[variables('LogAnaltyicsUri')]",
+						"CloudTrailFolderName": "[parameters('CloudTrailFolderName')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AWS-CloudTrail-AzFunc/AzFunAWSCloudTrailLogsIngestion.zip?raw=true"
+                    }
+                }
+            ]
+        },
+		{
+		  "type": "Microsoft.KeyVault/vaults",
+		  "apiVersion": "2016-10-01",
+		  "name": "[variables('KeyVaultName')]",
+		  "location": "[resourceGroup().location]",
+		  "dependsOn": [
+			"[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+		  ],
+		  "properties": {
+			"sku": {
+			  "family": "A",
+			  "name": "Standard"
+			},
+			"tenantId": "[subscription().tenantId]",
+			"accessPolicies": [
+			  {
+				"tenantId": "[subscription().tenantId]",
+				"objectId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')),'2019-08-01', 'full').identity.principalId]",
+				"permissions": {
+				  "secrets": [ "get",
+							   "list"
+							]
+				}
+			  }
+			],
+			"enabledForDeployment": false,
+			"enabledForDiskEncryption": false,
+			"enabledForTemplateDeployment": true,
+			"enableSoftDelete": true
+		  },
+		  "resources": [
+			{
+			  "type": "secrets",
+			  "apiVersion": "2016-10-01",
+			  "name": "[variables('AWSAccessKeyId')]",
+			  "dependsOn": [
+				"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+			  ],
+			  "properties": {
+				"value": "[parameters('AWSAccessKeyId')]",
+				"contentType": "string",
+				"attributes": {
+				  "enabled": true
+				}
+			  }
+			},
+			{
+			  "type": "secrets",
+			  "apiVersion": "2016-10-01",
+			  "name": "[variables('AWSSecretAccessKey')]",
+			  "dependsOn": [
+				"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+			  ],
+			  "properties": {
+				"value": "[parameters('AWSSecretAccessKey')]",
+				"contentType": "string",
+				"attributes": {
+				  "enabled": true
+				}
+			  }
+			}, 
+			{
+			  "type": "secrets",
+			  "apiVersion": "2016-10-01",
+			  "name": "[variables('LogAnalyticsWorkspaceKey')]",
+			  "dependsOn": [
+				"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
+			  ],
+			  "properties": {
+				"value": "[parameters('WorkspaceKey')]",
+				"contentType": "string",
+				"attributes": {
+				  "enabled": true
+				}
+			  }
+			}
+		  ]
+		},        
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/', variables('StorageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ]
+}
