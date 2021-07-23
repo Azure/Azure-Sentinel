@@ -20,7 +20,7 @@
             "type": 4,
             "isRequired": true,
             "value": {
-              "durationMs": 604800000
+              "durationMs": 7776000000
             },
             "typeSettings": {
               "selectableValues": [
@@ -88,7 +88,7 @@
         "size": 0,
         "title": "Indicators imported into Sentinel by indicator type and date",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -105,7 +105,7 @@
         "size": 0,
         "title": "Indicators imported into Sentinel by indicator provider and date",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -122,7 +122,7 @@
         "size": 0,
         "title": "Active indicators by indicator type",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -139,7 +139,7 @@
         "size": 0,
         "title": "Active indicators by indicator source",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -156,7 +156,7 @@
         "size": 0,
         "title": "Active indicators by confidence score",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -173,7 +173,7 @@
         "size": 0,
         "title": "Alerts generated from threat intelligence by alert severity and date",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -186,38 +186,17 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let tiObservables = ThreatIntelligenceIndicator \r\n| project IndicatorId, ThreatType, Description, Active, IndicatorTime = TimeGenerated, observableValue = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, EmailSourceIpAddress, EmailSenderAddress, DomainName), SourceSystem;\r\nlet alertEntity = SecurityAlert \r\n| project parse_json(Entities), SystemAlertId , AlertTime = TimeGenerated\r\n| mvexpand(Entities)\r\n| extend entity = iif(isnotempty(Entities.Address), Entities.Address,\r\n iif(isnotempty(Entities.HostName),strcat(Entities.HostName, \".\", Entities.DnsDomain),\r\n iif(isnotempty(Entities.Url), Entities.Url,\r\n iif(Entities.Type == \"account\", strcat(Entities.Name,\"@\",Entities.UPNSuffix),\"\")))) \r\n| where isnotempty(entity) \r\n| project entity, SystemAlertId, AlertTime;\r\nalertEntity \r\n| join kind= inner tiObservables on $left.entity == $right.observableValue\r\n| summarize Alerts = dcount(SystemAlertId) by Value = observableValue, ThreatType, Description, Source = SourceSystem\r\n| order by Alerts desc",
+        "query": "\r\n\r\nlet tiObservables = ThreatIntelligenceIndicator\r\n    | where TimeGenerated < now()\r\n    | project IndicatorId, ThreatType, Description, Active, IndicatorTime = TimeGenerated, observableValue = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName), SourceSystem;\r\nlet alertEntity = SecurityAlert \r\n    | project parse_json(Entities), SystemAlertId , AlertTime = TimeGenerated\r\n    | mvexpand(Entities)\r\n    | extend entity = iif(isnotempty(Entities.Address), Entities.Address,\r\n                      iif(isnotempty(Entities.HostName),strcat(Entities.HostName, \".\", Entities.DnsDomain),\r\n                      iif(isnotempty(Entities.Url), Entities.Url,\r\n                      iif(isnotempty(Entities.Value), Entities.Value,\r\n                      iif(Entities.Type == \"account\", strcat(Entities.Name,\"@\",Entities.UPNSuffix),\"\")))))\r\n    | where isnotempty(entity) \r\n    | project entity, SystemAlertId, AlertTime;\r\nlet IncidentAlerts = SecurityIncident\r\n    | project IncidentTime = TimeGenerated, IncidentNumber, Title, parse_json(AlertIds)\r\n    | mv-expand AlertIds\r\n    | project IncidentTime, IncidentNumber, Title, tostring(AlertIds);\r\nlet AlertsWithTiObservables = alertEntity\r\n    | join kind=inner tiObservables on $left.entity == $right.observableValue;\r\nlet IncidentsWithAlertsWithTiObservables = AlertsWithTiObservables\r\n    | join kind=inner IncidentAlerts on $left.SystemAlertId == $right.AlertIds;\r\nIncidentsWithAlertsWithTiObservables\r\n| summarize Incidents=dcount(IncidentNumber), Alerts=dcount(SystemAlertId) by Value = observableValue, ThreatType, Description, Source = SourceSystem\r\n| order by Value desc",
         "size": 0,
-        "title": "Alert counts by indicator",
+        "title": "Incident and Alert counts by indicator",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "gridSettings": {
           "formatters": [
-            {
-              "columnMatch": "Value",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "ThreatType",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "Description",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
             {
               "columnMatch": "Alerts",
               "formatter": 8,
@@ -230,30 +209,23 @@
         }
       },
       "customWidth": "55",
-      "name": "query - 13"
+      "name": "query - 13 - Copy"
     },
     {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let tiObservables = ThreatIntelligenceIndicator \r\n| where TimeGenerated < now() \r\n| project IndicatorId, Active, SourceSystem, IndicatorTime = TimeGenerated , observableValue = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, EmailSourceIpAddress, EmailSenderAddress, DomainName)\r\n| summarize arg_min(IndicatorTime, *) by IndicatorId;\r\n// Create a temp table containing all alerts generated from threat intelligence.\r\nlet alertEntity = SecurityAlert \r\n| where TimeGenerated < now()\r\n// | where ExtendedProperties contains \"ThreatIntelligenceIndicator\" \r\n| project parse_json(Entities), SystemAlertId , AlertTime = TimeGenerated\r\n| mvexpand(Entities)\r\n| extend entity = iif((isnotempty(Entities.Address)), Entities.Address,\r\n                  iif(isnotempty(Entities.HostName),strcat(Entities.HostName, '.', Entities.DnsDomain),\r\n                  iif(isnotempty(Entities.Url), Entities.Url,\r\n                  iif(Entities.Type == 'account', strcat(Entities.Name,'@',Entities.UPNSuffix),'')))) \r\n| where isnotempty(entity)\r\n| project entity, SystemAlertId, AlertTime;\r\n// Join the two temp tables and summarize the data in a table showing indicator sources by detection time and count of alerts.\r\nalertEntity \r\n| join kind = inner tiObservables on $left.entity == $right.observableValue\r\n| project SystemAlertId, IndicatorId, timedelta = AlertTime - IndicatorTime, SourceSystem\r\n| summarize DetectionTime=case(toint(avg(timedelta))>0,strcat(replace(@'\\-',@'',replace(@'(\\:\\d+\\:\\d+\\.\\d+)',@'',tostring(avg(timedelta)))),' hrs',' DELAYED'),toint(avg(timedelta))<0,strcat(replace(@'\\-',@'',replace(@'(\\:\\d+\\:\\d+\\.\\d+)',@'',tostring(avg(timedelta)))),' hrs',' AHEAD'), 'None'), Alerts = dcount(SystemAlertId) by Source = SourceSystem\r\n| order by Source asc\r\n| render table",
+        "query": "let tiObservables = ThreatIntelligenceIndicator \r\n    | where TimeGenerated < now() \r\n    | project IndicatorId, Active, SourceSystem, IndicatorTime = TimeGenerated , observableValue = strcat(NetworkSourceIP, NetworkIP, NetworkDestinationIP, Url, FileHashValue, EmailSourceIpAddress, EmailSenderAddress, DomainName)\r\n    | summarize arg_min(IndicatorTime, *) by IndicatorId;\r\n// Create a temp table containing all alerts generated from threat intelligence.\r\nlet alertEntity = SecurityAlert \r\n    | where TimeGenerated < now()\r\n    | project parse_json(Entities), SystemAlertId , AlertTime = TimeGenerated\r\n    | mv-expand Entities\r\n    | extend entity = iif((isnotempty(Entities.Address)), Entities.Address,\r\n                      iif(isnotempty(Entities.HostName),strcat(Entities.HostName, '.', Entities.DnsDomain),\r\n                      iif(isnotempty(Entities.Url), Entities.Url,\r\n                      iif(isnotempty(Entities.Value), Entities.Value,\r\n                      iif(Entities.Type == 'account', strcat(Entities.Name,'@',Entities.UPNSuffix),'')))))\r\n    | where isnotempty(entity)\r\n    | project entity, SystemAlertId, AlertTime;\r\n// Join the two temp tables and summarize the data in a table showing indicator sources by detection time and count of alerts.\r\nalertEntity \r\n| join kind = inner tiObservables on $left.entity == $right.observableValue\r\n| project SystemAlertId, IndicatorId, timedelta = AlertTime - IndicatorTime, SourceSystem\r\n| summarize DetectionTime=case(toint(avg(timedelta))>0,strcat(replace(@'\\-',@'',replace(@'(\\:\\d+\\:\\d+\\.\\d+)',@'',tostring(avg(timedelta)))),' hrs',' DELAYED'),toint(avg(timedelta))<0,strcat(replace(@'\\-',@'',replace(@'(\\:\\d+\\:\\d+\\.\\d+)',@'',tostring(avg(timedelta)))),' hrs',' AHEAD'), 'None'), Alerts = dcount(SystemAlertId) by Source = SourceSystem\r\n| order by Source asc\r\n| render table",
         "size": 0,
         "title": "Average detection time by source",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 7776000000
         },
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "gridSettings": {
           "formatters": [
-            {
-              "columnMatch": "Source",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
             {
               "columnMatch": "DetectionTime",
               "formatter": 18,
@@ -280,27 +252,6 @@
                     "text": "{0}{1}"
                   }
                 ]
-              }
-            },
-            {
-              "columnMatch": "Alerts",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "AvgProtectionTime",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
-              }
-            },
-            {
-              "columnMatch": "AvgDetectionTime",
-              "formatter": 0,
-              "formatOptions": {
-                "showIcon": true
               }
             }
           ],
@@ -337,9 +288,26 @@
         }
       },
       "customWidth": "45",
-      "name": "query - 15"
+      "name": "query - 15 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let DomainQuery=view() { \r\nThreatIntelligenceIndicator\r\n| summarize arg_max(TimeGenerated, *) by IndicatorId\r\n| where isnotempty(DomainName)\r\n| summarize SourceSystemArray=make_set(SourceSystem) by DomainName\r\n| summarize count() by tostring(SourceSystemArray)\r\n| project SourceSystemArray, count_, EntryType=\"DomainEntry\"\r\n};\r\nlet UrlQuery=view(){\r\nThreatIntelligenceIndicator\r\n| summarize arg_max(TimeGenerated, *) by IndicatorId\r\n| where isnotempty(Url)\r\n| summarize SourceSystemArray=make_set(SourceSystem) by Url\r\n| summarize count() by tostring(SourceSystemArray)\r\n| project SourceSystemArray, count_, EntryType=\"UrlEntry\"\r\n};\r\nlet FileHashQuery=view(){\r\nThreatIntelligenceIndicator\r\n| summarize arg_max(TimeGenerated, *) by IndicatorId\r\n| where isnotempty(FileHashValue)\r\n| summarize SourceSystemArray=make_set(SourceSystem) by FileHashValue\r\n| summarize count() by tostring(SourceSystemArray)\r\n| project SourceSystemArray, count_, EntryType=\"FileHashEntry\"\r\n};\r\nlet IPQuery=view(){\r\nThreatIntelligenceIndicator\r\n| summarize arg_max(TimeGenerated, *) by IndicatorId\r\n| where isnotempty(NetworkIP) or isnotempty(NetworkSourceIP)\r\n| summarize SourceSystemArray=make_set(SourceSystem) by NetworkIP, NetworkSourceIP\r\n| summarize count() by tostring(SourceSystemArray)\r\n| project SourceSystemArray, count_, EntryType=\"IPEntry\"\r\n};\r\nlet EmailAddressQuery=view(){\r\nThreatIntelligenceIndicator\r\n| summarize arg_max(TimeGenerated, *) by IndicatorId\r\n| where isnotempty(EmailSenderAddress)\r\n| summarize SourceSystemArray=make_set(SourceSystem) by EmailSenderAddress\r\n| summarize count() by tostring(SourceSystemArray)\r\n| project SourceSystemArray, count_, EntryType=\"EmailAddressEntry\"\r\n};\r\nlet EmailMessageQuery=view(){\r\nThreatIntelligenceIndicator\r\n| summarize arg_max(TimeGenerated, *) by IndicatorId\r\n| where isnotempty(EmailSubject)\r\n| summarize SourceSystemArray=make_set(SourceSystem) by EmailSubject\r\n| summarize count() by tostring(SourceSystemArray)\r\n| project SourceSystemArray, count_, EntryType=\"EmailMessageEntry\"\r\n};\r\nlet SingleSourceIndicators=view(){\r\n    DomainQuery\r\n    | union UrlQuery\r\n    | union FileHashQuery\r\n    | union IPQuery\r\n    | union EmailAddressQuery\r\n    | union EmailMessageQuery\r\n    | where array_length(todynamic(SourceSystemArray))==1\r\n    | summarize sum(count_) by SourceSystemArray\r\n    | extend counter=1 \r\n};\r\nlet MultipleSourceIndicators=view(){\r\n    DomainQuery\r\n    | union UrlQuery\r\n    | union FileHashQuery\r\n    | union IPQuery\r\n    | union EmailAddressQuery\r\n    | union EmailMessageQuery\r\n    | where array_length(todynamic(SourceSystemArray))!=1\r\n    | summarize sum(count_) by SourceSystemArray\r\n    | extend counter=1\r\n};\r\nlet CountOfActiveIndicatorsBySource=view(){\r\n    ThreatIntelligenceIndicator\r\n    | where ExpirationDateTime > now() and Active == true\r\n    | summarize arg_max(TimeGenerated, *) by IndicatorId\r\n    | summarize count() by SourceSystem\r\n    | project SourceSystem, count_\r\n};\r\nSingleSourceIndicators\r\n| join kind=fullouter MultipleSourceIndicators on counter \r\n| where SourceSystemArray1 contains todynamic(SourceSystemArray)[0] \r\n| order by SourceSystemArray\r\n| extend solitary_count=sum_count_\r\n| summarize shared_count = sum(sum_count_1) by SourceSystemArray, solitary_count\r\n| extend total_count = shared_count + solitary_count\r\n| extend unique_percentage = round(toreal(solitary_count)/toreal(total_count)*100, 1)\r\n| extend IndicatorSource = tostring(todynamic(SourceSystemArray)[0])\r\n| join kind=inner CountOfActiveIndicatorsBySource on $left.IndicatorSource == $right.SourceSystem\r\n| order by unique_percentage desc\r\n| project Source=IndicatorSource, Uniqueness=strcat(unique_percentage, \"%\"), ActiveIndicators = count_",
+        "size": 0,
+        "title": "Uniqueness of Threat Intelligence Sources",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 12"
     }
   ],
+  "fallbackResourceIds": [],
   "fromTemplateId": "sentinel-ThreatIntelligence",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
