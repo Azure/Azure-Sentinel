@@ -9,8 +9,8 @@
       "2. If SOC user confirms yes, the IP Address gets added to IPGroups under IPAddress section and incident will get updates with endpoint information, summary of the action taken and virus total scan report.",
       "3. Else, incident will get updates with endpoint information and summary of the action taken."],
     "prerequisites": ["1. Create IP Groups and attach them to Azure Firewall rules.", 
-      "2. Create a Service Principal which the Azure Firewall connector will use, and grant Contributor permissions to it on the IP groups. ['Detailed instructions'](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewallConnector#azure-active-directory-service-principal)",
-      "3. Deploy Azure Firewall Logic Apps custom connector under the same resource group (see link below). **Permissions required for this playbook** This playbook **Gets** and **Updates** IP groups.", 
+      "2. Create a Service Principal which the Azure Firewall connector will use, and grant Contributor permissions to it on the IP groups.",
+      "3. Deploy Azure Firewall Logic Apps custom connector under the same resource group (see link below).", 
       "4. To use VirusTotal connector in this playbook, get your [Virus Total API key](https://developers.virustotal.com/v3.0/reference#getting-started). Otherwise, erase these steps or replace them with other TI sources."],
     "prerequisitesDeployTemplateFile": "../AzureFirewallConnector/azuredeploy.json",
     "lastUpdateTime": "2021-06-19T00:00:00.000Z", 
@@ -19,6 +19,10 @@
     "support": {
         "tier": "community" 
     },
+    "source": { 
+      "type": "solution",
+      "name": "Azure Firewall"
+      }, 
     "author": {
         "name": "Accenture"
     }
@@ -94,13 +98,16 @@
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]"
       ],
+      "kind": "V1",
       "properties": {
-        "customParameterValues": {},
-        "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-        }
+          "displayName": "[variables('AzureSentinelConnectionName')]",
+          "customParameterValues": {},
+          "parameterValueType": "Alternative",
+          "api": {
+              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+          }
       }
-    },
+  },
     {
       "type": "Microsoft.Web/connections",
       "apiVersion": "2016-06-01",
@@ -146,6 +153,9 @@
         "hidden-SentinelTemplateName": "BlockIP-AzureFirewall-IPGroups",
         "hidden-SentinelTemplateVersion": "1.0"
     },
+    "identity": {
+      "type": "SystemAssigned"
+  },
       "properties": {
         "state": "Enabled",
         "definition": {
@@ -467,12 +477,17 @@
               "AzureFirewallConnector": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('OAuthConnection'))]",
                 "connectionName": "[variables('OAuthConnection')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
               },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                      "type": "ManagedServiceIdentity"
+                  }
+              }
               },
               "teams": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
