@@ -15,14 +15,14 @@ For more information, see:
 
 <br>
 
-The template deploys the following:
-* vimFileEventEmpty.yaml
-* vimFileEventGeneric.yaml
-* vimFileEventMicrosoftDefender.yaml
-* vimFileEventMicrosoftFileStorage.yaml
-* vimFileEventMicrosoftSharePoint.yaml
-* vimFileEventMicrosoftSysmonFileCreated.yaml
-* vimFileEventMicrosoftSysmonFileDeleted.yaml
+The template deploys parsers for the following products:
+* vimFileEventEmpty - An empty FileEvent table
+* vimFileEventGeneric - Source agnostic parser
+* vimFileEventMicrosoftDefender - Microsoft Defender 
+* vimFileEventMicrosoftFileStorage - Microsoft Azure File Storage
+* vimFileEventMicrosoftSharePoint - Microsoft SharePoint
+* vimFileEventMicrosoftSysmonFileCreated - Sysmon File Created event (EventId 11)
+* vimFileEventMicrosoftSysmonFileDeleted - Sysmon File Deleted events (EventId 23, 26) 
 
 <br>
 
