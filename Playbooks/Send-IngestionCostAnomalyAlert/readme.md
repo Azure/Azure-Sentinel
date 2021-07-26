@@ -1,6 +1,6 @@
 # Ingestion Anomaly Alert Playbook
 
-This playbook sends you an alert should there be an ingestion spike into your workspace. The playbook uses the <em>series_decompose_anomalies</em> KQL funtion to determine anomalous ingestion.
+This playbook sends you an alert should there be an ingestion spike into your workspace. The playbook uses the <em>series_decompose_anomalies</em> KQL function to determine anomalous ingestion.
 
 ## Deployment steps
 
