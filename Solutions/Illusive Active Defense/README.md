@@ -3,7 +3,7 @@
 <br>
 <br>
 <p align="center">  
-<img width="800" src="./Images/Illusive.svg"> </a>
+<img width="800" height="300" src="./Images/Illusive.svg"> </a>
 </p>
 <br>
 
@@ -23,7 +23,7 @@ Use this playbook to enrich Sentinel security incidents originating from Illusiv
 Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource. 
 
 <p align="left">  
-<img width="800" src="./images/cp_integration_detail.png"> </a>
+<img width="800" src="./Images/IncidentEnrichmentPlaybook.png"> </a>
 </p>
 
 
@@ -51,14 +51,12 @@ For more information see:
 ## Generate an Illusive API Key from Illusive console
 
  1. In the Illusive Console, navigate to Settings>General>API Keys.
- <br>
-
  2. Enter values in the following fields:
 
     <table>
         <tr>
-            <td>Field</td>
-            <td>Description and values</td>
+            <td><b>Field</b></td>
+            <td><b>Description and values</b></td>
         </tr>
         <tr>
             <td>Description</td>
@@ -80,11 +78,7 @@ For more information see:
     </table>
 
  3. Click Add.The API Key is created and added to the list of keys shown.
- <br>
-
  4. Copy the header containing the key to a text file and save it securely.
- <br>
-
  5. The key is valid for one year to access the REST API on this Management Server only.
 
 
@@ -95,9 +89,12 @@ For more information see:
 * Dry run result
 
     <p align="left">  
-    <img width="400" src="./Images/IncidentEnrichmentPlaybook.png"> </a>
+    <img width="400" src="./Images/IncidentResponse1.png"> </a>
     </p>
 
+    <p align="left">  
+    <img width="400" src="./Images/IncidentResponse2.png"> </a>
+    </p>
 
 <br>
 <br>
