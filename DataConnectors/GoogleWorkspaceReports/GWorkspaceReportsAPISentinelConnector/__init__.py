@@ -131,15 +131,15 @@ def expand_data(obj):
     for event in obj:
         for nested in event["events"]:
             if 'name' in nested:
-                event.update({'event_name': nested["name"]})
+                nested.update({'event_name': nested["name"]})
             if 'type' in nested:
-                event.update({'event_type': nested["type"]})
+                nested.update({'event_type': nested["type"]})
             if 'parameters' in nested:
                 for parameter in nested["parameters"]:
                     if 'name' in parameter:
                         for param_name in ["value", "boolValue", "multiValue", "multiMessageValue", "multiIntValue", "messageValue", "intValue"]:
                             if param_name in parameter:
-                                event.update({parameter["name"]: parameter[param_name]})
+                                nested.update({parameter["name"]: parameter[param_name]})
     return obj
 
 def gen_chunks_to_object(data,chunksize=100):
