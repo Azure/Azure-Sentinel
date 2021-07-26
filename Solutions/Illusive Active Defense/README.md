@@ -3,7 +3,7 @@
 <br>
 <br>
 <p align="center">  
-<img width="800" height="100" src="./Images/Illusive.svg"> </a>
+<img width="600" height="300" src="./Images/Illusive.svg"> </a>
 </p>
 <br>
 
