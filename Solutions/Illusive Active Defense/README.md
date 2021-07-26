@@ -3,7 +3,7 @@
 <br>
 <br>
 <p align="center">  
-<img width="800" height="300" src="./Images/Illusive.svg"> </a>
+<img width="800" height="100" src="./Images/Illusive.svg"> </a>
 </p>
 <br>
 
@@ -23,7 +23,7 @@ Use this playbook to enrich Sentinel security incidents originating from Illusiv
 Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource. 
 
 <p align="left">  
-<img width="800" src="./Images/IncidentEnrichmentPlaybook.png"> </a>
+<img width="600" src="./Images/IncidentEnrichmentPlaybook.png"> </a>
 </p>
 
 
@@ -42,6 +42,10 @@ For more information see:
 1. Analytic Rule used by the Playbooks
 2. Playbook that will enrich Sentinel Incidents and isolate Hosts/Processes based on Illusive Incidents
 
+You can deploy Playbook from their specific folder.
+
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIllusive%20Active%20Defense/Playbooks/Illusive-SentinelIncident-Enrichment/azuredeploy.json)
+   [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIllusive%20Active%20Defense/Playbooks/Illusive-SentinelIncident-Response/azuredeploy.json)
 <br>
 
 <a name="deployinstr">
@@ -89,11 +93,11 @@ For more information see:
 * Dry run result
 
     <p align="left">  
-    <img width="400" src="./Images/IncidentResponse1.png"> </a>
+    <img width="600" src="./Images/IncidentResponse1.png"> </a>
     </p>
 
     <p align="left">  
-    <img width="400" src="./Images/IncidentResponse2.png"> </a>
+    <img width="600" src="./Images/IncidentResponse2.png"> </a>
     </p>
 
 <br>
