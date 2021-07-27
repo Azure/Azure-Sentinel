@@ -11,11 +11,11 @@ describe("Playbooks validator", () => {
   });
 
   it(`Should pass when playbook template doesn't belong to the gallery`, async () => {
-    await checkValid(".script/tests/playbooksValidatorTest/testFiles/validPlaybookTemplate.json");
+    await checkValid(".script/tests/playbooksValidatorTest/testFiles/validPlaybookTemplateNotForGallery.json");
   });
 
   it(`Should pass when playbook template is using using capitalized parameter types`, async () => {
-    await checkValid(".script/tests/playbooksValidatorTest/testFiles/validPlaybookTemplateNotForGallery.json");
+    await checkValid(".script/tests/playbooksValidatorTest/testFiles/playbookTemplateWithCapitalizedParameterType.json");
   });
 
   it(`Should throw an exception when template is missing 'PlaybookName' parameter`, async () => {
