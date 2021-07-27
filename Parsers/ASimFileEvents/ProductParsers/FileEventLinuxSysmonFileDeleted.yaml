@@ -1,0 +1,70 @@
+Parser:
+  Title: ASIM Sysmon/Linux File Deleted (Event Ids 23, 26) File Event Parser
+  Version: '0.1'
+  LastUpdated: July 27, 2021
+Product:
+  Name: Microsoft Linux Sysmon
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: |
+  This is a Query Parser that is used to map Microsoft Linux Sysmon Event ids 23 and 26 (Event) to the Azure Sentinel Information Model FileEvent schema.
+ParserName: vimFileEventLinuxSysmonFileDeleted
+ParserQuery: |
+  Syslog
+  | where SyslogMessage has ('<Provider Name="Linux-Sysmon"') and SyslogMessage has_any('<EventID>23</EventID>','<EventID>26</EventID>')
+  | parse SyslogMessage with  *
+    //    '<Event><System><Provider Name="' msgProviderName:string
+    // '" Guid="{ff032593-a8d3-4f13-b0d6-01fc615a0f97}"/><EventID>'msgEventID:int 
+    // '</EventID><Version>2</Version><Level>'msgLevel:int // Could be indication for success/failure
+    // '</Level><Task>11</Task><Opcode>'msgOpcode:int
+    // '</Opcode><Keywords>'msgKeywords:string
+    '</Keywords><TimeCreated SystemTime="'msgTimeCreated:datetime
+    '"/><EventRecordID>'msgEventRecordID:string
+    '</EventRecordID><Correlation/><Execution ProcessID="'msgProcessID:string // what process is this?
+      '" ThreadID="'msgThreadID:int
+    '"/><Channel>Linux-Sysmon/Operational</Channel><Computer>'msgComputer:string
+    '</Computer><Security UserId="'msgUserId:string 
+    '"/></System><EventData><Data Name="RuleName">'msgRuleName:string
+    '</Data><Data Name="UtcTime">'msgUtcTime:datetime
+    '</Data><Data Name="ProcessGuid">'msgProcessGuid:string
+    '</Data><Data Name="ProcessId">'msgProcessId:string
+    '</Data><Data Name="Image">'msgImage:string
+    '</Data><Data Name="TargetFilename">'msgTargetFileName:string 
+    '</Data><Data Name="CreationUtcTime">'msgCreationUtcTime:datetime 
+    '</Data></EventData></Event>'
+  | extend
+    EventMessage=SyslogMessage
+    , EventCount=int(1)
+    , EventStartTime =TimeGenerated // msgTimeCreated? CreationUtc? UtcTime?
+    , EventEndTime=TimeGenerated
+    , EventType = 'FileCreated'
+    , EventResult ='Success'  // does this event log failures? S/F indication: level or keywords
+    , EventOriginalUid=msgEventRecordID
+    , EventOriginalType ='11' 
+    , EventProduct='Sysmon For Linux'
+    , EventProductVersion='v13.22' // Guessing. is there a version number on that?
+    , EventVendor ='Microsoft'
+    , EventSchemaVersion ='0.1.0'
+    , DvcOs = 'Linux'
+    , ActorUserIdType='UID' /// 
+    , TargetFilePathFormat='Unix'
+  | project-rename
+      DvcHostname=Computer
+    , ActorUserId=msgUserId
+    , ActingProcessName =msgImage
+    , ActingProcessId=msgProcessId
+    , ActingProcessGuid=msgProcessGuid
+    , TargetFilePath =msgTargetFileName
+    , TargetFileCreationTime =msgCreationUtcTime
+    // ------  Alias
+  | extend
+      Process=ActingProcessName
+      , FilePath=TargetFilePath
+      , Dvc =DvcHostname
+      
