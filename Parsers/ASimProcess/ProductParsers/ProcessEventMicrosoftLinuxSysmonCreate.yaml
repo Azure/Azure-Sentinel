@@ -13,18 +13,17 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AzSentinelNormalization
 Description: ASIM Sysmon/Linux Process Creation Event Parser (event number 1)
-ParserName: vimProcessEventLinuxSysmon
+ParserName: vimProcessCreateLinuxSysmon
 ParserQuery: | 
   let ParsedProcessEvent=(){
   // Create the raw table from the raw XML file structure
   Syslog 
-  //| project-rename EventData = SyslogMessage 
   | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>1</EventID>')
   | parse SyslogMessage with 
       *
       '<EventRecordID>' EventRecordId:int '</EventRecordID>'
       *
-      '<Computer>' Computer:string '</Computer>'
+      '<Computer>' SysmonComputer:string '</Computer>'
       *
       '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readability 
       '</Data><Data Name="UtcTime">'UtcTime
@@ -57,23 +56,22 @@ ParserQuery: |
       // End of XML parse
   | extend 
               EventType = "ProcessCreated",
-              EventStartTime = todatetime(TimeGenerated),
-              EventEndTime = todatetime(TimeGenerated),
+              EventStartTime = TimeGenerated,
+              EventEndTime = TimeGenerated,
               EventCount = int(1),
               EventVendor = "Microsoft",
               EventSchemaVersion = "0.1.0",
-              EventProduct = "Event",
-              DvcOs = "Linux", // Changed
+              EventProduct = "Sysmon For Linux",
+              DvcOs = "Linux",
               TargetUserSessionId = toint(LogonId)  ,           
               TargetUsernameType = "Simple",
-              // ActorUsernameType = "Simple",
               TargetUsername = User,
               TargetProcessCommandLine = CommandLine,
               EventOriginalId = '1' // Set with a constant value to avoid parsing
 
   | project-rename 
               // EventMessage = RenderedDescription, // field not available in Linux
-              DvcHostName = Computer, // Computer may be different than HostName, in which case HostIP may be incorrect. 
+              DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect. 
               DvcIpAddr = HostIP, 
               EventOriginalUid = EventRecordId,
 

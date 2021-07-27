@@ -25,7 +25,7 @@ This template deploys the following:
 * vimProcessEventsMicrosoft365D - Process events from Microsoft 365 Defender for Endpoints
 * vimProcessCreateMicrosoftSysmon - Process creation events from Sysmon
 * vimProcessTerminateMicrosoftSysmon - Process termination events from Sysmon
-* vimProcessEventLinuxSysmon - Process creation events from Sysmon on Linux
+* vimProcessCreateLinuxSysmon - Process creation events from Sysmon on Linux
 * vimProcessCreateMicrosoftSecurityEvents - Process creation events from Security Events
 * vimProcessTerminateMicrosoftSecurityEvents - Process termination Events from Security Events
 
