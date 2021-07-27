@@ -1,0 +1,66 @@
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias as ImpervaWAFCloud.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. ImpervaWAFCloud | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+ImpervaWAFCloud_CL 
+ | where Message has "CEF"
+ | extend logs = split(Message, "|") 
+ | extend product = logs[1]
+ | extend type = logs[2]
+ | extend severity = logs[5]
+ | extend msg = logs[7]
+ | extend  Properties = extract_all(@"(?P<key>[^=\s]+)?=(?P<value>(?:[\\]=|[^=])+)(?:\s|$)", dynamic(["key","value"]), tostring(msg))
+| mv-apply Properties on (
+    summarize make_bag(pack(tostring(Properties[0]), Properties[1]))
+)
+| evaluate bag_unpack(bag_) 
+| extend packed = pack(
+                    replace(@"\s","",cs1Label), cs1,
+                    replace(@"\s","",cs2Label), cs2,
+                    replace(@"\s","",cs3Label), cs3,
+                    replace(@"\s","",cs4Label), cs4,
+                    replace(@"\s","",cs5Label), cs5,
+                    replace(@"\s","",cs6Label), cs6,
+                    replace(@"\s","",cs7Label), cs7,
+                    replace(@"\s","",cs8Label), cs8
+                 )
+| evaluate bag_unpack(packed)
+| project-away logs, msg, cs1, cs1Label, cs2, cs2Label, cs3, cs3Label, cs4,cs4Label, cs5,cs5Label, cs6, cs6Label, cs7, cs7Label, cs8, cs8Label, Message
+| extend    EventVendor = "Imperva",
+            EventProduct = product,
+            EventType = type,
+            EventSeverity = severity,
+            DvcAction = act,
+            NetworkApplicationProtocol = app,
+            Country = ccode,
+            City = cicode,
+            HttpStatusCode = cn1,
+            SrcPortNumber = cpt,
+            AccountName = Customer,
+            RequestId = deviceExternalId,
+            PoPName = deviceFacility,
+            BrowserType = dproc,
+            EventEndTime = end,
+            NetworkSessionId = fileId,
+            PostBody = postbody,
+            QueryString = qstr,
+            UrlOriginal = request,
+            HttpUserAgentOriginal = requestClientApplication,
+            HttpRequestMethod = requestMethod,
+            DstIpAddr = sip,
+            SiteID = siteid,
+            DstDomainHostname = sourceServiceName,
+            DstPortNumber = spt,
+            SrcIpAddr = src,
+            EventStartTime = start,
+            AccountID = suid,
+            NetworkApplicationProtocoVersion = ver,
+            HttpRequestXff = xff,
+            CaptchaSupport = CapSupport,
+            ClientApp = clapp,
+            ClientAppSig = clappsig,
+            CookiesSupport = COSupport,
+            SrcGeoLatitude = latitude,
+            SrcGeoLongitude = longitude,
+            VisitorID = VID
+| project TimeGenerated, EventVendor, EventProduct, EventType, EventSeverity, DvcAction, NetworkApplicationProtocol, Country, City, HttpStatusCode, SrcPortNumber, AccountName, RequestId, PoPName, BrowserType, EventEndTime, NetworkSessionId, PostBody, QueryString, UrlOriginal, HttpUserAgentOriginal, HttpRequestMethod, DstIpAddr, SiteID, DstDomainHostname, DstPortNumber, SrcIpAddr, EventStartTime, AccountID, NetworkApplicationProtocoVersion, HttpRequestXff, CaptchaSupport, ClientApp, ClientAppSig, CookiesSupport, SrcGeoLatitude, SrcGeoLongitude, VisitorID, JavascriptSupport
