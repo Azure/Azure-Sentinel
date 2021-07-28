@@ -1,14 +1,18 @@
 
-# Illusive Active Defense Product Suite
+<p align="left">  
+<img width="300" height="100" src="./Images/logo.jpg"> </a>
+</p>
+
+## Illusive Active Defense Product Suite
+
+# Microsoft Azure Sentinel
+
+  Playbook and setup for incident enrichment and response
 
 # Table of Contents
 
 1. [Executive Summary](#executive_summary)
    - [Azure Application Setup](#azureappsetup)
-3. [Deploy Playbook templates](#deployall)
-4. [Deployment instructions](#deployinstr)
-5. [Test the playbook](#testplaybook)
-<br>
 
 <a name="executive_summary">
 
@@ -46,6 +50,9 @@ Steps to locate the Sentinel Workspace name:
 1. In the [Azure portal](https://portal.azure.com/), go to <b>Azure Sentinel</b>
    Type Azure Sentinel in the <b>Search bar</b>, or click on the Azure Sentinel icon
 2. On the Azure Sentinel page, find the workspace within which the playbook and its API connection are deployed
+   <p align="center">  
+      <img src="./Images/Workspace.png"> </a>
+   </p>
 3. Use the above highlighted name as the “Workspace Name” while deployment.
 
 <a name="azureappsetup">
@@ -58,14 +65,23 @@ Steps to locate the Sentinel Workspace name:
    
 1. Login to [http://portal.azure.com/](http://portal.azure.com/) 
 2. If you have access to multiple tenants, in the top menu, use the Directory + subscription filter to select the tenant in which you want to register the application
+   <p align="center">  
+      <img src="./Images/app_registration.png"> </a>
+   </p>
 3. Search for and select Azure Active Directory.
 4. Under Manage, select App registrations>New registration.The Register an application page appears.
+   <p align="center">  
+      <img src="./Images/app_name.png"> </a>
+   </p>
 5. Specify a Name for your application.
 Conform to company naming conventions. Do not use “illusive” or any other word that might reveal the existence of Illusive in the environment. 
 6. Under Supported account types, select Accounts in this organizational directory only.
 7. To complete the initial app registration, click Register.
 8. Go to the created application’s Overview page.
 9. Copy and save the Application (client) ID and the Directory (tenant) ID. You need these to configure the Playbooks.
+   <p align="center">  
+      <img src="./Images/Certificates_and_Secrets.png"> </a>
+   </p>
 10. Generate and save a Client Secret. 
     - Click Certificates & Secrets.
     - Click New Client Secret.
@@ -73,16 +89,20 @@ Conform to company naming conventions. Do not use “illusive” or any other wo
     - Select an Expiry date for the Client Secret.
     - Click Add 
     - Copy and save the secret Value. You need these to configure the Playbooks.
+   <p align="center">  
+      <img src="./Images/API_Permission.png"> </a>
+   </p>
+   
 11. Give API permissions to the application.
-    - Go to API Permissions.
-    - Click Add a permission.
-    - Under Microsoft APIs.
-    - Select Azure Service Management>Delegated, and check user_impersonation. Used to read Azure Sentinel incidents. 
+      - Go to API Permissions.
+      - Click Add a permission.
+      - Under Microsoft APIs.
+      - Select Azure Service Management>Delegated, and check user_impersonation (Used to read Azure Sentinel incidents). 
 12. FOR INCIDENT RESPONSE PLAYBOOK ONLY: Under API’s my organization uses”
-    - Select WindowsDefenderATP, and check the following permissions for both Delegated and Application.
-      - Machine.Isolate – to isolate device
-      - Machine.Read – to find agent ID- to collect data from a single machine. 
-      - Machine.Read.All – to find agent ID – to query all machines 
-      - File.Read.All – for process handling find and erase/stop suspicious executable
-      - Machine.StopAndQuarantine - for process handling find and erase/stop suspicious executable
+     - Select WindowsDefenderATP, and check the following permissions for both Delegated and Application.
+         - Machine.Isolate – to isolate device
+         - Machine.Read – to find agent ID- to collect data from a single machine. 
+         - Machine.Read.All – to find agent ID – to query all machines 
+         - File.Read.All – for process handling find and erase/stop suspicious executable
+         - Machine.StopAndQuarantine - for process handling find and erase/stop suspicious executable
 13. Once all the API permissions are added, click Grant admin consent for Default Directory and click OK. 
