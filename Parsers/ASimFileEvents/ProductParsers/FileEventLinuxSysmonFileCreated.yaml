@@ -18,45 +18,38 @@ ParserName: vimFileEventLinuxSysmonFileCreated
 ParserQuery: |
   Syslog
   | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>11</EventID>')
+  | take 2
   | parse SyslogMessage with  *
-    //    '<Event><System><Provider Name="' msgProviderName:string
-    // '" Guid="{ff032593-a8d3-4f13-b0d6-01fc615a0f97}"/><EventID>'msgEventID:int 
-    // '</EventID><Version>2</Version><Level>'msgLevel:int // Could be indication for success/failure
-    // '</Level><Task>11</Task><Opcode>'msgOpcode:int
-    // '</Opcode><Keywords>'msgKeywords:string
-    '</Keywords><TimeCreated SystemTime="'msgTimeCreated:datetime
-    '"/><EventRecordID>'msgEventRecordID:string
-    '</EventRecordID><Correlation/><Execution ProcessID="'msgProcessID:string // what process is this?
-      '" ThreadID="'msgThreadID:int
-    '"/><Channel>Linux-Sysmon/Operational</Channel><Computer>'msgComputer:string
-    '</Computer><Security UserId="'msgUserId:string 
-    '"/></System><EventData><Data Name="RuleName">'msgRuleName:string
-    '</Data><Data Name="UtcTime">'msgUtcTime:datetime
-    '</Data><Data Name="ProcessGuid">'msgProcessGuid:string
-    '</Data><Data Name="ProcessId">'msgProcessId:string
-    '</Data><Data Name="Image">'msgImage:string
-    '</Data><Data Name="TargetFilename">'msgTargetFileName:string 
-    '</Data><Data Name="CreationUtcTime">'msgCreationUtcTime:datetime 
-    '</Data></EventData></Event>'
+    '<EventRecordID>'msgEventRecordID:string'</EventRecordID>'
+    *
+    //'<Computer>'msgComputer:string'</Computer>'
+    '<Security UserId="'msgUserId:string '"/>'
+    * 
+    '<Data Name="ProcessGuid">'msgProcessGuid:string'</Data>'
+    '<Data Name="ProcessId">'msgProcessId:string'</Data>'
+    '<Data Name="Image">'msgImage:string'</Data>'
+    '<Data Name="TargetFilename">'msgTargetFileName:string'</Data>'
+    '<Data Name="CreationUtcTime">'msgCreationUtcTime:datetime'</Data>'
+    *
   | extend
     EventMessage=SyslogMessage
     , EventCount=int(1)
-    , EventStartTime =TimeGenerated // msgTimeCreated? CreationUtc? UtcTime?
+    , EventStartTime =TimeGenerated 
     , EventEndTime=TimeGenerated
     , EventType = 'FileCreated'
-    , EventResult ='Success'  // does this event log failures? S/F indication: level or keywords
-    , EventOriginalUid=msgEventRecordID
+    , EventResult ='Success'
     , EventOriginalType ='11' 
     , EventProduct='Sysmon For Linux'
-    , EventProductVersion='v13.22' // Guessing. is there a version number on that?
+    , EventProductVersion='v13.22'
     , EventVendor ='Microsoft'
     , EventSchemaVersion ='0.1.0'
     , DvcOs = 'Linux'
     , ActorUserIdType='UID' /// 
-    , TargetFilePathFormat='Unix'
+    , TargetFilePathType='Unix'
   | project-rename
       DvcHostname=Computer
     , ActorUserId=msgUserId
+    , EventOriginalUid=msgEventRecordID
     , ActingProcessName =msgImage
     , ActingProcessId=msgProcessId
     , ActingProcessGuid=msgProcessGuid
