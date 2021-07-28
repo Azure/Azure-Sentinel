@@ -20,33 +20,30 @@ relevantTechniques:
   - T1190
   - T1078
 query: |
- let timeframe = 1d;
- SecurityAlert
- | where TimeGenerated > ago(timeframe)
+
+    SecurityAlert
     | where AlertName has_any ('Potential SQL Injection', 'A possible vulnerability to SQL Injection')
     | extend EntitiesDynamicArray = parse_json(Entities)
     | mv-expand EntitiesDynamicArray
-     | extend EntityType = tostring(parse_json(EntitiesDynamicArray).Type), EntityAddress = tostring(EntitiesDynamicArray.Address)
+    | extend EntityType = tostring(parse_json(EntitiesDynamicArray).Type), EntityAddress = tostring(EntitiesDynamicArray.Address)
     | extend IpAddress = iif(EntityType == 'ip', EntityAddress, '')
     | where isnotempty(IpAddress) 
-     | join kind=inner (
+    | join kind=inner (
     CommonSecurityLog 
-    | where TimeGenerated > ago(timeframe)
-    | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC" and DeviceAction != "deny"
-      | summarize count() by DeviceName, SourceIP, DestinationIP, DestinationPort, Protocol, SourcePort
+    | where DeviceVendor =~ "Palo Alto Networks" and Activity =~ "TRAFFIC" and DeviceAction != "deny"
+    | summarize count() by DeviceName, SourceIP, DestinationIP, DestinationPort, Protocol, SourcePort
     )
     on $left.IpAddress == $right.SourceIP
     | join kind=inner (
     AuditLogs
-    | where TimeGenerated > ago(timeframe)
     | where LoggedByService =~ "Core Directory"
     | where Category =~ "RoleManagement"
     | extend IpAddress = case(
-  isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
-  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),'Not Available')
+    isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
+    isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),'Not Available')
     | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
-  tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-   | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))  
+    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))  
     ) on IpAddress
     | summarize count () by TimeGenerated,  IpAddress, UserRoles,SourcePort, DestinationPort, AccountCustomEntity =InitiatedBy
     
