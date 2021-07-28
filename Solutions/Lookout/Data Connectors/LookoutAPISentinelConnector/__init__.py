@@ -65,7 +65,8 @@ def post_data(body):
         'content-type': content_type,
         'Authorization': signature,
         'Log-Type': log_type,
-        'x-ms-date': rfc1123date
+        'x-ms-date': rfc1123date,
+        'time-generated-field' : 'time_collected'
     }
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
@@ -88,6 +89,7 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
         processed_events = []
         for event in events:
             event['enterprise_name'] = ent_name
+            event['time_collected'] = event["eventTime"] 
             processed_events.append(event)
 
         post_status_code = post_data(json.dumps(processed_events))
