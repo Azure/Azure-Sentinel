@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Sysmon/Event Registry Creation Event Parser
-  Version: '0.1'
-  LastUpdated: June 23, 2021
+  Version: '0.1.1'
+  LastUpdated: July 29, 2021
 Product:
   Name: Microsoft Windows Events Sysmon
 Normalization:
@@ -76,18 +76,18 @@ ParserQuery: |
         | parse Parameter with KeyPrefix "\\" KeyMain
         | lookup Hives on KeyPrefix
         | extend NewName = strcat (Hive, "\\", KeyMain)
-        | project-away KeyPrefix, KeyMain
+        | project-away KeyPrefix, KeyMain, Hive
 
        // Split Key and Value for relevant events 
         | extend ParsedKey = extract_all (@"^(.+)\\(.+)$", Key)
-        | extend Key = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][0], TargetObject)
+        | extend Key = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][0], Key)
         | extend Value = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][1], "")
         | extend ParsedKey = extract_all (@"^(.+)\\(.+)$", NewName)
         | extend NewKey = ParsedKey[0][0]
         | extend NewValue = ParsedKey[0][1]
-        | project-away ParsedKey, TargetObject
+        | project-away ParsedKey, TargetObject, NewName
         
-        // Set normalizde registry fields
+        // Set normalized registry fields
         | extend
               RegistryKey = iff (EventType == "RegistryKeyRenamed", NewKey, Key),
               RegistryKeyModified = iff (EventType in ("RegistryKeyRenamed", "RegistryValueSet"), Key, ""),
@@ -101,6 +101,6 @@ ParserQuery: |
               Dvc = DvcHostName
 
         | project-away
-            Parameter, Value, Key, NewKey 
+            Parameter, Value, Key, NewKey, NewValue
 
         }; ParsedRegistryEvent
