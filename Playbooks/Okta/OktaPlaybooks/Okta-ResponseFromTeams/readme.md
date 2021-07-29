@@ -2,14 +2,14 @@
  ## Summary
 
 When a new sentinal incident is created,this playbook gets triggered and performs below actions
-1.  An adaptvie card is sent to the SOC Teams channel with information collected from the incident and the risky user information from Okta. 
+1.  An adaptive card is sent to the SOC Teams channel with information collected from the incident and the risky user information from Okta. 
 2.  The SOC is allowed to take action on risky user based on the information provided in the adaptive card.
 
 
 ![Playbook Designer view](./Okta-ResponseFromTeams.PNG)<br>
 
 **This is the adaptive card SOC will recieve when playbook is triggered:**<br><br>
-![Adaptive Card example](./AdaptiveCardtoSOCuser.PNG)<br><br>
+![Adaptive Card example](./images/AdaptiveCardtoSOCuser.PNG)<br><br>
 
 
 
@@ -19,13 +19,8 @@ When a new sentinal incident is created,this playbook gets triggered and perform
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deply to Azure" button. This will take you to deplyoing an ARM Template wizard.
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-ResponseFromTeams%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-</a>
-
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-ResponseFromTeams%2Fazuredeploy.json" target="_blank">
-   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-ResponseFromTeams%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-ResponseFromTeams%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
     * Playbook Name : Enter the playbook name here (ex:Oktaplaybook)
