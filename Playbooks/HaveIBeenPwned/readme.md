@@ -43,7 +43,7 @@ Authentication methods this connector supports- [API Key authentication](https:/
 
 <a name="prerequisites">
 
-# Prerequisites for using and deploying Custom Connector + 3 playbooks
+# Prerequisites for using and deploying Custom Connector + 4 playbooks
 1. HaveIBeenPwned service end point should be known. (e.g. https://{haveibeenpwned.com})
 2. Generate an API key. [Refer this link on how to generate the API Key](https://haveibeenpwned.com/API/Key)
 
