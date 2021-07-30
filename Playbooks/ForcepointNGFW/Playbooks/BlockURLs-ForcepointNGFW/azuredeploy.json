@@ -1,0 +1,1740 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block URLs - ForcepointNGFW",
+        "description": "This playbook checks if malicious URL is blocked or unblocked by SMC firewall.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious URLs", "2. If malicious URL is not blocked by SMC firewall then blocks it." ],
+        "prerequisites": [
+            "1. Forcepoint SMC Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+            "2. Forcepoint SMC API Key should be known.[Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )",
+            "3. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/)",
+            "4. Security policy rule name created in SMC should be known."
+        ],
+        "prerequisitesDeployTemplateFile": "../../ForcepointSMCApiConnector/azuredeploy.json",
+        "lastUpdateTime": "2021-07-26T00:00:00.000Z",
+        "entities": [ "URLs" ],
+        "tags": [ "Blocking" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for playbook without spaces"
+            }
+        },
+        "ForcepointSMCConnectorName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name for your Forcepoint SMC Connector without spaces"
+            }
+        },
+        "ForcepointSMCApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter the api key for smc login"
+            }
+        },
+        "VersionNumber": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter SMC Api key Version Number"
+            }
+        },
+        "SecurityPolicyRule": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter smc firewall security policy rule"
+            }
+
+        }
+    },
+    "variables": {
+        "Forcepoint_Connector": "[concat('ForcepointSMCApiConnector-',parameters('PlaybookName'))]",
+        "azureSentinel_Connection": "[concat('azuresentienl-',parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azureSentinel_Connection'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Assign_URL_Address_to_Array": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URLAddressarray",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "Asiign URL Address to URLAddressarray to reuse."
+                        },
+                        "Check_if_body_present_from_output": {
+                            "actions": {
+                                "Appending_URLs__to_URL_Address_array": {
+                                    "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                    "actions": {
+                                        "Append_to_array_variable_to_URLaddress_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "URLAddressarray",
+                                                "value": "@items('Appending_URLs__to_URL_Address_array')?['Url']"
+                                            },
+                                            "description": "Appending URL address from incident to URLaddress variable"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                },
+                                "Check_Login_Status": {
+                                    "runAfter": {
+                                        "Login": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "200_Success_OK": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Condition_for_Filter_Policy_Name": {
+                                                    "runAfter": {
+                                                        "Get_Policy_Name": [
+                                                            "Succeeded",
+                                                            "Failed",
+                                                            "Skipped",
+                                                            "TimedOut"
+                                                        ]
+                                                    },
+                                                    "cases": {
+                                                        "200_Success_OK": {
+                                                            "case": 200,
+                                                            "actions": {
+                                                                "Condition_to_check_terminate_variable_having_value": {
+                                                                    "actions": {
+                                                                        "Terminate": {
+                                                                            "runAfter": {},
+                                                                            "type": "Terminate",
+                                                                            "inputs": {
+                                                                                "runError": {
+                                                                                    "message": "Playbook failed "
+                                                                                },
+                                                                                "runStatus": "Failed"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Upload_Policy_After_Adding_IP_or_URL-_Forcepoint_SMC": [
+                                                                            "Succeeded",
+                                                                            "Failed",
+                                                                            "Skipped",
+                                                                            "TimedOut"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Add_comment_to_incident_(V3)": {
+                                                                                "runAfter": {},
+                                                                                "type": "ApiConnection",
+                                                                                "inputs": {
+                                                                                    "body": {
+                                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                        "message": "<p><strong></strong><strong>@{outputs('Forcepoint_Logo')}</strong><strong>Forcepoint NGFW-Block URL<br>\n</strong>The below URLs are found to be malicious and playbook taken action against to that URLs.<br>\n<br>\n@{body('Create_HTML_table_for_Add_comment_to_incident')}</p>"
+                                                                                    },
+                                                                                    "host": {
+                                                                                        "connection": {
+                                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method": "post",
+                                                                                    "path": "/Incidents/Comment"
+                                                                                }
+                                                                            },
+                                                                            "Update_incident": {
+                                                                                "runAfter": {
+                                                                                    "Add_comment_to_incident_(V3)": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "ApiConnection",
+                                                                                "inputs": {
+                                                                                    "body": {
+                                                                                        "classification": {
+                                                                                            "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                                                                            "ClassificationReasonText": "This incident is closed through the Playbook(Block or Unblock Ip)"
+                                                                                        },
+                                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                        "status": "Closed"
+                                                                                    },
+                                                                                    "host": {
+                                                                                        "connection": {
+                                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method": "put",
+                                                                                    "path": "/Incidents"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@variables('Terminate')",
+                                                                                    "APIError"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Create_HTML_table_for_Add_comment_to_incident": {
+                                                                    "runAfter": {
+                                                                        "Looping_URL_Address": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "Table",
+                                                                    "inputs": {
+                                                                        "columns": [
+                                                                            {
+                                                                                "header": "URL-Address",
+                                                                                "value": "@item()?['URLAddres']"
+                                                                            },
+                                                                            {
+                                                                                "header": "Policy-Name",
+                                                                                "value": "@variables('Firewall Policy Name')"
+                                                                            },
+                                                                            {
+                                                                                "header": "Policy-Rule-Status",
+                                                                                "value": "@item()?['URLStatus']"
+                                                                            },
+                                                                            {
+                                                                                "header": "Action",
+                                                                                "value": "@item()?['Action']"
+                                                                            }
+                                                                        ],
+                                                                        "format": "HTML",
+                                                                        "from": "@variables('Arrayforallactions')"
+                                                                    },
+                                                                    "description": "Creating a HTML table from all actions taken by IP address"
+                                                                },
+                                                                "Loop_for_Href": {
+                                                                    "foreach": "@body('Get_Policy_Name')?['result']",
+                                                                    "actions": {
+                                                                        "Set_variable_to_policy_element_key": {
+                                                                            "runAfter": {
+                                                                                "hreftag": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "Policy Element Key",
+                                                                                "value": "@{last(split(Outputs('hreftag'),'/'))}"
+                                                                            },
+                                                                            "description": " Split the href tag with \"/\" symbol and take policy element key. "
+                                                                        },
+                                                                        "hreftag": {
+                                                                            "runAfter": {},
+                                                                            "type": "Compose",
+                                                                            "inputs": "@items('Loop_for_Href')?['href']",
+                                                                            "description": "Binding href tag from result output to hreftag "
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "type": "Foreach"
+                                                                },
+                                                                "Looping_URL_Address": {
+                                                                    "foreach": "@variables('URLAddressarray')",
+                                                                    "actions": {
+                                                                        "Condition_for_check_policy_rule_by_URL_address": {
+                                                                            "runAfter": {
+                                                                                "Get_Policy_Rule_by_IP_or_URL": [
+                                                                                    "Succeeded",
+                                                                                    "Failed",
+                                                                                    "Skipped",
+                                                                                    "TimedOut"
+                                                                                ]
+                                                                            },
+                                                                            "cases": {
+                                                                                "200_Success_OK_and_URL_is_exist_in_the_policy_rule": {
+                                                                                    "case": 200,
+                                                                                    "actions": {
+                                                                                        "200_Status_Result": {
+                                                                                            "runAfter": {},
+                                                                                            "type": "Compose",
+                                                                                            "inputs": "@body('Get_Policy_Rule_by_IP_or_URL')?['result']"
+                                                                                        },
+                                                                                        "Check_the_result_length_from_filter_output": {
+                                                                                            "actions": {
+                                                                                                "Append_to_all_actions_array_variable_set": {
+                                                                                                    "runAfter": {
+                                                                                                        "Set_variable_to_consolidate_variable_set": [
+                                                                                                            "Succeeded"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "AppendToArrayVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "Arrayforallactions",
+                                                                                                        "value": "@variables('Consolidatevrbl')"
+                                                                                                    },
+                                                                                                    "description": "Append to all actions array variable set if IP is present in policy"
+                                                                                                },
+                                                                                                "Set_variable_to_consolidate_variable_set": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "Consolidatevrbl",
+                                                                                                        "value": {
+                                                                                                            "Action": "Already blocked",
+                                                                                                            "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                            "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                            "URLStatus": "Blocked"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "description": "Set variable to consolidate variable set if url is present in the policy"
+                                                                                                }
+                                                                                            },
+                                                                                            "runAfter": {
+                                                                                                "200_Status_Result": [
+                                                                                                    "Succeeded",
+                                                                                                    "Failed",
+                                                                                                    "Skipped",
+                                                                                                    "TimedOut"
+                                                                                                ]
+                                                                                            },
+                                                                                            "else": {
+                                                                                                "actions": {
+                                                                                                    "Create_URL_List_2": {
+                                                                                                        "runAfter": {},
+                                                                                                        "type": "ApiConnection",
+                                                                                                        "inputs": {
+                                                                                                            "body": {
+                                                                                                                "name": "@{items('Looping_URL_Address')}",
+                                                                                                                "url_entry": [
+                                                                                                                    "@{items('Looping_URL_Address')}"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "headers": {
+                                                                                                                "Accept": "application/json",
+                                                                                                                "Content-Type": "application/json"
+                                                                                                            },
+                                                                                                            "host": {
+                                                                                                                "connection": {
+                                                                                                                    "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "method": "post",
+                                                                                                            "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/url_list_application",
+                                                                                                            "retryPolicy": {
+                                                                                                                "type": "none"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "description": "  If URL is not found in the security policy rule then we have to create URL list name to URL address into it. From this API, we are creating URL List Name.  "
+                                                                                                    },
+                                                                                                    "condition_check_If_URL_list_created": {
+                                                                                                        "runAfter": {
+                                                                                                            "Create_URL_List_2": [
+                                                                                                                "Succeeded",
+                                                                                                                "Failed",
+                                                                                                                "Skipped",
+                                                                                                                "TimedOut"
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        "cases": {
+                                                                                                            "If_URL_list_already_exist_": {
+                                                                                                                "case": 422,
+                                                                                                                "actions": {
+                                                                                                                    "Append_to_array_variable_to__all_actions_array_after_URL_added_into_policy": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Set_variable_to_consolidate_variable_after_URL_added_into_policy": [
+                                                                                                                                "Succeeded",
+                                                                                                                                "Failed",
+                                                                                                                                "Skipped",
+                                                                                                                                "TimedOut"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "AppendToArrayVariable",
+                                                                                                                        "inputs": {
+                                                                                                                            "name": "Arrayforallactions",
+                                                                                                                            "value": "@variables('Consolidatevrbl')"
+                                                                                                                        },
+                                                                                                                        "description": "Append to array variable to  all actions array after URL added into policy"
+                                                                                                                    },
+                                                                                                                    "Create_Policy_Rule_in_Firewall_4": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Unlock_Policy_5": [
+                                                                                                                                "Succeeded",
+                                                                                                                                "Failed",
+                                                                                                                                "Skipped",
+                                                                                                                                "TimedOut"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "ApiConnection",
+                                                                                                                        "inputs": {
+                                                                                                                            "body": {
+                                                                                                                                "action": {
+                                                                                                                                    "action": [
+                                                                                                                                        "discard"
+                                                                                                                                    ]
+                                                                                                                                },
+                                                                                                                                "destinations": {
+                                                                                                                                    "any": true
+                                                                                                                                },
+                                                                                                                                "name": "@{items('Looping_URL_Address')}",
+                                                                                                                                "services": {
+                                                                                                                                    "service": [
+                                                                                                                                        "@{outputs('URL_list_href_value_from_filter')}"
+                                                                                                                                    ]
+                                                                                                                                },
+                                                                                                                                "sources": {
+                                                                                                                                    "any": true
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "headers": {
+                                                                                                                                "Accept": "application/json",
+                                                                                                                                "Content-Type": "application/json"
+                                                                                                                            },
+                                                                                                                            "host": {
+                                                                                                                                "connection": {
+                                                                                                                                    "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "method": "post",
+                                                                                                                            "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/fw_ipv4_access_rule"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "Get_URL_in_URL_List_3": {
+                                                                                                                        "runAfter": {},
+                                                                                                                        "type": "ApiConnection",
+                                                                                                                        "inputs": {
+                                                                                                                            "headers": {
+                                                                                                                                "Accept": "application/json",
+                                                                                                                                "Content-Type": "application/json"
+                                                                                                                            },
+                                                                                                                            "host": {
+                                                                                                                                "connection": {
+                                                                                                                                    "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "method": "get",
+                                                                                                                            "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/url_list_application",
+                                                                                                                            "queries": {
+                                                                                                                                "Expand": true,
+                                                                                                                                "Expose Etag": true,
+                                                                                                                                "URL": "@{items('Looping_URL_Address')}",
+                                                                                                                                "expose_etag": true,
+                                                                                                                                "filter": "@{items('Looping_URL_Address')}"
+                                                                                                                            },
+                                                                                                                            "retryPolicy": {
+                                                                                                                                "type": "none"
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "Set_variable_to_consolidate_variable_after_URL_added_into_policy": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Create_Policy_Rule_in_Firewall_4": [
+                                                                                                                                "Succeeded",
+                                                                                                                                "Failed",
+                                                                                                                                "Skipped",
+                                                                                                                                "TimedOut"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "SetVariable",
+                                                                                                                        "inputs": {
+                                                                                                                            "name": "Consolidatevrbl",
+                                                                                                                            "value": {
+                                                                                                                                "Action": "Blocked by playbook",
+                                                                                                                                "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                                                "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                                                "URLStatus": "Blocked"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "description": "Set variable to consolidate variable after URL added into policy"
+                                                                                                                    },
+                                                                                                                    "URL_list_href_value_from_filter": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Get_URL_in_URL_List_3": [
+                                                                                                                                "Succeeded"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "Compose",
+                                                                                                                        "inputs": "@body('Get_URL_in_URL_List_3')?['result']?[0]?['href']"
+                                                                                                                    },
+                                                                                                                    "Unlock_Policy_5": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "URL_list_href_value_from_filter": [
+                                                                                                                                "Succeeded",
+                                                                                                                                "Failed",
+                                                                                                                                "Skipped",
+                                                                                                                                "TimedOut"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "ApiConnection",
+                                                                                                                        "inputs": {
+                                                                                                                            "headers": {
+                                                                                                                                "Accept": "application/json",
+                                                                                                                                "Content-Type": "application/json"
+                                                                                                                            },
+                                                                                                                            "host": {
+                                                                                                                                "connection": {
+                                                                                                                                    "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "method": "post",
+                                                                                                                            "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/force_unlock",
+                                                                                                                            "retryPolicy": {
+                                                                                                                                "type": "none"
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "Success": {
+                                                                                                                "case": 201,
+                                                                                                                "actions": {
+                                                                                                                    "Append_to_array_variable_to_array_items": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Set_variable_to_consolidate_item_variable": [
+                                                                                                                                "Succeeded"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "AppendToArrayVariable",
+                                                                                                                        "inputs": {
+                                                                                                                            "name": "Arrayforallactions",
+                                                                                                                            "value": "@variables('Consolidatevrbl')"
+                                                                                                                        },
+                                                                                                                        "description": "   Appening the consolidate success object into array   "
+                                                                                                                    },
+                                                                                                                    "Create_Policy_Rule_in_Firewall_2": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Unlock_Policy_2": [
+                                                                                                                                "Succeeded"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "ApiConnection",
+                                                                                                                        "inputs": {
+                                                                                                                            "body": {
+                                                                                                                                "action": {
+                                                                                                                                    "action": [
+                                                                                                                                        "discard"
+                                                                                                                                    ]
+                                                                                                                                },
+                                                                                                                                "destinations": {
+                                                                                                                                    "any": true
+                                                                                                                                },
+                                                                                                                                "name": "@{items('Looping_URL_Address')}",
+                                                                                                                                "services": {
+                                                                                                                                    "service": [
+                                                                                                                                        "@outputs('Create_URL_List_2')['headers']['Location']"
+                                                                                                                                    ]
+                                                                                                                                },
+                                                                                                                                "sources": {
+                                                                                                                                    "any": true
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "headers": {
+                                                                                                                                "Accept": "application/json",
+                                                                                                                                "Content-Type": "application/json"
+                                                                                                                            },
+                                                                                                                            "host": {
+                                                                                                                                "connection": {
+                                                                                                                                    "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "method": "post",
+                                                                                                                            "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/fw_ipv4_access_rule",
+                                                                                                                            "retryPolicy": {
+                                                                                                                                "type": "none"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "description": " Here we will create a policy rule for IP address. "
+                                                                                                                    },
+                                                                                                                    "Set_variable_to_consolidate_item_variable": {
+                                                                                                                        "runAfter": {
+                                                                                                                            "Create_Policy_Rule_in_Firewall_2": [
+                                                                                                                                "Succeeded"
+                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        "type": "SetVariable",
+                                                                                                                        "inputs": {
+                                                                                                                            "name": "Consolidatevrbl",
+                                                                                                                            "value": {
+                                                                                                                                "Action": "Blocked by playbook",
+                                                                                                                                "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                                                "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                                                "URLStatus": "Blocked"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "description": "   Creating success object for URL Address to comment the incident    "
+                                                                                                                    },
+                                                                                                                    "Unlock_Policy_2": {
+                                                                                                                        "runAfter": {},
+                                                                                                                        "type": "ApiConnection",
+                                                                                                                        "inputs": {
+                                                                                                                            "headers": {
+                                                                                                                                "Accept": "application/json",
+                                                                                                                                "Content-Type": "application/json"
+                                                                                                                            },
+                                                                                                                            "host": {
+                                                                                                                                "connection": {
+                                                                                                                                    "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                                }
+                                                                                                                            },
+                                                                                                                            "method": "post",
+                                                                                                                            "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/force_unlock",
+                                                                                                                            "retryPolicy": {
+                                                                                                                                "type": "none"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "description": " Before creating a policy rule into firewall, we need to unlock the policy. why because the policy will be locked sometmies "
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "default": {
+                                                                                                            "actions": {
+                                                                                                                "Append_to_array_variable_when_URL_list_addition_failed": {
+                                                                                                                    "runAfter": {
+                                                                                                                        "Set_variable_to_consolidate_variable_when_URL_list_creation_failed": [
+                                                                                                                            "Succeeded"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "type": "AppendToArrayVariable",
+                                                                                                                    "inputs": {
+                                                                                                                        "name": "Arrayforallactions",
+                                                                                                                        "value": "@variables('Consolidatevrbl')"
+                                                                                                                    },
+                                                                                                                    "description": "   Appening the consolidate error object into array   "
+                                                                                                                },
+                                                                                                                "Set_variable_to_consolidate_variable_when_URL_list_creation_failed": {
+                                                                                                                    "runAfter": {
+                                                                                                                        "Set_variable_to_error_variable_when_error_occurred_while_adding_URL_address_2": [
+                                                                                                                            "Succeeded"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "type": "SetVariable",
+                                                                                                                    "inputs": {
+                                                                                                                        "name": "Consolidatevrbl",
+                                                                                                                        "value": {
+                                                                                                                            "Action": "@{variables('Error')}",
+                                                                                                                            "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                                            "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                                            "URLStatus": "Undetermine"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "description": "  Creating error object for URL Address to comment the incident   "
+                                                                                                                },
+                                                                                                                "Set_variable_to_error_variable_when_error_occurred_while_adding_URL_address_2": {
+                                                                                                                    "runAfter": {},
+                                                                                                                    "type": "SetVariable",
+                                                                                                                    "inputs": {
+                                                                                                                        "name": "Error",
+                                                                                                                        "value": "Error status code@{outputs('Create_URL_List_2')['statusCode']} .  Unable to add URL address into URL list @{items('Looping_URL_Address')}."
+                                                                                                                    },
+                                                                                                                    "description": "  Adding an error comment to \"Error\" variable"
+                                                                                                                },
+                                                                                                                "Set_variable_to_terminate_variable_if_URL_list_add_having_an_error": {
+                                                                                                                    "runAfter": {
+                                                                                                                        "Append_to_array_variable_when_URL_list_addition_failed": [
+                                                                                                                            "Succeeded"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "type": "SetVariable",
+                                                                                                                    "inputs": {
+                                                                                                                        "name": "Terminate",
+                                                                                                                        "value": "APIError"
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "expression": "@outputs('Create_URL_List_2')['statusCode']",
+                                                                                                        "type": "Switch",
+                                                                                                        "description": " From this condition, we will check result status code from Create URL List Name Forcepoint SMC Api. "
+                                                                                                    }
+                                                                                                }
+                                                                                            },
+                                                                                            "expression": {
+                                                                                                "and": [
+                                                                                                    {
+                                                                                                        "greater": [
+                                                                                                            "@length(Outputs('200_Status_Result'))",
+                                                                                                            0
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "If",
+                                                                                            "description": "We will check for the result output is empty or exist in the policy rule. If result output is empty ,then there is no policy based on IP Address. And If result ouput is having some information related to IP Address then there is a policy with respect to IP"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "404_Not_Found_and_URL_is_not_exist_in_the_policy_rule": {
+                                                                                    "case": 404,
+                                                                                    "actions": {
+                                                                                        "Condition_for_check_the_status_of_URL_list_name": {
+                                                                                            "runAfter": {
+                                                                                                "Create_URL_List": [
+                                                                                                    "Succeeded",
+                                                                                                    "Failed",
+                                                                                                    "Skipped",
+                                                                                                    "TimedOut"
+                                                                                                ]
+                                                                                            },
+                                                                                            "cases": {
+                                                                                                "201_Success_for_URL_list_name": {
+                                                                                                    "case": 201,
+                                                                                                    "actions": {
+                                                                                                        "Append_to_array_variable_when_Rule_is_added": {
+                                                                                                            "runAfter": {
+                                                                                                                "Set_variable_to_Consolidate_part_item": [
+                                                                                                                    "Succeeded",
+                                                                                                                    "Failed",
+                                                                                                                    "Skipped",
+                                                                                                                    "TimedOut"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "AppendToArrayVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "Arrayforallactions",
+                                                                                                                "value": "@variables('Consolidatevrbl')"
+                                                                                                            },
+                                                                                                            "description": "   Appening the consolidate success object into array"
+                                                                                                        },
+                                                                                                        "Create_Policy_Rule_in_Firewall": {
+                                                                                                            "runAfter": {
+                                                                                                                "Unlock_Policy": [
+                                                                                                                    "Succeeded",
+                                                                                                                    "Failed",
+                                                                                                                    "Skipped",
+                                                                                                                    "TimedOut"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "ApiConnection",
+                                                                                                            "inputs": {
+                                                                                                                "body": {
+                                                                                                                    "action": {
+                                                                                                                        "action": [
+                                                                                                                            "discard"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "destinations": {
+                                                                                                                        "any": true
+                                                                                                                    },
+                                                                                                                    "name": "@{items('Looping_URL_Address')}",
+                                                                                                                    "services": {
+                                                                                                                        "service": [
+                                                                                                                            "@outputs('Create_URL_List')['headers']['Location']"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "sources": {
+                                                                                                                        "any": true
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "headers": {
+                                                                                                                    "Accept": "application/json",
+                                                                                                                    "Content-Type": "application/json"
+                                                                                                                },
+                                                                                                                "host": {
+                                                                                                                    "connection": {
+                                                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "method": "post",
+                                                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/fw_ipv4_access_rule",
+                                                                                                                "retryPolicy": {
+                                                                                                                    "type": "none"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "description": "Here we will create a policy rule for URL address."
+                                                                                                        },
+                                                                                                        "Set_variable_to_Consolidate_part_item": {
+                                                                                                            "runAfter": {
+                                                                                                                "Create_Policy_Rule_in_Firewall": [
+                                                                                                                    "Succeeded"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "SetVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "Consolidatevrbl",
+                                                                                                                "value": {
+                                                                                                                    "Action": "Blocked by playbook",
+                                                                                                                    "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                                    "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                                    "URLStatus": "Blocked"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "description": "  Creating success object for IP Address to comment the incident   "
+                                                                                                        },
+                                                                                                        "Unlock_Policy": {
+                                                                                                            "runAfter": {},
+                                                                                                            "type": "ApiConnection",
+                                                                                                            "inputs": {
+                                                                                                                "headers": {
+                                                                                                                    "Accept": "application/json",
+                                                                                                                    "Content-Type": "application/json"
+                                                                                                                },
+                                                                                                                "host": {
+                                                                                                                    "connection": {
+                                                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "method": "post",
+                                                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/force_unlock",
+                                                                                                                "retryPolicy": {
+                                                                                                                    "type": "none"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "description": "Before creating a policy rule into firewall, we need to unlock the policy. why because the policy will be locked sometmies"
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "If_URL_list_already_exist": {
+                                                                                                    "case": 422,
+                                                                                                    "actions": {
+                                                                                                        "Append_to_array_variable_to_all_actions_variable": {
+                                                                                                            "runAfter": {
+                                                                                                                "Set_variable_to_consolidate_variable_after_URL_blocked": [
+                                                                                                                    "Succeeded"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "AppendToArrayVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "Arrayforallactions",
+                                                                                                                "value": "@variables('Consolidatevrbl')"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "Create_Policy_Rule_in_Firewall_3": {
+                                                                                                            "runAfter": {
+                                                                                                                "Unlock_Policy_4": [
+                                                                                                                    "Succeeded",
+                                                                                                                    "Failed",
+                                                                                                                    "Skipped",
+                                                                                                                    "TimedOut"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "ApiConnection",
+                                                                                                            "inputs": {
+                                                                                                                "body": {
+                                                                                                                    "action": {
+                                                                                                                        "action": [
+                                                                                                                            "discard"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "destinations": {
+                                                                                                                        "any": true
+                                                                                                                    },
+                                                                                                                    "name": "@{items('Looping_URL_Address')}",
+                                                                                                                    "services": {
+                                                                                                                        "service": [
+                                                                                                                            "@{outputs('URL_list_href')}"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    "sources": {
+                                                                                                                        "any": true
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "headers": {
+                                                                                                                    "Accept": "application/json",
+                                                                                                                    "Content-Type": "application/json"
+                                                                                                                },
+                                                                                                                "host": {
+                                                                                                                    "connection": {
+                                                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "method": "post",
+                                                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/fw_ipv4_access_rule",
+                                                                                                                "retryPolicy": {
+                                                                                                                    "type": "none"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "Get_URL_in_URL_List_2": {
+                                                                                                            "runAfter": {},
+                                                                                                            "type": "ApiConnection",
+                                                                                                            "inputs": {
+                                                                                                                "headers": {
+                                                                                                                    "Accept": "application/json",
+                                                                                                                    "Content-Type": "application/json"
+                                                                                                                },
+                                                                                                                "host": {
+                                                                                                                    "connection": {
+                                                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "method": "get",
+                                                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/url_list_application",
+                                                                                                                "queries": {
+                                                                                                                    "Expand": true,
+                                                                                                                    "Expose Etag": true,
+                                                                                                                    "URL": "@{items('Looping_URL_Address')}",
+                                                                                                                    "expose_etag": true,
+                                                                                                                    "filter": "@{items('Looping_URL_Address')}"
+                                                                                                                },
+                                                                                                                "retryPolicy": {
+                                                                                                                    "type": "none"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "Set_variable_to_consolidate_variable_after_URL_blocked": {
+                                                                                                            "runAfter": {
+                                                                                                                "Create_Policy_Rule_in_Firewall_3": [
+                                                                                                                    "Succeeded",
+                                                                                                                    "TimedOut",
+                                                                                                                    "Skipped",
+                                                                                                                    "Failed"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "SetVariable",
+                                                                                                            "inputs": {
+                                                                                                                "name": "Consolidatevrbl",
+                                                                                                                "value": {
+                                                                                                                    "Action": "Blocked by playbook",
+                                                                                                                    "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                                    "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                                    "URLStatus": "Blocked"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "description": "Set variable to consolidate variable after URL blocked"
+                                                                                                        },
+                                                                                                        "URL_list_href": {
+                                                                                                            "runAfter": {
+                                                                                                                "Get_URL_in_URL_List_2": [
+                                                                                                                    "Succeeded"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "Compose",
+                                                                                                            "inputs": "@body('Get_URL_in_URL_List_2')?['result']?[0]?['href']"
+                                                                                                        },
+                                                                                                        "Unlock_Policy_4": {
+                                                                                                            "runAfter": {
+                                                                                                                "URL_list_href": [
+                                                                                                                    "Succeeded"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            "type": "ApiConnection",
+                                                                                                            "inputs": {
+                                                                                                                "headers": {
+                                                                                                                    "Accept": "application/json",
+                                                                                                                    "Content-Type": "application/json"
+                                                                                                                },
+                                                                                                                "host": {
+                                                                                                                    "connection": {
+                                                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "method": "post",
+                                                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/force_unlock",
+                                                                                                                "retryPolicy": {
+                                                                                                                    "type": "none"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            },
+                                                                                            "default": {
+                                                                                                "actions": {
+                                                                                                    "Append_to_array_variable_when_URL_list_not_able_to_create": {
+                                                                                                        "runAfter": {
+                                                                                                            "Set_variable_to_consolidate_variable_when_URL_list_not_able_to_create": [
+                                                                                                                "Succeeded",
+                                                                                                                "Failed",
+                                                                                                                "Skipped",
+                                                                                                                "TimedOut"
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        "type": "AppendToArrayVariable",
+                                                                                                        "inputs": {
+                                                                                                            "name": "Arrayforallactions",
+                                                                                                            "value": "@variables('Consolidatevrbl')"
+                                                                                                        },
+                                                                                                        "description": " Appening the consolidate error object into array "
+                                                                                                    },
+                                                                                                    "Set_variable_to_consolidate_variable_when_URL_list_not_able_to_create": {
+                                                                                                        "runAfter": {
+                                                                                                            "Set_variable_to_error_variable_when_error_occurred_while_adding_URL_List_Name": [
+                                                                                                                "Succeeded",
+                                                                                                                "Failed",
+                                                                                                                "Skipped",
+                                                                                                                "TimedOut"
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        "type": "SetVariable",
+                                                                                                        "inputs": {
+                                                                                                            "name": "Consolidatevrbl",
+                                                                                                            "value": {
+                                                                                                                "Action": "@{variables('Error')}",
+                                                                                                                "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                                "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                                "URLStatus": "Undetermine"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "description": " Creating error object for URL Address to comment the incident "
+                                                                                                    },
+                                                                                                    "Set_variable_to_error_variable_when_error_occurred_while_adding_URL_List_Name": {
+                                                                                                        "runAfter": {},
+                                                                                                        "type": "SetVariable",
+                                                                                                        "inputs": {
+                                                                                                            "name": "Error",
+                                                                                                            "value": "Unable to create URL list @{items('Looping_URL_Address')}. Error Status code @{outputs('Create_URL_List')['statusCode']}"
+                                                                                                        },
+                                                                                                        "description": " Adding an error comment to \"Error\" variable "
+                                                                                                    },
+                                                                                                    "Set_variable_to_terminate_variable_if_URL_list_adding_an_error": {
+                                                                                                        "runAfter": {
+                                                                                                            "Append_to_array_variable_when_URL_list_not_able_to_create": [
+                                                                                                                "Succeeded"
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        "type": "SetVariable",
+                                                                                                        "inputs": {
+                                                                                                            "name": "Terminate",
+                                                                                                            "value": "APIError"
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            },
+                                                                                            "expression": "@outputs('Create_URL_List')['statusCode']",
+                                                                                            "type": "Switch",
+                                                                                            "description": "From this condition, we will check result status code from Create URL List Name Forcepoint SMC Api."
+                                                                                        },
+                                                                                        "Create_URL_List": {
+                                                                                            "runAfter": {},
+                                                                                            "type": "ApiConnection",
+                                                                                            "inputs": {
+                                                                                                "body": {
+                                                                                                    "name": "@{items('Looping_URL_Address')}",
+                                                                                                    "url_entry": [
+                                                                                                        "@{items('Looping_URL_Address')}"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "headers": {
+                                                                                                    "Accept": "application/json",
+                                                                                                    "Content-Type": "application/json"
+                                                                                                },
+                                                                                                "host": {
+                                                                                                    "connection": {
+                                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                                    }
+                                                                                                },
+                                                                                                "method": "post",
+                                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/url_list_application",
+                                                                                                "retryPolicy": {
+                                                                                                    "type": "none"
+                                                                                                }
+                                                                                            },
+                                                                                            "description": " If URL is not found in the security policy rule then we have to create URL list name to URL address into it. From this API, we are creating URL List Name. "
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "default": {
+                                                                                "actions": {
+                                                                                    "Append_to_array_variable_when_policy_rule_does_not_exist": {
+                                                                                        "runAfter": {
+                                                                                            "Set_variable_while_getting_rule": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Arrayforallactions",
+                                                                                            "value": "@variables('Consolidatevrbl')"
+                                                                                        },
+                                                                                        "description": "Appening the consolidate error object into array"
+                                                                                    },
+                                                                                    "Set_variable_to_get_policy_rule_defaut_status": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Error",
+                                                                                            "value": "Error status code @{outputs('Get_Policy_Rule_by_IP_or_URL')['statusCode']} Issue occurred while finding the rule @{items('Looping_URL_Address')} in the policy rule . "
+                                                                                        },
+                                                                                        "description": "Adding an error comment to \"Error\" variable"
+                                                                                    },
+                                                                                    "Set_variable_to_terminate_variable_if_get_policy_rule_got_an_error": {
+                                                                                        "runAfter": {
+                                                                                            "Append_to_array_variable_when_policy_rule_does_not_exist": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Terminate",
+                                                                                            "value": "APIError"
+                                                                                        }
+                                                                                    },
+                                                                                    "Set_variable_while_getting_rule": {
+                                                                                        "runAfter": {
+                                                                                            "Set_variable_to_get_policy_rule_defaut_status": [
+                                                                                                "Succeeded",
+                                                                                                "Failed",
+                                                                                                "Skipped",
+                                                                                                "TimedOut"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Consolidatevrbl",
+                                                                                            "value": {
+                                                                                                "Action": "@{variables('Error')}",
+                                                                                                "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                                "URLAddres": "@{items('Looping_URL_Address')}",
+                                                                                                "URLStatus": "Undetermine"
+                                                                                            }
+                                                                                        },
+                                                                                        "description": "Creating error object for URL Address to comment the incident"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": "@outputs('Get_Policy_Rule_by_IP_or_URL')['statusCode']",
+                                                                            "type": "Switch",
+                                                                            "description": "This condition is going to check result output from Get Policy rule by IP or URL-Forcepoint SMC"
+                                                                        },
+                                                                        "Get_Policy_Rule_by_IP_or_URL": {
+                                                                            "runAfter": {
+                                                                                "Login_3": [
+                                                                                    "Succeeded",
+                                                                                    "Failed",
+                                                                                    "Skipped",
+                                                                                    "TimedOut"
+                                                                                ]
+                                                                            },
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "headers": {
+                                                                                    "Accept": "application/json",
+                                                                                    "Content-Type": "application/json"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "get",
+                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/search_rule",
+                                                                                "queries": {
+                                                                                    "filter": "@{items('Looping_URL_Address')}"
+                                                                                },
+                                                                                "retryPolicy": {
+                                                                                    "type": "none"
+                                                                                }
+                                                                            },
+                                                                            "description": "From this API, we are going to check that the URL is blocked or unblocked in the security policy."
+                                                                        },
+                                                                        "Login_3": {
+                                                                            "runAfter": {},
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "authenticationkey": "@variables('SMC API Key')"
+                                                                                },
+                                                                                "headers": {
+                                                                                    "Accept": "application/json",
+                                                                                    "Content-Type": "application/json"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/login",
+                                                                                "retryPolicy": {
+                                                                                    "type": "none"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Loop_for_Href": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "Foreach",
+                                                                    "description": "Here we are looping each URL and check whether it is blocked or not "
+                                                                },
+                                                                "Upload_Policy_After_Adding_IP_or_URL-_Forcepoint_SMC": {
+                                                                    "runAfter": {
+                                                                        "Create_HTML_table_for_Add_comment_to_incident": [
+                                                                            "Succeeded",
+                                                                            "Failed",
+                                                                            "Skipped",
+                                                                            "TimedOut"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "headers": {
+                                                                            "Accept": "application/json",
+                                                                            "Content-Type": "application/json"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy/@{encodeURIComponent(variables('Policy Element Key'))}/upload",
+                                                                        "retryPolicy": {
+                                                                            "type": "none"
+                                                                        }
+                                                                    },
+                                                                    "description": "After all actions are done against to IP address from sentinel then we must upload the policy."
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "default": {
+                                                        "actions": {
+                                                            "Set_variable_to_filter_policy_error_default": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Error",
+                                                                    "value": "Status code  occured while filter the policy in firewall."
+                                                                },
+                                                                "description": "If we got any error while filtering the policy from Forcepoint security policy then we are going to bind the error to \"Error\" variable"
+                                                            },
+                                                            "Terminate_if_policy_does_not_found": {
+                                                                "runAfter": {
+                                                                    "Set_variable_to_filter_policy_error_default": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Terminate",
+                                                                "inputs": {
+                                                                    "runError": {
+                                                                        "message": "@variables('Error')"
+                                                                    },
+                                                                    "runStatus": "Failed"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": "@outputs('Get_Policy_Name')?['statusCode']",
+                                                    "type": "Switch",
+                                                    "description": "This condition is to check output status code from Filter Policy Name Api Forcepoint SMC"
+                                                },
+                                                "Get_Policy_Name": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "Accept": "application/json",
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/fw_policy",
+                                                        "queries": {
+                                                            "filter": "@variables('Firewall Policy Name')"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {
+                                            "Set_variable_to_login_unsuccessful": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Error",
+                                                    "value": "Error status code @{outputs('Login')['statusCode']}Unsuccessful login attempt."
+                                                },
+                                                "description": "When unsuccessful login atempt has done then we can bind the error to \"Error\" variable."
+                                            },
+                                            "Terminate_when_login_fialed": {
+                                                "runAfter": {
+                                                    "Set_variable_to_login_unsuccessful": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runError": {
+                                                        "message": "@variables('Error')"
+                                                    },
+                                                    "runStatus": "Failed"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": "@outputs('Login')['statusCode']",
+                                    "type": "Switch"
+                                },
+                                "Login": {
+                                    "runAfter": {
+                                        "Appending_URLs__to_URL_Address_array": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "authenticationkey": "@variables('SMC API Key')"
+                                        },
+                                        "headers": {
+                                            "Accept": "application/json",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/login",
+                                        "retryPolicy": {
+                                            "type": "none"
+                                        }
+                                    },
+                                    "description": "Before take an action against to any other api in Forcepoint SMC we need to do login."
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_terminate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_to_error_variable_if_URL_Address_are_not_available_from_sentinel": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "Error",
+                                            "value": "URL Address not found from sentinel incident."
+                                        },
+                                        "description": "Binding the error to \"Error\" variable and pass it to incident comment."
+                                    },
+                                    "Terminate_if_body_is_not_contain_URL_from_sentinel": {
+                                        "runAfter": {
+                                            "Set_variable_to_error_variable_if_URL_Address_are_not_available_from_sentinel": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "message": "@variables('Error')"
+                                            },
+                                            "runStatus": "Failed"
+                                        },
+                                        "description": "Terminate if body is not contain URL from sentinel"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@outputs('Entities_-_Get_URLs')",
+                                            "body"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_URLs')?['URLs']?[0]?['Url'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Form this condition, we will check like if body present in the sentinel incident or not and we will check the Ip address are available or not."
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "Firewall_Policy_Name": {
+                            "runAfter": {
+                                "SMC_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Firewall Policy Name",
+                                        "type": "string",
+                                        "value": "[parameters('SecurityPolicyRule')]"
+                                    }
+                                ]
+                            },
+                            "description": "Firewall Policy Name is to store policy name"
+                        },
+                        "Forcepoint_Logo": {
+                            "runAfter": {
+                                "Initialize_variable_to_Error": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://upload.wikimedia.org/wikipedia/en/b/b6/Forcepoint.jpg\" alt=\"ForcepointImage\" width=\"32\" height=\"32\">"
+                        },
+                        "Initialize_variable_for_Column_set_array": {
+                            "runAfter": {
+                                "Initialize_variable_for_Policy_Rue_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Column set array",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_Column_set_string": {
+                            "runAfter": {
+                                "Initialize_variable_for_Column_set_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Column set string",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_Create_Column_Set": {
+                            "runAfter": {
+                                "Forcepoint_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Create Column Set",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_Policy_Rue_Key": {
+                            "runAfter": {
+                                "Initialize_variable_for_Create_Column_Set": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Policy Rue Key",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_for_URL_Address": {
+                            "runAfter": {
+                                "URL_List_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URL Address",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "Binding URL address to this URL address variable"
+                        },
+                        "Initialize_variable_for_URL_Address_in_Policy": {
+                            "runAfter": {
+                                "Initialize_variable_for_Column_set_string": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URL Address in Policy",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": " Initialize variable for URL Address exists in the Security policy "
+                        },
+                        "Initialize_variable_to_Error": {
+                            "runAfter": {
+                                "Initialize_variable_to_SMC_Api_Version_Number": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Error",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "To keep the error into this variable and pass it to wherever required."
+                        },
+                        "Initialize_variable_to_SMC_Api_Version_Number": {
+                            "runAfter": {
+                                "Initialize_variable_to_consolidate_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SMC Api Version Number",
+                                        "type": "string",
+                                        "value": "[parameters('VersionNumber')]"
+                                    }
+                                ]
+                            },
+                            "description": "To keep SMC Api version number. Forcepoint will update the SMC version every year"
+                        },
+                        "Initialize_variable_to_consolidate_variable": {
+                            "runAfter": {
+                                "Initialize_variable_to_keep_all_actions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Consolidatevrbl",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To form a JSON object to pass it into Allaction variable"
+                        },
+                        "Initialize_variable_to_keep_all_actions": {
+                            "runAfter": {
+                                "Initialize_variable_for_URL_Address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Arrayforallactions",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To store IP address , severity , action to be taken into one array varriable and we can create a table."
+                        },
+                        "Initialize_variable_to_terminate": {
+                            "runAfter": {
+                                "Initialize_variable_for_URL_Address_in_Policy": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Terminate",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Policy_Element_Key": {
+                            "runAfter": {
+                                "Firewall_Policy_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Policy Element Key",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "Policy element key is to store policy element key for add or remove policy rule"
+                        },
+                        "SMC_API_Key": {
+                            "runAfter": {
+                                "Assign_URL_Address_to_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SMC API Key",
+                                        "type": "string",
+                                        "value": "[parameters('ForcepointSMCApiKey')]"
+                                    }
+                                ]
+                            },
+                            "description": "SMC API Key is to store Api key for login"
+                        },
+                        "URL_List_Key": {
+                            "runAfter": {
+                                "Policy_Element_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URL List Key",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "We can store URL list key after adding url list "
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "ForcepointSMCApiConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]",
+                                "connectionName": "[variables('Forcepoint_Connector')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('ForcepointSMCConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureSentinel_Connection'))]",
+                                "connectionName": "[variables('azureSentinel_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Forcepoint_Connector')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('ForcepointSMCConnectorName'))]"
+
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureSentinel_Connection')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('azuresentinel_Connection')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
