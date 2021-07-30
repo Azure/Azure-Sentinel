@@ -13,7 +13,7 @@ To get started with Azure Sentinel, you must have a Microsoft Azure subscription
 
 Permissions to create a resource group in your Azure subscription. 
 
-### Exercise 1: Deploy Azure Sentinel Labs ARM template
+### Exercise 1: Deploy Azure Sentinel Training Lab ARM template
 
 1. Click on the button below. Make sure that you open it in a new tab so you keep these instructions open.
 

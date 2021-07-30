@@ -11,16 +11,20 @@ The lab deploys an Azure Sentinel workspace and ingests pre-recorded data to sim
 
 ## Prerequisites
 
-To deploy Azure Sentinel Labs, **you must have a Microsoft Azure subscription**. If you do not have an existing Azure subscription, you can sign up for a free trial [here](https://azure.microsoft.com/free/).
+To deploy Azure Sentinel Trainig Lab, **you must have a Microsoft Azure subscription**. If you do not have an existing Azure subscription, you can sign up for a free trial [here](https://azure.microsoft.com/free/).
 
 ## Last release notes
 
-* Version 0.2 - Azure Sentinel Labs **Beta** 
+* Version 0.2 - Azure Sentinel Training Lab **Beta** 
+
+## Getting started
+
+Below you can see all the [modules](#Modules) that are part of this lab. Although in general they can be completed in any order, you must start with [Module 1](./Modules/Module-1-Setting-up-the-environment.md) as this deploys the lab environment itself.
 
 ## Modules
 
 [**Module 1 – Setting up the environment**](./Modules/Module-1-Setting-up-the-environment.md)
-- [Deploy Azure Sentinel Labs ARM template](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-deploy-azure-sentinel-labs-arm-template)
+- [Deploy Azure Sentinel Training Lab ARM template](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-deploy-azure-sentinel-labs-arm-template)
 - [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-configure-azure-sentinel-playbook)
  
 [**Module 2 – Data Connectors**](./Modules/Module-2-Data-Connectors.md)
