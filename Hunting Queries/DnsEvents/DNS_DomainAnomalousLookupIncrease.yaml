@@ -19,8 +19,9 @@ relevantTechniques:
   - T1048
 query: |
 
-  let startTime = 8d;
-  let endTime = 1d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
   //example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change
   let excludedDays = dynamic(["Saturday", "Sunday"]);
   // average is across 5 days as we are dropping weekends, change as needed
@@ -29,8 +30,8 @@ query: |
   let avglookupThreshold = 3;
   let lookupThreshold = 1000;
   DnsEvents
-  //Setting to startofday so we get 7 days prior to today
-  | where TimeGenerated >= startofday(ago(startTime)) and TimeGenerated <= startofday(ago(endTime))
+  //Setting to startofday so we get 7 days prior to start
+  | where TimeGenerated >= startofday(ago(lookback)) and TimeGenerated <= startofday(starttime)
   | where SubType =~ "LookupQuery"
   //getting the associated number of the day of the week so we can map to a given day for later parsing if needed
   | extend DayNumberofWeek = tostring(dayofweek(TimeGenerated))
@@ -47,7 +48,7 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by ClientIP, Domain, IPAddresses
   | project StartTimeUtc, EndTimeUtc, ClientIP, Domain, IPAddresses, DailyAvgLookupCountOverLastWeek = count_/numDays 
   | join ( DnsEvents 
-  | where TimeGenerated >= startofday(ago(endTime)) 
+  | where TimeGenerated between(startofday(starttime)..endofday(endtime)) 
   | where SubType =~ "LookupQuery"
   | extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
   | summarize count() by ClientIP, Domain, IPAddresses 

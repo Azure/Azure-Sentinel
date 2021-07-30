@@ -16,14 +16,15 @@ relevantTechniques:
   - T1020
 query: |
 
-  let starttime = 14d;
-  let endtime = 1d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
   let timeframe = 1h;
   let scorethreshold = 1.5;
   // Preparing the time series data aggregated on BytesTransferredOut column in the form of multi-value array so that it can be used with time series anomaly function.
   let TimeSeriesData=
   AwsBucketAPILogs_CL 
-  | where EventTime between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where EventTime between (lookback..endtime)
   | where EventName == "GetObject"
   | make-series Total=sum(BytesTransferredOut) on EventTime from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe;
   // Use the time series data prepared in previous step with time series aomaly function to generate baseline pattern and flag the outlier based on scorethreshold value.
@@ -37,7 +38,7 @@ query: |
   | join 
   (
     AWSS3BucketAPILogParsed 
-    | where EventTime between (startofday(ago(starttime))..startofday(ago(endtime)))
+    | where EventTime between (startofday(lookback)..endofday(endtime))
     | where EventName == "GetObject"
     | summarize Total = sum(BytesTransferredOut), Files= makeset(Key) , max(EventTime) by bin(EventTime, 1h), EventSource,EventName, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName
   ) on EventTime

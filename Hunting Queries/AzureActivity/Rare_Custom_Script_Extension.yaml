@@ -14,21 +14,22 @@ relevantTechniques:
   - T1064
 query: |
 
-  let current = 1d;
-  let Lookback = 14d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let Lookback = satarttime - 14d;
   let CustomScriptExecution = AzureActivity 
-  | where TimeGenerated >= ago(Lookback) 
+  | where TimeGenerated >= Lookback
   | where OperationName =~ "Create or Update Virtual Machine Extension"
   | extend Settings = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).settings)))
   | parse Settings with * 'fileUris":[' FileURI "]" *
   | parse Settings with * 'commandToExecute":' commandToExecute '}' *
   | extend message_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).statusMessage)).error)).message);
   let LookbackCustomScriptExecution = CustomScriptExecution
-  | where TimeGenerated >= ago(Lookback) and TimeGenerated < ago(current)
+  | where TimeGenerated >= Lookback and TimeGenerated < starttime
   | where isnotempty(FileURI) and isnotempty(commandToExecute)
   | summarize max(TimeGenerated), OperationCount = count() by Caller, Resource, CallerIpAddress, FileURI, commandToExecute;
   let CurrentCustomScriptExecution = CustomScriptExecution
-  | where TimeGenerated >= ago(current)
+  | where TimeGenerated beteeen (starttime..endtime)
   | where isnotempty(FileURI) and isnotempty(commandToExecute)
   | project TimeGenerated, ActivityStatus, OperationId, CorrelationId, ResourceId, CallerIpAddress, Caller, OperationName, Resource, ResourceGroup, FileURI, commandToExecute, FailureMessage = message_, HTTPRequest, Settings;
   let RareCustomScriptExecution =  CurrentCustomScriptExecution
