@@ -71,3 +71,15 @@ The Playbook modifies an Incident in two ways:
 If you don't want to use Managed Identity, then after deployment you can modify every block with connection requirement to use another method. <br/>
 The API connections are deployed to be used by Managed Identities, so if you don't utilize Managed Identity you can remove these API connections from the resource group. Also, if you don't want to use KeyVault, you can delete the second API connection <br/>
 
+**Deploy with Alert trigger:**<br/>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSpur-Enrichment%2FAlertTrigger%2Fazuredeploy.json)
+
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSpur-Enrichment%2FAlertTrigger%2Fazuredeploy.json)
+
+
+
+**Deploy with Incident trigger:**<br/>
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSpur-Enrichment%2FIncidentTrigger%2Fazuredeploy.json)
+
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSpur-Enrichment%2FIncidentTrigger%2Fazuredeploy.json)
