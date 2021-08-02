@@ -200,7 +200,7 @@ The analytic rule instructs Azure Sentinel to search for information of interest
 Configure Illusive to automatically send Illusive activity logs and event messages to a Linux based Syslog server. Sentinel will consume this information and trigger the Illusive solution playbooks.
 <br>
 Every Syslog message also contains the incident ID, which allows the SOC team to merge or aggregate events in the SIEM.
-  1. Install a syslog on a Linux machine (https://docs.microsoft.com/en-us/azure/sentinel/connect-syslog)
+  1. Install a syslog on a Linux machine 
   2. Configure the Linux machine as a syslog server in the Illusive Console.
   3. Navigate to <b>Settings>Reporting</b> and scroll down to <b>Syslog Servers.</b>
   4. In the <b>Host Name</b> server field, supply the server IP address or host name.
