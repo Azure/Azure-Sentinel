@@ -88,13 +88,13 @@ Once deployment is complete, you will need to authorize each connection.
 #  Reference to the playbook templates and the connector
 
  Connector
-*[HaveIBeenPwnedCustomConnector](https://github.com/Azure/Azure-Sentinel/master/Playbooks/HaveIBeenPwned/HaveIBeenPwnedCustomConnector)
+*[HaveIBeenPwnedCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/HaveIBeenPwned/HaveIBeenPwnedCustomConnector)
 
 Playbooks
-* [HaveIBeenPwned_Enrichment_GetAccountBreaches : Playbook to Get Account Breaches and update to incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_Enrichment_GetAccountBreaches)
-* [HaveIBeenPwned_Enrichment_GetSiteBreaches : Playbook to Get Site Breaches and update to incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_Enrichment_GetSiteBreaches)
-* [HaveIBeenPwned_ResponseOnTeams : Playbook to act based on Response from Teams](https://github.com/Azure/Azure-Sentinel/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_ResponseOnTeams)
-* [HaveIBeenPwned_SendEmail : Playbook to send email automatically](https://github.com/Azure/Azure-Sentinel/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_SendEmail)
+* [HaveIBeenPwned_Enrichment_GetAccountBreaches : Playbook to Get Account Breaches and update to incident](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_Enrichment_GetAccountBreaches)
+* [HaveIBeenPwned_Enrichment_GetSiteBreaches : Playbook to Get Site Breaches and update to incident](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_Enrichment_GetSiteBreaches)
+* [HaveIBeenPwned_ResponseOnTeams : Playbook to act based on Response from Teams](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_ResponseOnTeams)
+* [HaveIBeenPwned_SendEmail : Playbook to send email automatically](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/HaveIBeenPwned/Playbooks/HaveIBeenPwned_SendEmail)
 
 <a name="limitations">
 
