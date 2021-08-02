@@ -29,7 +29,9 @@ Use the playbook to quickly stop or slow down ransomware attacks and critical in
    <br>
 <b>Analytic Rule –</b> Trigger a Sentinel alert upon detecting an Illusive event and create a Sentinel incident. The Sentinel incident will correspond to the Illusive incident and will include all subsequent associated Illusive events.
    <br>
+  
 
+ ## This is a test to see if I really have permission to add content
  ## Basic Requirements (set up in advance) 
    
 To use the Illusive Active Defense solution, you must have the following: 
