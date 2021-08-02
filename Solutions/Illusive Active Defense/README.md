@@ -100,6 +100,14 @@ You need a secret Value to configure Illusive solution playbooks.
   5. Click Add 
   6. Copy and save the secret Value. You need this information to configure the Playbooks.
 
+## Add User Impersonation API Permission
+  
+1.	From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution. 
+1.	Go to API Permissions.
+1.	Click Add a permission.
+1.	Under Microsoft APIs, select <b>Azure Service Management>Delegated</b>, and check <b>user_impersonation</b>. This permission is used to read Azure Sentinel incidents.
+1.	Click <b>Grant admin consent for Default Directory</b> and click <b>OK</b>. 
+
 <a name="Illusive_API_Key">
   
 # Generate an Illusive API Key
@@ -131,7 +139,7 @@ You need the Illusive REST API URL and an Illusive API key to configure Illusive
 </table>
     3. Click Add.The API Key is created and added to the list of keys shown.<br/>
     4. Copy the header containing the key to a text file and save it securely.The key is valid for one year to access the REST API on this Management Server only.
-
+  
 <a name="Deploy_Playbooks">
   
 # Configure and Deploy Playbooks
