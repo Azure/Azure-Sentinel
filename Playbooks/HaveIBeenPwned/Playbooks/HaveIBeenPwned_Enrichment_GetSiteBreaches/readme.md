@@ -55,6 +55,6 @@ Iterates on the URL found in this incident and performs the following:
 
  3. Add a comment to the incident with the breach information collected which looks like below.
 
-![comment to the incident](./Images/IncidentcommentLight.PNG)
-![comment to the incident](./Images/IncidentcommentDark.PNG)
+![comment to the incident](./Images/IncidentcommentLight.png)
+![comment to the incident](./Images/IncidentcommentDark.png)
 
