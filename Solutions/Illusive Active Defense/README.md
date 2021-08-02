@@ -37,12 +37,17 @@ To use the Illusive Active Defense solution, you must have the following:
  - An Illusive ADS (deceptions) license
 
 ## Workflow 
+    
+  1. [Locate the Sentinel workspace](#Sentinel_Workspace)
+  2. [Azure Application Setup](#azureappsetup)
+  3. [Generate an Illusive API Key](#Illusive_API_Key)
+  4. [Configure and Deploy Playbooks](#Deploy_Playbooks)
+  5. [API connection setup](#API_connection)
+  6. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
+  7. [Add a SIEM Server](#SIEM_Server)
    
-1. Sentinel Workspace
-2. Azure Application Setup 
-3. Illusive API Key 
-4. SIEM server integration 
-   
+<a name="Sentinel_Workspace">
+  
 ## Locate the Sentinel Workspace
    
 The Workspace name and its location in the Azure hierarchy (Resource group and Subscription) is required later on during this configuration.
@@ -63,6 +68,7 @@ Steps to locate the Sentinel Workspace name:
    
 ## Prerequisites
    An Azure account that has an active subscription.
+  
 ## Register an Azure App
    
 1. Login to [http://portal.azure.com/](http://portal.azure.com/) 
@@ -94,7 +100,10 @@ You need a secret Value to configure Illusive solution playbooks.
   5. Click Add 
   6. Copy and save the secret Value. You need this information to configure the Playbooks.
 
+<a name="Illusive_API_Key">
+  
 # Generate an Illusive API Key
+  
 You need the Illusive REST API URL and an Illusive API key to configure Illusive solution playbooks.
   1. In the Illusive Console, navigate to Settings>General>API Keys. 
   2. Enter values in the following fields:   
@@ -123,10 +132,15 @@ You need the Illusive REST API URL and an Illusive API key to configure Illusive
     3. Click Add.The API Key is created and added to the list of keys shown.<br/>
     4. Copy the header containing the key to a text file and save it securely.The key is valid for one year to access the REST API on this Management Server only.
 
+<a name="Deploy_Playbooks">
+  
 # Configure and Deploy Playbooks
 To configure and deploy the Incident Response playbook, go to Incident Response Playbook.
 <br>
 To configure and deploy the Incident Enrichment playbook, go to Incident Enrichment Playbook. 
+  
+<a name="API_connection">
+  
 # API connection setup
 To connect the Illusive solution playbooks to Azure Sentinel, configure the API connection for each deployed playbook. 
 <br>
@@ -138,6 +152,8 @@ To connect the Illusive solution playbooks to Azure Sentinel, configure the API 
   4. Under Authorize, click <b>Authorize</b> and provide authorization by signing in.
   5. To save the authorization, click <b>Save.</b> To cancel, click <b>Discard.</b>
 
+<a name="Illusive_analytic_rule">
+  
 ## Configure the Illusive analytic rule
 The analytic rule instructs Azure Sentinel to search for information of interest and to supply this information to the Illusive solution playbooks. 
   1. Log onto http://portal.azure.com/ 
@@ -195,7 +211,9 @@ The analytic rule instructs Azure Sentinel to search for information of interest
   23. Then, click <b>Next:Review.</b>
   24. On the <b>Review and create</b> tab, review all the entered data, and click <b>Save.</b>
   25. The new analytic rule can be seen in the <b>Analytics>Active rules</b> table.
-    
+
+<a name="SIEM_Server">
+      
 # Add a SIEM Server
 Configure Illusive to automatically send Illusive activity logs and event messages to a Linux based Syslog server. Sentinel will consume this information and trigger the Illusive solution playbooks.
 <br>
