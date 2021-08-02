@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimRegistryEventMicrosoftSecurityEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Security Events Registry Creation Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimRegistryEventMicrosoftSecurityEvents",
+            "query": "let RegistryType = datatable (TypeCode:string,TypeName:string)\n  [\n    \"%%1872\", \"Reg_None\",\n    \"%%1873\",\t\"Reg_Sz\",\n    \"%%1874\",\t\"Reg_Expand_Sz\",\n    \"%%1875\",\t\"Reg_Binary\",\n    \"%%1876\",\t\"Reg_DWord\",\n    \"%%1879\",\t\"Reg_Multi_Sz\",\n    \"%%1883\",\t\"Reg_QWord\"\n  ];\nlet RegistryAction = datatable (EventOriginalSubType:string,EventType:string)\n  [\n    \"%%1904\", \"RegistryValueSet\",\n    \"%%1905\", \"RegistryValueSet\",      \n    \"%%1906\", \"RegistryValueDeleted\"             \n  ];\nlet Hives = datatable (KeyPrefix:string,Hive:string)\n  [\n    \"MACHINE\", \"HKEY_LOCAL_MACHINE\",\n    \"USER\", \"HKEY_USERS\",   \n  ];\n\nlet RegistryEvents=(){\nSecurityEvent\n// -- Filter\n| where EventID == 4657          \n\n// Event\n| extend\n    EventCount = int(1), \n    EventVendor = 'Microsoft', \n    EventProduct = 'Security Events', \n    EventSchemaVersion = '0.1.0', \n    EventStartTime = todatetime(TimeGenerated), \n    EventEndTime = todatetime(TimeGenerated) \n| project-rename\n    EventOriginalType = EventID,\n    EventOriginalSubType = OperationType,\n    EventOriginalUid = EventOriginId\n\n| lookup RegistryAction on EventOriginalSubType\n\n// Registry\n// Normalize key hive\n| parse ObjectName with \"\\\\REGISTRY\\\\\" KeyPrefix \"\\\\\" Key\n| lookup Hives on KeyPrefix\n| extend RegistryKey = strcat (Hive, \"\\\\\", Key)\n| project-away Hive, Key, KeyPrefix, ObjectName\n\n| project-rename\n  RegistryValue = ObjectValueName\n| extend\n  RegistryValueData = iff (EventOriginalSubType == \"%%1906\", OldValue, NewValue), \n  RegistryKeyModified = iff (EventOriginalSubType == \"%%1905\", RegistryKey, \"\"),\n  RegistryValueModified = iff (EventOriginalSubType == \"%%1905\", RegistryValue, \"\"),\n  RegistryValueDataModified = iff (EventOriginalSubType == \"%%1905\", OldValue, \"\")\n| lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName\n| lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryValueTypeModified = TypeName\n| project-away OldValue, NewValue, OldValueType, NewValueType\n\n// Device\n| extend\n    DvcId = SourceComputerId,\n    DvcHostname = Computer,\n    DvcOs = 'Windows'\n\n// User\n| project-rename\n    ActorUserId = SubjectUserSid, \n    ActorSessionId = SubjectLogonId, \n    ActorDomainName = SubjectDomainName\n| extend\n    ActorUserIdType = 'SID',\n    ActorUsername = iff (ActorDomainName == '-', SubjectUserName, SubjectAccount), \n    ActorUsernameType = iff(ActorDomainName == '-','Simple', 'Windows') \n\n// Process \n| project-rename\n    ActingProcessId = ProcessId, \n    ActingProcessName = ProcessName\n\n// -- Aliases\n  | extend\n    User = ActorUsername,\n    UserId = ActorUserId,\n    Dvc = DvcHostname,\n    Process = ActingProcessName\n\n// -- Remove potentially confusing\n  | project-away \n      SubjectUserName,\n      SubjectAccount\n\n}; RegistryEvents\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

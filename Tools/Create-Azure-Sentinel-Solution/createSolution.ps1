@@ -49,6 +49,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $playbookCounter = 1
     $parserCounter = 1
     $huntingQueryCounter = 1
+    $watchlistCounter = 1
 
     # Convenience Variables
     $solutionName = $contentToImport.Name
@@ -424,8 +425,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         $connectionCounter = 1
                         function getConnectionVariableName($connectionVariable) {
-                            foreach($templateVar in $($baseMainTemplate.variables).PSObject.Properties){
-                                if($templateVar.Value -eq $connectionVariable) {
+                            foreach ($templateVar in $($baseMainTemplate.variables).PSObject.Properties) {
+                                if ($templateVar.Value -eq $connectionVariable) {
                                     return $templateVar.Name
                                 }
                             }
@@ -449,9 +450,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         $connectionVar = $connectionVar.Replace("resourceGroup().location", "parameters('workspace-location')")
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
-                                    if($foundConnection) {
+                                    if ($foundConnection) {
                                         $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
-                                    } else {
+                                    }
+                                    else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
                                         $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
@@ -619,6 +621,67 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Update Connector Counter
                         $connectorCounter += 1
+                    }
+                    elseif ($objectKeyLowercase -eq "watchlists") {
+                        $watchlistData = $json.resources[0]
+                        #Handle CreateUiDefinition Base Step
+                        if ($watchlistCounter -eq 1) {
+                            $baseWatchlistStep = [PSCustomObject]@{
+                                name       = "watchlists";
+                                label      = "Watchlists";
+                                subLabel   = [PSCustomObject]@{
+                                    preValidation  = "Configure the watchlists";
+                                    postValidation = "Done";
+                                }
+                                bladeTitle = "Watchlists";
+                                elements   = @(
+                                    [PSCustomObject]@{
+                                        name    = "watchlists-text";
+                                        type    = "Microsoft.Common.TextBlock";
+                                        options = [PSCustomObject]@{
+                                            text = "Azure Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Azure Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Azure Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.";
+                                            link = [PSCustomObject]@{
+                                                label = "Learn more";
+                                                uri = "https://aka.ms/sentinelwatchlists";
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            $baseCreateUiDefinition.parameters.steps += $baseWatchlistStep
+                        }
+
+                        #Handle CreateUiDefinition Step Sub-Element
+                        $currentStepNum = $baseCreateUiDefinition.parameters.steps.Count - 1
+                        $watchlistStepElement = [PSCustomObject]@{
+                            name     = "watchlist$watchlistCounter";
+                            type     = "Microsoft.Common.Section";
+                            label    = $watchlistData.properties.displayName;
+                            elements = @(
+                                [PSCustomObject]@{
+                                    name    = "watchlist$watchlistCounter-text";
+                                    type    = "Microsoft.Common.TextBlock";
+                                    options = [PSCustomObject]@{
+                                        text = $watchlistData.properties.description
+                                    }
+                                }
+                            )
+                        }
+                        $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $watchlistStepElement
+
+                        # Add Watchlist ID to MainTemplate parameters
+                        $watchlistIdParameterName = "watchlist$watchlistCounter-id"
+                        $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                        $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $watchlistIdParameterName -Value $watchlistIdParameter
+                        
+                        # Replace watchlist resource id
+                        $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$watchlistCounter-id'))]"
+                        
+                        # Handle MainTemplate Resource
+                        $baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template                        
+
+                        # Update Watchlist Counter
+                        $watchlistCounter += 1
                     }
                 }
                 else {
@@ -938,11 +1001,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $connectorCounter -= 1
     $parserCounter -= 1
     $huntingQueryCounter -= 1
-    updateDescriptionCount $connectorCounter    "**Data Connectors:** " "{{DataConnectorCount}}" $(checkResourceCounts $parserCounter, $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter)
-    updateDescriptionCount $parserCounter       "**Parsers:** "         "{{ParserCount}}"        $(checkResourceCounts $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter)
-    updateDescriptionCount $workbookCounter     "**Workbooks:** "       "{{WorkbookCount}}"      $(checkResourceCounts $analyticRuleCounter, $playbookCounter, $huntingQueryCounter)
-    updateDescriptionCount $analyticRuleCounter "**Analytic Rules:** "  "{{AnalyticRuleCount}}"  $(checkResourceCounts $playbookCounter, $huntingQueryCounter)
-    updateDescriptionCount $huntingQueryCounter "**Hunting Queries:** " "{{HuntingQueryCount}}"  $(checkResourceCounts @($playbookCounter))
+    $watchlistCounter -= 1
+    updateDescriptionCount $connectorCounter    "**Data Connectors:** " "{{DataConnectorCount}}" $(checkResourceCounts $parserCounter, $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $parserCounter       "**Parsers:** "         "{{ParserCount}}"        $(checkResourceCounts $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $workbookCounter     "**Workbooks:** "       "{{WorkbookCount}}"      $(checkResourceCounts $analyticRuleCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $analyticRuleCounter "**Analytic Rules:** "  "{{AnalyticRuleCount}}"  $(checkResourceCounts $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $huntingQueryCounter "**Hunting Queries:** " "{{HuntingQueryCount}}"  $(checkResourceCounts $playbookCounter, $watchlistCounter)
+    updateDescriptionCount $watchlistCounter    "**Watchlists:** "      "{{WatchlistCount}}"     $(checkResourceCounts @($playbookCounter))
     updateDescriptionCount $playbookCounter     "**Playbooks:** "       "{{PlaybookCount}}"      $false
 
     # Update Logo in CreateUiDefinition Description
@@ -979,7 +1044,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     }
     try {
         # Sort UI Steps before writing to file
-        $createUiDefinitionOrder = "dataconnectors", "parsers", "workbooks", "analytics", "huntingqueries", "playbooks"
+        $createUiDefinitionOrder = "dataconnectors", "parsers", "workbooks", "analytics", "huntingqueries", "watchlists", "playbooks"
         $baseCreateUiDefinition.parameters.steps = $baseCreateUiDefinition.parameters.steps | Sort-Object { $createUiDefinitionOrder.IndexOf($_.name) }
         # Ensure single-step UI Definitions have proper type for steps
         if ($($baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
@@ -992,14 +1057,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         break;
     }
     $zipPackageName = "$(if($contentToImport.Version){$contentToImport.Version}else{"newSolutionPackage"}).zip"
-    Compress-Archive -Path $solutionFolder -DestinationPath "$solutionFolder/$zipPackageName" -Force
+    Compress-Archive -Path "$solutionFolder/*" -DestinationPath "$solutionFolder/$zipPackageName" -Force
     
     #downloading and running arm-ttk on generated solution
     $armTtkFolder = "$PSScriptRoot/arm-ttk"
-    if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue))
-    {
+    if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 $solutionName"  
+    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"  
 }

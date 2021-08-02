@@ -2,10 +2,6 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "FunctionName": {
-            "defaultValue": "O365Data",
-            "type": "String"
-        },
         "clientID": {
             "type": "string",
             "defaultValue": "AAD Application Client ID"
@@ -44,19 +40,21 @@
         }
     },
     "variables": {
-            "StroageAccountName": "[tolower(concat(parameters('FunctionName'), uniqueString(resourceGroup().id, subscription().id)))]",
-            "KeyVaultName": "[concat(parameters('FunctionName'), uniqueString(resourceGroup().id, subscription().id))]"
+            "Name": "O365Data",
+            "FunctionName": "[concat(variables('Name'), 'fn', uniqueString(resourceGroup().id, subscription().id))]",
+            "StorageAccountName": "[tolower(concat(variables('Name'), 'sa', uniqueString(resourceGroup().id, subscription().id)))]",
+            "KeyVaultName": "[concat(variables('Name'), 'kv', uniqueString(resourceGroup().id, subscription().id))]"
     },
     "resources": [
         {
             "type": "microsoft.insights/components",
             "apiVersion": "2015-05-01",
-            "name": "[parameters('FunctionName')]",
+            "name": "[variables('FunctionName')]",
             "location": "[resourceGroup().location]",
             "kind": "web",
             "properties": {
                 "Application_Type": "web",
-                "ApplicationId": "[parameters('FunctionName')]"
+                "ApplicationId": "[variables('FunctionName')]"
             }
         },
         {
@@ -111,7 +109,7 @@
         {
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2019-06-01",
-            "name": "[variables('StroageAccountName')]",
+            "name": "[variables('StorageAccountName')]",
             "location": "[resourceGroup().location]",
             "sku": {
                 "name": "Standard_LRS",
@@ -146,7 +144,7 @@
         {
             "type": "Microsoft.Web/serverfarms",
             "apiVersion": "2018-02-01",
-            "name": "[parameters('FunctionName')]",
+            "name": "[variables('FunctionName')]",
             "location": "[resourceGroup().location]",
             "sku": {
                 "name": "Y1",
@@ -154,7 +152,7 @@
             },
             "kind": "functionapp",
             "properties": {
-                "name": "[parameters('FunctionName')]",
+                "name": "[variables('FunctionName')]",
                 "workerSize": "0",
                 "workerSizeId": "0",
                 "numberOfWorkers": "1"
@@ -163,9 +161,9 @@
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices",
             "apiVersion": "2019-06-01",
-            "name": "[concat(variables('StroageAccountName'), '/default')]",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "sku": {
                 "name": "Standard_LRS",
@@ -184,9 +182,9 @@
         {
             "type": "Microsoft.Storage/storageAccounts/fileServices",
             "apiVersion": "2019-06-01",
-            "name": "[concat(variables('StroageAccountName'), '/default')]",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "sku": {
                 "name": "Standard_LRS",
@@ -202,21 +200,21 @@
         {
             "type": "Microsoft.Web/sites",
             "apiVersion": "2018-11-01",
-            "name": "[parameters('FunctionName')]",
+            "name": "[variables('FunctionName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]",
-                "[resourceId('Microsoft.Web/serverfarms', parameters('FunctionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
                 "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]",
-                "[resourceId('Microsoft.Insights/components', parameters('FunctionName'))]"
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
             ],
             "kind": "functionapp",
             "identity": {
                 "type": "SystemAssigned"
             },
             "properties": {
-                "name": "[parameters('FunctionName')]",
-                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('FunctionName'))]",
+                "name": "[variables('FunctionName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
                 "httpsOnly": true,
                 "clientAffinityEnabled": true
             },
@@ -226,16 +224,16 @@
                     "type": "config",
                     "name": "appsettings",
                     "dependsOn": [
-                        "[concat('Microsoft.Web/sites/', parameters('FunctionName'))]"
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
                     ],
                     "properties": {
                         "FUNCTIONS_EXTENSION_VERSION": "~3",
                         "FUNCTIONS_WORKER_RUNTIME": "powershell",
-                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', parameters('FunctionName')), '2015-05-01').InstrumentationKey]",
-                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', parameters('FunctionName')), '2015-05-01').ConnectionString]",
-                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StroageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
-                        "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StroageAccountName'),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
-                        "WEBSITE_CONTENTSHARE": "[variables('StroageAccountName')]",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('StorageAccountName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
+                        "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('StorageAccountName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
+                        "WEBSITE_CONTENTSHARE": "[variables('StorageAccountName')]",
                         "clientID": "[parameters('clientID')]",
                         "clientSecret": "[concat('@Microsoft.KeyVault(SecretUri=https://', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), 'clientSecret')).SecretUriWithVersion, ')')]",
                         "domain": "[parameters('domain')]",
@@ -255,10 +253,10 @@
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
             "apiVersion": "2019-06-01",
-            "name": "[concat(variables('StroageAccountName'), '/default/azure-webjobs-hosts')]",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-hosts')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StroageAccountName'), 'default')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "properties": {
                 "publicAccess": "None"
@@ -267,10 +265,10 @@
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
             "apiVersion": "2019-06-01",
-            "name": "[concat(variables('StroageAccountName'), '/default/azure-webjobs-secrets')]",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-secrets')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StroageAccountName'), 'default')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "properties": {
                 "publicAccess": "None"
@@ -279,10 +277,10 @@
         {
             "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
             "apiVersion": "2019-06-01",
-            "name": "[concat(variables('StroageAccountName'), '/default/', tolower(parameters('FunctionName')))]",
+            "name": "[concat(variables('StorageAccountName'), '/default/', tolower(variables('FunctionName')))]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('StroageAccountName'), 'default')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('StroageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
             ],
             "properties": {
                 "shareQuota": 5120
@@ -293,13 +291,13 @@
             "apiVersion": "2016-10-01",
             "name": "[concat(variables('KeyVaultName'), '/add')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('FunctionName'))]"
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
             ],
             "properties": {
                 "accessPolicies": [
                     {
                         "tenantId": "[subscription().tenantId]",
-                        "objectId": "[reference(concat(resourceId('Microsoft.Web/sites', parameters('FunctionName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2018-11-30').principalId]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')), '2019-08-01', 'full').identity.principalId]",
                         "permissions": {
                             "secrets": [
                                 "Get",

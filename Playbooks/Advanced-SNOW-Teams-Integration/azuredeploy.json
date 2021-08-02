@@ -1,38 +1,49 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-        "deploymentGroupName": {
-            "defaultValue": "playbook",
-            "type": "String",
-            "metadata": {
-                "description": "This name will be prefixed on all the resources"
-              }
+    "contentVersion": "1.2.0.0",
+    "metadata":{
+        "title": "Advanced SNOW Teams Integration Playbook", 
+        "description": "This playbook showcases an example of triggering an incident within a targeted Teams channel and opening up a ticket within Service Now. Additionally The playbook will also list playbooks that can be initiated from teams using an adaptive card and callbacks that will take action upon certain entities identified in the incident.",
+        "prerequisites": [
+            "1. ServiceNow Instance URL, Username, and password.", 
+            "2. Access and authorization to enable API connectors", 
+            "3. Teams Group ID and Alert Channel ID where the messages are to be posted in."
+        ],
+        "lastUpdateTime": "2021-06-29T10:00:00.000Z", 
+        "entities": ["Account","URL","Host"], 
+        "tags": ["Sync","Notification","Teams Response"], 
+        "support": {
+            "tier": "microsoft"
         },
-        "playbookName": {
-            "defaultValue": "ServiceNow-Teams-Integration",
-            "type": "String",
+        "author": {
+            "name": "Jing Nghik"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SNOW-Teams-Integration",
+            "type": "string",
             "metadata": {
                 "description": "Name of the primary playbook that will be called from Azure Sentinel"
               }
-        },        
+        },           
         "MSUserName": {
             "defaultValue": "<username@domain.com>",
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "Username with authority API connectors (Teams, ARM, and Sentinel)."
               }
         },
 		"Snow_Instance": {
 			"defaultValue": "https://<instance>.<domainName>.com",
-			"type": "String",
+			"type": "string",
             "metadata": {
                 "description": "Can be found with <instance>.service-now.com or https://<instance>.<domainName>.com for migrated account"
               }
 		},	
 		"Snow_Username": {
 			"defaultValue": "<servicenow_username@domain.com>",
-			"type": "String"
+			"type": "string"
 		},
 		"Snow_Password": {
 			"defaultValue": "<servicenow_password>",
@@ -40,21 +51,21 @@
 		},		
 		"TeamsGroupId": {
 			"defaultValue": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx",
-			"type": "String",
+			"type": "string",
             "metadata": {
                 "description": "The Teams Group ID where the channel is located."
               }
 		},
 		"AlertChannelId": {
 			"defaultValue": "xx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@thread.skype",
-			"type": "String",
+			"type": "string",
             "metadata": {
                 "description": "The particular Teams channel ID where the alert should go"
               }
 		},
 		"InvestigationChannelId": {
 			"defaultValue": "xx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@thread.skype",
-			"type": "String",
+			"type": "string",
             "metadata": {
                 "description": "The particular Teams channel ID where the Investigation Playbook options should go."
               }
@@ -62,18 +73,17 @@
 		"VirusTotalAPIKey": {
             "type": "securestring",
 			"defaultValue": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-			"type": "String",
             "metadata": {
                 "description": "Virus Total API Key. https://developers.virustotal.com/v3.0/reference#overview"
               }
 		}
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat(parameters('deploymentGroupName'),'-apiconnector-azuresentinel')]",
-		"ARMConnectionName": "[concat(parameters('deploymentGroupName'),'-apiconnector-arm')]",
-		"TeamsConnectionName": "[concat(parameters('deploymentGroupName'),'-apiconnector-teams')]",
-        "SNOWConnectionName": "[concat(parameters('deploymentGroupName'),'-apiconnector-snow')]",
-        "VirusTotalConnectionName": "[concat(parameters('deploymentGroupName'),'-apiconnector-virusTotal')]"
+        "AzureSentinelConnectionName": "[concat(parameters('PlaybookName'),'-apiconnector-azuresentinel')]",
+		"ARMConnectionName": "[concat(parameters('PlaybookName'),'-apiconnector-arm')]",
+		"TeamsConnectionName": "[concat(parameters('PlaybookName'),'-apiconnector-teams')]",
+        "SNOWConnectionName": "[concat(parameters('PlaybookName'),'-apiconnector-snow')]",
+        "VirusTotalConnectionName": "[concat(parameters('PlaybookName'),'-apiconnector-virusTotal')]"
     },
     "resources": [
         {
@@ -139,6 +149,13 @@
             "apiVersion": "2018-07-01-preview",
             "location": "[resourceGroup().location]",
             "name": "[variables('VirusTotalConnectionName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ARMConnectionName'))]",
+                "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('PlaybookName'),'-function-getListOfTaggedPlaybooks')]"
+            ],
             "properties": {
                 "api": {
                     "id": "[concat(subscription().id,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
@@ -155,14 +172,14 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[concat(parameters('deploymentGroupName'),'-workflow-',parameters('playbookName'))]",
+            "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('ARMConnectionName'))]",
-                "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('deploymentGroupName'),'-function-getListOfTaggedPlaybooks')]"
+                "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('PlaybookName'),'-function-getListOfTaggedPlaybooks')]"
             ],
             "tags": {
                 "LogicAppsCategory": "security"
@@ -191,7 +208,7 @@
                         }
                     },
                     "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -202,7 +219,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
@@ -230,7 +247,7 @@
                                         "type": "ApiConnection",
                                         "inputs": {
                                             "body": {
-                                                "short_description": "@{body('Incident_-_Get_alerts_parent_incident')?['properties']?['incidentNumber']} - @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['title']}",
+                                                "short_description": "@{triggerBody()?['object']?['properties']?['incidentNumber']} - @{triggerBody()?['object']?['properties']?['title']}",
                                                 "sys_tags": "Azure Sentinel"
                                             },
                                             "host": {
@@ -272,106 +289,133 @@
                             },
                             "type": "If"
                         },
-                        "Extract_Entities": {
+                        "Compose_Teams_Incident_Alert_Card": {
+                            "runAfter": {
+                                "Check_to_see_if_ServiceNow_Incident_exists": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                "actions": [
+                                    {
+                                        "title": "Open Incident in Sentinel",
+                                        "type": "Action.OpenUrl",
+                                        "url": "@{triggerBody()?['object']?['properties']?['incidentUrl']}"
+                                    },
+                                    {
+                                        "style": "destructive",
+                                        "title": "Open Service Now Incident",
+                                        "type": "Action.OpenUrl",
+                                        "url": "https://ven03842.service-now.com/nav_to.do?uri=/incident_list.do?sysparm_query=active=true"
+                                    }
+                                ],
+                                "body": [
+                                    {
+                                        "color": "accent",
+                                        "size": "large",
+                                        "text": "Azure Sentinel Alert - @{triggerBody()?['object']?['properties']?['incidentNumber']} - @{triggerBody()?['object']?['properties']?['title']} ",
+                                        "type": "TextBlock",
+                                        "wrap": true
+                                    },
+                                    {
+                                        "items": "@variables('adaptiveCardItems')",
+                                        "spacing": "padding",
+                                        "style": "default",
+                                        "type": "Container"
+                                    }
+                                ],
+                                "msTeams": {
+                                    "width": "full"
+                                },
+                                "type": "AdaptiveCard",
+                                "version": "1.2"
+                            }
+                        },
+                        "Extract_entities_and_add_to_adaptive_card": {
                             "actions": {
-                                "Compose": {
+                                "Entities_List": {
                                     "runAfter": {
-                                        "Get_Users": [
+                                        "LogicApp_-_Get_tagged_playbooks": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "Compose",
-                                    "inputs": {
-                                        "test": "cool"
-                                    }
+                                    "inputs": {}
                                 },
-                                "For_each_account_entity": {
-                                    "foreach": "@body('Get_Users')?['Accounts']",
+                                "For_each_entity_type": {
+                                    "foreach": "@body('Get_list_of_entity_types')",
                                     "actions": {
-                                        "Add_to_accounts_string_variable": {
-                                            "runAfter": {},
-                                            "type": "AppendToStringVariable",
+                                        "Append_to_array_variable": {
+                                            "runAfter": {
+                                                "Build_entity_json_payload": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
                                             "inputs": {
-                                                "name": "entitiesAccounts",
-                                                "value": "@{items('For_each_account_entity')?['Name']}; "
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Compose": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Foreach"
-                                },
-                                "For_each_host": {
-                                    "foreach": "@body('Get_Hosts')?['Hosts']",
-                                    "actions": {
-                                        "Append_host_to_string_variable": {
-                                            "runAfter": {},
-                                            "type": "AppendToStringVariable",
-                                            "inputs": {
-                                                "name": "entitiesHosts",
-                                                "value": "@{items('For_each_host')?['HostName']}; "
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Get_Hosts": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Foreach"
-                                },
-                                "Get_Hosts": {
-                                    "runAfter": {
-                                        "For_each_account_entity": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": "@triggerBody()?['Entities']",
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                "name": "adaptiveCardItems",
+                                                "value": {
+                                                    "text": "**Related @{items('For_each_entity_type')['type']}(s)**: @{length(body('Filter_list_by_each_type_name'))}",
+                                                    "type": "TextBlock",
+                                                    "wrap": true
+                                                }
                                             }
                                         },
-                                        "method": "post",
-                                        "path": "/entities/host"
-                                    }
+                                        "Build_entity_json_payload": {
+                                            "runAfter": {
+                                                "Filter_list_by_each_type_name": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "kind": "@items('For_each_entity_type')['type']",
+                                                "list": "@body('Filter_list_by_each_type_name')"
+                                            }
+                                        },
+                                        "Filter_list_by_each_type_name": {
+                                            "runAfter": {},
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@array(triggerBody()?['object']?['properties']?['relatedEntities'])",
+                                                "where": "@equals(item()['kind'], items('For_each_entity_type')['type'])"
+                                            }
+                                        },
+                                        "append_to_relatedEntities": {
+                                            "runAfter": {
+                                                "Append_to_array_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "RelatedEntities",
+                                                "value": "@outputs('Build_entity_json_payload')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_list_of_entity_types": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
                                 },
-                                "Get_Users": {
+                                "Get_list_of_entity_types": {
                                     "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": "@triggerBody()?['Entities']",
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/entities/account"
-                                    }
-                                },
-                                "Get_the_alert_entity_types": {
-                                    "runAfter": {
-                                        "For_each_host": [
-                                            "Succeeded"
-                                        ]
-                                    },
                                     "type": "Select",
                                     "inputs": {
-                                        "from": "@triggerBody()?['Entities']",
+                                        "from": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                         "select": {
-                                            "type": "@item()?['Type']"
+                                            "type": "@item()['kind']"
                                         }
                                     }
                                 },
                                 "LogicApp_-_Get_tagged_playbooks": {
                                     "runAfter": {
-                                        "Get_the_alert_entity_types": [
+                                        "For_each_entity_type": [
                                             "Succeeded"
                                         ]
                                     },
@@ -380,7 +424,7 @@
                                         "host": {
                                             "triggerName": "manual",
                                             "workflow": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('deploymentGroupName'),'-function-getListOfTaggedPlaybooks')]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('PlaybookName'),'-function-getListOfTaggedPlaybooks')]"
                                             }
                                         }
                                     },
@@ -388,7 +432,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Variable_-_ServiceNow_Incident_Number": [
+                                "adaptiveCardItems": [
                                     "Succeeded"
                                 ]
                             },
@@ -406,29 +450,8 @@
                                 "value": "@split(body('Post_Actions_Required_in_Investigation_Requests_Channel')?['data']?['playbooks'],',')"
                             }
                         },
-                        "Incident_-_Get_alerts_parent_incident": {
-                            "runAfter": {
-                                "Extract_Entities": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            }
-                        },
                         "Initialize_Playbook_Variable": {
-                            "runAfter": {
-                                "Variable_-_Hosts": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -451,7 +474,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@body('Incident_-_Get_alerts_parent_incident')?['id']",
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
                                             "message": "<p>Playbook (@{items('Loop_through_each_playbook_and_run_it')}) executed with the following response.<br>\n<br>\n@{body('Call_the_playbook_and_pass_alert_to_playbook')}</p>"
                                         },
                                         "host": {
@@ -471,7 +494,8 @@
                                     },
                                     "type": "Http",
                                     "inputs": {
-                                        "body": "@triggerBody()",
+                                        "body": "@{triggerBody()}",
+										"headers" : { "Content-Type" : "application/json"},
                                         "method": "POST",
                                         "uri": "@{body('Find_playbook_based_on_playbook_name_provided')[0]?['callbackUrl']}"
                                     }
@@ -549,12 +573,11 @@
                             "inputs": {
                                 "body": {
                                     "body": {
-                                        "messageBody": "{\n    \"msTeams\": {\n        \"width\": \"full\"\n    },\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.2\",\n    \"body\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\t\t\"size\": \"large\",\n\t\t\t\t\t\t\"color\": \"accent\",\n\t\t\t\t\t\t\"text\": \"**Azure Sentinel Alert - @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['incidentNumber']}** - @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['title']}\",\n\t\t\t\t\t\t\"wrap\": true\n\t\t\t\t\t},\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Please Select the playbooks to run for the incident:\",\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Available tagged Logic App playbooks\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"color\": \"Accent\"\n        },\n        {\n            \"type\": \"Input.ChoiceSet\",\n            \"choices\": @{body('LogicApp_-_Get_tagged_playbooks')},\n            \"placeholder\": \"IP Playbooks\",\n            \"isMultiSelect\": true,\n            \"style\": \"expanded\",\n            \"id\": \"playbooks\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit\"\n        }\n    ]\n}",
+                                        "messageBody": "{\n    \"msTeams\": {\n        \"width\": \"full\"\n    },\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.2\",\n    \"body\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\t\t\"size\": \"large\",\n\t\t\t\t\t\t\"color\": \"accent\",\n\t\t\t\t\t\t\"text\": \"**Azure Sentinel Alert - **@{triggerBody()?['object']?['properties']?['incidentNumber']} - @{triggerBody()?['object']?['properties']?['title']}\",\n\t\t\t\t\t\t\"wrap\": true\n\t\t\t\t\t},\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Please Select the playbooks to run for the incident:\",\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Available tagged Logic App playbooks\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"color\": \"Accent\"\n        },\n        {\n            \"type\": \"Input.ChoiceSet\",\n            \"choices\": @{body('LogicApp_-_Get_tagged_playbooks')},\n            \"placeholder\": \"IP Playbooks\",\n            \"isMultiSelect\": true,\n            \"style\": \"expanded\",\n            \"id\": \"playbooks\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit\"\n        }\n    ]\n}",
                                         "recipient": {
                                             "channelId": "[parameters('InvestigationChannelId')]"
                                         },
-                                        "shouldUpdateCard": true,
-                                        "updateMessage": "Azure Sentinel Incident - @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['incidentNumber']} \n@{body('Incident_-_Get_alerts_parent_incident')?['properties']?['title']}"
+                                        "shouldUpdateCard": true
                                     },
                                     "notificationUrl": "@{listCallbackUrl()}"
                                 },
@@ -571,14 +594,14 @@
                         },
                         "Post_Incident_in_SOC_Alerts_Channel": {
                             "runAfter": {
-                                "Check_to_see_if_ServiceNow_Incident_exists": [
+                                "Compose_Teams_Incident_Alert_Card": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "messageBody": "{\n  \"msTeams\": {\n    \"width\": \"full\"\n  },\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.2\",\n  \"body\": [\n\t\t{\n\t\t\t\"type\": \"TextBlock\",\n\t\t\t\"size\": \"large\",\n\t\t\t\"color\": \"accent\",\n\t\t\t\"text\": \"Azure Sentinel Alert - @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['incidentNumber']} - @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['title']} \",\n\t\t\t\"wrap\": true\n\t\t},\n\t{\n\t\t\"type\": \"Container\",\n\t\t\"spacing\": \"padding\",\n\t\t\"style\": \"default\",\n\t\t\"items\": [\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"text\": \"**Owner: \"\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"spacing\": \"none\",\n\t\t\t\t\"text\": \"**Date:** @{triggerBody()?['TimeGenerated']}\",\n\t\t\t\t\"wrap\": true\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"spacing\" : \"none\",\n\t\t\t\t\"text\": \"**ServiceNow ID#:**  @{variables('ServiceNowSystemID')}\"\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"spacing\" : \"none\",\n\t\t\t\t\"text\": \"**Incident Status:** @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['status']}\"\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"spacing\" : \"none\",\n\t\t\t\t\"text\": \"**Incident Severity:** @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['severity']}\"\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"wrap\": true,\n\t\t\t\t\"text\": \"**Description:** @{body('Incident_-_Get_alerts_parent_incident')?['properties']?['description']}\"\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"wrap\": true,\n\t\t\t\t\"text\": \"**User(s) affected:** @{variables('entitiesAccounts')}\"\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"type\": \"TextBlock\",\n\t\t\t\t\"wrap\": true,\n\t\t\t\t\"text\": \"**Host(s) affected:** @{variables('entitiesHosts')}\"\n\t\t\t}\n\t\t]\n\t}\n  ],\n  \"actions\": [\n    {\n      \"type\": \"Action.OpenUrl\",\n      \"title\": \"Open Incident in Sentinel\",\n      \"url\": \"@{body('Incident_-_Get_alerts_parent_incident')?['properties']?['incidentUrl']}\"\n    },\n    {\n      \"type\": \"Action.OpenUrl\",\n      \"title\": \"Open Service Now Incident\",\n      \"url\": \"https://ven03842.service-now.com/nav_to.do?uri=/incident_list.do?sysparm_query=active=true\",\n      \"style\" : \"destructive\"\n    }\n  ]\n}",
+                                    "messageBody": "@{outputs('Compose_Teams_Incident_Alert_Card')}",
                                     "recipient": {
                                         "channelId": "[parameters('AlertChannelId')]",
                                         "groupId": "[parameters('TeamsGroupId')]"
@@ -595,8 +618,11 @@
                         },
                         "ServiceNow_-_Query_for_Sentinel_Incident_Number": {
                             "runAfter": {
-                                "Incident_-_Get_alerts_parent_incident": [
-                                    "Succeeded"
+                                "Extract_entities_and_add_to_adaptive_card": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
                                 ]
                             },
                             "type": "ApiConnection",
@@ -611,7 +637,7 @@
                                 "queries": {
                                     "sysparm_display_value": false,
                                     "sysparm_exclude_reference_link": true,
-                                    "sysparm_query": "123TEXTQUERY321=@{body('Incident_-_Get_alerts_parent_incident')?['properties']?['incidentNumber']}^active=true"
+                                    "sysparm_query": "123TEXTQUERY321=@{triggerBody()?['object']?['properties']?['incidentNumber']}^active=true"
                                 }
                             }
                         },
@@ -662,34 +688,6 @@
                                 "path": "/v2/beta/teams/@{encodeURIComponent(parameters('TeamsGroupId'))}/channels/@{encodeURIComponent(parameters('AlertChannelId'))}/messages/@{encodeURIComponent(body('Post_Incident_in_SOC_Alerts_Channel')?['id'])}/replies"
                             }
                         },
-                        "Variable_-_Accounts": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "entitiesAccounts",
-                                        "type": "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Variable_-_Hosts": {
-                            "runAfter": {
-                                "Variable_-_Accounts": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "entitiesHosts",
-                                        "type": "string"
-                                    }
-                                ]
-                            }
-                        },
                         "Variable_-_ServiceNow_Incident_Number": {
                             "runAfter": {
                                 "Initialize_Playbook_Variable": [
@@ -702,6 +700,70 @@
                                     {
                                         "name": "ServiceNowSystemID",
                                         "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "adaptiveCardItems": {
+                            "runAfter": {
+                                "relatedEntities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "adaptiveCardItems",
+                                        "type": "array",
+                                        "value": [
+                                            {
+                                                "text": "**Owner:** @{triggerBody()?['object']?['properties']?['owner']?['assignedTo']}",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "spacing": "none",
+                                                "text": "**Date:** @{triggerBody()?['object']?['properties']?['firstActivityTimeUtc']}",
+                                                "type": "TextBlock",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "spacing": "none",
+                                                "text": "**ServiceNow ID#:**  @{variables('ServiceNowSystemID')}",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "spacing": "none",
+                                                "text": "**Incident Status:** @{triggerBody()?['object']?['properties']?['status']}",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "spacing": "none",
+                                                "text": "**Incident Severity:** @{triggerBody()?['object']?['properties']?['severity']}",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "text": "**Description:** @{triggerBody()?['object']?['properties']?['description']}",
+                                                "type": "TextBlock",
+                                                "wrap": true
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "relatedEntities": {
+                            "runAfter": {
+                                "Variable_-_ServiceNow_Incident_Number": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RelatedEntities",
+                                        "type": "array"
                                     }
                                 ]
                             }
@@ -741,12 +803,12 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[concat(parameters('deploymentGroupName'),'-function-getListOfTaggedPlaybooks')]",
+            "name": "[concat(parameters('PlaybookName'),'-function-getListOfTaggedPlaybooks')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('ARMConnectionName'))]"
-            ],
+			],
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -821,12 +883,31 @@
                                                 "subscription": "@{outputs('split_the_resource_ID')[2]}",
                                                 "tags": "@{body('Read_a_resource')?['tags']}",
                                                 "title": "@{items('For_each_playbook')?['name']}",
-                                                "trigger": "@{split(body('Get_playbook_callback_URL')?['value'], '/')[6]}",
                                                 "type": "@{items('For_each_playbook')?['type']}",
                                                 "value": "@{items('For_each_playbook')?['name']}"
                                             }
                                         },
                                         "Get_playbook_callback_URL": {
+                                            "runAfter": {
+                                                "Get_resource_trigger_name": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['arm']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/subscriptions/@{encodeURIComponent(outputs('split_the_resource_ID')[2])}/resourcegroups/@{encodeURIComponent(outputs('split_the_resource_ID')[4])}/providers/@{encodeURIComponent('Microsoft.Logic')}/@{encodeURIComponent('workflows/',outputs('split_the_resource_ID')[8])}/@{encodeURIComponent('triggers/',body('Get_resource_trigger_name')?['value'][0]['name'],'/listCallbackUrl')}",
+                                                "queries": {
+                                                    "x-ms-api-version": "2016-06-01"
+                                                }
+                                            }
+                                        },
+                                        "Get_resource_trigger_name": {
                                             "runAfter": {
                                                 "Read_a_resource": [
                                                     "Succeeded"
@@ -839,8 +920,8 @@
                                                         "name": "@parameters('$connections')['arm']['connectionId']"
                                                     }
                                                 },
-                                                "method": "post",
-                                                "path": "/subscriptions/@{encodeURIComponent(outputs('split_the_resource_ID')[2])}/resourcegroups/@{encodeURIComponent(outputs('split_the_resource_ID')[4])}/providers/@{encodeURIComponent('Microsoft.Logic')}/@{encodeURIComponent('workflows/',outputs('split_the_resource_ID')[8])}/@{encodeURIComponent('triggers/',if(contains(body('Read_a_resource')?['properties']?['definition']?['triggers'],'When_a_response_to_an_Azure_Sentinel_alert_is_triggered'),'When_a_response_to_an_Azure_Sentinel_alert_is_triggered','manual'),'/listCallbackUrl')}",
+                                                "method": "get",
+                                                "path": "/subscriptions/@{encodeURIComponent(outputs('split_the_resource_ID')[2])}/resourcegroups/@{encodeURIComponent(outputs('split_the_resource_ID')[4])}/providers/@{encodeURIComponent('Microsoft.Logic')}/@{encodeURIComponent('workflows/',outputs('split_the_resource_ID')[8],'/triggers')}",
                                                 "queries": {
                                                     "x-ms-api-version": "2016-06-01"
                                                 }
@@ -970,11 +1051,10 @@
                 }
             }
         },
-
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[concat(parameters('deploymentGroupName'),'-ip-checkIPOnVirusTotal')]",
+            "name": "[concat(parameters('PlaybookName'),'-ip-checkIPOnVirusTotal')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]"
@@ -994,7 +1074,7 @@
                         }
                     },
                     "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -1005,7 +1085,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
@@ -1018,8 +1098,8 @@
                             },
                             "type": "Query",
                             "inputs": {
-                                "from": "@triggerBody()?['Entities']",
-                                "where": "@equals(item()?['Type'], 'ip')"
+                                "from": "@array(triggerBody()?['object']?['properties']?['relatedEntities'])",
+                                "where": "@equals(item()?['Kind'], 'Ip')"
                             }
                         },
                         "For_each": {
@@ -1047,7 +1127,7 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('For_each')?['Address'])}"
+                                        "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('For_each')?['properties']?['Address'])}"
                                     }
                                 }
                             },

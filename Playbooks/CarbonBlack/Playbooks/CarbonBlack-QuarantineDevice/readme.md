@@ -3,10 +3,12 @@
  When a new sentinal incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
  2. Quarantine the device
- 2. Enrich the incident with device information by fetching from CarbonBlack
+ 3. Enrich the incident with device information by fetching from CarbonBlack<br>
+    ![CarbonBlack-Enrich Incident With devices information](./images/Incident_Comment.png)
 
 
-![CarbonBlack-Enrich Incident With devices information](./CarbonBlack-QuarantineDevice.png)
+![CarbonBlack-Enrich Incident With devices information](./images/designerOverviewLight1.png)<br>
+![CarbonBlack-Enrich Incident With devices information](./images/designerOverviewLight2.png)
 
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
