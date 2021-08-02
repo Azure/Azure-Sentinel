@@ -41,22 +41,22 @@ To use the Illusive Active Defense solution, you must have the following:
   1. [Locate the Sentinel workspace](#Sentinel_Workspace)
   2. [Azure Application Setup](#azureappsetup)
   3. [Generate an Illusive API Key](#Illusive_API_Key)
+  7. [Add a SIEM Server](#SIEM_Server)
   4. [Configure and Deploy Playbooks](#Deploy_Playbooks)
   5. [API connection setup](#API_connection)
   6. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
-  7. [Add a SIEM Server](#SIEM_Server)
    
 <a name="Sentinel_Workspace">
   
 ## Locate the Sentinel Workspace
    
-The Workspace name and its location in the Azure hierarchy (Resource group and Subscription) is required later on during this configuration.
+  The workspace <b>name</b>, as well as the <b>Subscription</b> and <b>resource group</b> it belongs to are required later on during this configuration.
    <br>
-Steps to locate the Sentinel Workspace name:
+Steps to locate the Sentinel Workspace name, subscription, and resource group:
    <br>
-1. In the [Azure portal](https://portal.azure.com/), go to <b>Azure Sentinel</b>
-   Type Azure Sentinel in the <b>Search bar</b>, or click on the Azure Sentinel icon
-2. On the Azure Sentinel page, find the workspace within which the playbook and its API connection are deployed
+1. In the [Azure portal](https://portal.azure.com/), go to <b>Azure Sentinel</b>.
+   Type "Azure Sentinel" in the <b>Search bar</b>, or click on the Azure Sentinel icon.
+2. On the Azure Sentinel page, in the list, find the workspace where you want to create the playbook and its associated API connection.
    <p align="center">  
       <img src="./Images/Workspace.png"> </a>
    </p>
