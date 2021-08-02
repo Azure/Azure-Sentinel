@@ -1,0 +1,65 @@
+Parser:
+  Title: Sysmon Events 23 and 26 - File Deleted
+  Version: '0.1'
+  LastUpdated: June 28, 2021
+Product:
+  Name: Windows Sysmon
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: ASIM Sysmon/Event File Deletion Event Parser (event number 23)
+ParserName: vimFileEventDeleteMicrosoftSysmon
+ParserQuery: |
+  let Sysmon23_26=(){
+    Event
+      | where Source == "Microsoft-Windows-Sysmon"
+      | where EventID in (23,26)
+      | parse EventData with 
+      '<DataItem type="System.XmlData" time="'Time:datetime
+              '" sourceHealthServiceId="'sourceHealthServiceId
+              '"><EventData xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><Data Name="RuleName">'RuleName:string
+              '</Data><Data Name="UtcTime">'UtcTime:datetime
+              '</Data><Data Name="ProcessGuid">{'ProcessGuid:string
+              '}</Data><Data Name="ProcessId">'ProcessId:string
+              '</Data><Data Name="User">'User:string
+              '</Data><Data Name="Image">'Image:string
+              '</Data><Data Name="TargetFilename">'TargetFilename:string
+              '</Data><Data Name="Hashes">SHA1='SHA1:string',MD5='MD5:string',SHA256='SHA256:string',IMPHASH='IMPHASH:string
+              '</Data><Data Name="IsExecutable">'isExecutable:string
+              '</Data>' DataSuffix
+      | parse DataSuffix with '<Data Name="Archived">'Archived'</Data></EventData></DataItem>'
+      | extend
+          EventType='FileDeleted'
+          , EventProduct='Sysmon'
+          , EventSchemaVersion = "0.1.0"
+          , EventResult='Success'
+          , EventCount=int(1)
+          , EventStartTime = TimeGenerated
+          , EventEndTime = TimeGenerated
+          , DvcOs='Windows'
+          , ActorUsernameType = 'Windows'
+          , TargetFileName_wo_Path=tostring(split(TargetFilename,'\\')[-1])
+          | project-rename
+              DvcHostname = Computer
+              , ActorUsername = UserName
+              , ActingProcessName = Image
+              , ActingProcessId = ProcessId
+              , ActingProcessGuid = ProcessGuid
+              , EventOriginalId=EventID
+              , TargetFileMD5=MD5
+              , TargetFileSHA1=SHA1
+              , TargetFileSHA256=SHA256
+              , TargetFileIMPHASH=IMPHASH
+              , EventMessage=RenderedDescription
+              , TargetFilePath=TargetFileName
+              ,TargetFileName=TargetFileName_wo_Path
+          | extend
+              User = ActorUsername
+              , Process = ActingProcessName
+              , Dvc = DvcHostname};Sysmon23_26
+              , FilePath = TargetFilePath

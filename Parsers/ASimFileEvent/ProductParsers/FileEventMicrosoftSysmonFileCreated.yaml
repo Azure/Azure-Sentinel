@@ -1,0 +1,57 @@
+Parser:
+  Title: Sysmon Event 11 - Create File
+  Version: '0.1'
+  LastUpdated: June 28, 2021
+Product:
+  Name: Windows Sysmon
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: ASIM Sysmon/Event File Creation Event Parser (event number 11)
+ParserName: vimFileEventCreateMicrosoftSysmon
+ParserQuery: |
+  let Sysmon11=(){
+    Event
+    | where Source == "Microsoft-Windows-Sysmon"
+    | where EventID == 11
+    | parse EventData with '<DataItem type="System.XmlData" time="'Time:datetime
+            '" sourceHealthServiceId="'sourceHealthServiceId
+            '"><EventData xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><Data Name="RuleName">'RuleName:string
+            '</Data><Data Name="UtcTime">'UtcTime:datetime'</Data><Data Name="ProcessGuid">{'ProcessGuid:string
+            '}</Data><Data Name="ProcessId">'ProcessId:string
+            '</Data><Data Name="Image">'Image:string /// Image is the full path 
+            '</Data><Data Name="TargetFilename">'TargetFilename:string //// Full Path
+            '</Data><Data Name="CreationUtcTime">'CreationUtcTime:datetime  
+            '</Data></EventData></DataItem>'
+    | extend
+        EventType='FileCreated'
+        , EventProduct='Sysmon'
+        , EventSchemaVersion = '0.1.0'
+        , EventResult='Success'
+        , EventCount=int(1)
+        , EventStartTime = TimeGenerated
+        , EventEndTime = TimeGenerated
+        , DvcOs='Windows'
+        , ActorUsernameType = 'Windows'
+        , TargetFileName_wo_Path=tostring(split(TargetFilename,'\\')[-1])
+    | project-rename
+        DvcHostname = Computer
+        , ActorUsername = UserName
+        , ActingProcessName = Image
+        , ActingProcessId = ProcessId
+        , ActingProcessGuid = ProcessGuid
+        , EventOriginalType=EventID
+        , TargetFileCreationTime=CreationUtcTime
+        , EventMessage=RenderedDescription
+        , TargetFilePath=TargetFilename
+        ,TargetFileName=TargetFileName_wo_Path
+    | extend
+            User = ActorUsername
+            , Process = ActingProcessName
+            , Dvc = DvcHostname};Sysmon11
+            , FilePath = TargetFilePath
