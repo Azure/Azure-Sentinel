@@ -24,7 +24,7 @@ Documentation references:
 </li>
 <li>Logic App as a Managed Service identity - MSI, assigned with RBAC roles
 <ul>
-<li><a href="https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview" target="_blank" rel="noopener">Learn more about Managed Service Identities in Azure Active Directory.</a></li>
+<li><a href="https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/overview" target="_blank" rel="noopener">Learn more about Managed Service Identities in Azure Active Directory.</a></li>
 </ul>
 </li>
 </ul>
