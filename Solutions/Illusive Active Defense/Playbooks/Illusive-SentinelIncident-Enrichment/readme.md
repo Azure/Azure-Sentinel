@@ -1,44 +1,52 @@
-# Illusive Incident Enrichment Playbook
+# Readme – Incident Enrichment
 
-## Summary
+The Incident Enrichment playbook leverages Sentinel analytic rules to discover Illusive-based alerts and report the associated data and forensics as Sentinel incident sets. 
+Use this playbook to enrich Sentinel security incidents originating from Illusive with Illusive incident and forensics information. Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource.
 
-Use this playbook to enrich Sentinel security incidents originating from Illusive with Illusive incident and forensics information. 
-Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource. 
+# Playbook Workflow
 
-![Azure Sentinel comment](./Images/SentinelIncidentCommentLight.png)
+ 1. Perform the general solution setup
+ 2. Add API permissions to the Azure app
+ 3. Create the Illusive playbook
 
-![Illusive Entities](./Images/IncidentTagsAndEntitiesLight.png)
+# Create the Illusive playbook
 
-**Plabook overview:**
+Deploying the Illusive Incident Enrichment playbook requires a custom deployment template. 
+ - The playbook should be deployed under the same resource group, subscription, and workspace as the Azure app.
+ - The Illusive API key should contain only the API key and no keywords such as “Bearer” or “Basic”.
 
-![Playbook overview](./Images/DesignerOverviewLight.png)
+# Deploy a custom template
+ 1. On the Azure home page, filter for Deploy a custom template.
+ 2. Under Custom Deployment>Select a template, click Build your own template in the editor.
+ 3. From Edit template, click Load file, the file named IllusiveSentinelIncidentEnrichment.json provided by Illusive and click Save.
+ 4. Under Custom Deployment>Basics:
+  - Specify the Subscription that contains the dedicated Azure app that will run the Illusive Sentinel solution 
+  - Specify the Resource group that contains the Workspace where you want to install the playbook.
+  - Under Instance details:
+    - Region is filled automatically based on the subscription and cannot be changed.
+    - Specify the Azure Sentinel Workspace Name where you want to create the playbook.
+    - Supply the authentication parameters required to access the Illusive API:
+      - Illusive API URL
+      - Illusive API Key (just the key, without the prefix) 
+    - Supply the authentication parameters required to access the Sentinel API:
+      - Azure-Sentinel Client ID: 
+      - Azure-Sentinel Client Secret: 
+      - Azure-Sentinel Tenant ID:
+5. When finished entering details, click Review + Create.
+6. On successful validation, click Create.
+This completes the playbook deployment. 
+7. To view the playbook, click Go to resource group.
+  - If there is only one installed playbook in the workspace, clicking on Go to resource group will take you to the playbook page. 
+  - If there are multiple installed playbooks in the workspace, clicking on Go to resource group will take you to the All resources page. The deployed playbook will be available in the list.
 
-![Playbook overview](./Images/DesignerOverviewDark.png)
+# Access and view the playbook 
 
+You can view and manage the playbook as well as review the playbook run history. 
+1. Find the playbook on the Azure Sentinel or All resources page. 
+2. Click on the playbook to view the playbook run History.
+3. Select any executed playbook to view the results.
+Sample playbook history:
 
-### Prerequisites
-1. Illusive custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc pages.
+# Playbook retry mechanism
 
-<a name="deployment-instructions"></a>
-### Deployment instructions 
-1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCiscoFirepower-BlockFQDN-NetworkGroup%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCiscoFirepower-BlockFQDN-NetworkGroup%2Fazuredeploy.json)
-
-2. Fill in the required paramteres:
-    * Playbook Name: Enter the playbook name here (ex:IllusiveSentinelIncidentEnrichment)
-
-### Post-Deployment instructions 
-#### a. Authorize connections
-Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
-2.	Click edit API connection
-3.	Click Authorize
-4.	Sign in
-5.	Click Save
-6.	Repeat steps for other connections such as Illusive (For authorizing the Illusive API connection, the username and password needs to be provided)
-
-#### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with URL Entity.
-2. Configure the automation rules to trigger this playbook
+Azure Sentinel handles the retry mechanism. If any condition is not met, Sentinel retries the playbook four times.
