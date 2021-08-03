@@ -1,0 +1,66 @@
+Parser:
+  Title: ASIM Azure Defender for IoT Process Events Parser
+  Version: '0.1.0'
+  LastUpdated: Aug 4, 2021
+Product:
+  Name: Azure Defender for IoT
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Azure Defender for IoT Process Events Parser
+ParserName: vimProcessEventAD4IoT
+ParserQuery: |
+              let ProcessEvents_AD4IoT=()
+              {
+                SecurityIoTRawEvent 
+                | where RawEventName == "Process"
+                | extend
+                  EventDetails = todynamic(EventDetails) // -- waiting for schema fix
+                  //
+                | extend
+                  // Event
+                  EventOriginalUid = EventDetails.EventId, // OK
+                  EventCount = int(1), // OK
+                  EventProduct = 'Azure Defender for IoT', // OK
+                  EventVendor = 'Microsoft', // OK
+                  EventSchemaVersion = '0.1.0', // OK
+                  EventStartTime = todatetime(TimeGenerated), // Open question about timestamps
+                  EventEndTime = todatetime(TimeGenerated), // Open question about timestamps
+                  EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), // OK
+                  EventSubType = EventDetails.EventType, // OK - Add to docs, FORK, EXEC
+                  EventResult = 'Success', // OK
+                  //
+                  // Device
+                  DvcId = EventDetails.DeviceId, // OK
+                  DvcOs = EventDetails.MessageSource, // OK
+                  //
+                  // Users
+                  TargetUserId = EventDetails.UserId, // OK
+                  TargetUserName = EventDetails.UserName, // OK
+                  // TargetUserIdType
+                  // TargetUserNameType
+                  //
+                  // Process
+                  TargetProcessId = EventDetails.ProcessId, // OK
+                  ActingProcessId = EventDetails.ParentProcessId, // OK
+                  TargetProcessCommandLine = coalesce (EventDetails.Commandline, EventDetails.Executable), // OK
+                  TargetProcessName = coalesce (EventDetails.Executable, split(EventDetails.Commandline," ")[0]) // OK
+                  //
+                | project-rename
+                  EventProductVersion = AgentVersion, // OK
+                  _ResourceId = AssociatedResourceId, // OK - fix schema
+                  _SubscriptionId = AzureSubscriptionId // OK - fix Schema
+                  //
+                  // -- aliases
+                | extend 
+                  User = TargetUserName, // OK
+                  CommandLine = TargetProcessCommandLine, // OK
+                  Process = TargetProcessName,
+                  Dvc = DeviceId // OK
+               };
+               ProcessEvents_AD4IoT
