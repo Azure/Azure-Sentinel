@@ -1,0 +1,1051 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "TritonPlayook",
+            "type": "String"
+        },
+        "SocEmailAddress": {
+        "defaultValue": "Email will be sent to this address when new alert is triggered.",
+        "type": "string"
+        }
+    },
+    "variables": {
+		"AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+		"AzureExcelonlinebusinessConnectionName": "[concat('excelonlinebusiness-', parameters('PlaybookName'))]",
+		"AzureOffice365ConnectionName": "[concat('office365', parameters('PlaybookName'))]",
+		"AzureOfficeTeamsConnectionName": "[concat('teams', parameters('PlaybookName'))]",
+		"AzureOfficeWdatpConnectionName": "[concat('wdatp-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+                {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureExcelonlinebusinessConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureExcelonlinebusinessConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/excelonlinebusiness')]"
+                }
+            }
+        },
+                {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureOffice365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureOffice365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                    }
+            }
+        },
+        {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('AzureOfficeTeamsConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[variables('AzureOfficeTeamsConnectionName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+          }
+        }
+      },
+    {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('AzureOfficeWdatpConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/wdatp')]"
+                },
+                "displayName": "[variables('AzureOfficeWdatpConnectionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureExcelonlinebusinessConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureOffice365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureOfficeTeamsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureOfficeWdatpConnectionName'))]"           
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_-_SOC_email_address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_2": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Condition_-_Was_the_alert_sent_from_an_Engineering_Workstation": {
+                                    "actions": {
+                                        "Close_incident_with_reason_-_Sent_from_Engineering_Station": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "CloseReason": "BenignPositive",
+                                                    "CloseReasonText": "Sent from Engineering workstation (IP was found in authorized list)"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Status/@{encodeURIComponent('Closed')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_a_row": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Condition_-_Was_the_programming_happened_during_working_hours": {
+                                                "actions": {
+                                                    "Run_query_and_list_results_-_Remote_Access_connections": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": "CommonSecurityLog\n| where SourceIP contains \"@{items('For_each_2')?['Address']}\"  | where  Message contains \"RDP\" or Message contains \"SSH\" or Message contains \"telnet\" or Message contains \"Malware\" ",
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/queryData",
+                                                            "queries": {
+                                                                "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                                                "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                                                "resourcetype": "Log Analytics Workspace",
+                                                                "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                                                "timerange": "Last 7 days"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Was_the_attacker_accessed_by_a_Remote_Access_connection": {
+                                                        "actions": {
+                                                            "Get_a_row_-_Look_for_IP_address_in_Authorized_PCs": {
+                                                                "runAfter": {},
+                                                                "metadata": {
+                                                                    "013C4SCMVE7C5ZCBULTZA3RTEBDIHJEBDP": "TritonDemo/Authorized PC.xlsx"
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['excelonlinebusiness']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "get",
+                                                                    "path": "/drives/@{encodeURIComponent('')}/files/@{encodeURIComponent('')}/tables/@{encodeURIComponent('{}')}/items/@{encodeURIComponent(encodeURIComponent(items('For_each_2')?['Address']))}",
+                                                                    "queries": {
+                                                                        "idColumn": "Ip address",
+                                                                        "source": "groups/groupid"
+                                                                    }
+                                                                },
+                                                                "description": "Take first row -> SourceIp fields"
+                                                            },
+                                                            "Was_the_remote_access_done_by_an_Authorized_PC": {
+                                                                "actions": {
+                                                                    "Resolve_incident_-_Authorized_PC": {
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "body": {
+                                                                                "CloseReason": "BenignPositive",
+                                                                                "CloseReasonText": "Authorized PC"
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "put",
+                                                                            "path": "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Status/@{encodeURIComponent('Closed')}"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Get_a_row_-_Look_for_IP_address_in_Authorized_PCs": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "For_each_MDATP_alert_found_on_this_IP_check_": {
+                                                                            "foreach": "@body('Parse_response')?['value']",
+                                                                            "actions": {
+                                                                                "Check_if_we_found_an_additional_alert_on_this_PC_from_MDATP": {
+                                                                                    "actions": {
+                                                                                        "Actions_-_Isolate_machine": {
+                                                                                            "runAfter": {
+                                                                                                "Parse_JSON_-_machines_list": [
+                                                                                                    "Succeeded"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "ApiConnection",
+                                                                                            "inputs": {
+                                                                                                "body": {
+                                                                                                    "Comment": "Machine was found as part of Triton attack",
+                                                                                                    "IsolationType": "Full"
+                                                                                                },
+                                                                                                "host": {
+                                                                                                    "connection": {
+                                                                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                                                                    }
+                                                                                                },
+                                                                                                "method": "post",
+                                                                                                "path": "/api/machines/@{encodeURIComponent('machineID')}/isolate"
+                                                                                            }
+                                                                                        },
+                                                                                        "Change_incident_severity_to_critical": {
+                                                                                            "runAfter": {
+                                                                                                "Actions_-_Isolate_machine": [
+                                                                                                    "Succeeded"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "ApiConnection",
+                                                                                            "inputs": {
+                                                                                                "host": {
+                                                                                                    "connection": {
+                                                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                                    }
+                                                                                                },
+                                                                                                "method": "put",
+                                                                                                "path": "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Severity/@{encodeURIComponent('Critical')}"
+                                                                                            }
+                                                                                        },
+                                                                                        "HTTP_-_get_machine_by_IP_address": {
+                                                                                            "runAfter": {},
+                                                                                            "type": "Http",
+                                                                                            "inputs": {
+                                                                                                "method": "GET",
+                                                                                                "uri": "https://api.securitycenter.windows.com/api/machines/findbyip(ip='@{first(body('Run_query_and_list_results_-_Remote_Access_connections')?['value'])?['SourceIp']}',timestamp=@{utcNow()})"
+                                                                                            }
+                                                                                        },
+                                                                                        "Parse_JSON_-_machines_list": {
+                                                                                            "runAfter": {
+                                                                                                "HTTP_-_get_machine_by_IP_address": [
+                                                                                                    "Succeeded"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "ParseJson",
+                                                                                            "inputs": {
+                                                                                                "content": "@body('HTTP_-_get_machine_by_IP_address')",
+                                                                                                "schema": {
+                                                                                                    "properties": {
+                                                                                                        "@@odata.context": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "value": {
+                                                                                                            "items": {
+                                                                                                                "properties": {
+                                                                                                                    "aadDeviceId": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "computerDnsName": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "exposureLevel": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "firstSeen": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "healthStatus": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "id": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "isAadJoined": {
+                                                                                                                        "type": "boolean"
+                                                                                                                    },
+                                                                                                                    "lastExternalIpAddress": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "lastIpAddress": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "lastSeen": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "machineTags": {
+                                                                                                                        "items": {
+                                                                                                                            "type": "string"
+                                                                                                                        },
+                                                                                                                        "type": "array"
+                                                                                                                    },
+                                                                                                                    "osBuild": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "osPlatform": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "osProcessor": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "rbacGroupId": {
+                                                                                                                        "type": "integer"
+                                                                                                                    },
+                                                                                                                    "rbacGroupName": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "riskScore": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "version": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "id",
+                                                                                                                    "computerDnsName",
+                                                                                                                    "firstSeen",
+                                                                                                                    "lastSeen",
+                                                                                                                    "osPlatform",
+                                                                                                                    "version",
+                                                                                                                    "osProcessor",
+                                                                                                                    "lastIpAddress",
+                                                                                                                    "lastExternalIpAddress",
+                                                                                                                    "osBuild",
+                                                                                                                    "healthStatus",
+                                                                                                                    "rbacGroupId",
+                                                                                                                    "rbacGroupName",
+                                                                                                                    "riskScore",
+                                                                                                                    "exposureLevel",
+                                                                                                                    "isAadJoined",
+                                                                                                                    "aadDeviceId",
+                                                                                                                    "machineTags"
+                                                                                                                ],
+                                                                                                                "type": "object"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "Send_a_Teams_message_to_the_SOC_for_critical_IT-OT_threat": {
+                                                                                            "runAfter": {
+                                                                                                "Change_incident_severity_to_critical": [
+                                                                                                    "Succeeded"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "ApiConnection",
+                                                                                            "inputs": {
+                                                                                                "body": {
+                                                                                                    "body": {
+                                                                                                        "content": "<p>A critical incident was created. And a device was automatically blocked.<br>\n<br>\nMachine IP: @{items('For_each_2')?['Address']}<br>\nIncident URL: @{triggerBody()?['object']?['properties']?['incidentUrl']}</p>",
+                                                                                                        "contentType": "html"
+                                                                                                    }
+                                                                                                },
+                                                                                                "host": {
+                                                                                                    "connection": {
+                                                                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                                    }
+                                                                                                },
+                                                                                                "method": "post",
+                                                                                                "path": "/v3/beta/teams/@{encodeURIComponent('teamsid')}/channels/@{encodeURIComponent('channel')}/messages"
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "runAfter": {},
+                                                                                    "else": {
+                                                                                        "actions": {
+                                                                                            "Change_incident_severity_to_high": {
+                                                                                                "runAfter": {},
+                                                                                                "type": "ApiConnection",
+                                                                                                "inputs": {
+                                                                                                    "host": {
+                                                                                                        "connection": {
+                                                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "method": "put",
+                                                                                                    "path": "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Severity/@{encodeURIComponent('High')}"
+                                                                                                }
+                                                                                            },
+                                                                                            "Enrich_incident_with_investigation_details": {
+                                                                                                "runAfter": {
+                                                                                                    "Change_incident_severity_to_high": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "ApiConnection",
+                                                                                                "inputs": {
+                                                                                                    "body": {
+                                                                                                        "Value": "PLC Proggraming occured from a non-engineering workstation, that was remotly accessed by an unauthorized IT PC"
+                                                                                                    },
+                                                                                                    "host": {
+                                                                                                        "connection": {
+                                                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "method": "put",
+                                                                                                    "path": "/Comment/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}"
+                                                                                                }
+                                                                                            },
+                                                                                            "Send_a_Teams_message_to_the_SOC_for_IT-OT_threat": {
+                                                                                                "runAfter": {
+                                                                                                    "Enrich_incident_with_investigation_details": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "ApiConnection",
+                                                                                                "inputs": {
+                                                                                                    "body": {
+                                                                                                        "body": {
+                                                                                                            "content": "<p>Remote access for engineering station from unauthorized PC:<br>\n@{items('For_each_2')?['Address']}<br>\n Incident URL: @{triggerBody()?['object']?['properties']?['incidentUrl']}</p>",
+                                                                                                            "contentType": "html"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "host": {
+                                                                                                        "connection": {
+                                                                                                            "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "method": "post",
+                                                                                                    "path": "/v3/beta/teams/@{encodeURIComponent('teamid')}/channels/@{encodeURIComponent('channelid')}/messages"
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "expression": {
+                                                                                        "and": [
+                                                                                            {
+                                                                                                "contains": [
+                                                                                                    "@items('For_each_MDATP_alert_found_on_this_IP_check_')?['classification']",
+                                                                                                    "malware"
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "If"
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Parse_response": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Foreach"
+                                                                        },
+                                                                        "Gather_all_PC_alerts_in_MDATP": {
+                                                                            "runAfter": {},
+                                                                            "type": "Http",
+                                                                            "inputs": {
+                                                                                "method": "GET",
+                                                                                "uri": "https://api.securitycenter.windows.com/api/ips/@{items('For_each_2')?['Address']}/alerts"
+                                                                            },
+                                                                            "description": "Get all alerts associated with the IP"
+                                                                        },
+                                                                        "Parse_response": {
+                                                                            "runAfter": {
+                                                                                "Gather_all_PC_alerts_in_MDATP": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "ParseJson",
+                                                                            "inputs": {
+                                                                                "content": "@body('Gather_all_PC_alerts_in_MDATP')",
+                                                                                "schema": {
+                                                                                    "properties": {
+                                                                                        "@@odata.context": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "value": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "aadTenantId": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "alertCreationTime": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "assignedTo": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "category": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "classification": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "comments": {
+                                                                                                        "items": {
+                                                                                                            "properties": {
+                                                                                                                "comment": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "createdBy": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "createdTime": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "required": [
+                                                                                                                "comment",
+                                                                                                                "createdBy",
+                                                                                                                "createdTime"
+                                                                                                            ],
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "type": "array"
+                                                                                                    },
+                                                                                                    "computerDnsName": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "detectionSource": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "determination": {},
+                                                                                                    "evidence": {
+                                                                                                        "type": "array"
+                                                                                                    },
+                                                                                                    "firstEventTime": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "id": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "incidentId": {
+                                                                                                        "type": "integer"
+                                                                                                    },
+                                                                                                    "investigationId": {
+                                                                                                        "type": "integer"
+                                                                                                    },
+                                                                                                    "investigationState": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "lastEventTime": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "lastUpdateTime": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "machineId": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "rbacGroupName": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "relatedUser": {
+                                                                                                        "properties": {
+                                                                                                            "domainName": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "userName": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "type": "object"
+                                                                                                    },
+                                                                                                    "resolvedTime": {},
+                                                                                                    "severity": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "status": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "threatFamilyName": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "title": {
+                                                                                                        "type": "string"
+                                                                                                    }
+                                                                                                },
+                                                                                                "required": [
+                                                                                                    "id",
+                                                                                                    "incidentId",
+                                                                                                    "investigationId",
+                                                                                                    "assignedTo",
+                                                                                                    "severity",
+                                                                                                    "status",
+                                                                                                    "classification",
+                                                                                                    "determination",
+                                                                                                    "investigationState",
+                                                                                                    "detectionSource",
+                                                                                                    "category",
+                                                                                                    "threatFamilyName",
+                                                                                                    "title",
+                                                                                                    "description",
+                                                                                                    "alertCreationTime",
+                                                                                                    "firstEventTime",
+                                                                                                    "lastEventTime",
+                                                                                                    "lastUpdateTime",
+                                                                                                    "resolvedTime",
+                                                                                                    "machineId",
+                                                                                                    "computerDnsName",
+                                                                                                    "rbacGroupName",
+                                                                                                    "aadTenantId",
+                                                                                                    "relatedUser",
+                                                                                                    "comments",
+                                                                                                    "evidence"
+                                                                                                ],
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "greater": [
+                                                                                "@length(body('Get_a_row_-_Look_for_IP_address_in_Authorized_PCs')?['Ip address'])",
+                                                                                0
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If",
+                                                                "description": "If the IP address found has length (an IP was found in the Authorized PCs list)"
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Run_query_and_list_results_-_Remote_Access_connections": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Enrich_the_incident_with_the_logs_2": {
+                                                                    "runAfter": {
+                                                                        "Get_all_logs_from_the_attacker_machine_2": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "Value": "The following query to find the events:\nCommonSecurityLog\n| where TimeGenerated >= @{getPastTime(4, 'Hour')} and TimeGenerated <= @{utcNow()}\n| where SourceIP contains  \"@{items('For_each_2')?['Address']}\""
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}"
+                                                                    }
+                                                                },
+                                                                "For_each_3": {
+                                                                    "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                                                    "actions": {
+                                                                        "Notify_by_email_to_stakeholders_2": {
+                                                                            "runAfter": {},
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "Body": "<p><span style=\"font-size: 14px\">Dear Customer,<br>\nYou have an incident from Azure Sentinel. Below is information:<br>\n<br>\n</span><span style=\"font-size: 14px\"><strong>Alert Name:</strong></span><span style=\"font-size: 14px\"></span><span style=\"font-size: 14px\">@{items('For_each_3')?['properties']?['alertDisplayName']}</span><span style=\"font-size: 14px\"><br>\n</span><span style=\"font-size: 14px\"><strong>Severity:</strong></span><span style=\"font-size: 14px\"></span><span style=\"font-size: 14px\">@{items('For_each_3')?['properties']?['severity']}</span><span style=\"font-size: 14px\"><br>\n</span><span style=\"font-size: 14px\"><strong>Start Time:</strong></span><span style=\"font-size: 14px\">@{items('For_each_3')?['properties']?['startTimeUtc']}</span><span style=\"font-size: 14px\"><br>\n</span><span style=\"font-size: 14px\"><strong>Source Device: </strong></span><span style=\"font-size: 14px\"></span><span style=\"font-size: 14px\">@{items('For_each_2')?['Address']}</span><span style=\"font-size: 14px\"><br>\n<br>\n</span><span style=\"font-size: 14px\"><strong>Description:</strong></span><span style=\"font-size: 14px\"><br>\n</span><span style=\"font-size: 14px\">@{items('For_each_3')?['properties']?['description']}</span><span style=\"font-size: 14px\"><br>\n<br>\nPlease review and let us know whether this incident is false positive.<br>\n<br>\nAzSec Team</span></p>",
+                                                                                    "Importance": "High",
+                                                                                    "Subject": "Unauthorized PLC programming occured",
+                                                                                    "To": "@variables('SocEmailAddress')"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/v2/Mail"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Enrich_the_incident_with_the_logs_2": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "Foreach"
+                                                                },
+                                                                "Get_all_logs_from_the_attacker_machine_2": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": "CommonSecurityLog\n| where SourceIP contains  \"@{items('For_each_2')?['Address']}\"",
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/queryData",
+                                                                        "queries": {
+                                                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                                                            "resourcetype": "Log Analytics Workspace",
+                                                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                                                            "timerange": "Last 4 hours"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "Raise_incident_severity_to_high_2": {
+                                                                    "runAfter": {
+                                                                        "For_each_3": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "path": "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Severity/@{encodeURIComponent('High')}"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "greater": [
+                                                                        "@length(body('Run_query_and_list_results_-_Remote_Access_connections')?['value'])",
+                                                                        0
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "else": {
+                                                    "actions": {
+                                                        "Enrich_the_incident_with_the_logs": {
+                                                            "runAfter": {
+                                                                "Get_all_logs_from_the_attacker_machine": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "Value": "The following query to find the events:\nCommonSecurityLog\n| where TimeGenerated >= @{getPastTime(4, 'Hour')} and TimeGenerated <= @{utcNow()}\n| where SourceIP contains  \"@{items('For_each_2')?['Address']}\""
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}"
+                                                            }
+                                                        },
+                                                        "For_each": {
+                                                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                                                            "actions": {
+                                                                "Notify_by_email_to_stakeholders": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "Body": "<p><span style=\"font-size: 16px\">Dear Customer,<br>\nYou have an incident from Azure Sentinel. Below is information:<br>\n<br>\n</span><span style=\"font-size: 16px\"><strong>Alert Name</strong></span><span style=\"font-size: 16px\">:</span><span style=\"font-size: 16px\">@{items('For_each')?['properties']?['alertDisplayName']}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\"><strong>Severity</strong></span><span style=\"font-size: 16px\">:</span><span style=\"font-size: 16px\">@{items('For_each')?['properties']?['severity']}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\"><strong>Start Time:</strong></span><span style=\"font-size: 16px\"></span><span style=\"font-size: 16px\">@{items('For_each')?['properties']?['startTimeUtc']}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\"><strong>Source Device:</strong></span><span style=\"font-size: 16px\"> </span><span style=\"font-size: 16px\">@{items('For_each_2')?['Address']}</span><span style=\"font-size: 16px\"><br>\n<br>\n</span><span style=\"font-size: 16px\"><strong>Description</strong></span><span style=\"font-size: 16px\">:<br>\n</span><span style=\"font-size: 16px\">@{items('For_each')?['properties']?['description']}</span><span style=\"font-size: 16px\"><br>\n<br>\nPlease review and let us know whether this incident is false positive.<br>\n<br>\nAzSec Team</span></p>",
+                                                                            "Importance": "High",
+                                                                            "Subject": "Unauthorized PLC programming occured not during working hours ",
+                                                                            "To": "@variables('SocEmailAddress')"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/v2/Mail"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Enrich_the_incident_with_the_logs": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Foreach"
+                                                        },
+                                                        "Get_all_logs_from_the_attacker_machine": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "CommonSecurityLog\n| where SourceIP contains \" @{items('For_each_2')?['Address']}\"",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/queryData",
+                                                                "queries": {
+                                                                    "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                                                    "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                                                    "resourcetype": "Log Analytics Workspace",
+                                                                    "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                                                    "timerange": "Last 4 hours"
+                                                                }
+                                                            }
+                                                        },
+                                                        "Raise_incident_severity_to_high": {
+                                                            "runAfter": {
+                                                                "For_each": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Severity/@{encodeURIComponent('High')}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "and": [
+                                                                {
+                                                                    "greater": [
+                                                                        "@int(substring(split(triggerBody()?['object']?['properties']?['createdTimeUtc'],'T')[1],0,2))",
+                                                                        "@int(6)"
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "less": [
+                                                                        "@int(substring(split(triggerBody()?['object']?['properties']?['createdTimeUtc'],'T')[1],0,2))",
+                                                                        "@int(18)"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "and": [
+                                                                {
+                                                                    "not": {
+                                                                        "equals": [
+                                                                            "@dayOfWeek(triggerBody()?['object']?['properties']?['createdTimeUtc'])",
+                                                                            "@int(0)"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                {
+                                                                    "not": {
+                                                                        "equals": [
+                                                                            "@dayOfWeek(triggerBody()?['object']?['properties']?['createdTimeUtc'])",
+                                                                            "@int(6)"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If",
+                                                "description": "First condition: take only the hour 2 digits from incident creation time. Second condition: dayOfWeek() returns number between 0-6, Saturday ==6, Sunday ==0"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Get_a_row')?['IPAddress']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_a_row": {
+                                    "runAfter": {},
+                                    "metadata": {
+                                        "013C4SCMVOKQXD5QLZ5NHLPBHSGFO4OWMW": "/TritonDemo/Authorized stations.xlsx",
+                                        "01QES7VSN32ZDFMJSCJBAJ2F3EHL2BXONF": "/AssetInventory1.xlsx"
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['excelonlinebusiness']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/drives/@{encodeURIComponent('b!79ydF-l5akakWEPLRYRmfwN1MtPhqNZHoIJxp6doXEZZX9DLHdm8T6FXj7AHSJ6i')}/files/@{encodeURIComponent('01QES7VSN32ZDFMJSCJBAJ2F3EHL2BXONF')}/tables/@{encodeURIComponent('Table1')}/items/@{encodeURIComponent(encodeURIComponent(items('For_each_2')?['Address']))}",
+                                        "queries": {
+                                            "idColumn": "IPAddress",
+                                            "source": "me"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-_SOC_email_address": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SocEmailAddress",
+                                        "type": "string",
+                                        "value": "[parameters('SocEmailAddress')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "excelonlinebusiness": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureExcelonlinebusinessConnectionName'))]",
+                                "connectionName": "[variables('AzureExcelonlinebusinessConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/excelonlinebusiness')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureOffice365ConnectionName'))]",
+                                "connectionName": "[variables('AzureOffice365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureOfficeTeamsConnectionName'))]",
+                                "connectionName": "[variables('AzureOfficeTeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            },
+                            "wdatp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureOfficeWdatpConnectionName'))]",
+                                "connectionName": "[variables('AzureOfficeWdatpConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
