@@ -1,31 +1,56 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Sync Jira to Sentinel - Assigned User",
+        "description": "This Playbook will sync the assigned user from JIRA to Azure Sentinel.",
+        "prerequisites": ["1. Create service principal with User.Read.All application permissions to perform get users call on Microsoft Graph.",
+            "2. Configure JIRA with for custom fields and automation rule.",
+            "3. Deploy Azure Key Vault and add secrets for: AAD service prncipal (to communicate with Microsoft Graph), Jira account (to perform calls on Jira).",
+            "3. After playbook is deployed, grant the playbook permissions on the Key Vault (Secret - Get) and on Azure Sentinel workspace (Azure Sentinel responder)",
+        "4. [Full documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Sync-IncidentsWithJIRA/readme.md)"],
+        "lastUpdateTime": "2021-07-20T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Sync" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Thijs Lecomte"
+        }
+    },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Add-JIRALinkComment",
+            "defaultValue": "Sync-AssignedUser",
             "type": "string"
         },
         "Tenant ID": {
             "type": "String",
             "metadata" : {
-                "description" : "Tenant ID for used service princiipals"
+                "description" : "Tenant ID for used service principals"
             }
         },
-        "ClientID Sentinel SP": {
+        "Keyvault Name": {
             "type": "String",
             "metadata" : {
-                "description" : "Client ID of the Sentinel Service Principal"
+                "description" : "Name of the Key Vault which stores the client secrets"
             }
         },
-        "ClientSecret Sentinel SP": {
+        "SecretName AAD SP": {
             "type": "String",
             "metadata" : {
-                "description" : "Client Secret of the Sentinel Service Principal"
+                "description" : "name of the Key Vault Secret that contains the Azure Active Directory SP Client Secret"
+            }
+        },
+        "ClientID AAD SP": {
+            "type": "String",
+            "metadata" : {
+                "description" : "Client ID for AAD Authentication"
             }
         }
     },
     "variables": {
+        "AzureKeyVaultConnectionName" : "[concat('azurekeyvault-', parameters('PlaybookName'))]",
         "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
     "resources": [
@@ -35,16 +60,29 @@
             "name": "[variables('SentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[variables('SentinelConnectionName')]",
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureKeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureKeyVaultConnectionName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('Keyvault Name')]"
                 },
-                "parameterValues":{
-                    "token:clientID" : "[parameters('ClientID Sentinel SP')]",
-                    "token:clientSecret" : "[parameters('ClientSecret Sentinel SP')]",
-                    "token:TenantID" : "[parameters('Tenant ID')]",
-                    "token:grantType" : "client_credentials",
-                    "token:resourceUri" : "https://management.azure.com/"
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
                 }
             }
         },
@@ -53,7 +91,15 @@
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "SyncJIRAAssignedUser",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
             ],
             "properties": {
@@ -105,7 +151,51 @@
                                                 "aggregatetimeestimate": {},
                                                 "aggregatetimeoriginalestimate": {},
                                                 "aggregatetimespent": {},
-                                                "assignee": {},
+                                                "assignee": {
+                                                    "properties": {
+                                                        "accountId": {
+                                                            "type": "string"
+                                                        },
+                                                        "accountType": {
+                                                            "type": "string"
+                                                        },
+                                                        "active": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "avatarUrls": {
+                                                            "properties": {
+                                                                "16x16": {
+                                                                    "type": "string"
+                                                                },
+                                                                "24x24": {
+                                                                    "type": "string"
+                                                                },
+                                                                "32x32": {
+                                                                    "type": "string"
+                                                                },
+                                                                "48x48": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "displayName": {
+                                                            "type": "string"
+                                                        },
+                                                        "emailAddress": {},
+                                                        "groups": {},
+                                                        "key": {},
+                                                        "locale": {},
+                                                        "name": {},
+                                                        "self": {
+                                                            "type": "string"
+                                                        },
+                                                        "timeZone": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
                                                 "attachment": {
                                                     "items": {
                                                         "properties": {
@@ -627,9 +717,7 @@
                                                 "customfield_10022": {
                                                     "type": "string"
                                                 },
-                                                "customfield_10023": {
-                                                    "type": "string"
-                                                },
+                                                "customfield_10023": {},
                                                 "customfield_10024": {
                                                     "type": "array"
                                                 },
@@ -776,23 +864,8 @@
                                                 "customfield_10145": {
                                                     "type": "string"
                                                 },
-                                                "customfield_10146": {
-                                                    "type": "string"
-                                                },
-                                                "customfield_10147": {
-                                                    "properties": {
-                                                        "id": {
-                                                            "type": "string"
-                                                        },
-                                                        "self": {
-                                                            "type": "string"
-                                                        },
-                                                        "value": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
+                                                "customfield_10146": {},
+                                                "customfield_10147": {},
                                                 "customfield_10148": {},
                                                 "customfield_10149": {
                                                     "properties": {
@@ -856,7 +929,9 @@
                                                 "customfield_10170": {
                                                     "type": "string"
                                                 },
-                                                "customfield_10171": {},
+                                                "customfield_10171": {
+                                                    "type": "string"
+                                                },
                                                 "customfield_10172": {
                                                     "type": "string"
                                                 },
@@ -1048,29 +1123,8 @@
                                                     },
                                                     "type": "object"
                                                 },
-                                                "resolution": {
-                                                    "properties": {
-                                                        "description": {
-                                                            "type": "string"
-                                                        },
-                                                        "id": {
-                                                            "type": "integer"
-                                                        },
-                                                        "name": {
-                                                            "type": "string"
-                                                        },
-                                                        "namedValue": {
-                                                            "type": "string"
-                                                        },
-                                                        "self": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "resolutiondate": {
-                                                    "type": "integer"
-                                                },
+                                                "resolution": {},
+                                                "resolutiondate": {},
                                                 "security": {},
                                                 "status": {
                                                     "properties": {
@@ -1220,31 +1274,150 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)": {
+                        "Condition": {
+                            "actions": {
+                                "Update_incident": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
+                                            "owner": "@{first(body('Parse_JSON')?['value'])?['id']}",
+                                            "ownerAction": "Assign"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
                             "runAfter": {
-                                "Create_HTML_Comment": [
+                                "Parse_JSON": [
                                     "Succeeded"
                                 ]
                             },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(body('Parse_JSON')?['value'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_secret": {
+                            "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": {
-                                    "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
-                                    "message": "<p>@{outputs('Create_HTML_Comment')}</p>"
-                                },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
                                     }
                                 },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName AAD SP'), ''')}/value')]"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
                             }
                         },
-                        "Create_HTML_Comment": {
-                            "runAfter": {},
-                            "type": "Compose",
-                            "inputs": "[[[JIRA ID: @{triggerBody()?['key']}](@{triggerBody()?['fields']?['customfield_10010']?['_links']?['web']})"
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "[parameters('ClientID AAD SP')]",
+                                    "secret": "@body('Get_secret')?['value']",
+                                    "tenant": "[parameters('Tenant ID')]",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/v1.0/users?$filter=DisplayName eq '@{concat(triggerBody()?['fields']?['assignee']?['displayName'], ' (Operator)')}'"
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "businessPhones": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "displayName": {
+                                                        "type": "string"
+                                                    },
+                                                    "givenName": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "jobTitle": {},
+                                                    "mail": {},
+                                                    "mobilePhone": {},
+                                                    "officeLocation": {},
+                                                    "preferredLanguage": {},
+                                                    "surname": {
+                                                        "type": "string"
+                                                    },
+                                                    "userPrincipalName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "businessPhones",
+                                                    "displayName",
+                                                    "givenName",
+                                                    "jobTitle",
+                                                    "mail",
+                                                    "mobilePhone",
+                                                    "officeLocation",
+                                                    "preferredLanguage",
+                                                    "surname",
+                                                    "userPrincipalName",
+                                                    "id"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
                         }
                     },
                     "outputs": {}
@@ -1255,7 +1428,22 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
                                 "connectionName": "[variables('SentinelConnectionName')]",
-                                "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+                                "connectionName": "[variables('AzureKeyVaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     }
