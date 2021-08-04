@@ -10,10 +10,10 @@
             "3. Teams Group ID and Alert Channel ID where the messages are to be posted in."
         ],
         "lastUpdateTime": "2021-06-29T10:00:00.000Z", 
-        "entities": ["Account","URL","Host"], 
+        "entities": ["Account","Url","Host"], 
         "tags": ["Sync","Notification","Teams Response"], 
         "support": {
-            "tier": "microsoft"
+            "tier": "community"
         },
         "author": {
             "name": "Jing Nghik"
@@ -26,29 +26,7 @@
             "metadata": {
                 "description": "Name of the primary playbook that will be called from Azure Sentinel"
               }
-        },           
-        "MSUserName": {
-            "defaultValue": "<username@domain.com>",
-            "type": "string",
-            "metadata": {
-                "description": "Username with authority API connectors (Teams, ARM, and Sentinel)."
-              }
-        },
-		"Snow_Instance": {
-			"defaultValue": "https://<instance>.<domainName>.com",
-			"type": "string",
-            "metadata": {
-                "description": "Can be found with <instance>.service-now.com or https://<instance>.<domainName>.com for migrated account"
-              }
-		},	
-		"Snow_Username": {
-			"defaultValue": "<servicenow_username@domain.com>",
-			"type": "string"
-		},
-		"Snow_Password": {
-			"defaultValue": "<servicenow_password>",
-			"type": "securestring"
-		},		
+        },	
 		"TeamsGroupId": {
 			"defaultValue": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx",
 			"type": "string",
@@ -69,13 +47,6 @@
             "metadata": {
                 "description": "The particular Teams channel ID where the Investigation Playbook options should go."
               }
-		},
-		"VirusTotalAPIKey": {
-            "type": "securestring",
-			"defaultValue": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-            "metadata": {
-                "description": "Virus Total API Key. https://developers.virustotal.com/v3.0/reference#overview"
-              }
 		}
     },
     "variables": {
@@ -92,7 +63,7 @@
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('MSUserName')]",
+                "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
@@ -106,7 +77,7 @@
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[parameters('MSUserName')]",
+                "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
@@ -123,24 +94,21 @@
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/service-now')]"
-                },
-				"parameterValues" : {
-					"instance" : "[parameters('Snow_Instance')]",
-					"username" : "[parameters('Snow_Username')]",
-					"password" : "[parameters('Snow_Password')]"
-				}
+                }
             }
         },
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('ARMConnectionName')]",
+            "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('MSUserName')]",
+                "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/arm')]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
             }
         },
@@ -160,13 +128,7 @@
                 "api": {
                     "id": "[concat(subscription().id,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                 },
-                    "displayName": "[variables('VirusTotalConnectionName')]",
-                    "customParameterValues": {
-                    "x-api_key" : "[parameters('VirusTotalApiKey')]"
-                    },
-                    "parameterValues": {
-                    "api_key" : "[parameters('VirusTotalApiKey')]"
-                }
+                "displayName": "[variables('VirusTotalConnectionName')]"
             }
         },
         {
@@ -182,7 +144,12 @@
                 "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('PlaybookName'),'-function-getListOfTaggedPlaybooks')]"
             ],
             "tags": {
-                "LogicAppsCategory": "security"
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "AdvancedSNOWTeamsIntegration",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
             },
             "properties": {
                 "state": "Enabled",
@@ -1172,7 +1139,12 @@
                             "azuresentinel": {
                                 "id": "[concat(subscription().id,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                                 "connectionName": "[variables('VirusTotalConnectionName')]",
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]"
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "virustotal": {
                                 "id": "[concat(subscription().id,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]",
