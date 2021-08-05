@@ -128,19 +128,25 @@ def post_data(customer_id, shared_key, body, log_type):
         logging.warn("Response code: {}".format(response.status_code))
 
 def expand_data(obj):
+    new_obj = []
     for event in obj:
-        for nested in event["events"]:
-            if 'name' in nested:
-                event.update({'event_name': nested["name"]})
-            if 'type' in nested:
-                event.update({'event_type': nested["type"]})
-            if 'parameters' in nested:
-                for parameter in nested["parameters"]:
-                    if 'name' in parameter:
-                        for param_name in ["value", "boolValue", "multiValue", "multiMessageValue", "multiIntValue", "messageValue", "intValue"]:
-                            if param_name in parameter:
-                                event.update({parameter["name"]: parameter[param_name]})
-    return obj
+        nested_events_arr = event["events"]
+        head_event_part = event.copy()
+        head_event_part.pop("events")
+        for nested in nested_events_arr:
+            event = head_event_part
+        if 'name' in nested:
+            event.update({'event_name': nested["name"]})
+        if 'type' in nested:
+            event.update({'event_type': nested["type"]})
+        if 'parameters' in nested:
+            for parameter in nested["parameters"]:
+                if 'name' in parameter:
+                    for param_name in ["value", "boolValue", "multiValue", "multiMessageValue", "multiIntValue", "messageValue", "intValue"]:
+                        if param_name in parameter:
+                            event.update({parameter["name"]: parameter[param_name]})
+        new_obj.append(event)
+    return new_obj
 
 def gen_chunks_to_object(data,chunksize=100):
     chunk = []
