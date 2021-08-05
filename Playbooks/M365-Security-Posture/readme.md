@@ -19,6 +19,8 @@ The workbook will also be referencing data from Azure Security Center and Micros
 - ASC Recommendations and Regulatory Compliance
 - MCAS ShadowIT
 
+Link to the [Microsoft Defender Security Insights Workbook](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/M365SecurityPosture.json)
+
 You can find all instructions on the blog post on Microsoft Tech Community - [Microsoft Defender Security Insights in Azure Sentinel](https://techcommunity.microsoft.com/t5/azure-sentinel/microsoft-defender-security-insights-in-azure-sentinel/ba-p/2359705)
 
 ## **Pre-requisites**
@@ -51,7 +53,7 @@ First, an application needs to registered in Azure AD and assigned API permissio
 9.	Now click on Overview from right menu and copy fields <strong>Application (client) ID</strong> and <strong>Directory (Tenant) ID</strong>
 
 
-Note: The Microsoft Cloud Application Security data connector needs to be on and is ingesting Shadow IT data (Cloud Discovery Logs). If the MCAS data connector isn’t enabled, please follow the public documentation - https://docs.microsoft.com/en-us/azure/sentinel/connect-cloud-app-security.
+Note: The Microsoft Cloud Application Security data connector needs to be on and is ingesting Shadow IT data (Cloud Discovery Logs). If the MCAS data connector isn’t enabled, please follow the public documentation - https://docs.microsoft.com/azure/sentinel/connect-cloud-app-security.
 
 Once the application is ready, as well as <strong>Workspace ID and Workspace key</strong>, the Logic App can be deployed. 
 
