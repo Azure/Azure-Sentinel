@@ -1,0 +1,244 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Logic Apps Custom Connector and Playbook templates - wildfire",
+        "description": "This is a linked json file for deploying wildfire custom connector + 3 playbooks.",
+        "prerequisites": [
+            "1. PaloAlto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+            "2. Generate wildfire API key to establish the connection to wildfire custom connector.",
+            "3. Palo alto API key.",
+            "4. Security policy rule in the Palo Alto PAN-OS VM.",
+            "5. Wildfire API end point should be known.",
+            "6. Users must have access to Microsoft Teams and they should be a part of a Teams channel and also Power Automate app should be installed in the Microsoft Teams channel."
+        ],
+        "lastUpdateTime": "2021-07-23T00:00:00.000Z",
+        "entities": [ "URLs", "Filehash" ],
+        "tags": [ "Teams", "enrichment", "automation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "linkedTemplateWildfireCustomConnectorURI": {
+            "type": "string",
+            "metadata": {
+                "description": "The Uri of the linked template for WildFire custom connector"
+            },
+            "minLength": 3
+        },
+        "linkedTemplatePlaybookFilehashEnrichmentURI": {
+            "type": "string",
+            "metadata": {
+                "description": "The Uri of the linked template for file hash enrichment playbook"
+            },
+            "minLength": 3
+        },
+        "linkedTemplatePlaybookURLVerdictURI": {
+            "type": "string",
+            "metadata": {
+                "description": "The Uri of the linked template for URL verdict playbook"
+            },
+            "minLength": 3
+        },
+        "linkedTemplatePlaybookURLVerdictOnTeamsURI": {
+            "type": "string",
+            "metadata": {
+                "description": "The Uri of the linked template for URL Verdict on Teams playbook"
+            },
+            "minLength": 3
+        },
+        "FilehashEnrichmentPlaybookName": {           
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Enrichment Filehash Playbook"
+            },
+            "minLength": 3
+        },
+        "URLVerdictPlaybookName": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of the URL Verdict Playbook"
+            },
+            "minLength": 3
+        },
+        "URLVerdictOnTeamsPlaybookName": {
+           "type": "String",
+            "metadata": {
+                "description": "Name of the URL Verdict on Teams Playbook"
+            },
+            "minLength": 3
+        },
+        "WildfireCustomConnectorName": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter Palo Alto WildFire Custom Connector Display Name"
+            },
+            "minLength": 3
+        },
+        "PaloAltoCustomConnectorName": {
+           "type": "String",
+            "metadata": {
+                "description": "Enter Palo Alto Custom Connector Display Name"
+            },
+            "minLength": 3
+        },
+        "WildfireServiceEndPoint": {
+           "type": "String",
+            "metadata": {
+                "description": "Enter WildFire Endpoint (ex: https://{yourDomain})"
+            },
+            "minLength": 3
+        },
+        "WildfireAPIKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter WildFire API Key"
+            },
+            "minLength": 3
+        },
+        "SecurityPolicyRule": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Security Policy Rule Name - Created in PAN-OS"
+            },
+            "minLength": 3
+        },
+        "NotificationEmail": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter DL or SOC Email Address For Notification"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "name": "linkedTemplateWildfireCustomConnectorURI",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[parameters('linkedTemplateWildfireCustomConnectorURI')]"
+                },
+                "parameters": {
+                    "CustomConnectorName": {
+                        "value": "[parameters('WildfireCustomConnectorName')]"
+                    },
+                    "ServiceEndPoint": {
+                        "value": "[parameters('WildfireServiceEndPoint')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('PaloAltoCustomConnectorName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PaloAltoCustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "name": "linkedTemplatePlaybookFilehashEnrichmentURI",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'linkedTemplateWildfireCustomConnectorURI')]"
+            ],
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[parameters('linkedTemplatePlaybookFilehashEnrichmentURI')]"
+                },
+                "parameters": {
+                    "PlaybookName": {
+                        "Value": "[parameters('FilehashEnrichmentPlaybookName')]"
+                    },
+                    "WildfireAPIKey": {
+                        "Value": "[parameters('WildfireAPIKey')]"
+                    },
+                    "NotificationEmail": {
+                        "Value": "[parameters('NotificationEmail')]"
+                    },
+                    "WildfireCustomConnectorName": {
+                        "Value": "[parameters('WildfireCustomConnectorName')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "linkedTemplatePlaybookURLVerdictURI",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'linkedTemplateWildfireCustomConnectorURI')]",
+                "[resourceId('Microsoft.Web/connections', parameters('PaloAltoCustomConnectorName'))]"
+            ],
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[parameters('linkedTemplatePlaybookURLVerdictURI')]"
+                },
+                "parameters": {
+                    "PlaybookName": {
+                        "Value": "[parameters('URLVerdictPlaybookName')]"
+                    },
+                    "WildfireAPIKey": {
+                        "Value": "[parameters('WildfireAPIKey')]"
+                    },
+                    "SecurityPolicyRule": {
+                        "Value": "[parameters('SecurityPolicyRule')]"
+                    },
+                    "WildfireCustomConnectorName": {
+                        "Value": "[parameters('WildfireCustomConnectorName')]"
+                    },
+                    "PaloAltoCustomConnectorName": {
+                        "Value": "[parameters('PaloAltoCustomConnectorName')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "linkedTemplatePlaybookURLVerdictOnTeamsURI",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'linkedTemplateWildfireCustomConnectorURI')]",
+                "[resourceId('Microsoft.Web/connections', parameters('PaloAltoCustomConnectorName'))]"
+            ],
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[parameters('linkedTemplatePlaybookURLVerdictOnTeamsURI')]"
+                },
+                "parameters": {
+                    "PlaybookName": {
+                        "Value": "[parameters('URLVerdictOnTeamsPlaybookName')]"
+                    },
+                    "WildfireAPIKey": {
+                        "Value": "[parameters('WildfireAPIKey')]"
+                    },
+                    "SecurityPolicyRule": {
+                        "Value": "[parameters('SecurityPolicyRule')]"
+                    },
+                    "WildfireCustomConnectorName": {
+                        "Value": "[parameters('WildfireCustomConnectorName')]"
+                    },
+                    "PaloAltoCustomConnectorName": {
+                        "Value": "[parameters('PaloAltoCustomConnectorName')]"
+                    }
+                }
+            }
+        }
+    ]
+}
