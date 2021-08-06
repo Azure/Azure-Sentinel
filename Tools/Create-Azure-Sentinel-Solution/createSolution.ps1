@@ -694,7 +694,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $content = $content + "`n" + $line 
                             }
                             try {
-                                $yaml = ConvertFrom-YAML $content
+                                $yaml = ConvertFrom-YAML $content\
                             }
                             catch {
                                 Write-Host "Failed to deserialize $file" -ForegroundColor Red 
@@ -870,7 +870,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                             }
-                            $alertRule.description = $yaml.description.substring(1, $yaml.description.length - 3) # Remove surrounding single-quotes (') from YAML block literal string
+                            $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any. 
+                            if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')){
+                                # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.
+                                # This block is for backwards compatibility as YAML doesn't require having strings quotes by single (or double) quotes
+                                $alertRule.description = $alertRule.description.substring(1, $alertRule.description.length-2) 
+                            }
                             
                             # Check whether Day or Hour/Minut format need be used
                             function checkISO8601Format($field) {
