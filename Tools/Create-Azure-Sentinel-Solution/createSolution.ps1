@@ -694,7 +694,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $content = $content + "`n" + $line 
                             }
                             try {
-                                $yaml = ConvertFrom-YAML $content\
+                                $yaml = ConvertFrom-YAML $content
                             }
                             catch {
                                 Write-Host "Failed to deserialize $file" -ForegroundColor Red 
