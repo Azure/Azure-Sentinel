@@ -23,7 +23,7 @@ query: |
   let lookback = totimespan((endtime-starttime)*7);
   let failLimit = 10;
   let ipLimit = 3;
-  let FailedSignins = SigninLogs
+  let failedSignins = SigninLogs
   | where TimeGenerated between(starttime..endtime)
   | where ResultType != "0" and AppDisplayName != "Windows Sign In"
   | extend UserPrincipalName = tolower(UserPrincipalName)
@@ -52,21 +52,21 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedBy, UserPrincipalName, Category, OperationName, CorrelationId, Id
   | extend AccountCustomEntity = UserPrincipalName;
   // Gather only Audit data for UserPrincipalNames that we have Audit data for
-  let AccountNameOnly = FailedSignins | project UserPrincipalName;
-  let AuditMods = AccountNameOnly
+  let accountNameOnly = failedSignins | project UserPrincipalName;
+  let auditMods = accountNameOnly
   | join kind= innerunique (
   AccountMods
   ) on UserPrincipalName;
-  let AvailableAudits = AuditMods | project UserPrincipalName;
-  let SigninsWithAudit = AvailableAudits
+  let AvailableAudits = auditMods | project UserPrincipalName;
+  let aigninsWithAudit = AvailableAudits
   | join kind= innerunique (
-  FailedSignins
+  failedSignins
   ) on UserPrincipalName;
   // Union the Current Signin failures so we do not lose them with the Auditing data we do have
-  let Activity = (union isfuzzy=true
-  SigninsWithAudit, AuditMods)
+  let activity = (union isfuzzy=true
+  signinsWithAudit, auditMods)
   | order by StartTimeUtc, UserPrincipalName;
-  Activity
+  activity
   | project StartTimeUtc, EndTimeUtc, DataType = Type, Category, OperationName, UserPrincipalName, InitiatedBy, Activity, FailedLogonCount, DistinctIPAddressCount, DistinctResultCount, CorrelationId, Id
   | order by UserPrincipalName, StartTimeUtc
   | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName
