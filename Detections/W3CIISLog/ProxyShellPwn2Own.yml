@@ -1,0 +1,42 @@
+id: 968358d6-6af8-49bb-aaa4-187b3067fb95
+name: Exchange ProxyShell Pwn2Own
+description: |
+  'This query looks for suspicious request patterns to Exchange servers that fit patterns recently
+  blogged about by PeterJson.
+  Reference: https://peterjson.medium.com/reproducing-the-proxyshell-pwn2own-exploit-49743a4ea9a1'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let successCodes = dynamic([200, 302]);
+  let timeRange = 14d;
+  W3CIISLog
+  | where TimeGenerated > ago(timeRange)
+  | where csUriStem startswith "/autodiscover/autodiscover.json"
+  | where scStatus has_any (successCodes)
+  | project TimeGenerated, cIP, sIP, sSiteName, csUriStem, csUriQuery
+  | where (csUriQuery !has "Protocol" and isnotempty(csUriQuery))
+  or (csUriQuery has_any("/mapi/", "powershell"))
+  or (csUriQuery contains "@" and csUriQuery matches regex @"\.[a-zA-Z]{2,4}?(?:[a-zA-Z]{2,4}\/)")
+  or (csUriQuery contains ":" and csUriQuery matches regex @"\:[0-9]{2,4}\/")
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = cIP
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
