@@ -1,16 +1,17 @@
 id: 968358d6-6af8-49bb-aaa4-187b3067fb95
-name: Exchange ProxyShell Pwn2Own
+name: Exchange SSRF Autodiscover ProxyShell - Detection
 description: |
   'This query looks for suspicious request patterns to Exchange servers that fit patterns recently
-  blogged about by PeterJson.
+  blogged about by PeterJson. This exploitation chain utilises an SSRF vulnerability in Exchnage
+  which eventually allows the attacker to eexcute arbitrary Powershell on the server.
   Reference: https://peterjson.medium.com/reproducing-the-proxyshell-pwn2own-exploit-49743a4ea9a1'
-severity: Medium
+severity: High
 requiredDataConnectors:
   - connectorId: AzureMonitor(IIS)
     dataTypes:
       - W3CIISLog
-queryFrequency: 1d
-queryPeriod: 14d
+queryFrequency: 12h
+queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -18,19 +19,22 @@ tactics:
 relevantTechniques:
   - T1190
 query: |
-  let successCodes = dynamic([200, 302]);
-  let timeRange = 14d;
+  let successCodes = dynamic([200, 302, 401]);
   W3CIISLog
-  | where TimeGenerated > ago(timeRange)
-  | where csUriStem startswith "/autodiscover/autodiscover.json"
   | where scStatus has_any (successCodes)
-  | project TimeGenerated, cIP, sIP, sSiteName, csUriStem, csUriQuery, Computer
+  | where ipv4_is_private(cIP) == False
+  | where csUriStem hasprefix "/autodiscover/autodiscover.json"
+  | project TimeGenerated, cIP, sIP, sSiteName, csUriStem, csUriQuery, Computer, csUserName, _ResourceId, FileUri
   | where (csUriQuery !has "Protocol" and isnotempty(csUriQuery))
   or (csUriQuery has_any("/mapi/", "powershell"))
   or (csUriQuery contains "@" and csUriQuery matches regex @"\.[a-zA-Z]{2,4}?(?:[a-zA-Z]{2,4}\/)")
   or (csUriQuery contains ":" and csUriQuery matches regex @"\:[0-9]{2,4}\/")
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = cIP
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = cIP, AccountCustomEntity = csUserName, ResourceCustomEntity = _ResourceId, FileCustomEntity = FileUri
 entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: Host
     fieldMappings:
       - identifier: FullName
@@ -39,4 +43,12 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+  - entityType: azure-resource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceCustomEntity
+  - entityType: file
+    fieldMappings:
+      - identifier: Directory
+        columnName: FileCustomEntity
 version: 1.0.0
