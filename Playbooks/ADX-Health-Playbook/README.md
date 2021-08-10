@@ -4,6 +4,7 @@ Author: María de Sousa-Valadas  <br />
 Version: 1.0
 
 If you have ADX set up as your long-term retention solution for Azure Sentinel, you may want to use this logic app to make sure that the logs you are ingesting into Azure Sentinel are reaching your ADX cluster, and receive a warning via email if an unexpected delay is detected.
+<br />
 This Logic App is complimentary to the [ADXvsLA workbook](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/ADXvsLA.json "ADXvsLA workbook") created by Naomi Christis. It compares the number of logs in your Log Analytics tables with your logs in the ADX Cluster Database tables periodically and sends a warning email if a delay is detected. 
 
 ## Pre-requisites
