@@ -46,8 +46,12 @@ No Authentication
 # Prerequisites for using and deploying 2 Custom Connectors + 6 playbooks
 1. Forcepoint SMC API Key should be known.[Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
 2. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/)
-3. Forcepoint FUID version number should be known.[Refer here](https://www.websense.com/content/support/library/uid/v20/install/fuid_200_ht_integrate-fuid_a_en-us.pdf)
-4. Security policy rule name created in SMC should be known.
+3. Forcepoint SMC service endpoint should be known. (e.g.  https://forcepointdomain:PortNumber/})
+4. Forcepoint FUID service endpoint should be known. (e.g.  https://forcepointdomain:PortNumber/})
+5. Security policy rule name created in SMC should be known.
+6. IP address list name for blocking IP address present in SMC should be known.
+7. URL list name for blocking URLs present in SMC should be known.
+8. Users must have access to Microsoft Teams and they should be a part of a Teams channel and also Power Automate app should be installed in the Microsoft Teams channel.
 
 
 <a name="deployment">
@@ -67,10 +71,10 @@ No Authentication
 |**Enrichment URL PlaybookName**|Enter the Playbook Name here without spaces.|
 | **Forcepoint SMC Api Key**  | Enter the SMC API Key. | 
 | **SMC Version Number** | Enter the version number of SMC. |
-| **FUID Version Number** | Enter the version number of FUID |
 | **Security Policy Rule** | Enter the Security Policy Rule name. |
+|**IP List Name**|Enter IP List Name.|
+|**URL List Name**|Enter URL List Name.|
 |**For Custom Connectors**|                             |
-| **FUID Connector name**|Enter the name of your Forcepoint FUID Connector without spaces.|
 |**Service EndPoint FUID Connector**|Enter the Forcepoint FUID Service End Point.|
 | **SMC Connector name**|Enter the name of your Forcepoint SMC Connector without spaces.|
 |**Service EndPoint SMC Connector**|Enter the Forcepoint SMC Service End Point.|

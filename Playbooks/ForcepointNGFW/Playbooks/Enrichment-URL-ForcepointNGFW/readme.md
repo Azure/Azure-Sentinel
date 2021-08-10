@@ -6,8 +6,7 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious URLs.
  2. For each URL in the list, checks if the URL is already present in SMC (Security Management Center) security policy or not.<br>
- a. If URL is not present in security policy then the incident comment is created stating that URL is not found in the policy.<br>
- b. If URL is present in the security policy then the incident comment is created stating that URL is found in the policy.
+ 3. If URL is present in the security policy then the incident comment is created stating that URL is found in the policy.
 
  ![Forcepoint](./Images/PlaybookdesignerLight.png)<br>
 ![Forcepoint](./Images/PlaybookdesignerDark.png)<br>
@@ -57,9 +56,9 @@ This action will compose the Forcepoint image to add to the incident comments.
  * If the security policy does not exist then terminate with an error that policy rule not found.
  
 ##For each malicious URL received from the incident
-  - If security policy rule with respect to URLs are found it infers the malicious URL is already blocked.<br>
-- If security policy rule with respect to URLs are not found it infers the malicious URL is not blocked.<br>
-- A combined incident Comment is created for both the cases.
+- Check URL is part of how many URL Lists in SMC.
+- Check how many hosts are associated with each URL.
+- Check URL List and host associated with URL are part of how many security policy rules.
 - The incident comment is shown below for reference.
 
 ##Incident comment 

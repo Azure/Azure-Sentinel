@@ -6,8 +6,7 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
  2. For each IP in the list, checks if the IP is already present in SMC (Security Management Center) security policy or not.<br>
- a. If IP address is not present in security policy then the incident comment is created stating that IP address is not found in the policy.<br>
- b. If IP address is present in the security policy then the incident comment is created stating that the IP address is found in the policy.
+ 3. If IP address is present in the security policy then the incident comment is created stating that the IP address is found in the policy.
 
  ![Forcepoint](./Images/PlaybookdesignerLight.png)<br>
 ![Forcepoint](./Images/PlaybookdesignerDark.png)<br>
@@ -52,14 +51,10 @@ Get the list of IPs as entities from the Incident.
 ##Compose image to add in the incident
 This action will compose the Forcepoint image to add to the incident comments.
 
-##Check if security policy exists in SMC
- *  If a security policy exists in the SMC firewall then check for the presence of IP addresses. 
- *  If the security policy does not exist then terminate with the error that policy rule not found.
-
 ##For each malicious IP received from the incident
- - If security policy rule with respect to IP addresses are found it infers the malicious IP is already blocked.<br>
-- If security policy rule with respect to IP addresses are not found it infers the malicious IP is not blocked.<br>
-- A combined incident Comment is created for both the cases.
+ - Check IP address is part of how many IP Lists in SMC. <br>
+- Check how many hosts are associated with each IP address.<br>
+- Check IP address List and host associated with IP address are part of how many security policy rules.
 - The incident comment is shown below for reference.
 
 ##Incident comment 

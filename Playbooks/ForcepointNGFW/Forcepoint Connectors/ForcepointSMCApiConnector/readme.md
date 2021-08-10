@@ -21,13 +21,17 @@ This custom connector connects to Forcepoint SMC (Security Management Center) se
 | **Get policy rule by IP or URL** | Filters IP or URL from security policy rule.|
 | **Unlock policy** | Unlocks the policy if it is locked by an admin user.|
 | **Delete IP address** | Deletes the IP address from SMC. |
-| **Get URL in URL list** |Gets a list of all URLs if the filter is empty or Gets a list of URLs by filter value. |
+| **Get URL list** |Gets a list of all URLs if the filter is empty or Gets a list of URLs by filter value. |
 | **Create URL list**|Creates a list of URLs. |
 | **Delete URL from URL list**| Deletes URL from URL List.|
 | **Upload policy**|Uploads the policy after adding IP or URL into policy. |
 |**Create policy rule in firewall**|Creates policy rule for any IP or URL sources. |
 | **Get complete policy rule details**| Gets complete policy details by rule name.|
 | **Find IP or URL in SMC**| Searches IP or URL in Forcepoint SMC.|
+|**Get IP address**|Gets list of all IP addresses in IP List.|
+|**Get URL from URL List**|Gets list of all URLs from URL List.|
+|**Upload URL to URL List**|Updates URL to URL List.|
+|**Get Host**|Gets host by IP address or list of IP address.|
 
 
 # Prerequisites for deploying Forcepoint SMC Custom Connector

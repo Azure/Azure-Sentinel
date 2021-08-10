@@ -5,9 +5,8 @@
 ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious URLs.
- 2. For each URL in the list, checks if the URL is already present in SMC (Security Management Center) security policy or not.<br>
- a. List of all URLs present in security policy.<br>
- b. List of all URLs not present in security policy is blocked by the firewall.
+ 2. For each URL in the list, checks if the URL is already present in URL List Name or not.
+ 3. List of all URLs not present in URL List Name is blocked in the firewall by the playbook.
 
  ![Forcepoint](./Images/PlaybookdesignerLight.png)<br>
 ![Forcepoint](./Images/PlaybookdesignerDark.png)<br>
@@ -18,6 +17,7 @@
  2. Forcepoint SMC API Key should be known to establish a connection with Forcepoint SMC. For API Key [Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
  3. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/) to download and install Forcepoint SMC and capture the version number for the same.
  4. Security policy rule name created in SMC should be known.
+ 5. URL list name for blocking IP address present in SMC should be known.
 
 
  ## Deployment Instructions
@@ -36,6 +36,7 @@
 | **SMC API Key**  | Enter the SMC API Key.  | 
 | **SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 | **Security Policy Rule** | Enter the Security Policy Rule name used for blocking or unblocking URLs.  |
+| **URL List Name**|Enter URL list name.|
 
 
 # Post-Deployment Instructions 
@@ -54,17 +55,18 @@ Get the list of URLs as entities from the Incident.
 ##Compose image to add in the incident
 This action will compose the Forcepoint image to add to the incident comments.
 
-##Check if security policy exists in SMC
-*  If a security policy exists in the SMC firewall then check for the presence of URLs. 
-*  If the security policy does not exist then terminate with the error that policy rule not found.
-
 ##For each malicious URL received from the incident
--	If a security policy rule with respect to URLs are found:<br>
- ***i)*** List of all URLs that are already blocked in firewall. <br>
 
--	If a security policy rule with respect to URLs are not found:<br >
-  ***i)*** Then list of all such URLs are made and collectively blocked by firewall.<br>
-- A combined incident comment is created for both the cases as shown below and incident is closed.<br>
+###Check if URL is present in URL List Name
+* If URL is present in URL List Name then check if URL List is part of security policy rule.
+* If URL is not present in URL List Name then add the URL to URL List Name. Incident comment created with URL blocked by Playbook.
+
+###Check if URL List is part of security policy in SMC
+*  If a security policy exists in the SMC firewall for URL List Name then URL is already blocked. Incident comment created with URL already blocked.
+*  If the security policy does not exist for URL List name then security policy is created for URL List Name.
+
+- Incident comment from both the cases are combined.
+- The incident comments are shown below for reference.
 - The incident comments are shown below for reference.
 
 ##Incident comment 

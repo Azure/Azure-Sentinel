@@ -5,9 +5,8 @@
 ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
- 2. For each IP address in the list, checks if the IP is already present in SMC (Security Management Center) security policy or not.<br>
- a. List of all IP addresses present in security policy.<br>
- b. List of all IP addresses not present in security policy is blocked by the firewall.
+ 2. For each IP address in the list, checks if the IP address is already present in IP List Name or not.<br>
+ 3. List of all IP addresses not present in IP List Name is blocked in the firewall by the playbook.
 
  ![Forcepoint](./Images/PlaybookdesignerLight.png)<br>
 ![Forcepoint](./Images/PlaybookdesignerDark.png)<br>
@@ -17,6 +16,7 @@
  2. Forcepoint SMC API Key should be known to establish a connection with Forcepoint SMC. For API Key [Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
  3. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/) to download and install Forcepoint SMC and capture the version number for the same.
  4. Security policy rule name created in SMC should be known.
+ 5. IP address list name for blocking IP address present in SMC should be known.
 
 
  ## Deployment Instructions
@@ -35,6 +35,7 @@
 | **SMC API Key**  | Enter the SMC API Key. | 
 | **SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 | **Security Policy Rule** | Enter the Security Policy Rule name used for blocking or unblocking IP addresses. |
+| **IP List Name**|Enter IP address list name.|
 
 
 # Post-Deployment Instructions 
@@ -52,18 +53,17 @@ Get the list of IPs as entities from the Incident.
 ##Compose image to add in the incident
 This action will compose the Forcepoint image to add to the incident comments.
 
-##Check if security policy exists in SMC
-*  If a security policy exists in the SMC firewall then check for the presence of IP addresses. 
-*  If the security policy does not exist then terminate with the error that policy rule not found.
-
 ##For each malicious IP received from the incident
--	If a security policy rule with respect to IP addresses are found:<br>
- ***i)*** List of all IP addresses that are already blocked in firewall<br>
 
+###Check if IP address is present in IP List Name
+* If IP address is present in IP List Name then check if IP List is part of security policy rule.
+* If IP address is not present in IP List Name then add the IP address to IP List Name. Incident comment created with IP address blocked by Playbook.
 
--	If a security policy rule with respect to IP addresses are not found:<br >
- ***i)*** Then list of all such IP addresses are made and collectively blocked by firewall.<br>
-- A combined incident comment is created for both the cases as shown below and incident is closed.<br>
+###Check if IP List is part of security policy in SMC
+*  If a security policy exists in the SMC firewall for IP List Name then IP address is already blocked. Incident comment created with IP address already blocked.
+*  If the security policy does not exist for IP List name then security policy is created for IP List Name.
+
+- Incident comment from both the cases are combined.
 - The incident comments are shown below for reference.
 
 
