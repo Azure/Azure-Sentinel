@@ -1,6 +1,6 @@
 import { SampleDataValidationError } from "../validationError";
 
-const regEmail = 'sanitized@sanitzed.com';
+const regEmail = 'sanitized@sanitized.com';
 
 export function isValidSampleData(sampleDataContent: string) {
    console.log(sampleDataContent.length);
@@ -10,7 +10,7 @@ export function isValidSampleData(sampleDataContent: string) {
         throw new SampleDataValidationError(`Sample data file data must be in the form of array.`);
     }
  
-    let email  = extractEmails(sampleDataContent );
+    let email  = extractEmails(JSON.stringify(sampleDataContent) );
     let varEmail = email?.filter(e=>e!=regEmail)
     if(varEmail !== undefined && varEmail.length >0)
     {
@@ -20,6 +20,9 @@ export function isValidSampleData(sampleDataContent: string) {
 return true;
 }
 function extractEmails (sampleDataContent: string)
+
  {
+
      return sampleDataContent.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi);
+
  };

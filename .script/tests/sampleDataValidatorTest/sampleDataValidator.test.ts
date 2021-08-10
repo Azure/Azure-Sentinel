@@ -6,18 +6,19 @@ import { ExitCode } from "../../utils/exitCode";
 chai.use(chaiAsPromised);
 
 describe("sampleDataValidator", () => {
-    it("should pass when sampleDataWithArray.json is valid", async () => {
-        await checkValid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithArray.json");
-      });
-    it("should throw an exception when sampleDataWithStartWithBracket.json is missing a required property", async () => {
-        await checkInvalid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithStartWithBracket.json", "SchemaError");
+     it("should pass when sampleDataWithArray.json is valid", async () => {
+       await checkValid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithArray.json");
+       });
+     it("should throw an exception when sampleDataStartWithBracket.json starts with a curly bracket ", async () => {
+         await checkInvalid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataStartWithBracket.json", "SampleDataValidationError");
+       }); 
+       it("should pass when sampleDataWithValidEmail.json contains valid email.", async () => {
+         await checkValid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithValidEmail.json");
+     });
+    it("should throw an exception when sampleDataWithInvalidEmail.json contains invalid email.  ", async () => {
+        await checkInvalid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithInvalidEmail.json", "SampleDataValidationError");
       }); 
-      it("should throw an exception when sampleDataWithStartWithBracket.json is missing a required property", async () => {
-        await checkInvalid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithInvalidEmail.json", "SchemaError");
-      }); 
-      it("should throw an exception when sampleDataWithStartWithBracket.json is missing a required property", async () => {
-        await checkInvalid(".script/tests/sampleDataValidatorTest/testFiles/sampleDataWithValidEmail.json", "SchemaError");
-      }); 
+      
 
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidSampleDataSchema(filePath);
