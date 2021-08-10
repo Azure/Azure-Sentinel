@@ -63,7 +63,7 @@ No Authentication
 | Parameter  | Description |
 | ------------- | ------------- |
 |**For Playbooks**|                 |
-| **Block or Unblock IP by Teams channel PlaybookName** | Enter the Playbook Name here without spaces. |
+| **BlockIP Response On Teams PlaybookName** | Enter the Playbook Name here without spaces. |
 | **Block IP By Username PlaybookName** | Enter the Playbook Name here without spaces. |
 | **Block IP PlaybookName**|Enter the Playbook Name here without spaces.|
 |**Block URL PlaybookName**|Enter the Playbook Name here without spaces.|
