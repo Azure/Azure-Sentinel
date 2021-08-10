@@ -18,49 +18,49 @@ ParserQuery: |
               let ProcessEvents_AD4IoT=()
               {
                 SecurityIoTRawEvent 
-                | where RawEventName == "Process"
+                | where RawEventName == "Process" // OK+W
                 | extend
-                  EventDetails = todynamic(EventDetails) // -- waiting for schema fix
+                  EventDetails = todynamic(EventDetails) // OK
                   //
                 | extend
                   // Event
-                  EventOriginalUid = EventDetails.EventId, // OK
-                  EventCount = int(1), // OK
-                  EventProduct = 'Azure Defender for IoT', // OK
-                  EventVendor = 'Microsoft', // OK
-                  EventSchemaVersion = '0.1.0', // OK
-                  EventStartTime = todatetime(TimeGenerated), // Open question about timestamps
-                  EventEndTime = todatetime(TimeGenerated), // Open question about timestamps
-                  EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), // OK
-                  EventSubType = EventDetails.EventType, // OK - Add to docs, FORK, EXEC
-                  EventResult = 'Success', // OK
+                  EventOriginalUid = EventDetails.EventId, // OK+W
+                  EventCount = toint(EventDetails.HitCount), // OK+W
+                  EventProduct = 'Azure Defender for IoT', // OK+W
+                  EventVendor = 'Microsoft', // OK+W
+                  EventSchemaVersion = '0.1.0', // OK+W
+                  EventStartTime = todatetime(EventDetails.TimestampUTC), // OK+W
+                  EventEndTime = todatetime(TimeGenerated), // OK+W
+                  EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), // OK+W
+                  EventSubType = EventDetails.EventType, // OK+W - Add to docs, FORK, EXEC
+                  EventResult = 'Success', // OK+W
                   //
                   // Device
-                  DvcId = EventDetails.DeviceId, // OK
-                  DvcOs = EventDetails.MessageSource, // OK
+                  DvcHostname = EventDetails.DeviceId, // OK+W
                   //
                   // Users
-                  TargetUserId = EventDetails.UserId, // OK
-                  TargetUserName = EventDetails.UserName, // OK
-                  // TargetUserIdType
-                  // TargetUserNameType
                   //
                   // Process
-                  TargetProcessId = EventDetails.ProcessId, // OK
-                  ActingProcessId = EventDetails.ParentProcessId, // OK
-                  TargetProcessCommandLine = coalesce (EventDetails.Commandline, EventDetails.Executable), // OK
+                  TargetProcessId = tostring(EventDetails.ProcessId), // OK+W
+                  TargetProcessCommandLine = coalesce (EventDetails.Commandline, EventDetails.Executable), // OK+W
                   TargetProcessName = coalesce (EventDetails.Executable, split(EventDetails.Commandline," ")[0]) // OK
                   //
-                | project-rename
-                  EventProductVersion = AgentVersion, // OK
-                  _ResourceId = AssociatedResourceId, // OK - fix schema
-                  _SubscriptionId = AzureSubscriptionId // OK - fix Schema
+                | extend
+                  DvcOs = iif (TargetProcessName matches regex '^[A-Z]\\:', "Windows", "Linux") // OK+W
+                | extend
+                  TargetUserNameType = iif (DvcOs == "Windows", "Windows", "Simple"), // OK+W
+                  TargetUsername = iff (DvcOs == "Windows", EventDetails.UserName, ""), // OK+W
+                  ActingProcessId = iff (DvcOs == "Windows", tostring(EventDetails.ParentProcessId), "") // OK+W
+               | project-rename
+                  // EventProductVersion = AgentVersion, // Not available in Windows
+                  _ResourceId = AssociatedResourceId, // OK+W
+                  _SubscriptionId = AzureSubscriptionId // OK+W
                   //
                   // -- aliases
                 | extend 
-                  User = TargetUserName, // OK
-                  CommandLine = TargetProcessCommandLine, // OK
-                  Process = TargetProcessName,
-                  Dvc = DeviceId // OK
+                  User = TargetUsername, // OK+W
+                  CommandLine = TargetProcessCommandLine, // OK+W
+                  Process = TargetProcessName, // OK+W
+                  Dvc = DvcHostname // OK+W
                };
                ProcessEvents_AD4IoT
