@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationWindowsSecurityEvent",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Microsoft Windows Logon and Logoff",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationWindowsSecurityEvent",
+            "query": "let LogonEvents=dynamic([4624,4625]);\nlet LogoffEvents=dynamic([4634,4647]);\nlet LogonTypes=datatable(LogonType:int, EventSubType:string)[\n  2, 'Interactive',\n  3, 'Network',\n  4, 'Batch',\n  5, 'Service',\n  7, 'Unlock',\n  8, 'NetworkCleartext',\n  9, 'NewCredentials',\n  10, 'RemoteInteractive',\n  11, 'CachedInteractive'\n];\n// https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000\nlet LogonStatus=datatable \n  (EventStatus:string,EventOriginalResultDetails:string, EventResultDetails:string)[\n  '0x80090325', 'SEC_E_UNTRUSTED_ROOT','Other',\n  '0xc0000064', 'STATUS_NO_SUCH_USER','No such user or password',\n  '0xc000006f', 'STATUS_INVALID_LOGON_HOURS','Logon violates policy',\n  '0xc0000070', 'STATUS_INVALID_WORKSTATION','Logon violates policy',\n  '0xc0000071', 'STATUS_PASSWORD_EXPIRED','Password expired',\n  '0xc0000072', 'STATUS_ACCOUNT_DISABLED','User disabled',\n  '0xc0000133', 'STATUS_TIME_DIFFERENCE_AT_DC','Other',\n  '0xc000018d', 'STATUS_TRUSTED_RELATIONSHIP_FAILURE','Other',\n  '0xc0000193', 'STATUS_ACCOUNT_EXPIRED','Account expired',\n  '0xc0000380', 'STATUS_SMARTCARD_WRONG_PIN','Other',\n  '0xc0000381', 'STATUS_SMARTCARD_CARD_BLOCKED','Other',\n  '0xc0000382', 'STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED','Other',\n  '0xc0000383', 'STATUS_SMARTCARD_NO_CARD','Other',\n  '0xc0000384', 'STATUS_SMARTCARD_NO_KEY_CONTAINER','Other',\n  '0xc0000385', 'STATUS_SMARTCARD_NO_CERTIFICATE','Other',\n  '0xc0000386', 'STATUS_SMARTCARD_NO_KEYSET','Other',\n  '0xc0000387', 'STATUS_SMARTCARD_IO_ERROR','Other',\n  '0xc0000388', 'STATUS_DOWNGRADE_DETECTED','Other',\n  '0xc0000389', 'STATUS_SMARTCARD_CERT_REVOKED','Other',\n  '0x80090302', 'SEC_E_UNSUPPORTED_FUNCTION','Other',\n  '0x80090308', 'SEC_E_INVALID_TOKEN','Other',\n  '0x8009030e', 'SEC_E_NO_CREDENTIALS','Other',\n  '0xc0000008', 'STATUS_INVALID_HANDLE','Other',\n  '0xc0000017', 'STATUS_NO_MEMORY','Other',\n  '0xc0000022', 'STATUS_ACCESS_DENIED','Other',\n  '0xc0000034', 'STATUS_OBJECT_NAME_NOT_FOUND','Other',\n  '0xc000005e', 'STATUS_NO_LOGON_SERVERS','Other',\n  '0xc000006a', 'STATUS_WRONG_PASSWORD','Incorrect password',\n  '0xc000006d', 'STATUS_LOGON_FAILURE','Other',\n  '0xc000006e', 'STATUS_ACCOUNT_RESTRICTION','Logon violates policy',\n  '0xc0000073', 'STATUS_NONE_MAPPED','Other',\n  '0xc00000fe', 'STATUS_NO_SUCH_PACKAGE','Other',\n  '0xc000009a', 'STATUS_INSUFFICIENT_RESOURCES','Other',\n  '0xc00000dc', 'STATUS_INVALID_SERVER_STATE','Other',\n  '0xc0000106', 'STATUS_NAME_TOO_LONG','Other',\n  '0xc000010b', 'STATUS_INVALID_LOGON_TYPE','Logon violates policy',\n  '0xc000015b', 'STATUS_LOGON_TYPE_NOT_GRANTED','Logon violates policy',\n  '0xc000018b', 'STATUS_NO_TRUST_SAM_ACCOUNT','Logon violates policy',\n  '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',\n  '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',\n  '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];\nlet WinLogon=(){\n  SecurityEvent \n  | where EventID in (LogonEvents) or \n          EventID in (LogoffEvents)\n  | project-rename \n     EventProduct = EventSourceName\n     , EventMessage = Activity\n     , ActorSessionId=SubjectLogonId\n     , TargetSessionId=TargetLogonId\n     , ActorUserId=SubjectUserSid\n     , TargetUserId =TargetUserSid\n     , TargetUserType=AccountType\n     , SrcDvcHostname = WorkstationName\n     , TargetDvcHostname = Computer\n     , EventOriginalUid = EventOriginId\n     , LogonProtocol=AuthenticationPackageName\n     , SrcDvcIpAddr=IpAddress\n  | extend EventOriginId=EventID | project-away EventID \n  | extend EventResult = iff(EventOriginId == 4625, 'Failure', 'Success')\n    , EventCount=1\n    , EventSchemaVersion='0.1.0'\n    , ActorUserIdType='SID'\n    , TargetUserIdType='SID'\n    , EventVendor='Microsoft'  \n    , EventStartTime =TimeGenerated\n    , EventEndTime=TimeGenerated\n    , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')\n    , ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount)\n    , ActorUsernameType= iff(SubjectDomainName == '-','Simple', 'Windows' )\n    , TargetUsername = iff (TargetDomainName == '-', trim(@'\\\\',TargetUserName), trim(@'\\\\',TargetAccount))\n    , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')\n    , SrcDvcOs = 'Windows'\n    , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)\n  | lookup LogonStatus on EventStatus\n  | lookup LogonTypes  on LogonType\n  | project-reorder \n      TimeGenerated\n      , EventProduct\n      , EventMessage\n      , EventResult\n      , EventOriginalResultDetails\n      , EventStartTime\n      , EventEndTime\n      , EventType\n      , EventSubType\n      , ActorSessionId\n      , TargetSessionId\n      , ActorUserId\n      , ActorUsername\n      , TargetUserId\n      , TargetUsername\n      , TargetUserType\n      , SrcDvcOs\n      , TargetDvcHostname\n      , LogonProtocol\n      , ImpersonationLevel\n  /// ** Aliases \n  | extend\n       User=TargetUsername\n      , LogonTarget=TargetDvcHostname\n      , Dvc=SrcDvcHostname\n  };\nWinLogon",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

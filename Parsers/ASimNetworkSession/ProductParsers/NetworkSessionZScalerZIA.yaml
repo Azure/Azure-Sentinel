@@ -1,0 +1,70 @@
+Parser:
+  Title: ZScaler ZIA Network Sessions
+  Version: '0.0'
+  LastUpdated: June 20, 2021
+Product:
+  Name: ZScaler
+Normalization:
+  Schema: NetworkSessions
+  Version: '0.1.0'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/AzSentinelNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+  This Query Parser maps ZSCaler Events (CommonSecurityLogs) to the Azure Sentinel Information Model Network Session schema.
+ParserName: vimNetworkSessionZScalerZIA
+ParserQuery: |
+  let NetworkParserZscaler=(){
+      CommonSecurityLog
+      | where DeviceVendor == "Zscaler" and DeviceProduct == "NSSFWlog"
+      | project-rename 
+          EventOriginalUid = _ItemId 
+          , EventVendor=DeviceVendor
+          , EventProduct=DeviceProduct
+          , EventResourceId=_ResourceId 
+          //, TenantId=TenantId
+      //, DestinationUserId=DestinationUserID 
+          , NetworkRuleName=Activity 
+          , NetworkProtocol=Protocol
+          , NetworkApplicationProtocol=DeviceCustomString2
+          , SrcBytes=SentBytes
+          , DstBytes=ReceivedBytes 
+      , NetworkDuration=DeviceCustomNumber1
+          , EventProductVersion=DeviceVersion
+          , EventSeverity=LogSeverity 
+          , SrcNatIpAddr=SourceTranslatedAddress
+          , DstNatIpAddr=DestinationTranslatedAddress
+          , DstDvcHostname=DestinationHostName
+      , DvcMacAddress=DeviceMacAddress
+      , DstMacAddr=DestinationMACAddress 
+      , SrcMacAddr=SourceMACAddress
+      | extend
+          EventTimeIngested =ingestion_time()
+          , EventCount=toint(EventCount)
+          , EventType="Traffic"
+          , DvcAction=case(DeviceAction has "Allow", "Allow", DeviceAction has "Drop","Drop", "") 
+          , EventResult=case(DeviceAction has "Allow","Success","Failure") 
+          , EventSchemaVersion="0.1.0"
+  //  Auto complete bug mitigation
+  //  Trivial renames to mitigate Autocomplete
+  | project-rename
+      NetworkDirection=CommunicationDirection
+      , EventEndTime=EndTime
+    , EventStartTime= StartTime
+    , EventMessage=Message
+    , TimeGenerated=TimeGenerated
+      , DstIpAddr=DestinationIP
+      , DstPortNumber=DestinationPort
+      , DstNatPortNumber=DestinationTranslatedPort
+    , SrcPortNumber=SourcePort
+      , SrcIpAddr=SourceIP
+      , DeviceAction=DeviceAction
+    , DstUserName=DestinationUserName
+    , SrcNatPortNumber=SourceTranslatedPort
+    , DvcOutboundInterface=DeviceOutboundInterface
+    , DvcInboundInterface=DeviceInboundInterface
+    , SrcUserName=SourceUserName 
+  };
+  NetworkParserZscaler
