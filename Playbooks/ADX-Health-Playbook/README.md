@@ -15,7 +15,7 @@ You must have set up Azure Data Explorer as your long-term retention solution fo
 ### Connections
 There are three API connections in this logic app
 
-* **Connection to Azure Data Explorer**: this leverages the system-assigned managed identity that is set up by the template by default. You have to assign the Database Reader role to the logic app from your ADX Database. To do this, go to *Azure Data Explorer clusters*, select your cluster, select *Databases*, select your database, select *Permissions* > *+Add* > *Viewer* and finally select the playbook you have just deployed. This will allow the logic app to query the ADX tables that you are using for long-term ingestion
+* **Connection to Azure Data Explorer**: this leverages the system-assigned managed identity that is set up by default in this template. To authorize this conneciton, please assign the Database Reader role to the logic app from your ADX Database. To do this, go to *Azure Data Explorer clusters*, select your cluster, select *Databases*, select your database, select *Permissions* > *+Add* > *Viewer* and finally select the playbook you have just deployed. This will allow the logic app to query the ADX tables that you are using for long-term ingestion
 * **Connection to Azure Monitor**: this connector supports user identity or service principal (recommended). The user or service principal you use to create the connection will need to have at least Reader role at RG level, or Azure Sentinel Reader role.
 * **Connection to Office 365 Outlook**: this connector only supports user identity, so you will need to connect with a user that has an Exchange Online license assigned. This user will appear as the sender of the warning notification
  
