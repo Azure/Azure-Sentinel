@@ -11,7 +11,6 @@ This Logic App is complimentary to the [ADXvsLA workbook](https://github.com/Azu
 You must have set up Azure Data Explorer as your long-term retention solution for Azure Sentinel logs. 
    <br />  
 ## Post-deployment configuration
-   <br />  
 
 ### Connections
 There are three API connections in this logic app
