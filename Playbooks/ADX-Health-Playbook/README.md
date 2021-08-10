@@ -3,7 +3,7 @@
 Author: María de Sousa-Valadas
 Version: 1.0
 
-This Logic App is complimentary to the [ADXvsLA workbook]: (https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/ADXvsLA.json "ADXvsLA workbook") created by Naomi Christis. It compares the number of logs in your Log Analytics tables with your logs in the ADX Cluster Database tables periodically and sends a warning email if a delay is detected.
+This Logic App is complimentary to the [ADXvsLA workbook](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/ADXvsLA.json "ADXvsLA workbook") created by Naomi Christis. It compares the number of logs in your Log Analytics tables with your logs in the ADX Cluster Database tables periodically and sends a warning email if a delay is detected.
 BUTTONS TO DEPLOY
 
 ## Pre-requisites
@@ -21,19 +21,19 @@ There are three API connections in this logic app
  
 ### Other
 * By default this logic app runs every 24 hours, you can change this on the Recurrence trigger:
- <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/1.%20trigger.png">
+   <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/1.%20trigger.png">
 
 * The logic app assumes that your tables on Azure Sentinel and your final tables on ADX have the same name. Also, the query is set to exclude tables that contain the word "Raw" as it assumes your raw tables on ADX (before the mapping) have this taxonomy. Should your tables follow a different naming convention, you would need to update this query. If you wanted to exclude any tables from your query, you can customize your query for that purpose too:	
- <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/2.%20adx%20query.png">
+    <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/2.%20adx%20query.png">
 
 * The following query compares the results from your ADX tables against the Log Analytics tables. By default, the logic app looks at the period between the past 25h and 30min. We don't recommend making the endTime parameter lower than 20 minutes, as there is delay of a few minutes between the logs hitting Log Analytics and the ADX database.
- <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/3.%20compare%20adx%20vs%20la.png">
+    <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/3.%20compare%20adx%20vs%20la.png">
 
 * Finally, on the Azure Monitor queries, remember to select your subscription, resource group, resource type (Log Analytics Workspace) and resource name (your Azure Sentinel workspace name)
 
 If the logic app detects a difference in the number of logs ingested in your Log Analytics and ADX tables, it will send a notification to the mailing list you defined in the parameters. 
 You can modify the text or the threshold. By default, it will send an email when there is a difference between the tables greater than 0.
- <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/4.%20condition.png">
+    <img src="https://github.com/mariavaladas/Azure-Sentinel/blob/master/Playbooks/ADX-Health-Playbook/images/4.%20condition.png">
 
 
 
