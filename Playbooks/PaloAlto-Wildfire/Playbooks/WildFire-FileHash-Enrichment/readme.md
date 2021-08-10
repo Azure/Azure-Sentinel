@@ -1,4 +1,4 @@
-# Wildfire Filehash Incident Enrichment Playbook
+# Palo Alto Wildfire FileHash Enrichment Playbook
 # Summary
 This playbook enriches the incident with verdict information.
 
@@ -58,13 +58,13 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 # Enrich Incident with verdict or verdict report details as follows
 ## **When URL is having verdict status benign** 
 
- ![wildfire](./Images/IncidentCommentLight1.PNG)
- ![wildfire](./Images/IncidentCommentDark1.PNG)
+ ![wildfire](./Images/IncidentCommentLight1.png)
+ ![wildfire](./Images/IncidentCommentDark1.png)
 
 ## **When URL is having verdict status other than benign** 
 
- ![wildfire](./Images/IncidentCommentLight2.PNG)
- ![wildfire](./Images/IncidentCommentDark2.PNG)
+ ![wildfire](./Images/IncidentCommentLight2.png)
+ ![wildfire](./Images/IncidentCommentDark2.png)
 
 ## **Email received by SOC when verdict status is other than benign**
 

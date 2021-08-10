@@ -22,13 +22,15 @@
     },
     "parameters": {
         "PlaybookName": {
+            "defaultValue": "FileHashEnrichment-PaloAltoWildFire",
             "type": "string",
             "metadata": {
-                "description": "Enter Logic App / Playbook Name"
+                "description": "Enter FileHash Enrichment Playbook Name"
             },
             "minLength": 3
         },
         "WildfireCustomConnectorName": {
+            "defaultValue": "PaloAltoWildFire",
             "type": "String",
             "metadata": {
                 "description": "Enter Palo Alto WildFire Custom Connector Name"
@@ -117,6 +119,14 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
+                        },
+                        "APIKey": {
+                            "defaultValue": "[parameters('WildfireAPIKey')]",
+                            "type": "SecureString"
+                        },
+                        "NotificationEmail": {
+                            "defaultValue": "[parameters('NotificationEmail')]",
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -136,7 +146,16 @@
                         }
                     },
                     "actions": {
-                        "Entities_-_Get_File_Hashes": {
+                        "Azure_Sentinel_Logo": {
+                            "runAfter": {
+                                "WildFire_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://connectoricons-prod.azureedge.net/releases/v1.0.1500/1.0.1500.2502/azuresentinel/icon.png\",alt=\"Logo\" width=\"32\" height=\"32\" />\n"
+                        },
+                        "Entities_-_Get_FileHashes": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -150,79 +169,12 @@
                                 "path": "/entities/filehash"
                             }
                         },
-                        "For_each_consolidated_comment": {
-                            "foreach": "@variables('finalconsoildatedcomments')",
-                            "actions": {
-                                "Check_if_comment_length_exceed_maximum_": {
-                                    "actions": {
-                                        "Add_comment_to_incident": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>@{outputs('WildFire_Logo')}@{replace(item(), '﻿<?xml version=\"1.0\" encoding=\"utf-8\"?>', ' ')}</p>"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/Incidents/Comment"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {},
-                                    "else": {
-                                        "actions": {
-                                            "Add_comment_to_incident_when_exceeds_limit": {
-                                                "runAfter": {},
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": {
-                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>@{outputs('WildFire_Logo')}Report information is exceeding the maximum limit. Please refer the PDF format report provided over mail.</p>"
-                                                    },
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/Incidents/Comment"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "less": [
-                                                    "@length(item())",
-                                                    3000
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If",
-                                    "description": "Condition to check comment length is less than 3000"
-                                }
-                            },
-                            "runAfter": {
-                                "For_each_file_hash": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach",
-                            "description": "Loop for consolidated comment"
-                        },
-                        "For_each_file_hash": {
-                            "foreach": "@body('Entities_-_Get_File_Hashes')?['Filehashes']",
+                        "For_each_FileHash": {
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
                             "actions": {
                                 "Append_consolidated_comments": {
                                     "runAfter": {
-                                        "Check_if_file_hash_is_benign": [
+                                        "Check_if_FileHash_is_benign": [
                                             "Succeeded"
                                         ]
                                     },
@@ -233,22 +185,22 @@
                                     },
                                     "description": "To append consolidated incident comment"
                                 },
-                                "Check_if_file_hash_is_benign": {
+                                "Check_if_FileHash_is_benign": {
                                     "actions": {
                                         "Add_incident_comment": {
                                             "runAfter": {
-                                                "Create_HTML_for_benign_file_hash_verdict": [
+                                                "Create_HTML_for_benign_FileHash_verdict": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "IncidentComment",
-                                                "value": "@body('Create_HTML_for_benign_file_hash_verdict')"
+                                                "value": "@body('Create_HTML_for_benign_FileHash_verdict')"
                                             },
                                             "description": "To store incident comment"
                                         },
-                                        "Create_HTML_for_benign_file_hash_verdict": {
+                                        "Create_HTML_for_benign_FileHash_verdict": {
                                             "runAfter": {},
                                             "type": "Table",
                                             "inputs": {
@@ -285,12 +237,12 @@
                                         "actions": {
                                             "Add_incident_URL_to_Email": {
                                                 "runAfter": {
-                                                    "Get_file_hash_analysis_report_in_PDF_format": [
+                                                    "Get_FileHash_analysis_report_in_PDF_or_XML_format": [
                                                         "Succeeded"
                                                     ]
                                                 },
                                                 "type": "Compose",
-                                                "inputs": "<a href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\">click here to view the incident</a>",
+                                                "inputs": "<a href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\">Click here to view the incident</a>",
                                                 "description": "To compose incident URL for email body"
                                             },
                                             "Append_incident_comment": {
@@ -302,7 +254,7 @@
                                                 "type": "SetVariable",
                                                 "inputs": {
                                                     "name": "IncidentComment",
-                                                    "value": " Find verdict \"Behavior Summary\" report and PDF file has been sent to Email \"@{variables('SOCEmail')}    @{triggerBody()?['object']?['properties']?['owner']?['email']}\"\n\n   File Information\n@{body('Create_HTML_table_for_file_information')}\n Task Information\n\n@{body('Create_HTML_table_for_task_information')}"
+                                                    "value": "FileHash verdict \"Behavior Summary\" report and PDF file has been sent to Email \"@{parameters('NotificationEmail')}    @{triggerBody()?['object']?['properties']?['owner']?['email']}\"\n\n  File Information\n@{body('Create_HTML_table_for_file_information')}\n Task Information\n\n@{body('Create_HTML_table_for_task_information')}"
                                                 },
                                                 "description": "To append incident comment"
                                             },
@@ -321,14 +273,14 @@
                                             },
                                             "Construct_report_XML_object": {
                                                 "runAfter": {
-                                                    "Get_file_hash_analysis_report_in_XML_format": [
+                                                    "Get_FileHash_analysis_report_in_PDF_or_XML_format_2": [
                                                         "Succeeded"
                                                     ]
                                                 },
                                                 "type": "SetVariable",
                                                 "inputs": {
                                                     "name": "ReportXMLObject",
-                                                    "value": "@xml(body('Get_file_hash_analysis_report_in_XML_format'))"
+                                                    "value": "@xml(body('Get_FileHash_analysis_report_in_PDF_or_XML_format_2'))"
                                                 },
                                                 "description": "To compose report xml object"
                                             },
@@ -354,7 +306,7 @@
                                                             "value": "@body('Parse_report_JSON_object')?['wildfire']?['file_info']?['malware']"
                                                         },
                                                         {
-                                                            "header": "File Hash",
+                                                            "header": "FileHash",
                                                             "value": "@body('Parse_report_JSON_object')?['wildfire']?['file_info']?['md5']"
                                                         },
                                                         {
@@ -406,46 +358,46 @@
                                                 },
                                                 "description": "To create html table for incident comment"
                                             },
-                                            "Get_file_hash_analysis_report_in_PDF_format": {
+                                            "Get_FileHash_analysis_report_in_PDF_or_XML_format": {
                                                 "runAfter": {},
                                                 "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": {
-                                                        "apikey": "@variables('apikey')",
+                                                        "apikey": "@parameters('APIKey')",
                                                         "format": "pdf",
-                                                        "hash": "@items('For_each_file_hash')?['Value']"
+                                                        "hash": "@items('For_each_FileHash')?['Value']"
                                                     },
                                                     "headers": {
                                                         "Content-Type": "application/json"
                                                     },
                                                     "host": {
                                                         "connection": {
-                                                            "name": "@parameters('$connections')['PaloaltoWFConnector']['connectionId']"
+                                                            "name": "@parameters('$connections')['WildFireConnector']['connectionId']"
                                                         }
                                                     },
                                                     "method": "post",
                                                     "path": "/get/report"
                                                 }
                                             },
-                                            "Get_file_hash_analysis_report_in_XML_format": {
+                                            "Get_FileHash_analysis_report_in_PDF_or_XML_format_2": {
                                                 "runAfter": {
-                                                    "Send_email_with_file_hash_attachment": [
+                                                    "Send_email_with_FileHash_attachment": [
                                                         "Succeeded"
                                                     ]
                                                 },
                                                 "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": {
-                                                        "apikey": "@variables('apikey')",
+                                                        "apikey": "@parameters('APIKey')",
                                                         "format": "xml",
-                                                        "hash": "@items('For_each_file_hash')?['Value']"
+                                                        "hash": "@items('For_each_FileHash')?['Value']"
                                                     },
                                                     "headers": {
                                                         "Content-Type": "application/json"
                                                     },
                                                     "host": {
                                                         "connection": {
-                                                            "name": "@parameters('$connections')['PaloaltoWFConnector']['connectionId']"
+                                                            "name": "@parameters('$connections')['WildFireConnector']['connectionId']"
                                                         }
                                                     },
                                                     "method": "post",
@@ -572,7 +524,7 @@
                                                 },
                                                 "description": "To parse report json object"
                                             },
-                                            "Send_email_with_file_hash_attachment": {
+                                            "Send_email_with_FileHash_attachment": {
                                                 "runAfter": {
                                                     "Add_incident_URL_to_Email": [
                                                         "Succeeded"
@@ -583,13 +535,13 @@
                                                     "body": {
                                                         "Attachments": [
                                                             {
-                                                                "ContentBytes": "@{base64(body('Get_file_hash_analysis_report_in_PDF_format'))}",
-                                                                "Name": "@{items('For_each_file_hash')?['Value']}.pdf"
+                                                                "ContentBytes": "@{base64(body('Get_FileHash_analysis_report_in_PDF_or_XML_format'))}",
+                                                                "Name": "@{items('For_each_FileHash')?['Value']}.pdf"
                                                             }
                                                         ],
-                                                        "Body": "<p>Hi,<br>\n<br>\n@{outputs('WildFire_Logo')}As part of the INC# @{triggerBody()?['object']?['properties']?['incidentNumber']}, the summary of the File Hash verdict report is updated in the comments and the complete verdict report is attached in this email for reference.<br>\n<br>\n<strong>Additional details</strong>:<br>\n&nbsp;&nbsp;&nbsp;&nbsp;Incident Title : @{triggerBody()?['object']?['properties']?['title']}<br>\n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;File Hash:@{items('For_each_file_hash')?['Value']}<br>\n<br>\n@{outputs('Add_incident_URL_to_Email')}<br>\n<br>\n<br>\n<span style=\"color: rgb(124,112,107)\">Note: Do not respond to this Email.It is triggered from the playbook automation.</span></p>",
-                                                        "Subject": "INC#:@{triggerBody()?['object']?['properties']?['incidentNumber']} @{items('For_each_file_hash')?['Value']}-WildFire Analysis Report",
-                                                        "To": "@{triggerBody()?['object']?['properties']?['owner']?['email']};@{variables('SOCEmail')}"
+                                                        "Body": "<p>@{outputs('WildFire_Logo')}@{outputs('Azure_Sentinel_Logo')}<br>\n<br>\nTitle - Palo Alto WildFire FileHash verdict report (@{items('For_each_FileHash')?['Value']})<br>\n<br>\n Summary of FileHash verdict report was posted as a comment to the incident. @{outputs('Add_incident_URL_to_Email')}<br>\n Attached is full report.<br>\n<br>\n<br>\n<span style=\"color: rgb(124,112,107)\">Note: This is an automatic mail sent by Azure Sentinel playbook.</span></p>",
+                                                        "Subject": "INC#:@{triggerBody()?['object']?['properties']?['incidentNumber']} @{items('For_each_FileHash')?['Value']}- Palo Alto WildFire FileHash Verdict Report",
+                                                        "To": "@{triggerBody()?['object']?['properties']?['owner']?['email']};@{parameters('NotificationEmail')}"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -614,11 +566,11 @@
                                         ]
                                     },
                                     "type": "If",
-                                    "description": "Condition to check file hash verdict"
+                                    "description": "Condition to check filehash verdict"
                                 },
                                 "Construct_verdict_JSON": {
                                     "runAfter": {
-                                        "Get_file_hash_verdict": [
+                                        "Get_URL_or_Hash_Verdict": [
                                             "Succeeded"
                                         ]
                                     },
@@ -627,34 +579,33 @@
                                         "name": "VerdictJSON",
                                         "value": {
                                             "get-verdict-info": {
-                                                "md5": "@json(xml(body('Get_file_hash_verdict')))['wildfire']['get-verdict-info']['md5']",
-                                                "sha256": "@json(xml(body('Get_file_hash_verdict')))['wildfire']['get-verdict-info']['sha256']",
-                                                "verdict": "@json(xml(body('Get_file_hash_verdict')))['wildfire']['get-verdict-info']['verdict']"
+                                                "md5": "@json(xml(body('Get_URL_or_Hash_Verdict')))['wildfire']['get-verdict-info']['md5']",
+                                                "sha256": "@json(xml(body('Get_URL_or_Hash_Verdict')))['wildfire']['get-verdict-info']['sha256']",
+                                                "verdict": "@json(xml(body('Get_URL_or_Hash_Verdict')))['wildfire']['get-verdict-info']['verdict']"
                                             }
                                         }
                                     },
                                     "description": "To construct JSON object for XML"
                                 },
-                                "Get_file_hash_verdict": {
+                                "Get_URL_or_Hash_Verdict": {
                                     "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "apikey": "@variables('apikey')",
-                                            "hash": "@items('For_each_file_hash')?['Value']"
+                                            "apikey": "@parameters('APIKey')",
+                                            "hash": "@{item()?['Value']}"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json"
                                         },
                                         "host": {
                                             "connection": {
-                                                "name": "@parameters('$connections')['PaloaltoWFConnector']['connectionId']"
+                                                "name": "@parameters('$connections')['WildFireConnector']['connectionId']"
                                             }
                                         },
                                         "method": "post",
                                         "path": "/get/verdict"
-                                    },
-                                    "description": "Generate file hash verdict"
+                                    }
                                 },
                                 "Parse_verdict_JSON": {
                                     "runAfter": {
@@ -670,15 +621,15 @@
                                                 "get-verdict-info": {
                                                     "properties": {
                                                         "md5": {
-                                                            "description": "md5 of the file hash",
+                                                            "description": "md5 of the filehash",
                                                             "type": "string"
                                                         },
                                                         "sha256": {
-                                                            "description": "Algorithm of the file hash",
+                                                            "description": "Algorithm of the filehash",
                                                             "type": "string"
                                                         },
                                                         "verdict": {
-                                                            "description": "Verdict value of the file hash",
+                                                            "description": "Verdict value of the filehash",
                                                             "type": "string"
                                                         }
                                                     },
@@ -692,65 +643,79 @@
                                 }
                             },
                             "runAfter": {
-                                "WildFire_Logo": [
+                                "Azure_Sentinel_Logo": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Foreach",
-                            "description": "Loop for file hash associated entity"
+                            "description": "Loop for filehash associated entity"
                         },
-                        "Initialize_SOC_user_variable": {
+                        "For_each_consolidated_comment": {
+                            "foreach": "@variables('finalconsoildatedcomments')",
+                            "actions": {
+                                "Check_if_comment_length_exceed_maximum_": {
+                                    "actions": {
+                                        "Add_comment_to_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>@{outputs('WildFire_Logo')} Palo Alto WildFire FileHash Enrichment Playbook<br>\n<br>\n@{replace(item(), '﻿<?xml version=\"1.0\" encoding=\"utf-8\"?>', ' ')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_when_exceeds_limit": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>@{outputs('WildFire_Logo')} Palo Alto WildFire FileHash Enrichment Playbook<br>\n<br>\nReport information is exceeding the maximum limit. Please refer the PDF format report provided over mail.</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "less": [
+                                                    "@length(item())",
+                                                    3000
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Condition to check comment length is less than 3000"
+                                }
+                            },
                             "runAfter": {
-                                "Initialize_consolidated_comments_variable": [
+                                "For_each_FileHash": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "SOCEmail",
-                                        "type": "string",
-                                        "value": "[parameters('NotificationEmail')]"
-                                    }
-                                ]
-                            },
-                            "description": "To store SOC user"
-                        },
-                        "Initialize_URL_action_object_variable": {
-                            "runAfter": {
-                                "Initialize_SOC_user_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "URLActionObject",
-                                        "type": "object"
-                                    }
-                                ]
-                            },
-                            "description": "To store URL action object variable"
-                        },
-                        "Initialize_apikey_variable": {
-                            "runAfter": {
-                                "Initialize_verdict_JSON_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "apikey",
-                                        "type": "string",
-                                        "value": "[parameters('WildfireAPIKey')]"
-                                    }
-                                ]
-                            },
-                            "description": "To store apikey globally"
+                            "type": "Foreach",
+                            "description": "Loop for consolidated comment"
                         },
                         "Initialize_consolidated_comments_variable": {
                             "runAfter": {
@@ -771,7 +736,7 @@
                         },
                         "Initialize_incident_comment_variable": {
                             "runAfter": {
-                                "Initialize_apikey_variable": [
+                                "Initialize_verdict_JSON_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -788,7 +753,7 @@
                         },
                         "Initialize_report_JSON_object_variable": {
                             "runAfter": {
-                                "Entities_-_Get_File_Hashes": [
+                                "Entities_-_Get_FileHashes": [
                                     "Succeeded"
                                 ]
                             },
@@ -838,13 +803,13 @@
                         },
                         "WildFire_Logo": {
                             "runAfter": {
-                                "Initialize_URL_action_object_variable": [
+                                "Initialize_consolidated_comments_variable": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Compose",
-                            "inputs": "<img src=\"https://avatars.githubusercontent.com/u/4855743?s=200&v=4\",alt=\"Lamp\" width=\"32\" height=\"32\" />",
-                            "description": "To store Paloalto Wildfire logo"
+                            "inputs": "<img src=\"https://avatars.githubusercontent.com/u/4855743?s=200&v=4\",alt=\"Logo\" width=\"32\" height=\"32\" />",
+                            "description": "To store Palo Alto Wildfire logo"
                         }
                     },
                     "outputs": {}
@@ -852,7 +817,7 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "PaloaltoWFConnector": {
+                            "WildFireConnector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('WildfireConnectionName'))]",
                                 "connectionName": "[variables('WildfireConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('WildfireCustomConnectorName'))]"

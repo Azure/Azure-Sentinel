@@ -9,8 +9,7 @@
             "1. Palo Alto WildFire Custom Connector and PaloAlto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
             "2. Generate wildfire API key to establish the connection to wildfire custom connector.",
             "3. Palo alto API key.",
-            "4. Security policy rule in the Palo Alto PAN-OS VM.",
-            "5. Users must have access to Microsoft Teams and they should be a part of a Teams channel and also Power Automate app should be installed in the Microsoft Teams channel."
+            "4. Security policy rule in the Palo Alto PAN-OS VM."
         ],
         "prerequisitesDeployTemplateFile": [ "../../WildfireConnector/azuredeploy.json", "../../PaloAltoConnector/azuredeploy.json" ],
         "lastUpdateTime": "2021-07-27T00:00:00.000Z",
@@ -25,23 +24,26 @@
     },
     "parameters": {
         "PlaybookName": {
+            "defaultValue": "URLEnrichment-PaloAltoWildFire",
             "type": "string",
             "metadata": {
-                "description": "Enter Logic App / Playbook Name"
+                "description": "Enter URL Enrichment Playbook Name"
             },
             "minLength": 3
         },
         "WildfireCustomConnectorName": {
-           "type": "String",
+            "defaultValue": "PaloAltoWildFire",
+            "type": "String",
             "metadata": {
                 "description": "Enter Palo Alto WildFire Custom Connector Name"
             },
             "minLength": 3
         },
-        "PaloAltoCustomConnectorName": {
+        "PAN-OSCustomConnectorName": {
+          "defaultValue": "PaloAltoPAN-OS",
             "type": "String",
             "metadata": {
-                "description": "Enter Palo Alto Custom Connector Name"
+                "description": "Enter Palo Alto PAN-OS Custom Connector Name"
             },
             "minLength": 3
         },
@@ -62,7 +64,7 @@
     },
     "variables": {
         "WildFireConnectionName": "[concat('WildFireConnector-', parameters('PlaybookName'))]",
-        "PaloaltoConnectionName": "[concat('PaloaltoConnector-', parameters('PlaybookName'))]",
+        "PANOSConnectionName": "[concat('PANOSConnector-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('AzureSentinelConnector-', parameters('PlaybookName'))]",
         "TeamsConnectionName": "[concat('TeamsConnector-', parameters('PlaybookName'))]"
     },
@@ -82,12 +84,12 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('PaloaltoConnectionName')]",
+            "name": "[variables('PANOSConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
                 "customParameterValues": {},
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PaloAltoCustomConnectorName'))]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PAN-OSCustomConnectorName'))]"
                 }
             }
         },
@@ -124,7 +126,7 @@
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('PaloaltoConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('WildFireConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
@@ -141,6 +143,14 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
+                        },
+                        "APIKey": {
+                            "defaultValue": "[parameters('WildfireAPIKey')]",
+                            "type": "SecureString"
+                        },
+                        "SecurityPolicyRule": {
+                            "defaultValue": "[parameters('SecurityPolicyRule')]",
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -160,6 +170,16 @@
                         }
                     },
                     "actions": {
+                        "Add_icon_to_the_comment": {
+                            "runAfter": {
+                                "Post_adaptive_card_to_a_channel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://avatars.githubusercontent.com/u/4855743?s=200&v=4\",alt=\"Lamp\" width=\"32\" height=\"32\" />",
+                            "description": "Wildfire logo for incident comment"
+                        },
                         "Append_consolidated_comment": {
                             "runAfter": {
                                 "Create_adaptive_card_for_verdict": [
@@ -203,7 +223,7 @@
                                             },
                                             {
                                                 "header": "Security Policy Rule",
-                                                "value": "@variables('securityPolicyRules')"
+                                                "value": "@parameters('SecurityPolicyRule')"
                                             },
                                             {
                                                 "header": "Action Taken",
@@ -276,7 +296,7 @@
                                         "wrap": true
                                     },
                                     {
-                                        "text": "is/are having malicious verdict value & it is blocked in PAN OS VM",
+                                        "text": "is/are having malicious verdict value & it is blocked in PAN-OS VM",
                                         "type": "TextBlock",
                                         "wrap": true
                                     }
@@ -359,13 +379,13 @@
                                                 "value": [
                                                     {
                                                         "size": "Large",
-                                                        "text": "URL - Azure Sentinel",
+                                                        "text": "Incident URL - Azure Sentinel",
                                                         "type": "TextBlock",
                                                         "weight": "Bolder",
                                                         "wrap": true
                                                     },
                                                     {
-                                                        "text": "@{items('For_each_URL')?['Url']} is having benign verdict value. The URL is not blocked.",
+                                                        "text": "@{items('For_each_URL')?['Url']} is having benign verdict value. Incident URL is not blocked.",
                                                         "type": "TextBlock",
                                                         "wrap": true
                                                     }
@@ -484,7 +504,7 @@
                                                                 },
                                                                 "host": {
                                                                     "connection": {
-                                                                        "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                                        "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
                                                                     }
                                                                 },
                                                                 "method": "post",
@@ -525,7 +545,7 @@
                                                         "inputs": {
                                                             "body": {
                                                                 "entry": {
-                                                                    "@@name": "@variables('securityPolicyRules')",
+                                                                    "@@name": "@parameters('SecurityPolicyRule')",
                                                                     "action": "allow",
                                                                     "application": {
                                                                         "member": "any"
@@ -558,14 +578,14 @@
                                                             },
                                                             "host": {
                                                                 "connection": {
-                                                                    "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                                    "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
                                                                 }
                                                             },
                                                             "method": "put",
                                                             "path": "/restapi/v10.0/Policies/SecurityRules",
                                                             "queries": {
                                                                 "location": "vsys",
-                                                                "name": "@variables('securityPolicyRules')",
+                                                                "name": "@parameters('SecurityPolicyRule')",
                                                                 "vsys": "vsys1"
                                                             }
                                                         },
@@ -653,7 +673,7 @@
                                                 "inputs": {
                                                     "host": {
                                                         "connection": {
-                                                            "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                            "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
                                                         }
                                                     },
                                                     "method": "get",
@@ -675,14 +695,14 @@
                                                 "inputs": {
                                                     "host": {
                                                         "connection": {
-                                                            "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                            "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
                                                         }
                                                     },
                                                     "method": "get",
                                                     "path": "/restapi/v10.0/Policies/SecurityRules",
                                                     "queries": {
                                                         "location": "vsys",
-                                                        "name": "@variables('securityPolicyRules')",
+                                                        "name": "@parameters('SecurityPolicyRule')",
                                                         "vsys": "vsys1"
                                                     }
                                                 },
@@ -762,7 +782,7 @@
                                 },
                                 "Construct_verdict_JSON_object": {
                                     "runAfter": {
-                                        "Get_URL_verdict": [
+                                        "Get_URL_or_Hash_verdict": [
                                             "Succeeded"
                                         ]
                                     },
@@ -771,21 +791,21 @@
                                         "name": "VerdictJSON",
                                         "value": {
                                             "get-verdict-info": {
-                                                "analysis_time": "@json(xml(body('Get_URL_verdict')))['wildfire']['get-verdict-info']['analysis_time']",
-                                                "url": "@json(xml(body('Get_URL_verdict')))['wildfire']['get-verdict-info']['url']",
-                                                "valid": "@json(xml(body('Get_URL_verdict')))['wildfire']['get-verdict-info']['valid']",
-                                                "verdict": "@json(xml(body('Get_URL_verdict')))['wildfire']['get-verdict-info']['verdict']"
+                                                "analysis_time": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['analysis_time']",
+                                                "url": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['url']",
+                                                "valid": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['valid']",
+                                                "verdict": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['verdict']"
                                             }
                                         }
                                     },
                                     "description": "Construct JSON object for XML"
                                 },
-                                "Get_URL_verdict": {
+                                "Get_URL_or_Hash_verdict": {
                                     "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "apikey": "@variables('apikey')",
+                                            "apikey": "@parameters('APIKey')",
                                             "url": "@items('For_each_URL')?['Url']"
                                         },
                                         "headers": {
@@ -793,7 +813,7 @@
                                         },
                                         "host": {
                                             "connection": {
-                                                "name": "@parameters('$connections')['PaloaltoWFConnector']['connectionId']"
+                                                "name": "@parameters('$connections')['WildFireConnector']['connectionId']"
                                             }
                                         },
                                         "method": "post",
@@ -852,16 +872,12 @@
                             "foreach": "@variables('finalConsolidatedcomments')",
                             "actions": {
                                 "Add_comment_to_the_incident": {
-                                    "runAfter": {
-                                        "Add_icon_to_the_comment": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                    "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>@{outputs('Add_icon_to_the_comment')}@{item()}</p>"
+                                            "message": "<p>@{outputs('Add_icon_to_the_comment')} Palo Alto WildFire URL Enrichment Playbook<br>\n<br>\n@{item()}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -871,16 +887,10 @@
                                         "method": "post",
                                         "path": "/Incidents/Comment"
                                     }
-                                },
-                                "Add_icon_to_the_comment": {
-                                    "runAfter": {},
-                                    "type": "Compose",
-                                    "inputs": "<img src=\"https://avatars.githubusercontent.com/u/4855743?s=200&v=4\",alt=\"Lamp\" width=\"32\" height=\"32\" />",
-                                    "description": "Wildfire logo for incident comment"
                                 }
                             },
                             "runAfter": {
-                                "Post_adaptive_card_to_a_channel": [
+                                "Add_icon_to_the_comment": [
                                     "Succeeded"
                                 ]
                             },
@@ -889,7 +899,7 @@
                         },
                         "Initialize_adaptive_card_message_variable": {
                             "runAfter": {
-                                "Initialize_security_policy_rules_variable": [
+                                "Initialize_incident_comment_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -903,24 +913,6 @@
                                 ]
                             },
                             "description": "To store the adaptive card message"
-                        },
-                        "Initialize_api_key_variable": {
-                            "runAfter": {
-                                "Entities_-_Get_URLs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "apikey",
-                                        "type": "string",
-                                        "value": "[parameters('WildfireAPIKey')]"
-                                    }
-                                ]
-                            },
-                            "description": "To store the api key globally"
                         },
                         "Initialize_consolidated_comments_variable": {
                             "runAfter": {
@@ -990,27 +982,9 @@
                             },
                             "description": "To store incident comment"
                         },
-                        "Initialize_security_policy_rules_variable": {
-                            "runAfter": {
-                                "Initialize_incident_comment_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "securityPolicyRules",
-                                        "type": "string",
-                                        "value": "[parameters('SecurityPolicyRule')]"
-                                    }
-                                ]
-                            },
-                            "description": "To store predefined security policy rules"
-                        },
                         "Initialize_verdict_JSON_variable": {
                             "runAfter": {
-                                "Initialize_api_key_variable": [
+                                "Entities_-_Get_URLs": [
                                     "Succeeded"
                                 ]
                             },
@@ -1108,12 +1082,12 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "PaloAltoConnector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectionName'))]",
-                                "connectionName": "[variables('PaloAltoConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PaloAltoCustomConnectorName'))]"
+                            "PANOSConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
+                                "connectionName": "[variables('PANOSConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PAN-OSCustomConnectorName'))]"
                             },
-                            "PaloaltoWFConnector": {
+                            "WildFireConnector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('WildFireConnectionName'))]",
                                 "connectionName": "[variables('WildFireConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('WildfireCustomConnectorName'))]"
