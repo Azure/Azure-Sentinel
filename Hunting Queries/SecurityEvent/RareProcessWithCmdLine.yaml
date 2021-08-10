@@ -15,25 +15,27 @@ tactics:
   - Collection
 
 query: |
-  let v_StartTime = ago(7d);
-  let v_EndTime = ago(1m);
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
   let basic=materialize(
     SecurityEvent
-      | where TimeGenerated >= ago(30d)
+      | where TimeGenerated >= lookback
       | where EventID == 4688
       | where isnotempty(CommandLine) and NewProcessName !endswith ":\\windows\\system32\\conhost.exe" and CommandLine !~ NewProcessName and CommandLine !~ strcat('\"',NewProcessName,'\"'," ")
       | extend CommandLine=tolower(CommandLine)
       | summarize FullCount = count()
-                  , Count= countif(TimeGenerated between (v_StartTime .. v_EndTime))
+                  , Count= countif(TimeGenerated between (starttime .. endtime))
                   , min_TimeGenerated=min(TimeGenerated)
-                  , max_TimeGenerated=max(TimeGenerated) 
+                  , max_TimeGenerated=max(TimeGenerated)
                         by Computer, NewProcessName, CommandLine
       | where Count > 0 and Count < 100);
   let basic_avg = basic
       | summarize Avg = avg(FullCount) by  NewProcessName, CommandLine;
   basic | project-away FullCount
-    | join kind=inner 
-  basic_avg 
+    | join kind=inner
+  basic_avg
     on NewProcessName, CommandLine | project-away NewProcessName1, CommandLine1
-    | where Count < 7 or (Count <= Avg*0.01 and Count < 100) 
+    | where Count < 7 or (Count <= Avg*0.01 and Count < 100)
     | extend HostCustomEntity=Computer

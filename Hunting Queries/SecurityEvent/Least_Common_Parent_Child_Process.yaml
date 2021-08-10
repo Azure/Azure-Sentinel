@@ -1,8 +1,8 @@
 id: 3712595d-6f47-416b-963a-605201ed2764
 name: Least Common Parent And Child Process Pairs
 description: |
-  'Looks across your environment for least common Parent/Child process combinations.  
-  Will possibly find some malicious activity disguised as well known process names.  
+  'Looks across your environment for least common Parent/Child process combinations.
+  Will possibly find some malicious activity disguised as well known process names.
   By ZanCo'
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -12,12 +12,14 @@ tactics:
   - Execution
 query: |
 
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
   let Allowlist = dynamic (['foo.exe', 'baz.exe']);
   let Sensitivity = 5;
-  let StartDate = ago(7d);
-  let Duration = 7d;
   SecurityEvent
-  | where EventID == 4688 and TimeGenerated > StartDate and TimeGenerated < (StartDate + Duration) and isnotnull(ParentProcessName)
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID == 4688 and isnotnull(ParentProcessName)
   | extend ProcArray = split(NewProcessName, '\\'), ParentProcArray = split(ParentProcessName, '\\')
   // ProcArrayLength is Folder Depth
   | extend ProcArrayLength = arraylength(ProcArray), ParentProcArrayLength = arraylength(ParentProcArray)
@@ -28,4 +30,3 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = makeset(Computer), UserCount = dcount(SubjectUserName), Users = makeset(SubjectUserName) by ParentChildPair
   | where TimesSeen < Sensitivity
   | extend timestamp = StartTimeUtc
-  
