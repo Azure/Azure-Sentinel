@@ -17,12 +17,21 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 
 ### Deploy a custom template
  1. On the Azure home page, filter for Deploy a custom template.
-   <p align="center">  
-      <img src="./Images/deploy-custom-template-search.png"> </a>
-   </p>
- 3. Under <b>Custom Deployment>Select a template</b>, click <b>Build your own template in the editor</b>.
- 4. From <b>Edit template</b>, click <b>Load file</b>, the file named <u>IllusiveSentinelIncidentEnrichment.json</u> provided by Illusive and click <b>Save</b>.
- 5. Under <b>Custom Deployment>Basics</b>:
+       <p align="center">  
+          <img src="./Images/deploy-custom-template-search.png"> </a>
+       </p>
+ 1. Under <b>Custom Deployment>Select a template</b>, click <b>Build your own template in the editor</b>.
+       <p align="center">  
+          <img src="./Images/deploy-custom-template-page.png"> </a>
+       </p>
+ 1. From <b>Edit template</b>, click <b>Load file</b>, the file named <u>IllusiveSentinelIncidentEnrichment.json</u> provided by Illusive and click <b>Save</b>.
+       <p align="center">  
+          <img src="./Images/deploy-custom-template-load-file.png"> </a>
+       </p>
+       <p align="center">  
+          <img src="./Images/deploy-custom-template-edit-template.png"> </a>
+       </p>
+ 1. Under <b>Custom Deployment>Basics</b>:
   - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution. 
   - Specify the <b>Resource group</b> that contains the Workspace where you want to install the playbook.
   - Under <b>Instance details</b>:
@@ -35,12 +44,11 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
       - Azure-Sentinel Client ID: 
       - Azure-Sentinel Client Secret: 
       - Azure-Sentinel Tenant ID:
-5. When finished entering details, click <b>Review + Create</b>.
-6. On successful validation, click <b>Create</b>.
+1. When finished entering details, click <b>Review + Create</b>.
+1. On successful validation, click <b>Create</b>.
+   This completes the playbook deployment. 
 
-This completes the playbook deployment. 
-
-7. To view the playbook, click <b>Go to resource group</b>.
+1. To view the playbook, click <b>Go to resource group</b>.
   - If there is only one installed playbook in the workspace, clicking on <b>Go to resource group</b> will take you to the playbook page. 
   - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the All resources page. The deployed playbook will be available in the list.
 
