@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.20",
+  "contentVersion": "1.0.0.21",
   "parameters": {
     "AzureMonitorLogs-ConnectionName": {
       "type": "string",
@@ -117,7 +117,7 @@
               "type": "Foreach",
               "foreach": "@body('Get_Daily_Report_List')?['value']",
               "actions": {
-                "Create_CSV_table": {
+                "Create_Daily_CSV_table": {
                   "type": "Table",
                   "inputs": {
                     "from": "@body('Run_daily_report_query_and_list_results')?['value']",
@@ -150,7 +150,7 @@
                   },
                   "runAfter": {}
                 },
-                "Send_Email_(V3)": {
+                "Send_Daily_Emails": {
                   "type": "ApiConnection",
                   "inputs": {
                     "host": {
@@ -160,13 +160,13 @@
                     },
                     "method": "post",
                     "body": {
-                      "From": "<user>@<domain>",
-                      "To": "<user>@<domain>",
+                      "From": "reporter@chromeweb.com",
+                      "To": "@items('For_each_daily_report')?['Recipients']",
                       "Subject": "@{items('For_each_daily_report')?['Title']} daily report run completed",
                       "Body": "<p>The Daily Report Job has completed. &nbsp;Please find the results of the report '@{items('For_each_daily_report')?['Title']}' attached to this email</p>",
                       "Attachments": [
                         {
-                          "ContentData": "@{base64(body('Create_CSV_table'))}",
+                          "ContentData": "@{base64(body('Create_Daily_CSV_table'))}",
                           "ContentType": "text/csv",
                           "FileName": "@{items('For_each_daily_report')?['Title']}.csv"
                         }
@@ -175,7 +175,7 @@
                     "path": "/SendEmailV3"
                   },
                   "runAfter": {
-                    "Create_CSV_table": [
+                    "Create_Daily_CSV_table": [
                       "Succeeded"
                     ]
                   }
@@ -225,6 +225,18 @@
                   "type": "Foreach",
                   "foreach": "@body('Get_Monthly_Report_List')?['value']",
                   "actions": {
+                    "Create_Monthly_CSV_Reports": {
+                      "type": "Table",
+                      "inputs": {
+                        "from": "@body('Run_monthly_queries_and_list_results')?['value']",
+                        "format": "CSV"
+                      },
+                      "runAfter": {
+                        "Run_monthly_queries_and_list_results": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
                     "Run_monthly_queries_and_list_results": {
                       "type": "ApiConnection",
                       "inputs": {
@@ -245,6 +257,36 @@
                         }
                       },
                       "runAfter": {}
+                    },
+                    "Send_Monthly_Emails": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['smtp']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "From": "<user>@<domain>",
+                          "To": "@items('For_each_monthly_report')?['Recipients']",
+                          "Subject": "'@{items('For_each_monthly_report')?['Title']}' Monthly report completed",
+                          "Body": "<p>The monthly report '@{items('For_each_monthly_report')?['Title']}' has completed and is attached.</p>",
+                          "Attachments": [
+                            {
+                              "ContentData": "@{base64(body('Create_Monthly_CSV_Reports'))}",
+                              "ContentType": "text/csv",
+                              "FileName": "@{items('For_each_monthly_report')?['Title']}.csv"
+                            }
+                          ]
+                        },
+                        "path": "/SendEmailV3"
+                      },
+                      "runAfter": {
+                        "Create_Monthly_CSV_Reports": [
+                          "Succeeded"
+                        ]
+                      }
                     }
                   },
                   "runAfter": {
@@ -294,6 +336,18 @@
                   "type": "Foreach",
                   "foreach": "@body('Get_Weekly_Report_List')?['value']",
                   "actions": {
+                    "Create_CSV_table": {
+                      "type": "Table",
+                      "inputs": {
+                        "from": "@body('Run_weekly_queries_and_list_results')?['value']",
+                        "format": "CSV"
+                      },
+                      "runAfter": {
+                        "Run_weekly_queries_and_list_results": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
                     "Run_weekly_queries_and_list_results": {
                       "type": "ApiConnection",
                       "inputs": {
@@ -314,6 +368,36 @@
                         }
                       },
                       "runAfter": {}
+                    },
+                    "Send_Weekly_Emails": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['smtp']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "From": "<user>@<domain>",
+                          "To": "@items('For_each_weekly_report')?['Recipients']",
+                          "Subject": "'@{items('For_each_weekly_report')?['Title']}' weekly report completed",
+                          "Body": "<p>The weekly report '@{items('For_each_weekly_report')?['Title']}' has completed and is attached.</p>",
+                          "Attachments": [
+                            {
+                              "ContentData": "@{base64(body('Create_CSV_table'))}",
+                              "ContentType": "text/csv",
+                              "FileName": "@{items('For_each_weekly_report')?['Title']}.csv"
+                            }
+                          ]
+                        },
+                        "path": "/SendEmailV3"
+                      },
+                      "runAfter": {
+                        "Create_CSV_table": [
+                          "Succeeded"
+                        ]
+                      }
                     }
                   },
                   "runAfter": {
@@ -399,13 +483,12 @@
       "type": "MICROSOFT.WEB/CONNECTIONS",
       "apiVersion": "2018-07-01-preview",
       "name": "[parameters('AzureMonitorLogs-ConnectionName')]",
-      "location": "westus2",
+      "location": "[parameters('Location')]",
       "properties": {
         "api": {
           "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'azuremonitorlogs')]"
         },
-        "displayName": "[parameters('AzureMonitorLogs-ConnectionDisplayName')]",
-        "parameterValues": {}
+        "displayName": "[parameters('AzureMonitorLogs-ConnectionDisplayName')]"
       }
     },
     {
