@@ -48,8 +48,14 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
          <img src="./Images/custom-deployment-basics-incident-enrichment.png"> </a>
       </p>
 5. When finished entering details, click <b>Review + Create</b>.
+      <p align="center">  
+         <img src="./Images/custom-deployment-review-create.png"> </a>
+      </p>
 6. On successful validation, click <b>Create</b>.
    This completes the playbook deployment. 
+      <p align="center">  
+         <img src="./Images/custom-deployment-is-complete.png"> </a>
+      </p>
 7. To view the playbook, click <b>Go to resource group</b>.
     - If there is only one installed playbook in the workspace, clicking on <b>Go to resource group</b> will take you to the playbook page. 
     - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the All resources page. The deployed playbook will be available in the list.
