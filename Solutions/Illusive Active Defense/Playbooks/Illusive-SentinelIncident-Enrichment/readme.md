@@ -24,7 +24,7 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
        <p align="center">  
           <img src="./Images/deploy-custom-template-page.png"> </a>
        </p>
- 1. From <b>Edit template</b>, click <b>Load file</b>, the file named <u>IllusiveSentinelIncidentEnrichment.json</u> provided by Illusive and click <b>Save</b>.
+ 1. From <b>Edit template</b>, click <b>Load file</b>, and load the file named <u>IllusiveSentinelIncidentEnrichment.json</u> provided by Illusive and click <b>Save</b>.
        <p align="center">  
           <img src="./Images/deploy-custom-template-load-file.png"> </a>
        </p>
@@ -44,6 +44,10 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
       - Azure-Sentinel Client ID: 
       - Azure-Sentinel Client Secret: 
       - Azure-Sentinel Tenant ID:
+       </p>
+       <p align="center">  
+          <img src="./Images/custom-deployment-basics-incident-enrichment.png"> </a>
+       </p>
 1. When finished entering details, click <b>Review + Create</b>.
 1. On successful validation, click <b>Create</b>.
    This completes the playbook deployment. 
