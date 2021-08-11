@@ -2,19 +2,19 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "URL verdict automation - Wildfire",
+        "title": "Block URL - Palo Alto Wildfire and PAN-OS",
         "description": "This playbook used to add verdict URL security policy rules",
         "mainSteps": [ "1. Fetches detailed verdict information of the URL.", "2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information.", "3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules." ],
         "prerequisites": [
-            "1. Palo Alto WildFire Custom Connector and PaloAlto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+            "1. Palo Alto WildFire Custom Connector and Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
             "2. Generate wildfire API key to establish the connection to wildfire custom connector.",
-            "3. Palo alto API key.",
+            "3. Palo Alto WildFire API key.",
             "4. Security policy rule in the Palo Alto PAN-OS VM."
         ],
-        "prerequisitesDeployTemplateFile": [ "../../WildfireConnector/azuredeploy.json", "../../PaloAltoConnector/azuredeploy.json" ],
+        "prerequisitesDeployTemplateFile": [ "../../WildfireConnector/azuredeploy.json" ],
         "lastUpdateTime": "2021-07-27T00:00:00.000Z",
-        "entities": [ "URLs" ],
-        "tags": [ "Automation" ],
+        "entities": [ "URL" ],
+        "tags": [ "Remediation" ],
         "support": {
             "tier": "community"
         },
@@ -24,10 +24,10 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "URLEnrichment-PaloAltoWildFire",
+            "defaultValue": "Block-URL-PaloAltoWildFire",
             "type": "string",
             "metadata": {
-                "description": "Enter URL Enrichment Playbook Name"
+                "description": "Enter Block URL Playbook Name"
             },
             "minLength": 3
         },
@@ -40,7 +40,7 @@
             "minLength": 3
         },
         "PAN-OSCustomConnectorName": {
-          "defaultValue": "PaloAltoPAN-OS",
+            "defaultValue": "PaloAltoPANOS",
             "type": "String",
             "metadata": {
                 "description": "Enter Palo Alto PAN-OS Custom Connector Name"
@@ -65,8 +65,7 @@
     "variables": {
         "WildFireConnectionName": "[concat('WildFireConnector-', parameters('PlaybookName'))]",
         "PANOSConnectionName": "[concat('PANOSConnector-', parameters('PlaybookName'))]",
-        "AzureSentinelConnectionName": "[concat('AzureSentinelConnector-', parameters('PlaybookName'))]",
-        "TeamsConnectionName": "[concat('TeamsConnector-', parameters('PlaybookName'))]"
+        "AzureSentinelConnectionName": "[concat('AzureSentinelConnector-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -107,19 +106,7 @@
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
             }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('TeamsConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
-                }
-            }
-        },
+        },        
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
@@ -128,8 +115,7 @@
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('WildFireConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -172,7 +158,7 @@
                     "actions": {
                         "Add_icon_to_the_comment": {
                             "runAfter": {
-                                "Post_adaptive_card_to_a_channel": [
+                                "Append_consolidated_comment": [
                                     "Succeeded"
                                 ]
                             },
@@ -182,7 +168,7 @@
                         },
                         "Append_consolidated_comment": {
                             "runAfter": {
-                                "Create_adaptive_card_for_verdict": [
+                                "For_each_URL": [
                                     "Succeeded"
                                 ]
                             },
@@ -192,117 +178,6 @@
                                 "value": "@variables('incidentComment')"
                             },
                             "description": "consolidate comments of each iteration to update to incident"
-                        },
-                        "Check_for_malicious_verdict": {
-                            "actions": {
-                                "Append_incident_comment": {
-                                    "runAfter": {
-                                        "Create_HTML_table_for_verdict": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "AppendToStringVariable",
-                                    "inputs": {
-                                        "name": "incidentComment",
-                                        "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
-                                    },
-                                    "description": "To append incident comment"
-                                },
-                                "Create_HTML_table_for_verdict": {
-                                    "runAfter": {},
-                                    "type": "Table",
-                                    "inputs": {
-                                        "columns": [
-                                            {
-                                                "header": "URL",
-                                                "value": "@item()?['URL']"
-                                            },
-                                            {
-                                                "header": "Verdict",
-                                                "value": "@item()?['Wildfire_Verdict']"
-                                            },
-                                            {
-                                                "header": "Security Policy Rule",
-                                                "value": "@parameters('SecurityPolicyRule')"
-                                            },
-                                            {
-                                                "header": "Action Taken",
-                                                "value": "Blocked"
-                                            }
-                                        ],
-                                        "format": "HTML",
-                                        "from": "@variables('ConsolidatedverdictArray')"
-                                    },
-                                    "description": "Create HTML table for verdict "
-                                }
-                            },
-                            "runAfter": {
-                                "For_each_URL": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "not": {
-                                            "equals": [
-                                                "@variables('ConsolidatedverdictArray')",
-                                                "@null"
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "description": "Condition to check if verdict array has values"
-                        },
-                        "Construct_string_from_consolidated_verdict_array": {
-                            "runAfter": {
-                                "Check_for_malicious_verdict": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Compose",
-                            "inputs": "@replace(replace(replace(replace(replace(replace(string(variables('ConsolidatedverdictArray')),'[',''),']',''),'\"',''),'{',''),'}',''),'\"','')",
-                            "description": "Construct verdict string from verdict array "
-                        },
-                        "Create_adaptive_card_for_verdict": {
-                            "runAfter": {
-                                "Construct_string_from_consolidated_verdict_array": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "SetVariable",
-                            "inputs": {
-                                "name": "InformativeAdaptiveCardBody",
-                                "value": [
-                                    {
-                                        "size": "Large",
-                                        "text": " Verdict URL summary from Azure Sentinel",
-                                        "type": "TextBlock",
-                                        "weight": "Bolder",
-                                        "wrap": true
-                                    },
-                                    {
-                                        "size": "Large",
-                                        "text": "Below URL(s) is/are blocked",
-                                        "type": "TextBlock",
-                                        "weight": "Bolder",
-                                        "wrap": true
-                                    },
-                                    {
-                                        "text": "@{outputs('Construct_string_from_consolidated_verdict_array')}",
-                                        "type": "TextBlock",
-                                        "wrap": true
-                                    },
-                                    {
-                                        "text": "is/are having malicious verdict value & it is blocked in PAN-OS VM",
-                                        "type": "TextBlock",
-                                        "wrap": true
-                                    }
-                                ]
-                            },
-                            "description": "Create adaptive card for verdict"
                         },
                         "Entities_-_Get_URLs": {
                             "runAfter": {},
@@ -366,57 +241,6 @@
                                                 "from": "@createArray(body('Parse_verdict_JSON'))"
                                             },
                                             "description": "To create html table for incident comment"
-                                        },
-                                        "Create_adaptive_card_for_benign_verdict": {
-                                            "runAfter": {
-                                                "Add_incident_comment": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "InformativeAdaptiveCardBody",
-                                                "value": [
-                                                    {
-                                                        "size": "Large",
-                                                        "text": "Incident URL - Azure Sentinel",
-                                                        "type": "TextBlock",
-                                                        "weight": "Bolder",
-                                                        "wrap": true
-                                                    },
-                                                    {
-                                                        "text": "@{items('For_each_URL')?['Url']} is having benign verdict value. Incident URL is not blocked.",
-                                                        "type": "TextBlock",
-                                                        "wrap": true
-                                                    }
-                                                ]
-                                            },
-                                            "description": "To create adaptive card body"
-                                        },
-                                        "Update_incident": {
-                                            "runAfter": {
-                                                "Create_adaptive_card_for_benign_verdict": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "classification": {
-                                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
-                                                    },
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
-                                                    "status": "Closed"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/Incidents"
-                                            }
                                         }
                                     },
                                     "runAfter": {
@@ -426,6 +250,69 @@
                                     },
                                     "else": {
                                         "actions": {
+                                            "Check_for_malicious_verdict": {
+                                                "actions": {
+                                                    "Append_incident_comment": {
+                                                        "runAfter": {
+                                                            "Create_HTML_table_for_verdict": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "incidentComment",
+                                                            "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
+                                                        },
+                                                        "description": "To append incident comment"
+                                                    },
+                                                    "Create_HTML_table_for_verdict": {
+                                                        "runAfter": {},
+                                                        "type": "Table",
+                                                        "inputs": {
+                                                            "columns": [
+                                                                {
+                                                                    "header": "URL",
+                                                                    "value": "@item()?['URL']"
+                                                                },
+                                                                {
+                                                                    "header": "Verdict",
+                                                                    "value": "@item()?['Wildfire_Verdict']"
+                                                                },
+                                                                {
+                                                                    "header": "Security Policy Rule",
+                                                                    "value": "@parameters('SecurityPolicyRule')"
+                                                                },
+                                                                {
+                                                                    "header": "Action Taken",
+                                                                    "value": "Blocked"
+                                                                }
+                                                            ],
+                                                            "format": "HTML",
+                                                            "from": "@variables('ConsolidatedverdictArray')"
+                                                        },
+                                                        "description": "Create HTML table for verdict "
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Check_if_the_URL_is_added_to_security_policy_rules": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "not": {
+                                                                "equals": [
+                                                                    "@variables('ConsolidatedverdictArray')",
+                                                                    "@null"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If",
+                                                "description": "Condition to check if verdict array has values"
+                                            },
                                             "Check_if_address_object_exists": {
                                                 "actions": {
                                                     "Check_if_security_rule_applied_to_URL": {
@@ -877,7 +764,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>@{outputs('Add_icon_to_the_comment')} Palo Alto WildFire URL Enrichment Playbook<br>\n<br>\n@{item()}</p>"
+                                            "message": "<p>@{outputs('Add_icon_to_the_comment')} Palo Alto WildFire Block URL Playbook<br>\n<br>\n@{item()}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -897,26 +784,9 @@
                             "type": "Foreach",
                             "description": "Loop for incident comment"
                         },
-                        "Initialize_adaptive_card_message_variable": {
-                            "runAfter": {
-                                "Initialize_incident_comment_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "InformativeAdaptiveCardBody",
-                                        "type": "array"
-                                    }
-                                ]
-                            },
-                            "description": "To store the adaptive card message"
-                        },
                         "Initialize_consolidated_comments_variable": {
                             "runAfter": {
-                                "Initialize_adaptive_card_message_variable": [
+                                "Initialize_incident_comment_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -999,23 +869,6 @@
                             },
                             "description": "To store the verdict JOSN object"
                         },
-                        "Initialize_verdict_URL_collections_variable": {
-                            "runAfter": {
-                                "Initialize_consolidated_comments_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "VerdictURLs",
-                                        "type": "array"
-                                    }
-                                ]
-                            },
-                            "description": "Tp store Invalid verdict URLs"
-                        },
                         "Initialize_verdict_description_variable": {
                             "runAfter": {
                                 "Initialize_destination_members_variable": [
@@ -1035,7 +888,7 @@
                         },
                         "Initialize_verdict_object_variable": {
                             "runAfter": {
-                                "Initialize_verdict_URL_collections_variable": [
+                                "Initialize_consolidated_comments_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -1050,30 +903,29 @@
                             },
                             "description": "To store verdict object"
                         },
-                        "Post_adaptive_card_to_a_channel": {
+                        "Update_incident": {
                             "runAfter": {
-                                "Append_consolidated_comment": [
+                                "For_each_incident_comment": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\":  [\n     {\n    \"size\": \"Small\",\n    \"style\": \"Person\",\n    \"type\": \"Image\",\n    \"url\": \"https://avatars2.githubusercontent.com/u/4855743?s=280&v=4\"\n  },\n    {\n      \"type\":\"ColumnSet\",\n    \"columns\": [\n        {\n        \"type\":\"Column\",\n\n        \"items\": @{variables('InformativeAdaptiveCardBody')},\n \"width\": \"auto\"\n        \n      }\n    ]\n}\n  ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
-                                    "recipient": {
-                                        "channelId": "19:9439f8f3bcf94355a5fd22c21582f0f7@thread.tacv2"
-                                    }
+                                    "classification": {
+                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
+                                    },
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                                    "status": "Closed"
                                 },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "method": "post",
-                                "path": "/flowbot/actions/adaptivecard/recipienttypes/channel",
-                                "queries": {
-                                    "groupId": "03f5260e-dec3-4047-8cac-38ffe019dd73"
-                                }
+                                "method": "put",
+                                "path": "/Incidents"
                             }
                         }
                     },
@@ -1101,11 +953,6 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
-                            },
-                            "teams": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
-                                "connectionName": "[variables('TeamsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
                             }
                         }
                     }

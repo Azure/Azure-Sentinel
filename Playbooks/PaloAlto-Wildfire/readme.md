@@ -7,7 +7,6 @@
 1. [Overview](#overview)
 1. [Prerequisites](#prerequisites)
 1. [Authentication](#authentication)
-1. [Deploy PAN-OS custom connector](#deplyoment) 
 1. [Deploy WildFire custom connector and 3 playbook templates](#deployall) 
 1. [Deployment Instructions](#instructions)
 1. [Post-Deployment Instructions](#postdeployment)
@@ -36,15 +35,6 @@ WildFire Custom Connector supports: API Key Authentication
 
 <a name="deplyoment">
 
-# Deploy Palo Alto PAN-OS custom connector 
-
-To deploy Palo Alto PAN-OS Custom connector goto [Pre-requisites to deploy Palo Alto PAN-OS Custom Connector](/Connectors/PaloAltoConnector/readme.md)
-
-Click on the below button to deploy Palo Alto PAN-OS Custom Connector in your Azure subscription.
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-Wildfire%2FConnectores%2FPaloAltoConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-Wildfire%2FConnectores%2FPaloAltoConnector%2Fazuredeploy.json)
-
 
 <a name="deployall">
 
@@ -69,14 +59,14 @@ You can choose to deploy the whole package: connector and all three playbook tem
 
 | Parameter  | Description |
 | ------------- | ------------- |
-| **Filehash Enrichment Playbook Name**  | Enter the Filehash Enrichment Playbook Name (e.g. Wildfire_filehash_enrichment)  |
-| **URL Enrichment Playbook Name** | Enter the URL Enrichment Playbook Name (e.g. Wildfire_URL_verdict) |
-| **URL Enrichment Teams Playbook Name** | Enter the URL Enrichment Teams Playbook Name  (e.g. URL_verdict_on_teams) |
-| **Wildfire Custom Connector Name** | Enter the name of WildFire custom connector |
+| **Filehash Enrichment Playbook Name**  | Enter the Filehash Enrichment Playbook Name |
+| **Block URL Playbook Name** | Enter the Block URL Playbook Name |
+| **Block URL From Teams Playbook Name** | Enter the Block URL From Teams Playbook Name |
+| **Wildfire Custom Connector Name** | Enter the name of Palo Alto WildFire custom connector |
 | **Wildfire Service End Point** | Enter the Service End Point of Wildfire API [WildFire Console](https://wildfire.paloaltonetworks.com)|
 | **Wildfire API Key**  | Enter the WildFire API Key| 
 | **Notification Email** | Enter the DL or SOC email address for receiving filehash report|
-| **PAN-OS Custom Connector Name**  | Enter the PAN-OS custom connector name  |
+| **PAN-OS Custom Connector Name**  | Enter the Palo Alto PAN-OS custom connector name  |
 | **Security Policy Rule** | Enter the Security Policy Rule which is created in PAN-OS |
 
 <a name="postdeployment">
@@ -104,12 +94,13 @@ You can choose to deploy the whole package: connector and all three playbook tem
 * [Wildfire Connector](Connectors/WildFireConnector/readme.md)
 
 Playbooks
-* [WildFire Filehash Enrichment](/Playbooks/WildFire-FileHash-Enrichment/readme.md)
-* [WildFire URL Enrichment](/Playbooks/WildFire-URL-Enrichment/readme.md)
-* [WildFire URL Enrichment Teams](/Playbooks/WildFire-URL-Enrichment-Teams/readme.md)
+* [WildFire Filehash Enrichment](/Playbooks/FileHash-Enrichment/readme.md)
+* [WildFire Block URL](/Playbooks/Block-URL/readme.md)
+* [WildFire Block URL From Teams](/Playbooks/Block-URL-From-Teams/readme.md)
 
 
 <a name="limitations">
 
 # Known Issues and Limitations
  - We need to authorize the connections after deploying the playbooks.
+ - Palo Alto Wildfire API returns response body in XML format. To handle this, 'Parse Json' action is needed to convert xml body into json object.[Refer here](./XMLResponse.xml)

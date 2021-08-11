@@ -2,20 +2,23 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Logic Apps Custom Connector and Playbook templates - Wildfire",
+        "title": "Logic Apps Custom Connector and Playbook templates - Palo Alto Wildfire and PAN-OS",
         "description": "This is a consolidated json file for deploying WildFire custom connector + 3 Playbooks",
-        "mainSteps": [ "Filehash enrichment: 1. Fetches detailed verdict information of the filehash. 2. Enriches the incident with verdict information based on the verdict values (benign, phishing, malware, grayware).", "URL on Teams : 1. Fetches detailed verdict information of the URL. 2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information. 3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules.", "URL on Teams : 1. Fetches detailed verdict information of the URL. 2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information. 3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules." ],
+        "mainSteps": [
+            "Filehash Enrichment: 1. Fetches detailed verdict information of the filehash. 2. Enriches the incident with verdict information based on the verdict values (benign, phishing, malware, grayware).",
+            "Block URL: 1. Fetches detailed verdict information of the URL. 2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information. 3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules.",
+            "Block URL From Teams : 1. Fetches detailed verdict information of the URL. 2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information. 3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules."
+        ],
         "prerequisites": [
             "1. PaloAlto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
             "2. Generate wildfire API key to establish the connection to wildfire custom connector.",
-            "3. Palo alto API key.",
+            "3. Palo alto Wildfire API key.",
             "4. Security policy rule in the Palo Alto PAN-OS VM.",
-            "5. Wildfire API end point should be known."
+            "5. Wildfire API Serivce Endpoint should be known."
         ],
-        "prerequisitesDeployTemplateFile": [ "../../PaloAltoConnector/azuredeploy.json" ],
         "lastUpdateTime": "2021-07-27T00:00:00.000Z",
-        "entities": [ "URLs", "Filehash" ],
-        "tags": [ "Teams", "enrichment", "automation" ],
+        "entities": [ "URL", "Filehash" ],
+        "tags": [ "Remediation", "Response from teams", "Enrichment" ],
         "support": {
             "tier": "community"
         },
@@ -25,26 +28,26 @@
     },
     "parameters": {
         "FilehashEnrichmentPlaybookName": {
-            "defaultValue": "FileHashEnrichment-PaloAltoWildFire",
+            "defaultValue": "FileHash-Enrichment-PaloAltoWildFire",
             "type": "string",
             "metadata": {
                 "description": "Enter Filehash Enrichment Playbook Name"
             },
             "minLength": 3
         },
-        "URLEnrichmentPlaybookName": {
-            "defaultValue": "URLEnrichment-PaloAltoWildFire",
+        "BlockURLPlaybookName": {
+            "defaultValue": "Block-URL-PaloAltoWildFire",
             "type": "string",
             "metadata": {
-                "description": "Enter URL Enrichment Playbook Name"
+                "description": "Enter Block URL Playbook Name"
             },
             "minLength": 3
         },
-        "URLEnrichmentTeamsPlaybookName": {
-            "defaultValue": "URLEnrichmentTeams-PaloAltoWildFire",
+        "BlockURLFromTeamsPlaybookName": {
+            "defaultValue": "Block-URL-From-Teams-PaloAltoWildFire",
             "type": "string",
             "metadata": {
-                "description": "Enter URL Enrichment Teams Playbook Name"
+                "description": "Enter Block URL From Teams Playbook Name"
             },
             "minLength": 3
         },
@@ -73,12 +76,12 @@
         "NotificationEmail": {
             "type": "string",
             "metadata": {
-                "description": "Enter DL or SOC Email Address For Notification"
+                "description": "Enter DL or SOC Email Address for receiving filehash report"
             },
             "minLength": 3
         },
         "PAN-OSCustomConnectorName": {
-            "defaultValue": "PaloAltoPAN-OS",
+            "defaultValue": "PaloAltoPANOS",
             "type": "String",
             "metadata": {
                 "description": "Enter Palo Alto PAN-OS Custom Connector Name"
@@ -760,7 +763,7 @@
                             "type": "Compose",
                             "inputs": "<img src=\"https://connectoricons-prod.azureedge.net/releases/v1.0.1500/1.0.1500.2502/azuresentinel/icon.png\",alt=\"Logo\" width=\"32\" height=\"32\" />\n"
                         },
-                        "Entities_-_Get_FileHashes": {
+                        "Entities_-_Get_FileHash": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -775,7 +778,7 @@
                             }
                         },
                         "For_each_FileHash": {
-                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "foreach": "@body('Entities_-_Get_FileHash')?['Filehashes']",
                             "actions": {
                                 "Append_consolidated_comments": {
                                     "runAfter": {
@@ -1144,8 +1147,8 @@
                                                                 "Name": "@{items('For_each_FileHash')?['Value']}.pdf"
                                                             }
                                                         ],
-                                                        "Body": "<p>@{outputs('WildFire_Logo')}@{outputs('Azure_Sentinel_Logo')}<br>\n<br>\nTitle - Palo Alto WildFire FileHash verdict report (@{items('For_each_FileHash')?['Value']})<br>\n<br>\n Summary of FileHash verdict report was posted as a comment to the incident. @{outputs('Add_incident_URL_to_Email')}<br>\n Attached is full report.<br>\n<br>\n<br>\n<span style=\"color: rgb(124,112,107)\">Note: This is an automatic mail sent by Azure Sentinel playbook.</span></p>",
-                                                        "Subject": "INC#:@{triggerBody()?['object']?['properties']?['incidentNumber']} @{items('For_each_FileHash')?['Value']}- Palo Alto WildFire FileHash Verdict Report",
+                                                        "Body": "<p>@{outputs('WildFire_Logo')}@{outputs('Azure_Sentinel_Logo')}<br>\n<br>\nPalo Alto WildFire FileHash verdict report (@{items('For_each_FileHash')?['Value']})<br>\n<br>\n* Summary of FileHash verdict report was posted as a comment to the incident. @{outputs('Add_incident_URL_to_Email')}<br>\n* Attached is full report.<br>\n<br>\n<br>\n<span style=\"color: rgb(124,112,107)\">Note: This is an automatic mail sent by Azure Sentinel playbook.</span></p>",
+                                                        "Subject": "INC#@{triggerBody()?['object']?['properties']?['incidentNumber']} - Palo Alto WildFire FileHash Verdict Report (@{items('For_each_FileHash')?['Value']})",
                                                         "To": "@{triggerBody()?['object']?['properties']?['owner']?['email']};@{parameters('NotificationEmail')}"
                                                     },
                                                     "host": {
@@ -1358,7 +1361,7 @@
                         },
                         "Initialize_report_JSON_object_variable": {
                             "runAfter": {
-                                "Entities_-_Get_FileHashes": [
+                                "Entities_-_Get_FileHash": [
                                     "Succeeded"
                                 ]
                             },
@@ -1450,13 +1453,12 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('URLEnrichmentPlaybookName')]",
+            "name": "[parameters('BlockURLPlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('WildFireConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -1499,7 +1501,7 @@
                     "actions": {
                         "Add_icon_to_the_comment": {
                             "runAfter": {
-                                "Post_adaptive_card_to_a_channel": [
+                                "Append_consolidated_comment": [
                                     "Succeeded"
                                 ]
                             },
@@ -1509,7 +1511,7 @@
                         },
                         "Append_consolidated_comment": {
                             "runAfter": {
-                                "Create_adaptive_card_for_verdict": [
+                                "For_each_URL": [
                                     "Succeeded"
                                 ]
                             },
@@ -1519,117 +1521,6 @@
                                 "value": "@variables('incidentComment')"
                             },
                             "description": "consolidate comments of each iteration to update to incident"
-                        },
-                        "Check_for_malicious_verdict": {
-                            "actions": {
-                                "Append_incident_comment": {
-                                    "runAfter": {
-                                        "Create_HTML_table_for_verdict": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "AppendToStringVariable",
-                                    "inputs": {
-                                        "name": "incidentComment",
-                                        "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
-                                    },
-                                    "description": "To append incident comment"
-                                },
-                                "Create_HTML_table_for_verdict": {
-                                    "runAfter": {},
-                                    "type": "Table",
-                                    "inputs": {
-                                        "columns": [
-                                            {
-                                                "header": "URL",
-                                                "value": "@item()?['URL']"
-                                            },
-                                            {
-                                                "header": "Verdict",
-                                                "value": "@item()?['Wildfire_Verdict']"
-                                            },
-                                            {
-                                                "header": "Security Policy Rule",
-                                                "value": "@parameters('SecurityPolicyRule')"
-                                            },
-                                            {
-                                                "header": "Action Taken",
-                                                "value": "Blocked"
-                                            }
-                                        ],
-                                        "format": "HTML",
-                                        "from": "@variables('ConsolidatedverdictArray')"
-                                    },
-                                    "description": "Create HTML table for verdict "
-                                }
-                            },
-                            "runAfter": {
-                                "For_each_URL": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "not": {
-                                            "equals": [
-                                                "@variables('ConsolidatedverdictArray')",
-                                                "@null"
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "description": "Condition to check if verdict array has values"
-                        },
-                        "Construct_string_from_consolidated_verdict_array": {
-                            "runAfter": {
-                                "Check_for_malicious_verdict": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Compose",
-                            "inputs": "@replace(replace(replace(replace(replace(replace(string(variables('ConsolidatedverdictArray')),'[',''),']',''),'\"',''),'{',''),'}',''),'\"','')",
-                            "description": "Construct verdict string from verdict array "
-                        },
-                        "Create_adaptive_card_for_verdict": {
-                            "runAfter": {
-                                "Construct_string_from_consolidated_verdict_array": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "SetVariable",
-                            "inputs": {
-                                "name": "InformativeAdaptiveCardBody",
-                                "value": [
-                                    {
-                                        "size": "Large",
-                                        "text": " Verdict URL summary from Azure Sentinel",
-                                        "type": "TextBlock",
-                                        "weight": "Bolder",
-                                        "wrap": true
-                                    },
-                                    {
-                                        "size": "Large",
-                                        "text": "Below URL(s) is/are blocked",
-                                        "type": "TextBlock",
-                                        "weight": "Bolder",
-                                        "wrap": true
-                                    },
-                                    {
-                                        "text": "@{outputs('Construct_string_from_consolidated_verdict_array')}",
-                                        "type": "TextBlock",
-                                        "wrap": true
-                                    },
-                                    {
-                                        "text": "is/are having malicious verdict value & it is blocked in PAN-OS VM",
-                                        "type": "TextBlock",
-                                        "wrap": true
-                                    }
-                                ]
-                            },
-                            "description": "Create adaptive card for verdict"
                         },
                         "Entities_-_Get_URLs": {
                             "runAfter": {},
@@ -1693,57 +1584,6 @@
                                                 "from": "@createArray(body('Parse_verdict_JSON'))"
                                             },
                                             "description": "To create html table for incident comment"
-                                        },
-                                        "Create_adaptive_card_for_benign_verdict": {
-                                            "runAfter": {
-                                                "Add_incident_comment": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "InformativeAdaptiveCardBody",
-                                                "value": [
-                                                    {
-                                                        "size": "Large",
-                                                        "text": "Incident URL - Azure Sentinel",
-                                                        "type": "TextBlock",
-                                                        "weight": "Bolder",
-                                                        "wrap": true
-                                                    },
-                                                    {
-                                                        "text": "@{items('For_each_URL')?['Url']} is having benign verdict value. Incident URL is not blocked.",
-                                                        "type": "TextBlock",
-                                                        "wrap": true
-                                                    }
-                                                ]
-                                            },
-                                            "description": "To create adaptive card body"
-                                        },
-                                        "Update_incident": {
-                                            "runAfter": {
-                                                "Create_adaptive_card_for_benign_verdict": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "classification": {
-                                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
-                                                    },
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
-                                                    "status": "Closed"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/Incidents"
-                                            }
                                         }
                                     },
                                     "runAfter": {
@@ -1753,6 +1593,69 @@
                                     },
                                     "else": {
                                         "actions": {
+                                            "Check_for_malicious_verdict": {
+                                                "actions": {
+                                                    "Append_incident_comment": {
+                                                        "runAfter": {
+                                                            "Create_HTML_table_for_verdict": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "incidentComment",
+                                                            "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
+                                                        },
+                                                        "description": "To append incident comment"
+                                                    },
+                                                    "Create_HTML_table_for_verdict": {
+                                                        "runAfter": {},
+                                                        "type": "Table",
+                                                        "inputs": {
+                                                            "columns": [
+                                                                {
+                                                                    "header": "URL",
+                                                                    "value": "@item()?['URL']"
+                                                                },
+                                                                {
+                                                                    "header": "Verdict",
+                                                                    "value": "@item()?['Wildfire_Verdict']"
+                                                                },
+                                                                {
+                                                                    "header": "Security Policy Rule",
+                                                                    "value": "@parameters('SecurityPolicyRule')"
+                                                                },
+                                                                {
+                                                                    "header": "Action Taken",
+                                                                    "value": "Blocked"
+                                                                }
+                                                            ],
+                                                            "format": "HTML",
+                                                            "from": "@variables('ConsolidatedverdictArray')"
+                                                        },
+                                                        "description": "Create HTML table for verdict "
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Check_if_the_URL_is_added_to_security_policy_rules": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "not": {
+                                                                "equals": [
+                                                                    "@variables('ConsolidatedverdictArray')",
+                                                                    "@null"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If",
+                                                "description": "Condition to check if verdict array has values"
+                                            },
                                             "Check_if_address_object_exists": {
                                                 "actions": {
                                                     "Check_if_security_rule_applied_to_URL": {
@@ -2204,7 +2107,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>@{outputs('Add_icon_to_the_comment')} Palo Alto WildFire URL Enrichment Playbook<br>\n<br>\n@{item()}</p>"
+                                            "message": "<p>@{outputs('Add_icon_to_the_comment')} Palo Alto WildFire Block URL Playbook<br>\n<br>\n@{item()}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -2224,26 +2127,9 @@
                             "type": "Foreach",
                             "description": "Loop for incident comment"
                         },
-                        "Initialize_adaptive_card_message_variable": {
-                            "runAfter": {
-                                "Initialize_incident_comment_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "InformativeAdaptiveCardBody",
-                                        "type": "array"
-                                    }
-                                ]
-                            },
-                            "description": "To store the adaptive card message"
-                        },
                         "Initialize_consolidated_comments_variable": {
                             "runAfter": {
-                                "Initialize_adaptive_card_message_variable": [
+                                "Initialize_incident_comment_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -2326,23 +2212,6 @@
                             },
                             "description": "To store the verdict JOSN object"
                         },
-                        "Initialize_verdict_URL_collections_variable": {
-                            "runAfter": {
-                                "Initialize_consolidated_comments_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "VerdictURLs",
-                                        "type": "array"
-                                    }
-                                ]
-                            },
-                            "description": "Tp store Invalid verdict URLs"
-                        },
                         "Initialize_verdict_description_variable": {
                             "runAfter": {
                                 "Initialize_destination_members_variable": [
@@ -2362,7 +2231,7 @@
                         },
                         "Initialize_verdict_object_variable": {
                             "runAfter": {
-                                "Initialize_verdict_URL_collections_variable": [
+                                "Initialize_consolidated_comments_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -2377,30 +2246,29 @@
                             },
                             "description": "To store verdict object"
                         },
-                        "Post_adaptive_card_to_a_channel": {
+                        "Update_incident": {
                             "runAfter": {
-                                "Append_consolidated_comment": [
+                                "For_each_incident_comment": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\":  [\n     {\n    \"size\": \"Small\",\n    \"style\": \"Person\",\n    \"type\": \"Image\",\n    \"url\": \"https://avatars2.githubusercontent.com/u/4855743?s=280&v=4\"\n  },\n    {\n      \"type\":\"ColumnSet\",\n    \"columns\": [\n        {\n        \"type\":\"Column\",\n\n        \"items\": @{variables('InformativeAdaptiveCardBody')},\n \"width\": \"auto\"\n        \n      }\n    ]\n}\n  ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
-                                    "recipient": {
-                                        "channelId": "19:9439f8f3bcf94355a5fd22c21582f0f7@thread.tacv2"
-                                    }
+                                    "classification": {
+                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
+                                    },
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                                    "status": "Closed"
                                 },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "method": "post",
-                                "path": "/flowbot/actions/adaptivecard/recipienttypes/channel",
-                                "queries": {
-                                    "groupId": "03f5260e-dec3-4047-8cac-38ffe019dd73"
-                                }
+                                "method": "put",
+                                "path": "/Incidents"
                             }
                         }
                     },
@@ -2428,11 +2296,6 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
-                            },
-                            "teams": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
-                                "connectionName": "[variables('TeamsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
                             }
                         }
                     }
@@ -2442,7 +2305,7 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-            "name": "[parameters('URLEnrichmentTeamsPlaybookName')]",
+            "name": "[parameters('BlockURLFromTeamsPlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
@@ -2604,6 +2467,31 @@
                                     "Succeeded"
                                 ]
                             },
+                            "else": {
+                                "actions": {
+                                    "Update_incident": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "classification": {
+                                                    "ClassificationAndReason": "@triggerBody()?['object']?['properties']?['status']"
+                                                },
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                                                "status": "Closed"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Incidents"
+                                        }
+                                    }
+                                }
+                            },
                             "expression": {
                                 "and": [
                                     {
@@ -2689,57 +2577,6 @@
                                                 "from": "@createArray(body('Parse_verdict_JSON'))"
                                             },
                                             "description": "To create html table for incident comment"
-                                        },
-                                        "Create_adaptive_card_for_benign_verdict": {
-                                            "runAfter": {
-                                                "Add_incident_comment": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "InformativeAdaptiveCardBody",
-                                                "value": [
-                                                    {
-                                                        "size": "Large",
-                                                        "text": "Incident URL - Azure Sentinel",
-                                                        "type": "TextBlock",
-                                                        "weight": "Bolder",
-                                                        "wrap": true
-                                                    },
-                                                    {
-                                                        "text": "@{items('For_each_URL')?['Url']} is having benign verdict value. Incident URL is not Blocked.",
-                                                        "type": "TextBlock",
-                                                        "wrap": true
-                                                    }
-                                                ]
-                                            },
-                                            "description": "To store adaptive card body"
-                                        },
-                                        "Update_incident": {
-                                            "runAfter": {
-                                                "Create_adaptive_card_for_benign_verdict": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "classification": {
-                                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
-                                                    },
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
-                                                    "status": "Closed"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/Incidents"
-                                            }
                                         }
                                     },
                                     "runAfter": {
@@ -3361,7 +3198,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>@{outputs('Add_icon_to_the_comments')} Palo Alto WildFire URL Enrichment Teams Playbook<br>\n<br>\n@{item()}</p>"
+                                            "message": "<p>@{outputs('Add_icon_to_the_comments')} Palo Alto WildFire Block URL From Teams Playbook<br>\n<br>\n@{item()}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -3527,7 +3364,7 @@
                             "inputs": {
                                 "body": {
                                     "body": {
-                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Below is/are the URL(s) blocked\",\n            \"wrap\": true\n        },\n\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{outputs('Construct_string_from_consolidated_verdict_array')}\",\n            \"wrap\": true\n        },\n \n {\n    \"text\": \" Incident # : @{triggerBody()?['object']?['properties']?['incidentNumber']}  \",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Update configuration\"\n                    }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Below is/are the URL(s) blocked\",\n            \"wrap\": true\n        },\n\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{outputs('Construct_string_from_consolidated_verdict_array')}\",\n            \"wrap\": true\n        },\n \n {\n    \"text\": \" Incident # : @{triggerBody()?['object']?['properties']?['incidentNumber']}  \",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Update configuration\"\n                    },\n  {\n    \"title\": \"Ignore\",\n    \"type\": \"Action.Submit\"\n  }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
                                         "recipient": {
                                             "channelId": "19:9439f8f3bcf94355a5fd22c21582f0f7@thread.tacv2"
                                         },

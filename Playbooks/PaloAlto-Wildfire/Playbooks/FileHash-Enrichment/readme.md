@@ -26,7 +26,7 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 
 | Parameter  | Description |
 | ------------- | ------------- |
-| **Playbook Name** | Enter the Playbook Name (e.g. Wildfire-file-hash-Enrichment) |
+| **Playbook Name** | Enter the Playbook Name|
 | **Wildfire API Key**  | Enter the WildFire API Key | 
 | **Wildfire Custom Connector Name** | Enter the name of WildFire custom connector |
 | **Notification Email** | Enter the DL or SOC email address for receiving filehash report|
@@ -68,4 +68,4 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 
 ## **Email received by SOC when verdict status is other than benign**
 
- ![wildfire](./Images/email.PNG) 
+ ![wildfire](./Images/Email.jpg) 

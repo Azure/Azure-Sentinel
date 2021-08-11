@@ -2,19 +2,19 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "URL verdict on Teams - Wildfire",
+        "title": "Block URL From Teams - Palo Alto Wildfire and PAN-OS",
         "description": "This playbook is used to add Malicious URL to security policy rules of PAN-OS VM on teams response",
         "mainSteps": [ "1. Fetches detailed verdict information of the URL.", "2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information.", "3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules." ],
         "prerequisites": [
             "1. Palo Alto WildFire Custom Connector and Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
-            "2. Generate wildfire API key to establish the connection to wildfire custom connector.",
-            "3. Palo alto API key.",
+            "2. Generate Wildfire API key to establish the connection to wildfire custom connector.",
+            "3. Palo alto Wildfire API key.",
             "4. Security policy rule in the Palo Alto PAN-OS VM."
         ],
-        "prerequisitesDeployTemplateFile": [ "../../WildfireConnector/azuredeploy.json", "../../PaloAltoConnector/azuredeploy.json" ],
+        "prerequisitesDeployTemplateFile": [ "../../WildfireConnector/azuredeploy.json" ],
         "lastUpdateTime": "2021-07-27T00:00:00.000Z",
-        "entities": [ "URLs" ],
-        "tags": [ "Teams" ],
+        "entities": [ "URL" ],
+        "tags": [ "Remediation", "Response from teams" ],
         "support": {
             "tier": "community"
         },
@@ -24,10 +24,10 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "URLEnrichmentTeams-PaloAltoWildFire",
+            "defaultValue": "Block-URL-From-Teams-PaloAltoWildFire",
             "type": "string",
             "metadata": {
-                "description": "Enter URL Enrichment Teams Playbook Name"
+                "description": "Enter Block URL From Teams Playbook Name"
             },
             "minLength": 3
         },
@@ -40,7 +40,7 @@
             "minLength": 3
         },
         "PAN-OSCustomConnectorName": {
-            "defaultValue": "PaloAltoPAN-OS",
+            "defaultValue": "PaloAltoPANOS",
             "type": "String",
             "metadata": {
                 "description": "Enter Palo Alto PAN-OS Custom Connector Name"
@@ -285,6 +285,31 @@
                                     "Succeeded"
                                 ]
                             },
+                            "else": {
+                                "actions": {
+                                    "Update_incident": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "classification": {
+                                                    "ClassificationAndReason": "@triggerBody()?['object']?['properties']?['status']"
+                                                },
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                                                "status": "Closed"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Incidents"
+                                        }
+                                    }
+                                }
+                            },
                             "expression": {
                                 "and": [
                                     {
@@ -370,57 +395,6 @@
                                                 "from": "@createArray(body('Parse_verdict_JSON'))"
                                             },
                                             "description": "To create html table for incident comment"
-                                        },
-                                        "Create_adaptive_card_for_benign_verdict": {
-                                            "runAfter": {
-                                                "Add_incident_comment": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "InformativeAdaptiveCardBody",
-                                                "value": [
-                                                    {
-                                                        "size": "Large",
-                                                        "text": "Incident URL - Azure Sentinel",
-                                                        "type": "TextBlock",
-                                                        "weight": "Bolder",
-                                                        "wrap": true
-                                                    },
-                                                    {
-                                                        "text": "@{items('For_each_URL')?['Url']} is having benign verdict value. Incident URL is not Blocked.",
-                                                        "type": "TextBlock",
-                                                        "wrap": true
-                                                    }
-                                                ]
-                                            },
-                                            "description": "To store adaptive card body"
-                                        },
-                                        "Update_incident": {
-                                            "runAfter": {
-                                                "Create_adaptive_card_for_benign_verdict": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "classification": {
-                                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
-                                                    },
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
-                                                    "status": "Closed"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "path": "/Incidents"
-                                            }
                                         }
                                     },
                                     "runAfter": {
@@ -1042,7 +1016,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>@{outputs('Add_icon_to_the_comments')} Palo Alto WildFire URL Enrichment Teams Playbook<br>\n<br>\n@{item()}</p>"
+                                            "message": "<p>@{outputs('Add_icon_to_the_comments')} Palo Alto WildFire Block URL From Teams Playbook<br>\n<br>\n@{item()}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -1208,7 +1182,7 @@
                             "inputs": {
                                 "body": {
                                     "body": {
-                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Below is/are the URL(s) blocked\",\n            \"wrap\": true\n        },\n\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{outputs('Construct_string_from_consolidated_verdict_array')}\",\n            \"wrap\": true\n        },\n \n {\n    \"text\": \" Incident # : @{triggerBody()?['object']?['properties']?['incidentNumber']}  \",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Update configuration\"\n                    }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Below is/are the URL(s) blocked\",\n            \"wrap\": true\n        },\n\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{outputs('Construct_string_from_consolidated_verdict_array')}\",\n            \"wrap\": true\n        },\n \n {\n    \"text\": \" Incident # : @{triggerBody()?['object']?['properties']?['incidentNumber']}  \",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Update configuration\"\n                    },\n  {\n    \"title\": \"Ignore\",\n    \"type\": \"Action.Submit\"\n  }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
                                         "recipient": {
                                             "channelId": "19:9439f8f3bcf94355a5fd22c21582f0f7@thread.tacv2"
                                         },
