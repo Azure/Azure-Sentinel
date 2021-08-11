@@ -1510,7 +1510,7 @@
                         },
                         "Append_consolidated_comment": {
                             "runAfter": {
-                                "For_each_URL": [
+                                "Check_for_malicious_verdict": [
                                     "Succeeded"
                                 ]
                             },
@@ -1520,6 +1520,82 @@
                                 "value": "@variables('incidentComment')"
                             },
                             "description": "consolidate comments of each iteration to update to incident"
+                        },
+                        "Check_for_malicious_verdict": {
+                            "actions": {
+                                "Append_incident_comment": {
+                                    "runAfter": {
+                                        "Create_HTML_table_for_verdict": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "incidentComment",
+                                        "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
+                                    },
+                                    "description": "To append incident comment"
+                                },
+                                "Create_HTML_table_for_verdict": {
+                                    "runAfter": {},
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "URL",
+                                                "value": "@item()?['URL']"
+                                            },
+                                            {
+                                                "header": "Verdict",
+                                                "value": "@item()?['Wildfire_Verdict']"
+                                            },
+                                            {
+                                                "header": "Security Policy Rule",
+                                                "value": "@parameters('SecurityPolicyRule')"
+                                            },
+                                            {
+                                                "header": "Action Taken",
+                                                "value": "Blocked"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@variables('ConsolidatedverdictArray')"
+                                    },
+                                    "description": "Create HTML table for verdict "
+                                },
+                                "Set_classification_reason_variable": {
+                                    "runAfter": {
+                                        "Append_incident_comment": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ClassificationReason",
+                                        "value": "TruePositive - SuspiciousActivity"
+                                    },
+                                    "description": "to store classification reason"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('ConsolidatedverdictArray')",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Condition to check if verdict array has values"
                         },
                         "Entities_-_Get_URLs": {
                             "runAfter": {},
@@ -1583,6 +1659,19 @@
                                                 "from": "@createArray(body('Parse_verdict_JSON'))"
                                             },
                                             "description": "To create html table for incident comment"
+                                        },
+                                        "Set_classification_reason_variable_for_benign_verdict": {
+                                            "runAfter": {
+                                                "Add_incident_comment": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "ClassificationReason",
+                                                "value": "BenignPositive - SuspiciousButExpected"
+                                            },
+                                            "description": "To store classification reason variable for benign verdict"
                                         }
                                     },
                                     "runAfter": {
@@ -1592,69 +1681,6 @@
                                     },
                                     "else": {
                                         "actions": {
-                                            "Check_for_malicious_verdict": {
-                                                "actions": {
-                                                    "Append_incident_comment": {
-                                                        "runAfter": {
-                                                            "Create_HTML_table_for_verdict": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "AppendToStringVariable",
-                                                        "inputs": {
-                                                            "name": "incidentComment",
-                                                            "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
-                                                        },
-                                                        "description": "To append incident comment"
-                                                    },
-                                                    "Create_HTML_table_for_verdict": {
-                                                        "runAfter": {},
-                                                        "type": "Table",
-                                                        "inputs": {
-                                                            "columns": [
-                                                                {
-                                                                    "header": "URL",
-                                                                    "value": "@item()?['URL']"
-                                                                },
-                                                                {
-                                                                    "header": "Verdict",
-                                                                    "value": "@item()?['Wildfire_Verdict']"
-                                                                },
-                                                                {
-                                                                    "header": "Security Policy Rule",
-                                                                    "value": "@parameters('SecurityPolicyRule')"
-                                                                },
-                                                                {
-                                                                    "header": "Action Taken",
-                                                                    "value": "Blocked"
-                                                                }
-                                                            ],
-                                                            "format": "HTML",
-                                                            "from": "@variables('ConsolidatedverdictArray')"
-                                                        },
-                                                        "description": "Create HTML table for verdict "
-                                                    }
-                                                },
-                                                "runAfter": {
-                                                    "Check_if_the_URL_is_added_to_security_policy_rules": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "expression": {
-                                                    "and": [
-                                                        {
-                                                            "not": {
-                                                                "equals": [
-                                                                    "@variables('ConsolidatedverdictArray')",
-                                                                    "@null"
-                                                                ]
-                                                            }
-                                                        }
-                                                    ]
-                                                },
-                                                "type": "If",
-                                                "description": "Condition to check if verdict array has values"
-                                            },
                                             "Check_if_address_object_exists": {
                                                 "actions": {
                                                     "Check_if_security_rule_applied_to_URL": {
@@ -2090,7 +2116,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_verdict_description_variable": [
+                                "Initialize_classification_reason_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -2125,6 +2151,23 @@
                             },
                             "type": "Foreach",
                             "description": "Loop for incident comment"
+                        },
+                        "Initialize_classification_reason_variable": {
+                            "runAfter": {
+                                "Initialize_verdict_description_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ClassificationReason",
+                                        "type": "string",
+                                        "value": "BenignPositive - SuspiciousButExpected"
+                                    }
+                                ]
+                            }
                         },
                         "Initialize_consolidated_comments_variable": {
                             "runAfter": {
@@ -2255,7 +2298,7 @@
                             "inputs": {
                                 "body": {
                                     "classification": {
-                                        "ClassificationAndReason": "BenignPositive - SuspiciousButExpected"
+                                        "ClassificationAndReason": "@variables('ClassificationReason')"
                                     },
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
                                     "severity": "@triggerBody()?['object']?['properties']?['severity']",
@@ -2465,31 +2508,6 @@
                                 "For_each_incident_comment": [
                                     "Succeeded"
                                 ]
-                            },
-                            "else": {
-                                "actions": {
-                                    "Update_incident": {
-                                        "runAfter": {},
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "body": {
-                                                "classification": {
-                                                    "ClassificationAndReason": "BenignPositive - SuspiciousButExpected"
-                                                },
-                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                "severity": "@triggerBody()?['object']?['properties']?['severity']",
-                                                "status": "Closed"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                }
-                                            },
-                                            "method": "put",
-                                            "path": "/Incidents"
-                                        }
-                                    }
-                                }
                             },
                             "expression": {
                                 "and": [
