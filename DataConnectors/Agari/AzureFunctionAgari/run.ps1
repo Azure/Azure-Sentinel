@@ -19,6 +19,8 @@ Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 # Agari Client ID and Secret 
 $client_id = $env:clientID
 $client_secret = $env:clientSecret
+$apiToken = $false
+$revoke_api_token_uri = $false
 
 # Define the Log Analytics Workspace ID and Keys
 $CustomerId = $env:workspaceId
@@ -212,7 +214,7 @@ Function Body-SentinelTI($GraphTenantId,$IoC_Type,$IoC,$Product,$expiry){
     $sg_body = $body | ConvertTo-Json
     return $sg_body
     }
-    
+
 # Setup the SGAPI call
 if ($sgEnabled){
     # Set a 10 day expiry for the IoC
@@ -235,12 +237,11 @@ if ($sgEnabled){
             $sgapi_headers = @{
                             'Authorization' = "Bearer $sgapi_token"
                             'ContentType' = 'application/json'
-                        } 
+                        }
         } else {
             $sgEnabled = $false
             Write-Host "Error fetching token for the Security Graph API call"
         }
-        
 }
 
 #Set uris for get/revoke bearer tokens
@@ -251,50 +252,61 @@ $revoke_apd_token_uri='https://api.agari.com/v1/ep/revoke'
 $revoke_apr_token_uri='https://api.agari.com/v1/apr/revoke'
 $revoke_bp_token_uri='https://api.agari.com/v1/cp/oauth/revoke'
 
-
 # Get the Bearer Tokens
 if ($bpEnabled){
     #Get the bearer token
-    $bpToken = GetToken $client_id $client_secret $get_bp_token_uri
+    if ($apiToken){
+    } else {
+        $apiToken = GetToken $client_id $client_secret $get_bp_token_uri
+    }
     # set the headers
-    if ($bpToken){
+    if ($apiToken){
         $bpHeaders = @{
-                    'Authorization' = "Bearer $bpToken"
+                    'Authorization' = "Bearer $apiToken"
                     'ContentType' = 'application/json'
                     'UserAgent' = "AgariSentinel BP_Integration/v1.0 SentinelPowerShellCore/v$PSVersionTable.PSVersion.major"
                 }
-    } else { 
-        $bpToken = $false
+        $revoke_api_token_uri = $revoke_bp_token_uri
+    } else {
+        $apiToken = $false
         Write-Host "Error Fetching BP Token" 
         }
-} 
+}
 if ($apdEnabled){
     #Get the bearer token
-    $apdToken = GetToken $client_id $client_secret $get_apd_token_uri
+    if ($apiToken){
+    } else {
+        $apiToken = GetToken $client_id $client_secret $get_apd_token_uri
+    }
     # set the headers
-    if ($apdToken){
+    if ($apiToken){
         $apdHeaders = @{
-                    'Authorization'="Bearer $apdToken"
+                    'Authorization'="Bearer $apiToken"
                     'ContentType' = 'application/json'
                     'UserAgent' = "AgariSentinel APD_Integration/v1.0 SentinelPowerShellCore/v$PSVersionTable.PSVersion.major"
                 }
-    } else { 
-        $apdToken = $false
+        $revoke_api_token_uri = $revoke_adp_token_uri
+    } else {
+        $apiToken = $false
         Write-Host "Error Fetching APD Token" 
         }
 }
 if ($aprEnabled){
     #Get the bearer token
-    $aprToken = GetToken $client_id $client_secret $get_apr_token_uri
+    if ($apiToken){
+    } else {
+        $apiToken = GetToken $client_id $client_secret $get_apr_token_uri
+    }
     # set the headers
-    if ($aprToken){
+    if ($apiToken){
         $aprHeaders = @{
-                    'Authorization'="Bearer $aprToken"
+                    'Authorization'="Bearer $apiToken"
                     'ContentType' = 'application/json'
                     'UserAgent' = "AgariSentinel APR_Integration/v1.0 SentinelPowerShellCore/v$PSVersionTable.PSVersion.major"
                 }
-    } else { 
-        $aprToken = $false
+        $revoke_api_token_uri = $revoke_apr_token_uri
+    } else {
+        $apiToken = $false
         Write-Host "Error Fetching APR Token" 
         }
 }
@@ -315,7 +327,7 @@ $TimeStampField = "DateValue"
 # --------------------------------------------------- #
 
 #Check if BP is enabled and we got a token
-if (($bpEnabled) -and ($bpToken)) {
+if (($bpEnabled) -and ($apiToken)) {
     #Check to see if start time empty - usally first run, otherwise set the time from the env variable
     if ($BPlastLog){
         $BPstartdate = $BPlastLog.substring(1)  
@@ -332,13 +344,13 @@ if (($bpEnabled) -and ($bpToken)) {
         }
     $offset += $limit
     } while ($count -eq $limit)
-    
+
     #Loop through each ID and add to the bp_alert log
     foreach ($id in $ids) {
         $GetIDAPI="https://api.agari.com:443/v1/cp/alert_events/$id"
         Invoke-RestMethod -Uri $GetIDAPI -Method 'GET' -Headers $bpHeaders | ForEach-Object {
             $id_data = $_.alert_event
-            $id_log = $id_data | ConvertTo-Json
+            $id_log = $id_data | ConvertTo-Json -Depth 3
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($id_log)) -logType "agari_bpalerts_log"
             }
     }
@@ -358,7 +370,7 @@ if (($bpEnabled) -and ($bpToken)) {
                     Invoke-WebRequest -Method POST -Uri $sgapi_uri -Headers $sgapi_headers -Body $bpBody 
                 }
             }
-        }    
+        }
     }
 }
 
@@ -367,13 +379,13 @@ if (($bpEnabled) -and ($bpToken)) {
 # -------------------------------------------- #
 
 #Check if APD is enabled 
-if (($apdEnabled) -and ($apdToken)){
+if (($apdEnabled) -and ($apiToken)){
         #Check to see if start time empty - usally first run, otherwise set the time from the env variable
         if ($apdlastLog){
             $APDstartdate = $APDlastLog.substring(1)  
         } else {
             $APDstartdate = $fr_startdate
-        } 
+        }
         #Reset the Offset
         $offset = 0          
         #Get the APD policy hits with the offset for paging
@@ -390,7 +402,7 @@ if (($apdEnabled) -and ($apdToken)){
         if ($APDPolicyData){
             $APDPolicyLog = $APDPolicyData | ConvertTo-JSON
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($APDPolicyLog)) -logType "agari_apdpolicy_log"
-        }    
+        }
         #Get the Threat Categories and push to Sentinel
         #Reset the Offset
         $offset = 0   
@@ -417,13 +429,13 @@ if (($apdEnabled) -and ($apdToken)){
 
 if ($sgEnabled){
     # If APR enabled, get all malicious IoC verdicts from investigations 
-    if (($aprEnabled) -and ($aprToken)){
+    if (($aprEnabled) -and ($apiToken)){
         #Check to see if start time empty - usally first run, otherwise set the time from the env variable
         if ($aprlastLog){
             $APRstartdate = $APRlastLog.substring(1)  
         } else {
             $APRstartdate = $fr_startdate
-        } 
+        }
         $Product = 'Phishing Response'
         #Query the latest investigations that are malicious and get the TIs
         $APRUrl = "https://api.agari.com/v1/apr/investigations?start_date=$APRstartdate&end_date=$enddate&classification=malicious"
@@ -437,7 +449,7 @@ if ($sgEnabled){
             $aprLogSuccess = $true
         }
         #Load the Domain IoCs
-        if ($TI_DOMAIN) { 
+        if ($TI_DOMAIN) {
             $IoC_Type = "Domain"
             foreach ($domain_ioc in $TI_DOMAIN) {
                 $domainBody = Body-SentinelTI $GraphTenantId $IoC_Type $domain_ioc $Product $expiry
@@ -445,7 +457,7 @@ if ($sgEnabled){
             }
         }
         #Load the URL IoCs
-        if ($TI_URI) { 
+        if ($TI_URI) {
             $IoC_Type = "URL"
             foreach ($url_ioc in $TI_URL) {
                 $urlBody = Body-SentinelTI $GraphTenantId $IoC_Type $url_ioc $Product $expiry
@@ -453,7 +465,7 @@ if ($sgEnabled){
             }
         }
         #Load the IP IoCs
-        if ($TI_IP) { 
+        if ($TI_IP) {
         $IoC_Type = "IP"
         foreach ($ip_ioc in $TI_IP) {
             $ipBody = Body-SentinelTI $GraphTenantId $IoC_Type $ip_ioc $Product $expiry
@@ -469,21 +481,15 @@ if ($sgEnabled){
                 foreach ($file_ioc in $HashAPIcall.attachments.hash_sha256) {
                 $hashBody = Body-SentinelTI $GraphTenantId $IoC_Type $file_ioc $Product $expiry
                 Invoke-WebRequest -Method POST -Uri $sgapi_uri -Headers $sgapi_headers -Body $hashBody
-                }   
+                }
             }
         }
-    }   
+    }
 }
 
-# We done, revoke the Tokens!
-if (($bpEnabled) -and ($bpToken)){ 
-    RevokeToken $revoke_bp_token_uri $bpToken 
-}
-if (($apdEnabled) -and ($apdToken)){
-    RevokeToken $revoke_apd_token_uri $apdToken
-}
-if (($aprEnabled) -and ($aprToken)){
-    RevokeToken $revoke_apr_token_uri $aprToken
+# We done, revoke the apiToken!
+if ($revoke_api_token_uri){
+    RevokeToken $revoke_api_token_uri $apiToken
 }
 
 # Write the environment variable for the next startdate

@@ -1,0 +1,49 @@
+Parser:
+  Title: ASIM AWS authentication
+  Version: '0.1.0'
+  LastUpdated: June 17, 2021
+Product:
+  Name: Amazon web services cloud trail
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+      This Query Parser maps Amazon Web Service sign in logs (AWSCloudTrail) to the Azure Sentinel Information Model authenticaion schema.
+ParserName: vimAuthenticationAWSCloudTrail
+ParserQuery: |
+  let AWSLogon=(){
+  AWSCloudTrail
+   | where EventName == 'ConsoleLogin'
+   | extend
+    EventVendor = 'AWS'
+    , EventProduct='AWSCloudTrail'
+    , EventCount=1
+    , EventSchemaVersion='0.1.0'
+    , EventResult= iff (ResponseElements has_cs 'Success', 'Success', 'Failure')
+    , EventStartTime=TimeGenerated
+    , EventEndTime=TimeGenerated
+    , EventType='Logon'
+    , LogonMethod=iff(AdditionalEventData has '"MFAUsed": "No"', 'NoMFA', 'MFA')
+    , TargetUrl =tostring(todynamic(AdditionalEventData).LoginTo)
+    , TargetUsernameType='Simple'
+    , TargetUserIdType='AWSId'
+    | project-rename
+      EventOriginalUid= AwsEventId
+    , EventOriginalResultDetails= ErrorMessage
+    , TargetUsername= UserIdentityUserName
+    , TargetUserType=UserIdentityType
+    , TargetUserId=UserIdentityAccountId 
+    , SrcDvcIpAddr=SourceIpAddress
+    , HttpUserAgent=UserAgent
+  // **** Aliases
+  | extend
+         User=TargetUsername
+        , LogonTarget=tostring(split(TargetUrl,'?')[0])
+        , Dvc=EventVendor
+    };
+    AWSLogon

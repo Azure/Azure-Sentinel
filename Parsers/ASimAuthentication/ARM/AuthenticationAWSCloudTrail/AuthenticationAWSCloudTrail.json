@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationAWSCloudTrail",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM AWS authentication",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationAWSCloudTrail",
+            "query": "let AWSLogon=(){\nAWSCloudTrail\n | where EventName == 'ConsoleLogin'\n | extend\n  EventVendor = 'AWS'\n  , EventProduct='AWSCloudTrail'\n  , EventCount=1\n  , EventSchemaVersion='0.1.0'\n  , EventResult= iff (ResponseElements has_cs 'Success', 'Success', 'Failure')\n  , EventStartTime=TimeGenerated\n  , EventEndTime=TimeGenerated\n  , EventType='Logon'\n  , LogonMethod=iff(AdditionalEventData has '\"MFAUsed\": \"No\"', 'NoMFA', 'MFA')\n  , TargetUrl =tostring(todynamic(AdditionalEventData).LoginTo)\n  , TargetUsernameType='Simple'\n  , TargetUserIdType='AWSId'\n  | project-rename\n    EventOriginalUid= AwsEventId\n  , EventOriginalResultDetails= ErrorMessage\n  , TargetUsername= UserIdentityUserName\n  , TargetUserType=UserIdentityType\n  , TargetUserId=UserIdentityAccountId \n  , SrcDvcIpAddr=SourceIpAddress\n  , HttpUserAgent=UserAgent\n// **** Aliases\n| extend\n       User=TargetUsername\n      , LogonTarget=tostring(split(TargetUrl,'?')[0])\n      , Dvc=EventVendor\n  };\n  AWSLogon\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
