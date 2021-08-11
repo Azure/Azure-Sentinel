@@ -9,7 +9,7 @@ The easiest way is via the provided ARM templates:
 #### 1: Deploy via Azure ARM Template
 1.  Deploy the template.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAADUserInfo%2FData%20Conectors%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw%2Egithubusercontent%2Ecom%2FAzure%2FAzure%2DSentinel%2Fmaster%2FDataConnectors%2FAADUserInfo%2Fazuredeploy%2Ejson)
 
 Alternatively you can deploy the elements manually.
 #### 2: Deploy via VS Code
