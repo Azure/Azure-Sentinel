@@ -93,4 +93,8 @@ Sample playbook history:
 
 ## Playbook retry mechanism
 
+<p align="center">  
+   <img src="./Images/playbook-retry-mechanism.png"> </a>
+</p>
+
 Azure Sentinel handles the retry mechanism. If any condition is not met, Sentinel retries the playbook four times.
