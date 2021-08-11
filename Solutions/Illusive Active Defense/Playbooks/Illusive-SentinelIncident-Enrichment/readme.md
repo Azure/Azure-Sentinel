@@ -17,9 +17,12 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 
 ### Deploy a custom template
  1. On the Azure home page, filter for Deploy a custom template.
- 2. Under <b>Custom Deployment>Select a template</b>, click <b>Build your own template in the editor</b>.
- 3. From <b>Edit template</b>, click <b>Load file</b>, the file named <u>IllusiveSentinelIncidentEnrichment.json</u> provided by Illusive and click <b>Save</b>.
- 4. Under <b>Custom Deployment>Basics</b>:
+   <p align="center">  
+      <img src="./Images/deploy-custom-template-search.png"> </a>
+   </p>
+ 3. Under <b>Custom Deployment>Select a template</b>, click <b>Build your own template in the editor</b>.
+ 4. From <b>Edit template</b>, click <b>Load file</b>, the file named <u>IllusiveSentinelIncidentEnrichment.json</u> provided by Illusive and click <b>Save</b>.
+ 5. Under <b>Custom Deployment>Basics</b>:
   - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution. 
   - Specify the <b>Resource group</b> that contains the Workspace where you want to install the playbook.
   - Under <b>Instance details</b>:
