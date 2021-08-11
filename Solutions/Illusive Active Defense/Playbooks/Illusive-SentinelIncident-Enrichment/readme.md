@@ -28,8 +28,8 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
        <p align="center">  
           <img src="./Images/deploy-custom-template-load-file.png"> </a>
        </p>
-       <p align="center">  
-          <img src="./Images/deploy-custom-template-edit-template.png"> </a>
+       <p align="center" width="5cm">  
+          <img src="./Images/deploy-custom-template-edit-template-incident-enrichment.png"> </a>
        </p>
  1. Under <b>Custom Deployment>Basics</b>:
   - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution. 
