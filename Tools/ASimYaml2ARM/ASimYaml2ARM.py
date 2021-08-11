@@ -8,7 +8,9 @@ parser.add_argument('-p', '--path', required=True, metavar='C:\\path\\to\\folder
                     help='Full path to the parser\'s YAML file to convert')
 args = parser.parse_args()
 path = os.path.abspath(args.path)
-arm_template = json.load(open('Template.json', 'r'))
+script_path = os.path.split(__file__)[0]
+
+arm_template = json.load(open(os.path.join(script_path,'Template.json'), 'r'))
 print (f'Creating ARM template for parser {path}')
 
 (folder, filename) = os.path.split(os.path.abspath(path))
@@ -19,14 +21,23 @@ with open(path) as file:
 title = parserYaml["Parser"]["Title"]
 alias = parserYaml["ParserName"]
 query = parserYaml["ParserQuery"]
-Product = parserYaml["Product"]["Name"]
-Schema = parserYaml["Normalization"]["Schema"]
+product = parserYaml["Product"]["Name"]
+schema = parserYaml["Normalization"]["Schema"]
 
 data_section=arm_template['resources'][0]['resources'][0]
 data_section['name'] = alias
 data_section['properties']['query'] = query
 data_section['properties']['FunctionAlias'] = alias
 data_section['properties']['displayName'] = title
+
+with open(os.path.join(script_path,'readmemd.txt'), 'r') as readme_template:
+    readme_txt=readme_template.read()           \
+                .replace('{{Schema}}', schema)  \
+                .replace('{{filename}}', fname) \
+                .replace('{{Product}}', product)
+    with open(os.path.join(folder, 'README.md'), 'w') as rmf:
+                rmf.write(readme_txt)
+
 
 with open(os.path.join(folder, f'{fname}'), 'w') as jf:
     json.dump(arm_template, jf, indent=2)
