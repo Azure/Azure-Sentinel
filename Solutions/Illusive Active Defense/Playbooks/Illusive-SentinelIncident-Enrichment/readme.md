@@ -85,11 +85,16 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 
 ## Access and view the playbook 
 
-You can view and manage the playbook as well as review the playbook run history. 
+You can view and manage the playbook as well as review the playbook run history. This can be helpful for troubleshooting or for understanding playbook behavior and results. 
+
 1. Find the playbook on the Azure Sentinel or All resources page. 
 2. Click on the playbook to view the playbook run History.
 3. Select any executed playbook to view the results.
-Sample playbook history:
+
+<!-- Sample playbook history:
+<p align="center">  
+   <img src="./Images/playbook-history-sample.png"> </a>
+</p>  -->
 
 ## Playbook retry mechanism
 
