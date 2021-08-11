@@ -4,8 +4,8 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser(description='Generates ARM templates from a parser YAML file')
-parser.add_argument('-p', '--path', required=True, metavar='C:\\path\\to\\folder\\file.json', type=str, dest='path',
-                    help='Full path to the folder containing the YAML files')
+parser.add_argument('-p', '--path', required=True, metavar='C:\\path\\to\\folder\\file.yaml', type=str, dest='path',
+                    help='Full path to the parser\'s YAML file to convert')
 args = parser.parse_args()
 path = os.path.abspath(args.path)
 arm_template = json.load(open('Template.json', 'r'))
