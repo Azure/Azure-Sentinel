@@ -27,6 +27,9 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
     - File.Read.All – for process handling, find and erase/stop suspicious executables
     - Machine.StopAndQuarantine – for process handling, find and erase/stop suspicious executables
  1. Once all the API permissions are added, click <b>Grant admin consent for Default Directory</b> and click <b>Yes</b>.
+ 1. Verify admin consent has been granted. This step is important, even if the admin consent status is green. Only a Global Admin can approve admin consent requests.
+       1. Go to <b>Enterprise>Admin Consent requests</b>.
+       1. Go to <b>My pending</b> and verify that this permission is not pending.
 
 The result should look like this: 
    <p align="center">  
