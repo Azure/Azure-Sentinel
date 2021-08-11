@@ -30,14 +30,5 @@ data_section['properties']['query'] = query
 data_section['properties']['FunctionAlias'] = alias
 data_section['properties']['displayName'] = title
 
-with open(os.path.join(script_path,'readmemd.txt'), 'r') as readme_template:
-    readme_txt=readme_template.read()           \
-                .replace('{{Schema}}', schema)  \
-                .replace('{{filename}}', fname) \
-                .replace('{{Product}}', product)
-    with open(os.path.join(folder, 'README.md'), 'w') as rmf:
-                rmf.write(readme_txt)
-
-
 with open(os.path.join(folder, f'{fname}'), 'w') as jf:
     json.dump(arm_template, jf, indent=2)
