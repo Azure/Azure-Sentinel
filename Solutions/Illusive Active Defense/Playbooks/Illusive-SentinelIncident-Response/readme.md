@@ -30,7 +30,7 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
 
 The result should look like this: 
    <p align="center">  
-      <img src="./Images/azure-app-api-incident-response-permissions-admin-consent-granted"> </a>
+      <img src="./Images/azure-app-api-incident-response-permissions-admin-consent-granted.png"> </a>
    </p>
 
 ## Configure Microsoft Defender for Endpoint
