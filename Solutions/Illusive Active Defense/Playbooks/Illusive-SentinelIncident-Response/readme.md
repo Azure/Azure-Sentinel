@@ -1,36 +1,39 @@
-## Illusive Active Defense Product Suite
-
-# Sentinel Incident Response
-
-## Playbook and setup for incident response
-
-# Readme – Incident Response
+# Incident Response
 
 The Incident Response playbook leverages Sentinel analytic rules and CrowdStrike or Microsoft Defender for Endpoint integration to automate incident response when specified Illusive incidents are discovered. 
 <br/>
-Use the playbook to quickly stop or slow down ransomware attacks and critical incidents detected by Illusive in your organization. Upon detection, Sentinel is instructed to use the triggering process information reported by Illusive remove or kill the process. If the triggering process cannot be killed, Sentinel is instructed to isolate the host. These capabilities are available for organizations with CrowdStrike Falcon or Microsoft Defender for Endpoint.
+Use this playbook to quickly stop or slow down ransomware attacks and critical incidents detected by Illusive in your organization. Upon detection, Sentinel is instructed to use the triggering process information reported by Illusive remove or kill the process. If the triggering process cannot be killed, Sentinel is instructed to isolate the host. These capabilities are available for organizations with CrowdStrike Falcon or Microsoft Defender for Endpoint.
 
-# Playbook Workflow
+## Playbook Workflow
  
  1. Perform the general solution setup
  2. Add API permissions to the Azure app
  3. Enable Microsoft Defender for Endpoint 
  4. Create the Illusive playbook
 
-# Add API permissions to the Azure app 
+## Add API permissions to the Azure app 
 
  1. From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution. 
- 2. Go to <b>API Permissions.</b>
- 3. Click <b>Add a permission.</b>
- 4. Under <b>Microsoft APIs>API’s my organization uses,</b> select <b>WindowsDefenderATP,</b> and check the following permissions for both <b>Delegated</b> and <b>Application.</b>
-      - Machine.Isolate – to isolate device
-      - Machine.Read – to find agent ID - to collect data from a single machine. 
-      - Machine.Read.All – to find agent ID – to query all machines and collect device information even if we don’t have a device ID. 
-      - File.Read.All – for process handling find and erase/stop suspicious executable
-      - Machine.StopAndQuarantine - for process handling find and erase/stop suspicious executable
- 5. Once all the API permissions are added, click <b>Grant admin consent for Default Directory</b> and click <b>OK. </b>
+ 1. Go to <b>API Permissions</b>.
+ 1. Click <b>Add a permission</b>.
+ 1. Under <b>Request API permissions>API’s my organization uses</b>, search for and select <b>WindowsDefenderATP</b>, select select <b>Delegated permissions</b> and check the following permissions:
+    - Machine.Isolate – to isolate device
+    - Machine.Read – to find agent ID - to collect data from a single machine. 
+    - File.Read.All – for process handling, find and erase/stop suspicious executables
+    - Machine.StopAndQuarantine – for process handling, find and erase/stop suspicious executables
+ 1.	Select Application permissions and check the following permissions:
+    - Machine.Isolate – to isolate device
+    - Machine.Read.All – to find agent ID – to query all machines and collect device information even if we don’t have a device ID. 
+    - File.Read.All – for process handling, find and erase/stop suspicious executables
+    - Machine.StopAndQuarantine – for process handling, find and erase/stop suspicious executables
+ 1. Once all the API permissions are added, click <b>Grant admin consent for Default Directory</b> and click <b>Yes</b>.
 
-# Configure Microsoft Defender for Endpoint
+The result should look like this: 
+   <p align="center">  
+      <img src="./Images/azure-app-api-incident-response-permissions-admin-consent-granted"> </a>
+   </p>
+
+## Configure Microsoft Defender for Endpoint
 
 Enable Microsoft Defender for Endpoint to allow the playbook to stop an attack by triggering an incident response from MDE. 
 
