@@ -21,7 +21,9 @@ Watchlist Structure
 The watchlist has a set structure that you have to follow.  I've included a sample in this repo.
 Title:  The name of the report.  This is used in the subject line of the email, the body of the email, and as the filename for the .CSV attachment
 Schedule: The schedule to run the report.  Acceptable values: Daily, Weekly, Monthly (please note it is cAsE sEnSiTiVe)
-QueryBody:  The query you want to run to generate the report.  PLEASE NOTE:  You have to flatten the query in to one line by removing carriage returns / line feeds.  For example:      SigninLogs | where TimeGenerated >= ago(24h) | where UserPrincipalName == blah@blah.com.  Because of this you cannot use inline comments (//my comment).
+QueryBody:  The query you want to run to generate the report.  PLEASE NOTE:  You have to flatten the query in to one line by removing carriage returns / line feeds.  For example:
+    SigninLogs | where TimeGenerated >= ago(24h) | where UserPrincipalName == blah@blah.com.
+Because of this you cannot use inline comments (//my comment).
 Recipients:  A semicolon separated list of email recipients.  PLEASE NOTE:  If you are using unauthenticated email via O365, these must ALL be in your domain. Unauthenticated email via O365 cannot be sent to external recipients.
 
 
