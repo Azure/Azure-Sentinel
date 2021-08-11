@@ -5,9 +5,9 @@ This playbook automates the URL verdict and adds it to security policy rules.
 When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
 - It fetches detailed verdict information of the URL.
 - It checks for verdict status. If it is benign then it closes the incident with URL verdict information.
-- If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules.
+- If verdict status is other than benign (phishing, malware, grayware) then it sends adaptive card to SOC for taking action on malicious URL.
 
-**PlayBook Overview:**
+**Playbook Overview:**
 
 ![wildfire](./Images/PlaybookdesignerLight.png)
 ![wildfire](./Images/PlaybookdesignerDark.png)

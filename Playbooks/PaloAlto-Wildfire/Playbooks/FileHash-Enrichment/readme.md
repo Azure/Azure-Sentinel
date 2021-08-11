@@ -5,8 +5,9 @@ This playbook enriches the incident with verdict information.
 When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
 - It fetches detailed verdict information of the file hash.
 - It enriches the incident with verdict information based on the verdict values (benign, phishing, malware, grayware).
+- It sends filehash report to SOC via email.
 
-**PlayBook Overview:**
+**Playbook Overview:**
 
 ![wildfire](./Images/PlaybookdesignerLight.png)
 ![wildfire](./Images/PlaybookdesignerDark.png)
@@ -14,6 +15,7 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 # Prerequisites 
 - Palo Alto WildFire Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription and same resource group. Capture the name of connector during deployment.
 - Generate wildfire API key to establish the connection to wildfire custom connector. [Generate Wildfire API Key](https://wildfire.paloaltonetworks.com/wildfire/dashboard)
+- SOC email address should be known.
 
 # Deployment Instructions 
 - Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.

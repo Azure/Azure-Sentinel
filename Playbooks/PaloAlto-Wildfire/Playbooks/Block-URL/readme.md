@@ -7,10 +7,10 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 - It checks for verdict status. If it is benign then it closes the incident with URL verdict information.
 - If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules.
 
-**PlayBook Overview:**
+**Playbook Overview:**
 
-![wildfire](./Images/PlaybookdesignerLight.png)
-![wildfire](./Images/PlaybookdesignerDark.png)
+![wildfire](./Images/PlaybookDesignerLight.png)
+![wildfire](./Images/PlaybookDesignerDark.png)
 
 # Prerequisites 
 - Deploy both palo alto wildfire custom connector and palo alto PAN-OS custom connector in the same resource group and same subscription as this playbook. Capture the name for both connectors during deployment.

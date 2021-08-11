@@ -33,9 +33,6 @@ Palo Alto Wildfire Next Generation Firewall is used to fetch the verdict informa
 WildFire Custom Connector supports: API Key Authentication 
 
 
-<a name="deplyoment">
-
-
 <a name="deployall">
 
 # Deploy Wildfire custom connector and 3 playbook ARM templates
