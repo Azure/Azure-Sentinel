@@ -6,8 +6,8 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious URLs.
  2. For each URL in the list, checks if the URL is blocked by any of the networks of the organization.
-  - If URL is blocked by the network, then incident comment is created saying URL is blocked.
   - If URL is allowed by the network, then incident comment is created saying URL is allowed.
+  - If URL is blocked by the network, then incident comment is created saying URL is blocked.
   - If URL is not blocked by the network and not part of the network, then incident comment is created saying URL not found in network.
 
 ![Meraki](./Images/PlaybookDesignerLight.jpg)
@@ -49,7 +49,7 @@
 
 # Playbook steps explained
 ## When Azure Sentinel incident creation rule is triggered
-  Captures potentially malicious or malware URL incident information.
+Captures potentially malicious or malware URL incident information.
 
 ## Entities - Get URLs
 Get the list of URLs as entities from the Incident.
@@ -60,10 +60,10 @@ Get the list of URLs as entities from the Incident.
 
 ## For each malicious URL received from the incident
  - Checks if the URL is blocked by any of the networks of the organization.
-    - If URL is blocked by the network, then incident comment is created saying URL is blocked.
     - If URL is allowed by the network, then incident comment is created saying URL is allowed.
+    - If URL is blocked by the network, then incident comment is created saying URL is blocked.   
     - If URL is not blocked by network and not part of the network, then incident comment is created saying URL not found.
-    - Incident Comment from all the cases are combined.
+ - Add incident Comment from all the cases.
 
 ## Incident Comment 
 ![meraki](./Images/IncidentCommentLight.jpg)

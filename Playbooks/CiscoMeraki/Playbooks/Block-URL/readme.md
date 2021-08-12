@@ -6,9 +6,12 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious URLs.
  2. For each URL in the list, checks if the URL is blocked by the network of the organization.
-  - If URL is blocked, then incident comment is created saying URL is blocked.
-  - If URL is allowed, then incident comment is created saying URL is allowed.
-  - If URL is not blocked, then that URL is blocked by playbook.
+  - If URL is allowed by the network, then incident comment is created saying URL is allowed.
+  - If URL is blocked by the network, then incident comment is created saying URL is blocked.
+  - If URL is not blocked by the network and not part of the network, that URL is blocked by playbook.
+3. Update the incident with status 'Closed' and reason as
+  - For allowed URL - 'BenignPositive - SuspiciousButExpected'
+  - For blocked URL - 'TruePositive - SuspiciousActivity'
 
 ![Meraki](./Images/PlaybookDesignerLight.jpg)
 
@@ -58,20 +61,22 @@
   Get the list of URLs as entities from the Incident.
 
 ## Check if Organization exists
- *  If organization name exists in list of organizations associated with the account, then get list of networks associated with the organization. 
+ *  If organization name exists in list of organizations associated with the account, then return organization. 
  *  If organization name does not exist, then terminate with the error that organization not found.
 
  ## Check if network exists
-  *  If network name exists in list of networks associated with the account, then return network associated with the organization. 
+  *  If network name exists in list of networks associated with the organization, then return network associated with the organization. 
  *  If network name does not exist, then terminate with the error that network not found.
 
 ## For each malicious URL received from the incident
  - Checks if the URL is blocked or allowed by the network of the organization.
-  - If URL is allowed by the network then incident comment is created saying URL is allowed using content filtering.
-  - If URL is blocked by network then incident comment is created saying URL is blocked using content filtering.
-  - If URL is not part of the network, then such URL is blocked by playbook using content filtering.
-  - Incident Comment from all the cases are combined.
-- Update the incident with status close.
+   - If URL is allowed by the network then incident comment is created saying URL is allowed using content filtering.
+   - If URL is blocked by network then incident comment is created saying URL is blocked using content filtering.
+   - If URL is not part of the network, then such URL is blocked by playbook using content filtering. Incident Comment is created saying URL blocked by playbook.
+ - Add incident Comment from all the cases.
+ - Update the incident with status 'Closed' and reason as
+   - For allowed URL - 'BenignPositive - SuspiciousButExpected'
+   - For blocked URL - 'TruePositive - SuspiciousActivity'
 
 ## Incident comment 
 ![meraki](./Images/IncidentCommentLight.jpg)

@@ -107,4 +107,4 @@ Playbooks
 
 #  Known Issues and Limitations
  - Need to authorize the api connections after deploying the playbooks.
- - For Block Device Client Playbook, While configuring the rule in Azure Sentinel - Device MAC needs to be mapped with hostname in Host entity.
+ - For Block Device Client Playbook, While configuring the rule in Azure Sentinel - Device Client MAC needs to be mapped with hostname in Host entity.

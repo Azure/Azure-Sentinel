@@ -6,8 +6,9 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
  2. For each IP address in the list, checks if the IP address is blocked by L3 firewall rule or L7 firewall rule in MX network.
-  - If IP address is blocked by either L3 firewall rule or L7 firewall rule, then incident comment is created saying IP address is blocked.
-  - If IP address is not blocked by either L3 firewall rule or L7 firewall rule, then incident comment is created saying IP address not found in any firewall rule.
+  - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
+  - If IP address is part of either L3 firewall rule or L7 firewall rule and blocked by the rule, then Incident Comment is created saying IP address is blocked.
+  - If IP address is not part of either L3 firewall rule or L7 firewall rule, then Incident Comment is created saying IP address not found in any rule.
 
 ![Meraki](./Images/PlaybookDesignerLight.jpg)
 
@@ -49,7 +50,7 @@
 
 # Playbook steps explained
 ## When Azure Sentinel incident creation rule is triggered
-  Captures potentially malicious or malware IP addresses incident information.
+Captures potentially malicious or malware IP addresses incident information.
 
 ## Entities - Get IPs
 Get the list of IPs as entities from the Incident.
@@ -60,10 +61,10 @@ Get the list of IPs as entities from the Incident.
 
 ## For each malicious IP received from the incident
  - Checks if the IP address is part of L3 firewall rule or L7 firewall rule in MX network.
-  - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
-  - If IP address is part of either L3 firewall rule or L7 firewall rule and blocked by the rule, then Incident Comment is created saying IP address is blocked.
-  - If IP address is not part of either L3 firewall rule or L7 firewall rule, then Incident Comment is created saying IP address not found in any rule.
-  - Incident Comment from all the cases are combined.
+   - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
+   - If IP address is part of either L3 firewall rule or L7 firewall rule and blocked by the rule, then Incident Comment is created saying IP address is blocked.
+   - If IP address is not part of either L3 firewall rule or L7 firewall rule, then Incident Comment is created saying IP address not found in any rule.
+ - Add incident Comment from all the cases.
 
 ## Incident comment 
 ![meraki](./Images/IncidentCommentLight.jpg)

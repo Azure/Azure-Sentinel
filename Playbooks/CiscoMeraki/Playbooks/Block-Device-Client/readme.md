@@ -4,10 +4,20 @@
 
 ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
- 1. Fetches a list of hosts with suspicious activity.
- 2. For each host in the list, checks if the host is blocked by any network of the organization.
-  - If host is blocked by any network of the organization then incident comment is created saying no action needed further.
-  - If host is not blocked by any network of the organization then that host is blocked by playbook. 
+ 1. Fetches a list of device clients with suspicious activity.
+ 2. For each client in the list, checks if the client is blocked by any network of the organization.
+  - If client does not exist in network, then incident comment is created saying client not found.
+  - If client exists in network, check policy rule associated with client.
+     * If client policy does not exist in the network, then incident comment is created saying client policy not found.
+     *  If client policy exists in the network as Blocked, then incident comment is created saying client blocked using client policy.
+     *  If client policy exists in the network as Whitelisted, then incident comment is created saying client allowed using client policy.
+     *  If client policy exists in the network as group polciy, then check the group policy details and  incident comment is created saying client blocked using client policy.
+     *  If client policy exists in the network as Normal, then client is blocked by playbook. Incident Comment is created saying Client blocked by playbook.
+  - Add incident Comment from all the cases.
+3. Update the incident with status 'Closed' and reason as
+  - For allowed IP - 'BenignPositive - SuspiciousButExpected'
+  - For blocked IP - 'TruePositive - SuspiciousActivity' 
+
 
 ![Meraki](./Images/PlaybookDesignerLight.png)
 
@@ -19,7 +29,7 @@
 2. Cisco Meraki API Key should be known to establish a connection with Cisco Meraki Custom Connector. [Refer here](https://developer.cisco.com/meraki/api-v1/#!getting-started/authorization)
 3. Organization name should be known. [Refer here](https://developer.cisco.com/meraki/api-v1/#!getting-started/find-your-organization-id) 
 4. Network name should be known.[Refer here](https://developer.cisco.com/meraki/api-v1/#!getting-started/find-your-network-id)
-5. Network Group Policy name should be known. [Refer here](https://developer.cisco.com/meraki/api-v1/#!get-network-group-policy)
+5. Network Group Policy name should be known. [Refer here](./Images/Scheduling-FromOneDay.png)
 
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
@@ -48,31 +58,41 @@
 
 ## b. Configurations in Sentinel
 - In Azure sentinel analytical rules should be configured to trigger an incident with hosts. 
-- Device MAC needs to be mapped with hostname in Host entity.
+- Device Client MAC needs to be mapped with hostname in Host entity.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
 ## When Azure Sentinel incident creation rule is triggered
-  Captures potentially malicious host incident information.
+  Captures potentially malicious client incident information.
 
 ## Entities - Get Hosts
-  Get the list of Hosts as entities from the Incident.
+  Get the list of device clients as entities from the Incident.
 
 ## Check if Organization exists
- *  If organization name exists in list of organizations associated with the account, then get list of networks associated with the organization. 
+ *  If organization name exists in list of organizations associated with the account, then return organization. 
  *  If organization name does not exist, then terminate with the error that organization not found.
 
  ## Check if network exists
-  *  If network name exists in list of networks associated with the account, then return network associated with the organization. 
+  *  If network name exists in list of networks associated with the organization, then return network associated with the organization. 
   *  If network name does not exist, then terminate with the error that network not found.
 
-## For each malicious host received from the incident
-- Checks if the host exists in network.
-  - If host exists in network and has policy rule associated with it, then no action is required for such host.
-  - If host exists in network but has no policy rule associated with it, then the host is blocked by playbook.
-  - If host doesn't exist in network at all, then the host is blocked by playbook.
-  - Incident Comment from all the cases are combined.
-- Update the incident with status close.
+  ## Check if group policy exists
+  *  If group policy name exists in list of group policies associated with the network, then return group policy associated with the network. 
+  *  If group policy name does not exist, then terminate with the error that group policy not found.
+
+## For each malicious device client received from the incident
+- Checks if the client exists in network.
+  - If client does not exist in network, then incident comment is created saying client not found.
+  - If client exists in network, check policy rule associated with client.
+     * If client policy does not exist in the network, then incident comment is created saying client policy not found.
+     *  If client policy exists in the network as Blocked, then incident comment is created saying client blocked using client policy.
+     *  If client policy exists in the network as Whitelisted, then incident comment is created saying client allowed using client policy.
+     *  If client policy exists in the network as group polciy, then check the group policy details and  incident comment is created saying client blocked using client policy.
+     *  If client policy exists in the network as Normal, then client is blocked by playbook. Incident Comment is created saying Client blocked by playbook.
+  - Add incident Comment from all the cases.
+  - Update the incident with status 'Closed' and reason as
+    - For allowed IP - 'BenignPositive - SuspiciousButExpected'
+    - For blocked IP - 'TruePositive - SuspiciousActivity'
 
 ## Incident comment 
 ![meraki](./Images/IncidentCommentLight.jpg)

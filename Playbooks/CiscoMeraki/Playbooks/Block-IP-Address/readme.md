@@ -6,8 +6,12 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
  2. For each IP address in the list, checks if the IP address is blocked by L3 firewall rule or L7 firewall rule of MX network.
-  - If IP address is blocked by either L3 firewall rule or L7 firewall rule, then incident comment is created saying IP address is blocked.
-  - If IP address is not blocked by either L3 firewall rule or L7 firewall rule, then that IP address is blocked by playbook.
+  - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
+  - If IP address is part of either L3 firewall rule or L7 firewall rule and blocked by the rule, then Incident Comment is created saying IP address is blocked.
+  - If IP address is not part of either L3 firewall rule or L7 firewall rule, then that IP address is blocked by playbook.
+3. Update the incident with status 'Closed' and reason as
+  - For allowed IP - 'BenignPositive - SuspiciousButExpected'
+  - For blocked IP - 'TruePositive - SuspiciousActivity'
 
 ![Meraki](./Images/PlaybookDesignerLight.jpg)
 
@@ -58,20 +62,22 @@
 This action will compose the Cisco Meraki image to add to the incident comments.
 
 ## Check if Organization exists
- *  If organization name exists in list of organizations associated with the account, then get list of networks associated with the organization. 
+ *  If organization name exists in list of organizations associated with the account, then return organization. 
  *  If organization name does not exist, then terminate with the error that organization not found.
 
  ## Check if network exists
-  *  If network name exists in list of networks associated with the account, then return network associated with the organization. 
+  *  If network name exists in list of networks associated with the organization, then return network associated with the organization. 
  *  If network name does not exist, then terminate with the error that network not found.
 
 ## For each malicious IP received from the incident
  - Checks if the IP address is part of L3 firewall rule or L7 firewall rule of MX network.
-  - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
-  - If IP address is part of either L3 firewall rule or L7 firewall rule and blocked by the rule, then Incident Comment is created saying IP address is blocked.
-  - If IP address is not part of either L3 firewall rule or L7 firewall rule, then that IP address is blocked by playbook. Incident Comment is created saying IP address blocked by playbook.
-  - Incident Comment from all the cases are combined.
-- Update the incident with status close.
+   - If IP address is part of both L3 firewall rule and L7 firewall rule but not blocked by either of the rules, then Incident Comment is created saying IP address allowed by firewall.
+   - If IP address is part of either L3 firewall rule or L7 firewall rule and blocked by the rule, then Incident Comment is created saying IP address is blocked.
+   - If IP address is not part of either L3 firewall rule or L7 firewall rule, then that IP address is blocked by playbook. Incident Comment is created saying IP address blocked by playbook.
+ - Add incident Comment from all the cases.
+ - Update the incident with status 'Closed' and reason as
+   - For allowed IP - 'BenignPositive - SuspiciousButExpected'
+   - For blocked IP - 'TruePositive - SuspiciousActivity'
 
 ## Incident comment 
 ![meraki](./Images/IncidentCommentLight.jpg)
