@@ -65,7 +65,7 @@ Allow the Illusive Incident Response playbook to stop an attack by triggering an
         <img src="./Images/Configure_MDE_3(Security_Center)_Upgrade.png"> </a>
      </p>
 
-# Deploy the Incident Response playbook
+# Create the Illusive Incident Response playbook
 
 Deploying the Illusive Incident Enrichment playbook requires a custom deployment template. 
  - The playbook should be deployed under the same resource group, subscription, and workspace as the Azure app.
@@ -76,9 +76,21 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 The playbook will fail to execute if the URL contains a hyphen  which is not supported by Sentinel (i.e., certain region-specific URLs). 
 
  1. On Azure home page, filter for <b>Deploy a custom template.</b>
- 2. Under <b>Custom Deployment>Select a template,</b> click <b>Build your own template in the editor.</b>
- 3. From <b>Edit template,</b> click <b>Load file,</b> the file named IllusiveSentinelIncidentResponse.json provided by Illusive and click <b>Save.</b>
- 4. Under <b>Custom Deployment>Basics:</b>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-search.png"> </a>
+     </p>
+ 1. Under <b>Custom Deployment>Select a template,</b> click <b>Build your own template in the editor.</b>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-page.png"> </a>
+     </p>
+ 1. From <b>Edit template,</b> click <b>Load file,</b> the file named IllusiveSentinelIncidentResponse.json provided by Illusive and click <b>Save.</b>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-load-file.png"> </a>
+     </p>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-edit-template-incident-response"> </a>
+     </p>
+ 1. Under <b>Custom Deployment>Basics:</b>
     - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution 
     - Specify the <b>Resource group</b> that contains the Workspace where you want to install the playbook.
     - Under <b>Instance details:</b>
@@ -117,10 +129,18 @@ The playbook will fail to execute if the URL contains a hyphen  which is not sup
         <td>If <b>EDR deployed = MDE,</b> specify MDE authentication parameters</td>
        </tr>
       </table>
-      
+      <p align="center">  
+         <img src="./Images/custom-deployment-basics-incident-response.PNG"> </a>
+      </p>      
  5. When finished entering details, click <b>Review + Create.</b>
+      <p align="center">  
+         <img src="./Images/custom-deployment-review-create.png"> </a>
+      </p>      
  6. On successful validation, click <b>Create.</b>
 This completes the playbook deployment. 
+      <p align="center">  
+         <img src="./Images/custom-deployment-is-complete.png"> </a>
+      </p>      
  7. To view the playbook, click <b>Go to resource group.</b>
    - If there is only one installed playbook in the workspace, clicking on Go to resource group will take you to the playbook page. 
    - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the <b>All resources page.</b> The deployed playbook will be available in the list.
