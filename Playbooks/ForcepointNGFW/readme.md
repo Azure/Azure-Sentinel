@@ -1,4 +1,4 @@
-  #ForcepointNGFW Logic Apps Custom Connectors and playbook templates
+  #Forcepoint NGFW Logic Apps Custom Connectors and playbook templates
 
   ![forcepoint](/Playbooks/logo.jpg)
 
@@ -46,12 +46,11 @@ No Authentication
 # Prerequisites for using and deploying 2 Custom Connectors + 6 playbooks
 1. Forcepoint SMC API Key should be known.[Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
 2. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/)
-3. Forcepoint SMC service endpoint should be known. (e.g.  https://forcepointdomain:PortNumber/})
-4. Forcepoint FUID service endpoint should be known. (e.g.  https://forcepointdomain:PortNumber/})
-5. Security policy rule name created in SMC should be known.
-6. IP address list name for blocking IP address present in SMC should be known.
-7. URL list name for blocking URLs present in SMC should be known.
-8. Users must have access to Microsoft Teams and they should be a part of a Teams channel and also Power Automate app should be installed in the Microsoft Teams channel.
+3. Forcepoint SMC service endpoint should be known. (e.g.  Https://{forcepointdomain:PortNumber/})
+4. Forcepoint FUID service endpoint should be known. (e.g.  https://{forcepointdomain:PortNumber/})
+5. IP address list name for blocking IP address present in SMC should be known.
+6. URL list name for blocking URLs present in SMC should be known.
+7. Users must have access to Microsoft Teams and they should be a part of a Teams channel and also Power Automate app should be installed in the Microsoft Teams channel.
 
 
 <a name="deployment">
@@ -63,15 +62,14 @@ No Authentication
 | Parameter  | Description |
 | ------------- | ------------- |
 |**For Playbooks**|                 |
-| **BlockIP Response On Teams PlaybookName** | Enter the Playbook Name here without spaces. |
-| **Block IP By Username PlaybookName** | Enter the Playbook Name here without spaces. |
-| **Block IP PlaybookName**|Enter the Playbook Name here without spaces.|
-|**Block URL PlaybookName**|Enter the Playbook Name here without spaces.|
-|**Enrichment IP PlaybookName**|Enter the Playbook Name here without spaces.|
-|**Enrichment URL PlaybookName**|Enter the Playbook Name here without spaces.|
+| **Block IP Response On Teams PlaybookName** | Enter the Block IP Response On Teams Playbook Name here without spaces. |
+| **Block IP By Username PlaybookName** | Enter the Block IP By Username Playbook Name here without spaces. |
+| **Block IP PlaybookName**|Enter the Block IP Playbook Name here without spaces.|
+|**Block URL PlaybookName**|Enter the Block URL Playbook Name here without spaces.|
+|**Enrichment IP PlaybookName**|Enter the Enrichment IP Playbook Name here without spaces.|
+|**Enrichment URL PlaybookName**|Enter the Enrichment URL Playbook Name here without spaces.|
 | **Forcepoint SMC Api Key**  | Enter the SMC API Key. | 
 | **SMC Version Number** | Enter the version number of SMC. |
-| **Security Policy Rule** | Enter the Security Policy Rule name. |
 |**IP List Name**|Enter IP List Name.|
 |**URL List Name**|Enter URL List Name.|
 |**For Custom Connectors**|                             |
@@ -102,18 +100,17 @@ No Authentication
 
 #  Reference to the playbook templates and the connectors
 
- Connectors
-* [Forcepoint FUID Connector]()
-* [Forcepoint SMC Connector]()
+ Connector
+* [Forcepoint SMC Connector](/Connector/ForcepointSMCApiConnector/readme.md)
 
 
 Playbooks
-* [BlockorUnblockIPbyTeamsChannel-ForcepointNGFW]()
-* [BlockIPAddressbyusername-ForcepointNGFW]()
-* [BlockIPAddress-ForcepointNGFW]()
-* [BlockURLs-ForcepointNGFW]()
-* [Enrichment-IP-ForcepointNGFW]()
-* [Enrichment-URL-ForcepointNGFW]()
+* [ResponseOnTeamsBlockIP-ForcepointNGFW](/Playbooks/ResponseOnTeamsBlockIP-ForcepointNGFW/readme.md)
+* [BlockIPbyUsername-ForcepointNGFW](/Playbooks/BlockIPbyUsername-ForcepointNGFW/readme.md)
+* [BlockIP-ForcepointNGFW](/Playbooks/BlockIP-ForcepointNGFW/readme.md)
+* [BlockURL-ForcepointNGFW](/Playbooks/BlockURL-ForcepointNGFW/readme.md)
+* [Enrichment-IP-ForcepointNGFW](/Playbooks/Enrichment-IP-ForcepointNGFW/readme.md)
+* [Enrichment-URL-ForcepointNGFW](/Playbooks/Enrichment-URL-ForcepointNGFW/readme.md)
 
 <a name="limitations">
 

@@ -12,7 +12,7 @@
         ],
         "prerequisitesDeployTemplateFile": "../../ForcepointSMCApiConnector/azuredeploy.json",
         "lastUpdateTime": "2021-07-26T00:00:00.000Z",
-        "entities": [ "IPs" ],
+        "entities": [ "Ip" ],
         "tags": [ "Enrichment" ],
         "support": {
             "tier": "community"
@@ -69,7 +69,7 @@
             },
             "properties": {
                 "state": "Enabled",
-                "definition":  {
+                "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {
@@ -95,41 +95,8 @@
                         }
                     },
                     "actions": {
-                        "Assign_IP_Address_to_Array": {
-                            "runAfter": {
-                                "Entities_-_Get_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "IPAddress",
-                                        "type": "array"
-                                    }
-                                ]
-                            },
-                            "description": "Asiign IP Address to IPAddress to reuse."
-                        },
                         "Check_if_body_present_from_output": {
                             "actions": {
-                                "Appending_IP_Address": {
-                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
-                                    "actions": {
-                                        "Append_to_array_variable_to_IPaddress_variable": {
-                                            "runAfter": {},
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "IPAddress",
-                                                "value": "@items('Appending_IP_Address')?['Address']"
-                                            },
-                                            "description": "Appending IP address from incident to IPaddress variable"
-                                        }
-                                    },
-                                    "runAfter": {},
-                                    "type": "Foreach"
-                                },
                                 "Check_Login_Status": {
                                     "runAfter": {
                                         "Login": [
@@ -158,7 +125,7 @@
                                                         }
                                                     },
                                                     "runAfter": {
-                                                        "Create_HTML_table_for_IP_list_element": [
+                                                        "Create_HTML_table_for_Add_comment_to_incident": [
                                                             "Succeeded",
                                                             "TimedOut",
                                                             "Skipped",
@@ -173,7 +140,7 @@
                                                                 "inputs": {
                                                                     "body": {
                                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                        "message": "<p>@{outputs('Forcepoint_Logo')}<strong>Forcepoint NGFW-Enrichment IP Address</strong><br>\nThe below IP address are found to be malicious and part of polices<br>\n<br>\n@{body('Create_HTML_table_for_Add_comment_to_incident')}<br>\n<br>\nIP address references elements<br>\n<br>\n@{body('Create_HTML_table_for_IP_list_element')}</p>"
+                                                                        "message": "<p>@{outputs('Forcepoint_Logo')}<strong>Forcepoint NGFW-Enrichment IP</strong><br>\n<br>\nList of policies associated by incident IP address(s)<br>\n<br>\n@{body('Create_HTML_table_for_Add_comment_to_incident')}<br>\n<br>\n<br>\n<br>\n<br>\n</p>"
                                                                     },
                                                                     "host": {
                                                                         "connection": {
@@ -201,7 +168,7 @@
                                                 },
                                                 "Create_HTML_table_for_Add_comment_to_incident": {
                                                     "runAfter": {
-                                                        "Remove_duplicates_from_IP_address_array": [
+                                                        "For_each_IPs_which_are_not_part_of_any_policy": [
                                                             "Succeeded"
                                                         ]
                                                     },
@@ -242,38 +209,8 @@
                                                     },
                                                     "description": "Creating a HTML table from all actions taken by IP address"
                                                 },
-                                                "Create_HTML_table_for_IP_list_element": {
-                                                    "runAfter": {
-                                                        "Create_HTML_table_for_Add_comment_to_incident": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "Table",
-                                                    "inputs": {
-                                                        "columns": [
-                                                            {
-                                                                "header": "IP-Address",
-                                                                "value": "@{item()?['']}@{item()?['IPAddres']}"
-                                                            },
-                                                            {
-                                                                "header": "IP-Element-Name",
-                                                                "value": "@item()?['Name']"
-                                                            },
-                                                            {
-                                                                "header": "IP-Address-Exist-Element",
-                                                                "value": "@item()?['Elementname']"
-                                                            },
-                                                            {
-                                                                "header": "IP-Element-Type",
-                                                                "value": "@item()?['Type']"
-                                                            }
-                                                        ],
-                                                        "format": "HTML",
-                                                        "from": "@variables('IP Address')"
-                                                    }
-                                                },
                                                 "For_each_IP_Address": {
-                                                    "foreach": "@variables('IPAddress')",
+                                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
                                                     "actions": {
                                                         "Condition_to_check_Host_is_present_in_the_SMC_by_IP": {
                                                             "actions": {
@@ -297,7 +234,7 @@
                                                                         "name": "Consolidatevrbl",
                                                                         "value": {
                                                                             "Element": "@{body('Get_Host')?['element']?[0]?['name']}",
-                                                                            "IPaddress": "@{items('For_each_IP_Address')}",
+                                                                            "IPaddress": "@{items('For_each_IP_Address')?['Address']}",
                                                                             "Type": "Host"
                                                                         }
                                                                     },
@@ -348,7 +285,7 @@
                                                                 "queries": {
                                                                     "expand": true,
                                                                     "expose_etag": true,
-                                                                    "filter": "@{items('For_each_IP_Address')}",
+                                                                    "filter": "@items('For_each_IP_Address')?['Address']",
                                                                     "flatten": true
                                                                 }
                                                             }
@@ -368,14 +305,7 @@
                                                     "foreach": "@body('Get_IP_List_Element')?['result']",
                                                     "actions": {
                                                         "Get_IP_address": {
-                                                            "runAfter": {
-                                                                "Login_2": [
-                                                                    "Succeeded",
-                                                                    "TimedOut",
-                                                                    "Skipped",
-                                                                    "Failed"
-                                                                ]
-                                                            },
+                                                            "runAfter": {},
                                                             "type": "ApiConnection",
                                                             "inputs": {
                                                                 "headers": {
@@ -391,28 +321,8 @@
                                                                 "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/ip_list/@{encodeURIComponent(last(split(items('For_each_IP_list')?['href'],'/')))}/ip_address_list"
                                                             }
                                                         },
-                                                        "Login_2": {
-                                                            "runAfter": {},
-                                                            "type": "ApiConnection",
-                                                            "inputs": {
-                                                                "body": {
-                                                                    "authenticationkey": "@variables('SMC API Key')"
-                                                                },
-                                                                "headers": {
-                                                                    "Accept": "application/json",
-                                                                    "Content-Type": "application/json"
-                                                                },
-                                                                "host": {
-                                                                    "connection": {
-                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
-                                                                    }
-                                                                },
-                                                                "method": "post",
-                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/login"
-                                                            }
-                                                        },
                                                         "Looping_IP_Address": {
-                                                            "foreach": "@variables('IPAddress')",
+                                                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
                                                             "actions": {
                                                                 "Check_the_result_length_from_filter_output": {
                                                                     "actions": {
@@ -436,7 +346,7 @@
                                                                                 "name": "Consolidatevrbl",
                                                                                 "value": {
                                                                                     "Element": "@{items('For_each_IP_list')?['name']}",
-                                                                                    "IPaddress": "@{items('Looping_IP_Address')}",
+                                                                                    "IPaddress": "@{items('Looping_IP_Address')?['Address']}",
                                                                                     "Type": "IP list"
                                                                                 }
                                                                             },
@@ -449,7 +359,7 @@
                                                                             {
                                                                                 "contains": [
                                                                                     "@body('Get_IP_address')?['ip']",
-                                                                                    "@items('Looping_IP_Address')"
+                                                                                    "@items('Looping_IP_Address')?['Address']"
                                                                                 ]
                                                                             }
                                                                         ]
@@ -481,8 +391,88 @@
                                                     "type": "Foreach",
                                                     "description": "For each IP list"
                                                 },
+                                                "For_each_IPs_which_are_not_part_of_any_policy": {
+                                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                                    "actions": {
+                                                        "Condition_to_check_body_of_filter_array": {
+                                                            "actions": {},
+                                                            "runAfter": {
+                                                                "Filter_array": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Append_to_all_actions_array": {
+                                                                        "runAfter": {
+                                                                            "Set_variable_to_consolidate_": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "Arrayforallactions",
+                                                                            "value": "@variables('Consolidatevrbl')"
+                                                                        }
+                                                                    },
+                                                                    "Set_variable_to_consolidate_": {
+                                                                        "runAfter": {},
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "Consolidatevrbl",
+                                                                            "value": {
+                                                                                "Action": "Not Found in any policy and IP address is unblocked state",
+                                                                                "Elementname": "--",
+                                                                                "IPAddres": "@{outputs('IP')?['Address']}",
+                                                                                "IPStatus": "Unblocked",
+                                                                                "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                "Policy": "--",
+                                                                                "Policytype": "--",
+                                                                                "Type": "--"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "greater": [
+                                                                            "@length(body('Filter_array'))",
+                                                                            0
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Filter_array": {
+                                                            "runAfter": {
+                                                                "IP": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Query",
+                                                            "inputs": {
+                                                                "from": "@variables('Arrayforallactions')",
+                                                                "where": "@contains(item()?['IPAddres'], outputs('IP')?['Address'])"
+                                                            }
+                                                        },
+                                                        "IP": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": "@items('For_each_IPs_which_are_not_part_of_any_policy')"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "For_each_element": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
                                                 "For_each_element": {
-                                                    "foreach": "@variables('Elements')",
+                                                    "foreach": "@outputs('Remove_duplicates')",
                                                     "actions": {
                                                         "Condition_to_check_if_element_is_part_any_policy": {
                                                             "actions": {
@@ -674,29 +664,6 @@
                                                     },
                                                     "type": "Compose",
                                                     "inputs": "@union(variables('Elements'),variables('Elements'))"
-                                                },
-                                                "Remove_duplicates_from_IP_address_array": {
-                                                    "runAfter": {
-                                                        "Remove_duplicates_from_all_actions_array": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "Compose",
-                                                    "inputs": "@union(variables('IP Address'),variables('IP Address'))",
-                                                    "description": "Remove duplicates from IP address array"
-                                                },
-                                                "Remove_duplicates_from_all_actions_array": {
-                                                    "runAfter": {
-                                                        "For_each_element": [
-                                                            "Succeeded",
-                                                            "TimedOut",
-                                                            "Skipped",
-                                                            "Failed"
-                                                        ]
-                                                    },
-                                                    "type": "Compose",
-                                                    "inputs": "@union(variables('Arrayforallactions'),variables('Arrayforallactions'))",
-                                                    "description": "Remove duplicates from all actions array"
                                                 }
                                             }
                                         }
@@ -733,11 +700,7 @@
                                     "type": "Switch"
                                 },
                                 "Login": {
-                                    "runAfter": {
-                                        "Appending_IP_Address": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                    "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
@@ -828,23 +791,6 @@
                             "inputs": "<img src=\"https://upload.wikimedia.org/wikipedia/en/b/b6/Forcepoint.jpg\" alt=\"ForcepointImage\" width=\"32\" height=\"32\">",
                             "description": "Forcepoint logo for comments "
                         },
-                        "IP_List_Key": {
-                            "runAfter": {
-                                "Policy_Element_Key": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "IP List Key",
-                                        "type": "string"
-                                    }
-                                ]
-                            },
-                            "description": "We can store IP list key after adding ip list name "
-                        },
                         "Initialize_variable_Terminate": {
                             "runAfter": {
                                 "Forcepoint_Logo": [
@@ -881,7 +827,7 @@
                         },
                         "Initialize_variable_for_IP_Address": {
                             "runAfter": {
-                                "IP_List_Key": [
+                                "SMC_API_Key": [
                                     "Succeeded"
                                 ]
                             },
@@ -965,26 +911,9 @@
                             },
                             "description": "To store IP address , severity , action to be taken into one array varriable and we can create a table."
                         },
-                        "Policy_Element_Key": {
-                            "runAfter": {
-                                "SMC_API_Key": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "Policy Element Key",
-                                        "type": "string"
-                                    }
-                                ]
-                            },
-                            "description": "Policy element key is to store policy element key for add or remove policy rule"
-                        },
                         "SMC_API_Key": {
                             "runAfter": {
-                                "Assign_IP_Address_to_Array": [
+                                "Entities_-_Get_IPs": [
                                     "Succeeded"
                                 ]
                             },
