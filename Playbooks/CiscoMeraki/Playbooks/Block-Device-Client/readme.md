@@ -15,8 +15,8 @@
      *  If client policy exists in the network as Normal, then client is blocked by playbook. Incident Comment is created saying Client blocked by playbook.
   - Add incident Comment from all the cases.
 3. Update the incident with status 'Closed' and reason as
-  - For allowed IP - 'BenignPositive - SuspiciousButExpected'
-  - For blocked IP - 'TruePositive - SuspiciousActivity' 
+  - For allowed Client - 'BenignPositive - SuspiciousButExpected'
+  - For blocked Client - 'TruePositive - SuspiciousActivity' 
 
 
 ![Meraki](./Images/PlaybookDesignerLight.png)
@@ -91,8 +91,8 @@
      *  If client policy exists in the network as Normal, then client is blocked by playbook. Incident Comment is created saying Client blocked by playbook.
   - Add incident Comment from all the cases.
   - Update the incident with status 'Closed' and reason as
-    - For allowed IP - 'BenignPositive - SuspiciousButExpected'
-    - For blocked IP - 'TruePositive - SuspiciousActivity'
+    - For allowed Client - 'BenignPositive - SuspiciousButExpected'
+    - For blocked Client - 'TruePositive - SuspiciousActivity'
 
 ## Incident comment 
 ![meraki](./Images/IncidentCommentLight.jpg)
