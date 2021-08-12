@@ -27,9 +27,9 @@ SigninLogs | where TimeGenerated >= ago(24h) | where UserPrincipalName == blah@b
 ````
 Because of this you cannot use inline comments (e.g.: //my comment).
 Recipients:  A semicolon separated list of email recipients.  PLEASE NOTE:  If you are using unauthenticated email via O365, these must ALL be in your domain. Unauthenticated email via O365 cannot be sent to external recipients.
-----
-## Gotchas / Issues / Bugs
 
+## Gotchas / Issues / Bugs
+----
 The following are some issues I’ve run into on this Playbook.  I am still working on more elegant solutions for them, but for now the workarounds seem to work.
 ##### Issue:  Azure Monitor Logs cannot be configured via a JSON template
 I’m not sure if this is a technical limitation of the Azure Monitor Logs connector or if I am just doing something wrong, but while the template will correctly create the connector it will still give you an error and you will have to authorize the connector and then go into the Playbook and configure the connector to point to the correct subscription etc.  It is much much easier to open the Azure Monitor Logs connector from the Resource Group first , authorize the connector there, and then go into the Playbook to complete the configuration.  
