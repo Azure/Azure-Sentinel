@@ -1,6 +1,6 @@
   #Forcepoint NGFW Logic Apps Custom Connectors and playbook templates
 
-  ![forcepoint](/Playbooks/logo.jpg)
+  ![forcepoint](./Playbooks/logo.jpg)
 
 
 ## Table of Contents
