@@ -95,22 +95,9 @@ class AzureSentinelConnector:
                     self.failed_sent_events_number += events_number
                     raise err
             else:
-                logging.debug('{} events have been successfully sent to Azure Sentinel'.format(events_number))
-                self.successfull_sent_events_number += events_number
-                break
-
-        try:
-            response = requests.post(uri, data=body, headers=headers)
-        except Exception as err:
-            logging.error("Error during sending events to Azure Sentinel: {}".format(err))
-            raise err
-        else:
-            if (response.status_code >= 200 and response.status_code <= 299):
                 logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
-            else:
-                logging.error("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
-                raise Exception("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+                break
 
     def _make_request(self, uri, body, headers):
         response = requests.post(uri, data=body, headers=headers)
