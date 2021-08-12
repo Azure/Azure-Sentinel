@@ -15,7 +15,7 @@ References:
 Description: ASIM Azure Defender for IoT Process Events Parser
 ParserName: vimProcessEventAD4IoT
 ParserQuery: |
-              let ProcessEvents_AD4IoT=()
+             let ProcessEvents_AD4IoT=()
               {
                 SecurityIoTRawEvent 
                 | where RawEventName == "Process" 
@@ -24,7 +24,7 @@ ParserQuery: |
                   //
                 | extend
                   // Event
-                  EventOriginalUid = EventDetails.OriginalEventId, 
+                  EventOriginalUid = tostring(EventDetails.OriginalEventId), 
                   EventCount = toint(EventDetails.HitCount), 
                   EventProduct = 'Azure Defender for IoT', 
                   EventVendor = 'Microsoft', 
@@ -32,24 +32,24 @@ ParserQuery: |
                   EventStartTime = todatetime(EventDetails.TimestampUTC), 
                   EventEndTime = todatetime(TimeGenerated), 
                   EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), 
-                  EventSubType = EventDetails.EventType,
+                  EventSubType = tostring(EventDetails.EventType),
                   EventResult = 'Success', 
                   //
                   // Device
-                  DvcHostname = EventDetails.DeviceId, 
+                  DvcHostname = tostring(EventDetails.DeviceId), 
                   //
                   // Users
                   //
                   // Process
                   TargetProcessId = tostring(EventDetails.ProcessId), 
-                  TargetProcessCommandLine = coalesce (EventDetails.Commandline, EventDetails.Executable), 
-                  TargetProcessName = coalesce (EventDetails.Executable, split(EventDetails.Commandline," ")[0]) // OK
+                  TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), 
+                  TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline," ")[0])
                   //
                 | extend
                   DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows") // Intermediate fix
                 | extend
-                  TargetUserNameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
-                  TargetUsername = iff (DvcOs == "Windows", EventDetails.UserName, ""), 
+                  TargetUsernameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
+                  TargetUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), ""), 
                   ActingProcessId = iff (DvcOs == "Windows", tostring(EventDetails.ParentProcessId), "") 
                 | project-rename
                   // EventProductVersion = AgentVersion, // Not available in Windows
@@ -62,5 +62,7 @@ ParserQuery: |
                   CommandLine = TargetProcessCommandLine, 
                   Process = TargetProcessName, 
                   Dvc = DvcHostname 
+                | project-away 
+                  DeviceId
                };
                ProcessEvents_AD4IoT
