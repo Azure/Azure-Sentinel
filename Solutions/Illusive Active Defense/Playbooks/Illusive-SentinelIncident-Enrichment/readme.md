@@ -31,32 +31,46 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
        <p align="center" width="5cm">  
           <img src="./Images/deploy-custom-template-edit-template-incident-enrichment.png"> </a>
        </p>
- 1. Under <b>Custom Deployment>Basics</b>:
-  - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution. 
-  - Specify the <b>Resource group</b> that contains the Workspace where you want to install the playbook.
-  - Under <b>Instance details</b>:
-    - <b>Region</b> is filled automatically based on the subscription and cannot be changed.
-    - Specify the Azure Sentinel <b>Workspace Name</b> where you want to create the playbook.
-    - Supply the authentication parameters required to access the Illusive API:
-      - Illusive API URL
-      - Illusive API Key (just the key, without the prefix) 
-    - Supply the authentication parameters required to access the Sentinel API:
-      - Azure-Sentinel Client ID: 
-      - Azure-Sentinel Client Secret: 
-      - Azure-Sentinel Tenant ID:
+ 1. Under <b>Custom Deployment>Basics:</b>
+    - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution 
+    - Specify the <b>Resource group</b> that contains the Workspace where you want to install the playbook.
+    - Under <b>Instance details:</b>
+      <table>
+       <tr>
+        <td><b>Field</b></td>
+        <td><b>Instructions</b></td>
+       </tr>
+       <tr>
+        <td>Region</td>
+        <td>Filled automatically based on the subscription and cannot be changed.</td>
+       </tr>
+       <tr>
+        <td>Workspace Name</td>
+        <td>Specify the Azure Sentinel <b>Workspace Name</b> where you want to create the playbook.</td>
+       </tr>
+       <tr>
+        <td>Illusive API URL <br/> Illusive API Key</td>
+        <td>Supply the authentication parameters required to access the Illusive API
+         <b>Important:</b> Enter the API key without the keyword</td>
+       </tr>
+       <tr>
+        <td>Azure-Sentinel Client ID:  <br/> Azure-Sentinel Client Secret:  <br/> Azure-Sentinel Tenant ID:</td>
+        <td>Supply the authentication parameters required to access the Azure-Sentinel API</td>
+       </tr>
+      </table>
       <p align="center">  
          <img src="./Images/custom-deployment-basics-incident-enrichment.png"> </a>
       </p>
-5. When finished entering details, click <b>Review + Create</b>.
+1. When finished entering details, click <b>Review + Create</b>.
       <p align="center">  
          <img src="./Images/custom-deployment-review-create.png"> </a>
       </p>
-6. On successful validation, click <b>Create</b>.
+1. On successful validation, click <b>Create</b>.
    This completes the playbook deployment. 
       <p align="center">  
          <img src="./Images/custom-deployment-is-complete.png"> </a>
       </p>
-7. To view the playbook, click <b>Go to resource group</b>.
+1. To view the playbook, click <b>Go to resource group</b>.
     - If there is only one installed playbook in the workspace, clicking on <b>Go to resource group</b> will take you to the playbook page. 
     - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the All resources page. The deployed playbook will be available in the list.
 
