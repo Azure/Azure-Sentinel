@@ -151,6 +151,8 @@ function Netskope () {
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count/1024/1024
           
+        Write-Host "JSON Payload content : $jsonPayload"
+
         # Check the payload size, if under 30MB post to Log Analytics.
         if (($mbytes -le 30)){                                
              $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
