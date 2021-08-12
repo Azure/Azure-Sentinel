@@ -38,16 +38,32 @@ The result should look like this:
 
 ## Configure Microsoft Defender for Endpoint
 
-Enable Microsoft Defender for Endpoint to allow the playbook to stop an attack by triggering an incident response from MDE. 
+Allow the Illusive Incident Response playbook to stop an attack by triggering an incident response from MDE. 
 
-<b>Attention:</b> Skip this procedure if you are using CrowdStrike as your incident response tool. You do not need Microsoft Defender for Endpoint.
+<b>Attention:</b> If you use CrowdStrike as your incident response tool, you can skip this procedure.
+
  1. From the Azure Search bar, search for the <b>Subscription</b> in which MDE is installed.
+     <p align="center">  
+        <img src="./Images/Configure_MDE_1(Subscriptions_MDE_1).png"> </a>
+     </p>
  2. Click on the existing <b>Subscription.</b>
  3. Click <b>Security</b> in the Subscription menu.
  4. Ensure Microsoft Defender for Endpoint is <b>On.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_2(Subscriptions_MDE_2).png"> </a>
+     </p>
  5. If MDE is off, click <b>Security Center.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_OFF_(Subscriptions_MDE_2).png"> </a>
+     </p>
  6. Find the Azure Defender card and click <b>Enable Azure Defender.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_3(Security_Center)_Enable.png"> </a>
+     </p>
  7. Select the desired subscription and click <b>Upgrade.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_3(Security_Center)_Upgrade.png"> </a>
+     </p>
 
 # Deploy the Incident Response playbook
 
