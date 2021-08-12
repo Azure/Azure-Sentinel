@@ -39,4 +39,4 @@ I’m not sure if this is a technical limitation of the Azure Monitor Logs conne
 The SMTP connector really doesn’t like allowing you to configure unauthenticated email (or sometimes even any email) in the UX.  What I’ve found seems to work really well is to configure it using the template configuration (I’ve included fields for all of the relevant values (from, server, port, ssl, etc.) and then just leave it alone.  IF you do need to make changes though, configuring it in the Designer view seems to throw errors.  If you want to change it, again, using the Resource Group Edit API Connection seems to be the way to go and not get an error.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FFlyingBlueMonkey%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FExport-Report-CSV%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FExport-Report-CSV%2Fazuredeploy.json)
