@@ -145,13 +145,24 @@ This completes the playbook deployment.
    - If there is only one installed playbook in the workspace, clicking on Go to resource group will take you to the playbook page. 
    - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the <b>All resources page.</b> The deployed playbook will be available in the list.
   
-# Access and view the playbook 
+## Access and view the playbook 
 
-You can view and manage the playbook as well as review the playbook run history. 
- 1. Find the playbook on the <b>Azure Sentinel</b> or <b>All resources page.</b> 
- 2. Click on the playbook to view the playbook run History.
- 3. Select any executed playbook to view the results.
-Sample playbook history: 
+You can view and manage the playbook as well as review the playbook run history. This can be helpful for troubleshooting or for understanding playbook behavior and results. 
 
-# Playbook retry mechanism
+1. Find the playbook on the Azure Sentinel or All resources page. 
+2. Click on the playbook to view the playbook run History.
+3. Select any executed playbook to view the results.
+
+<!-- Sample playbook history:
+<p align="center">  
+   <img src="./Images/playbook-history-sample.png"> </a>
+</p>  -->
+
+## Playbook retry mechanism
+
+<p align="center">  
+   <img src="./Images/playbook-retry-mechanism.png"> </a>
+</p>
+
 Azure Sentinel handles the retry mechanism. If any condition is not met, Sentinel retries the playbook four times.
+
