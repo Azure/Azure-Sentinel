@@ -88,7 +88,7 @@ The playbook will fail to execute if the URL contains a hyphen  which is not sup
         <img src="./Images/deploy-custom-template-load-file.png"> </a>
      </p>
      <p align="center">  
-        <img src="./Images/deploy-custom-template-edit-template-incident-response"> </a>
+        <img src="./Images/deploy-custom-template-edit-template-incident-response.png"> </a>
      </p>
  1. Under <b>Custom Deployment>Basics:</b>
     - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution 
