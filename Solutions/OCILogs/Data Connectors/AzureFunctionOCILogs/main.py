@@ -5,6 +5,7 @@ import logging
 import re
 from base64 import b64decode
 import azure.functions as func
+import time
 
 from .sentinel_connector import AzureSentinelConnector
 
@@ -18,6 +19,7 @@ WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
 
+MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -27,6 +29,7 @@ if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
 
 def main(mytimer: func.TimerRequest):
     logging.info('Function started.')
+    start_ts = int(time.time())
     config = get_config()
     oci.config.validate_config(config)
 
@@ -35,7 +38,7 @@ def main(mytimer: func.TimerRequest):
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
     cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
-    process_events(stream_client, StreamOcid, cursor, sentinel_connector)
+    process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
 
@@ -88,7 +91,7 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
     return response.data.value
 
 
-def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector):
+def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
         get_response = client.get_messages(stream_id, cursor, limit=1000)
@@ -101,4 +104,14 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             sentinel.send(event)
 
         sentinel.flush()
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            break
         cursor = get_response.headers["opc-next-cursor"]
+
+
+def check_if_script_runs_too_long(start_ts):
+    now = int(time.time())
+    duration = now - start_ts
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
+    return duration > max_duration
