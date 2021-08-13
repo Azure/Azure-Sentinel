@@ -6,55 +6,55 @@ description: |
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
-  - SigninLogs
+      - SigninLogs
   - connectorId: AzureActiveDirectory
     dataTypes:
-  - AADNonInteractiveUserSignInLogs
+      - AADNonInteractiveUserSignInLogs
   - connectorId: AzureSecurityCenter
     dataTypes:
-  - SecurityAlert (ASC)
+      - SecurityAlert (ASC)
   - connectorId: AzureActiveDirectory
     dataTypes:
-  - AuditLogs
+      - AuditLogs
 tactics:
   - InitialAccess
   - Impact
 relevantTechniques:
-- T1190
-- T1078
+  - T1190
+  - T1078
 query: |
-SecurityAlert 
-| where AlertName == "Unfamiliar sign-in properties"
-| summarize count() by WorkspaceSubscriptionId,CompromisedEntity,AlertName
-| join 
-(
-SigninLogs
-| where AppDisplayName == "Azure Portal"
-// 50126 - Invalid username or password, or invalid on-premises username or password.
-// 50020? - The user doesn't exist in the tenant.
-| where ResultType in ("50126", "50020")
-| extend OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
-| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
-| project  UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State,IPAddress
-| extend AccountCustomEntity = UserPrincipalName
-) on $left.CompromisedEntity == $right.AccountCustomEntity
-| project AccountCustomEntity,State,StatusCode,StatusDetails,IPAddress,ResultDescription,AppDisplayName,Location,AlertName
-| join kind=inner
-(
-AuditLogs
-| where LoggedByService =~ "Core Directory"
-| where Category =~ "RoleManagement"
-| where OperationName has_any ("Add member to role","Add member to role in PIM requested (permanent)")
-| extend IpAddress = case(
-  isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
-  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),
-  'Not Available')
-| extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
-  tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-| extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName)) 
-) on $left.AccountCustomEntity == $right.InitiatedBy
-| project AccountCustomEntity,AppDisplayName,IPAddress,Location,StatusCode,StatusDetails
+  SecurityAlert 
+  | where AlertName == "Unfamiliar sign-in properties"
+  | summarize count() by WorkspaceSubscriptionId,CompromisedEntity,AlertName
+  | join 
+  (
+  SigninLogs
+  | where AppDisplayName == "Azure Portal"
+  // 50126 - Invalid username or password, or invalid on-premises username or password.
+  // 50020? - The user doesn't exist in the tenant.
+  | where ResultType in ("50126", "50020")
+  | extend OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+  | project  UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State,IPAddress
+  | extend AccountCustomEntity = UserPrincipalName
+  ) on $left.CompromisedEntity == $right.AccountCustomEntity
+  | project AccountCustomEntity,State,StatusCode,StatusDetails,IPAddress,ResultDescription,AppDisplayName,Location,AlertName
+  | join kind=inner
+  (
+  AuditLogs
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "RoleManagement"
+  | where OperationName has_any ("Add member to role","Add member to role in PIM requested (permanent)")
+  | extend IpAddress = case(
+    isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
+    isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),
+    'Not Available')
+  | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName)) 
+  ) on $left.AccountCustomEntity == $right.InitiatedBy
+  | project AccountCustomEntity,AppDisplayName,IPAddress,Location,StatusCode,StatusDetails
 entityMappings:
   - entityType: IP
     fieldMappings:
