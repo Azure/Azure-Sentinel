@@ -19,14 +19,14 @@ Report items are based on a schedule of daily, weekly, or monthly, stored in a w
 
 ###### Watchlist Structure
 The watchlist has a set structure that you have to follow.  I've included a sample in this repo.
-Title:  The name of the report.  This is used in the subject line of the email, the body of the email, and as the filename for the .CSV attachment
-Schedule: The schedule to run the report.  Acceptable values: Daily, Weekly, Monthly (please note it is cAsE sEnSiTiVe)
-QueryBody:  The query you want to run to generate the report.  PLEASE NOTE:  You have to flatten the query in to one line by removing carriage returns / line feeds.  For example:
+- Title:  The name of the report.  This is used in the subject line of the email, the body of the email, and as the filename for the .CSV attachment
+- Schedule: The schedule to run the report.  Acceptable values: Daily, Weekly, Monthly (please note it is cAsE sEnSiTiVe)
+- QueryBody:  The query you want to run to generate the report.  PLEASE NOTE:  You have to flatten the query in to one line by removing carriage returns / line feeds.  For example:
 ````
 SigninLogs | where TimeGenerated >= ago(24h) | where UserPrincipalName == blah@blah.com.
 ````
 Because of this you cannot use inline comments (e.g.: //my comment).
-Recipients:  A semicolon separated list of email recipients.  PLEASE NOTE:  If you are using unauthenticated email via O365, these must ALL be in your domain. Unauthenticated email via O365 cannot be sent to external recipients.
+- Recipients:  A semicolon separated list of email recipients.  PLEASE NOTE:  If you are using unauthenticated email via O365, these must ALL be in your domain. Unauthenticated email via O365 cannot be sent to external recipients.
 
 ## Gotchas / Issues / Bugs
 ----
@@ -37,6 +37,10 @@ I’m not sure if this is a technical limitation of the Azure Monitor Logs conne
 
 ##### Issue: SMTP Connector throws an error in the UX configuration
 The SMTP connector really doesn’t like allowing you to configure unauthenticated email (or sometimes even any email) in the UX.  What I’ve found seems to work really well is to configure it using the template configuration (I’ve included fields for all of the relevant values (from, server, port, ssl, etc.) and then just leave it alone.  IF you do need to make changes though, configuring it in the Designer view seems to throw errors.  If you want to change it, again, using the Resource Group Edit API Connection seems to be the way to go and not get an error.
+
+
+##### Issue:  O365 is categorizing my email as SPAM/PHISH and putting it in quarantine!
+When you send the email through your public facing MX endpoint it's still subject to the same rules as any other email.  If the sending infrastructure (in this case Azure) isn't in your SPF records, then it will look a possible spoof and depending on your policy configuration, this may mean the emails will go to quarantine.  
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FExport-Report-CSV%2Fazuredeploy.json)
