@@ -3,7 +3,7 @@
 This Azure Function App will connect to the JumpCloud Rest-API using your JumpCloud api Token and retrieve the event logs and ingest them into a custom table called "JumpCloud" in your Log Anaytics Workspace used by Azure Sentinel.
 
 
-The Azure FUnction has bee setup to trigger once every 5 minutes and trigger a seperate execution for each log type listed in the configuration you setup. 
+The Azure Function has bee setup to trigger once every 5 minutes and trigger a seperate execution for each log type listed in the configuration you setup. 
 
 ### Prerequisites
 Before deplying this Arm Template 
