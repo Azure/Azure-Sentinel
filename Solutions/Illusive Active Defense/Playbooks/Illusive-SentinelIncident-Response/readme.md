@@ -26,6 +26,7 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
     - Machine.Read.All – to find agent ID – to query all machines and collect device information even if we don’t have a device ID. 
     - File.Read.All – for process handling, find and erase/stop suspicious executables
     - Machine.StopAndQuarantine – for process handling, find and erase/stop suspicious executables
+ 1. Click <b>Add permissions</b>.
  1. Once all the API permissions are added, click <b>Grant admin consent for Default Directory</b> and click <b>Yes</b>.
  1. Verify admin consent has been granted. This step is important, even if the admin consent status is green. Only a Global Admin can approve admin consent requests.
        1. Go to <b>Enterprise>Admin Consent requests</b>.
