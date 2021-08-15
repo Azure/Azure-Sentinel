@@ -1,6 +1,6 @@
-# Base schema ASIM RegistryEvent Normalization Parser
+# Source Agnostic ASIM RegistryEvent Normalization Parser
 
-This template deploys a parser which makes available the default schema columns for the ASIM RegistryEvent schema. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM RegistryEvent schema parser for Source Agnostic. The parser is a part of the Azure Sentinel Information Mode.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
