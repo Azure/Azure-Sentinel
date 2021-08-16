@@ -110,7 +110,7 @@ You need specify a secret <b>Value</b> to configure Illusive solution playbooks.
 
 ## Add the User Impersonation API Permission
   The user_impersonation permission is used to read Azure Sentinel incidents.  
-  Additional API permissions are required for the Incident Response playbook. These are specified in the [Incident Response playbook deployment instructions](/Playbooks/Illusive-SentinelIncident-Response).
+  Additional API permissions are required for the Incident Response playbook. These are specified in the [Incident Response playbook deployment instructions](./Playbooks/Illusive-SentinelIncident-Response).
 
   1.	From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution. 
   1.	Go to <b>API Permissions</b>.
@@ -202,9 +202,9 @@ Every Syslog message also contains the incident ID, which allows the SOC team to
 <a name="Deploy_Playbooks">
   
 # Configure and Deploy Playbooks
-To configure and deploy the Incident Enrichment playbook, go to [Incident Enrichment Playbook]. 
+To configure and deploy the Incident Enrichment playbook, go to [Incident Enrichment Playbook](./Playbooks/Illusive-SentinelIncident-Enrichment). 
 <br>
-To configure and deploy the Incident Response playbook, go to [Incident Response Playbook].
+To configure and deploy the Incident Response playbook, go to [Incident Response Playbook](./Playbooks/Illusive-SentinelIncident-Response).
   
 <a name="API_connection">
   
