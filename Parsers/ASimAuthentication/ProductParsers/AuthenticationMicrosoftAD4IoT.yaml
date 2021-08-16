@@ -1,0 +1,57 @@
+Parser:
+  Title: ASIM Azure Defender for IoT Authentication Parser
+  Version: '0.1.0'
+  LastUpdated: Aug 16, 2021
+Product:
+  Name: Azure Defender for IoT
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Azure Defender for IoT Authentication Parser
+ParserName: vimAuthenticationAD4IoT
+ParserQuery: |
+            let Authentication_AD4IoT=()
+              {
+                SecurityIoTRawEvent 
+                | where RawEventName == "Login" 
+                | extend
+                  EventDetails = todynamic(EventDetails)
+                  //
+                | extend
+                  // Event
+                  EventOriginalUid = tostring(EventDetails.OriginalEventId), // OK
+                  EventProduct = 'Azure Defender for IoT', // OK 
+                  EventVendor = 'Microsoft', // OK
+                  EventSchemaVersion = '0.1.0', // OK
+                  EventStartTime = todatetime(EventDetails.TimestampUTC), // OK
+                  EventEndTime = todatetime(TimeGenerated), // OK
+                  EventType = iff (EventDetails.Operation == 'Logout', 'Logoff', 'Logon'), // OK 
+                  EventResult = iff (EventDetails.Operation == 'LoginFailed', 'Failure', 'Success') // OK 
+                  //
+                | extend
+                  ActingProcessId = tostring(EventDetails.ProcessId), // OK 
+                  ActingProcessName = tostring(EventDetails.Executable), // OK // -- Linux input device or service used to authenticate, for example pts/1, tty1, pts/0, ssh:notty 
+                  DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"), // OK // -- Intermediate fix
+                  TargetUsernameType = "Simple",
+                  TargetUsername = tostring(EventDetails.UserName),
+                  SrcIpAddr = tostring(EventDetails.RemoteAddress) // OK
+                | project-rename
+                  DvcHostname = DeviceId, // OK
+                  EventProductVersion = AgentVersion, // OK // -- Not available in Windows
+                  _ResourceId = AssociatedResourceId, // OK
+                  _SubscriptionId = AzureSubscriptionId // OK
+                  //
+                  // -- aliases
+                | extend 
+                  User = TargetUsername, 
+                  Process = ActingProcessName, 
+                  Dvc = DvcHostname,
+                  SrcDvcIpAddr = SrcIpAddr,
+                  IpAddr = SrcIpAddr
+               };
+               Authentication_AD4IoT
