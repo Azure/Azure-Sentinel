@@ -1,10 +1,6 @@
 #!/bin/bash
 
 failed=0
-export TERMINFO=/usr/lib/terminfo
-red=`tput setaf 1`
-green=`tput setaf 2`
-reset=`tput sgr0`
 
 filesThatWereChanged=$(echo $(git diff origin/master --name-only))
 for file in $filesThatWereChanged
@@ -18,17 +14,15 @@ for file in $filesThatWereChanged
 		diffs=$(echo $(git diff origin/master -U0 $file))
 		if [[ "$diffs" == *"version:"* ]];
 		then
-			echo "${green}all good - the version was updated${reset}"
+			echo "all good - the version was updated"
 		else
-			echo "${red}You **did not** change the version in this file: $file.${reset}"
+			echo "You **did not** change the version in this file: $file."
 			failed=1
 		fi
 
 	else
-		echo "${green}$file is not a detection.${reset}"		
+		echo "$file is not a detection."		
     fi
 done
-echo $SHELL
-echo $TERM
 
 exit $failed
