@@ -27,4 +27,5 @@ for file in $filesThatWereChanged
 		echo "${green}$file is not a detection.${reset}"		
     fi
 done
+echo $SHELL
 exit $failed
