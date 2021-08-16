@@ -1,6 +1,6 @@
 #!/bin/bash
 
-var=$(echo $(git diff origin/main -U0))
+var=$(echo $(git diff origin/master -U0))
 
 if [[ "$var" == *"version"* ]];
 then
