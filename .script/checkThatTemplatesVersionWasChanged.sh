@@ -1,12 +1,28 @@
 #!/bin/bash
 
-var=$(echo $(git diff origin/master -U0))
+failed=0
 
-if [[ "$var" == *"version:"* ]];
-then
-    echo "Changed the version of the template, nice!"
-    exit 0
-else
-    echo "There are one or more templates that were modified and their version was not updated. Please update the version of the template(s) you changed."
-    exit 1
-fi
+filesThatWereChanged=$(echo $(git diff origin/master --name-only))
+for file in $filesThatWereChanged
+    #Going over all the files that were changed in this PR
+    #And making sure that in every file that its filename contains the word "Detection", the version was updated
+    do
+    	echo processing the file $file.
+	if [[ "$file" == *"Detections/"* ]];
+	then
+		echo $file is a detection
+		diffs=$(echo $(git diff origin/master -U0 $file))
+		if [[ "$diffs" == *"version:"* ]];
+		then
+			echo "all good - the version was updated"
+		else
+			echo "You **did not** change the version in this file: $file."
+			failed=1
+		fi
+
+	else
+		echo "$file is not a detection."		
+    fi
+done
+
+exit $failed
