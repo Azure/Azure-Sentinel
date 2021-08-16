@@ -1,9 +1,12 @@
 #!/bin/bash
 
+failed=0
 filesThatWereChanged=$(echo $(git diff origin/master --name-only))
 for file in $filesThatWereChanged
-do
-    echo processing the file $file that was changed
+    #Going over all the files that were changed in this PR
+    #And making sure that in every file that its filename contains the word "Detection", the version was updated
+    do
+    	echo processing the file $file that was changed
 	if [[ "$file" == *"Detection"* ]];
 	then
 		echo $file is a detection
@@ -13,10 +16,11 @@ do
 			echo all good - the version was updated
 		else
 			echo you **did not** change the version in this file: $file
-			exit 1
+			failed=1
 		fi
-		
+
 	else
 		echo $file is not a detection		
-fi
+    fi
 done
+exit $failed
