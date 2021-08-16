@@ -1,9 +1,9 @@
 #!/bin/bash
 
 failed=0
-red=`tput setaf 1`
-green=`tput setaf 2`
-reset=`tput sgr0`
+red=`tput -T setaf 1`
+green=`tput -T setaf 2`
+reset=`tput -T sgr0`
 
 filesThatWereChanged=$(echo $(git diff origin/master --name-only))
 for file in $filesThatWereChanged
