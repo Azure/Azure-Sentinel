@@ -11,7 +11,7 @@ Scroll to the bottom of this document and click the "Deploy to Azure" button
 
 Fill in the parameters, changing the default values as required for your environment
 
-![02-parameters](../Send-IngestionAnomalyAlert/images/02-parameters.png)
+![02-parameters](../Send-IngestionAnomalyAlert/images/LogicAppParameters.png)
 
 Select your newly deployed app from the resource group
 
