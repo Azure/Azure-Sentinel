@@ -12,7 +12,8 @@ do
 		then
 			echo all good - the version was updated
 		else
-			echo did not change the version in this file: $file
+			echo you **did not** change the version in this file: $file
+			exit 1
 		fi
 		
 	else
