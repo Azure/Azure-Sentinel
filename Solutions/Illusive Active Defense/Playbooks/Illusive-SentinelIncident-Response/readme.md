@@ -26,6 +26,7 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
     - Machine.Read.All – to find agent ID – to query all machines and collect device information even if we don’t have a device ID. 
     - File.Read.All – for process handling, find and erase/stop suspicious executables
     - Machine.StopAndQuarantine – for process handling, find and erase/stop suspicious executables
+ 1. Click <b>Add permissions</b>.
  1. Once all the API permissions are added, click <b>Grant admin consent for Default Directory</b> and click <b>Yes</b>.
  1. Verify admin consent has been granted. This step is important, even if the admin consent status is green. Only a Global Admin can approve admin consent requests.
        1. Go to <b>Enterprise>Admin Consent requests</b>.
@@ -38,18 +39,34 @@ The result should look like this:
 
 ## Configure Microsoft Defender for Endpoint
 
-Enable Microsoft Defender for Endpoint to allow the playbook to stop an attack by triggering an incident response from MDE. 
+Allow the Illusive Incident Response playbook to stop an attack by triggering an incident response from MDE. 
 
-<b>Attention:</b> Skip this procedure if you are using CrowdStrike as your incident response tool. You do not need Microsoft Defender for Endpoint.
+<b>Attention:</b> If you use CrowdStrike as your incident response tool, you can skip this procedure.
+
  1. From the Azure Search bar, search for the <b>Subscription</b> in which MDE is installed.
+     <p align="center">  
+        <img src="./Images/Configure_MDE_1(Subscriptions_MDE_1).png"> </a>
+     </p>
  2. Click on the existing <b>Subscription.</b>
  3. Click <b>Security</b> in the Subscription menu.
  4. Ensure Microsoft Defender for Endpoint is <b>On.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_2(Subscriptions_MDE_2).png"> </a>
+     </p>
  5. If MDE is off, click <b>Security Center.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_OFF_(Subscriptions_MDE_2).png"> </a>
+     </p>
  6. Find the Azure Defender card and click <b>Enable Azure Defender.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_3(Security_Center)_Enable.png"> </a>
+     </p>
  7. Select the desired subscription and click <b>Upgrade.</b>
+     <p align="center">  
+        <img src="./Images/Configure_MDE_3(Security_Center)_Upgrade.png"> </a>
+     </p>
 
-# Deploy the Incident Response playbook
+# Create the Illusive Incident Response playbook
 
 Deploying the Illusive Incident Enrichment playbook requires a custom deployment template. 
  - The playbook should be deployed under the same resource group, subscription, and workspace as the Azure app.
@@ -60,9 +77,21 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 The playbook will fail to execute if the URL contains a hyphen  which is not supported by Sentinel (i.e., certain region-specific URLs). 
 
  1. On Azure home page, filter for <b>Deploy a custom template.</b>
- 2. Under <b>Custom Deployment>Select a template,</b> click <b>Build your own template in the editor.</b>
- 3. From <b>Edit template,</b> click <b>Load file,</b> the file named IllusiveSentinelIncidentResponse.json provided by Illusive and click <b>Save.</b>
- 4. Under <b>Custom Deployment>Basics:</b>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-search.png"> </a>
+     </p>
+ 1. Under <b>Custom Deployment>Select a template,</b> click <b>Build your own template in the editor.</b>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-page.png"> </a>
+     </p>
+ 1. From <b>Edit template,</b> click <b>Load file,</b> the file named IllusiveSentinelIncidentResponse.json provided by Illusive and click <b>Save.</b>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-load-file.png"> </a>
+     </p>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-edit-template-incident-response.png"> </a>
+     </p>
+ 1. Under <b>Custom Deployment>Basics:</b>
     - Specify the <b>Subscription</b> that contains the dedicated Azure app that will run the Illusive Sentinel solution 
     - Specify the <b>Resource group</b> that contains the Workspace where you want to install the playbook.
     - Under <b>Instance details:</b>
@@ -101,21 +130,40 @@ The playbook will fail to execute if the URL contains a hyphen  which is not sup
         <td>If <b>EDR deployed = MDE,</b> specify MDE authentication parameters</td>
        </tr>
       </table>
-      
+      <p align="center">  
+         <img src="./Images/custom-deployment-basics-incident-response.PNG"> </a>
+      </p>      
  5. When finished entering details, click <b>Review + Create.</b>
+      <p align="center">  
+         <img src="./Images/custom-deployment-review-create.png"> </a>
+      </p>      
  6. On successful validation, click <b>Create.</b>
 This completes the playbook deployment. 
+      <p align="center">  
+         <img src="./Images/custom-deployment-is-complete.png"> </a>
+      </p>      
  7. To view the playbook, click <b>Go to resource group.</b>
    - If there is only one installed playbook in the workspace, clicking on Go to resource group will take you to the playbook page. 
    - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the <b>All resources page.</b> The deployed playbook will be available in the list.
   
-# Access and view the playbook 
+## Access and view the playbook 
 
-You can view and manage the playbook as well as review the playbook run history. 
- 1. Find the playbook on the <b>Azure Sentinel</b> or <b>All resources page.</b> 
- 2. Click on the playbook to view the playbook run History.
- 3. Select any executed playbook to view the results.
-Sample playbook history: 
+You can view and manage the playbook as well as review the playbook run history. This can be helpful for troubleshooting or for understanding playbook behavior and results. 
 
-# Playbook retry mechanism
+1. Find the playbook on the Azure Sentinel or All resources page. 
+2. Click on the playbook to view the playbook run History.
+3. Select any executed playbook to view the results.
+
+<!-- Sample playbook history:
+<p align="center">  
+   <img src="./Images/playbook-history-sample.png"> </a>
+</p>  -->
+
+## Playbook retry mechanism
+
+<p align="center">  
+   <img src="./Images/playbook-retry-mechanism.png"> </a>
+</p>
+
 Azure Sentinel handles the retry mechanism. If any condition is not met, Sentinel retries the playbook four times.
+

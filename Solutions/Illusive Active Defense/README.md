@@ -50,178 +50,129 @@ To use the Illusive Active Defense solution, you must have the following:
   
 ## Locate the Sentinel Workspace
    
-  The workspace <b>name</b>, as well as the <b>Subscription</b> and <b>resource group</b> it belongs to are required later on during this configuration.
-   <br>
+The workspace <b>name</b>, as well as the <b>Subscription</b> and <b>resource group</b> it belongs to are required later on during this configuration.
+
+  <br>
 Steps to locate the Sentinel Workspace name, subscription, and resource group:
    <br>
 1. In the [Azure portal](https://portal.azure.com/), go to <b>Azure Sentinel</b>.
-   Type "Azure Sentinel" in the <b>Search bar</b>, or click on the Azure Sentinel icon.
+1. Type "Azure Sentinel" in the <b>Search bar</b>, or click on the Azure Sentinel icon.
 1. On the Azure Sentinel page, in the list, find the workspace where you want to create the playbook and its associated API connection.
    <p align="center">  
       <img src="./Images/Workspace.png"> </a>
    </p>
-1. Use the above highlighted name as the “Workspace Name” while deployment.
+1. Make a note of the workspace <b>Name</b>, <b>resource group</b>, and <b>Subscription</b>.  You will need these during playbook deployment.
 
 <a name="azureappsetup">
    
 # Azure Application Setup
-   
-## Prerequisites
-   An Azure account that has an active subscription.
-  
+  The Illusive solution playbooks run with an Azure application with the required API permissions.
+
+  This procedure sets out the general registration and configuration requirements that apply to both the Incident Enrichment and Incident Response playbooks. 
+    
 ## Register an Azure App
    
 1. Login to [http://portal.azure.com/](http://portal.azure.com/) 
-1. If you have access to multiple tenants, in the top menu, use the Directory + subscription filter to select the tenant in which you want to register the application
+1. If you have access to multiple tenants, in the top menu, use the Directory + subscription filter to select the tenant in which you want to register the application.
    <p align="center">  
       <img src="./Images/app_registration.png"> </a>
    </p>
-1. Search for and select Azure Active Directory.
-1. Under Manage, select App registrations>New registration.The Register an application page appears.
+1. Search for and select <b>Azure Active Directory</b>.
+1. Under Manage, select <b>App registrations>New registration</b>.The <b>Register an application</b> page appears.
    <p align="center">  
       <img src="./Images/app_name.png"> </a>
    </p>
-1. Specify a Name for your application.
-Conform to company naming conventions. Do not use “illusive” or any other word that might reveal the existence of Illusive in the environment. 
-1. Under Supported account types, select Accounts in this organizational directory only.
-1. To complete the initial app registration, click Register.
+1. Specify a <b>Name</b> for your application.
+    <br>
+    Conform to company naming conventions. Do not use “illusive” or any other word that might reveal the existence of Illusive in the environment. 
+1. Under <b>Supported account types</b>, select <b>Accounts in this organizational directory only</b>.
+1. To complete the initial app registration, click <b>Register</b>.
 
 ## Collect App Information
-You need the Application (client) ID and the Directory (tenant) ID to configure Illusive solution playbooks. 
- 1. Go to the created application’s Overview page.
- 1. Copy and save the Application (client) ID and the Directory (tenant) ID. You need this information to configure the playbooks.
+You need the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b> to configure Illusive solution playbooks. 
+ 1. Go to the created application’s <b>Overview</b> page.
+ 1. Copy and save the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b>. You need this information to configure the Illusive playbooks.
+         <p align="center">  
+            <img width="400" src="./Images/App_registration_app-information.png"> </a>
+         </p>
 
 ## Generate and save a Client Secret
-You need a secret Value to configure Illusive solution playbooks.
+You need specify a secret <b>Value</b> to configure Illusive solution playbooks.
   1. Click <b>Certificates & Secrets</b>.
   1. Click <b>New Client Secret</b>.
   1. Add a <b>Description</b> for the Client Secret.
   1. Select an <b>Expiry date</b> for the Client Secret (recommended 6 months).
   1. Click <b>Add</b>. 
-  1. Copy and save the secret Value. You need this information to configure the Playbooks.
+  1. Copy and save the secret Value. You need this information to configure Illusive playbooks.
+        <p align="center">  
+            <img width="400" src="./Images/App_registration_secret-value.png"> </a>
+        </p>
 
-## Add User Impersonation API Permission
-1.	From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution. 
-1.	Go to <b>API Permissions</b>.
-1.	Click <b>Add a permission</b>.
-1.	Under Microsoft APIs, select <b>Azure Service Management>Delegated</b>, and check <b>user_impersonation</b>. This permission is used to read Azure Sentinel incidents.
-1.	Click <b>Grant admin consent for Default Directory</b> and click <b>OK</b>. 
+## Add the User Impersonation API Permission
+  The user_impersonation permission is used to read Azure Sentinel incidents.  
+  Additional API permissions are required for the Incident Response playbook. These are specified in the [Incident Response playbook deployment instructions](/Playbooks/Illusive-SentinelIncident-Response).
+
+  1.	From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution. 
+  1.	Go to <b>API Permissions</b>.
+  1.	Click <b>Add a permission</b>.
+  1.	Under <b>Microsoft APIs</b>, select <b>Azure Service Management</b>.
+        <p align="center">  
+            <img width="400" src="./Images/azure-app-api-user-impersonation1.png"> </a>
+        </p>
+  1.	Select <b>Delegated permissions</b>, check <b>user_impersonation</b>, and click <b>Add permissions</b>.
+        <p align="center">  
+            <img width="400" src="./Images/azure-app-api-user-impersonation2.png"> </a>
+        </p>        
+  1. Click <b>Grant admin consent for Default Directory</b> and click <b>Yes</b>.
+        <p align="center">  
+            <img width="400" src="./Images/azure-app-api-user-impersonation3.png"> </a>
+        </p>        
+  1. Verify admin consent has been granted. This step is important, even if the admin consent status is green. Only a Global Admin can approve admin consent requests.
+       1. Go to <b>Enterprise>Admin Consent requests</b>.
+       1. Go to <b>My pending</b> and verify that this permission is not pending.
 
 <a name="Illusive_API_Key">
   
 # Generate an Illusive API Key
 You need the Illusive REST API URL and an Illusive API key to configure Illusive solution playbooks.
+        <p align="center">  
+            <img width="400" src="./Images/illusive-api-key-card.png"> </a>
+        </p>        
   1. In the Illusive Console, navigate to Settings>General>API Keys. 
   1. Enter values in the following fields:   
-<table>
-  <tr>
-      <td><b>Field</b></td>
-      <td><b>Description and values</b></td>
-  </tr>
-  <tr>
-      <td>Description</td>
-      <td>Specify description of key. <br/>
-    - All Permissions<br/>
-    - Create Event Read<br/>
-    - Monitoring Data
-      </td>
-  </tr>
-  <tr>
-      <td>Permissions</td>
-      <td>Select the permission:</td>
-  </tr>
-  <tr>
-      <td>Restrict SourceIP</td>
-      <td>Limit the API key to be used only from the specified source IP address. (optional)</td>
-  </tr>
-</table>
-    1. Click Add.The API Key is created and added to the list of keys shown.<br/>
-    1. Copy the header containing the key to a text file and save it securely.The key is valid for one year to access the REST API on this Management Server only.
-  
-<a name="Deploy_Playbooks">
-  
-# Configure and Deploy Playbooks
-To configure and deploy the Incident Response playbook, go to Incident Response Playbook.
-<br>
-To configure and deploy the Incident Enrichment playbook, go to Incident Enrichment Playbook. 
-  
-<a name="API_connection">
-  
-# API connection setup
-To connect the Illusive solution playbooks to Azure Sentinel, configure the API connection for each deployed playbook. 
-<br>
-<b>NOTE:</b> The API connection is the same for both the incident enrichment playbook and the incident response playbook. 
-
-  1. Click the deployed playbook and then click <b>API connections.</b>
-  1. Under API connections, click <b>azuresentinel.</b>
-  1. On the <b>azuresentinel</b> card, click <b>Edit API connection.</b>
-  1. Under Authorize, click <b>Authorize</b> and provide authorization by signing in.
-  1. To save the authorization, click <b>Save.</b> To cancel, click <b>Discard.</b>
-
-<a name="Illusive_analytic_rule">
-  
-## Configure the Illusive analytic rule
-The analytic rule instructs Azure Sentinel to search for information of interest and to supply this information to the Illusive solution playbooks. 
-  1. Log onto http://portal.azure.com/ 
-  1. Click <b>Azure Sentinel.</b>
-  1. Select the required workspace (resource group)
-  1. Select <b>Analytics.</b>
-  1. Click <b>Create>Scheduled query rule</b> and click <b>Next.</b>
-  1. Enter the analytics rule details:
-      - <b>Name</b>– Specify a display name for the rule. (e.g., “Illusive analytic rule”)
-      - <b>Description</b>– Add a description for what the rule does. 
-<br/><b>E.g.:</b>  Triggers a Sentinel alert upon detecting an Illusive event and creates a Sentinel incident. The Sentinel incident will correspond to the Illusive incident and will include all subsequent associated Illusive events. 
-      - <b>Tactics</b> – do not select any tactics. 
-      - <b>Severity</b> – select the severity of incidents created by the Illusive solution. Recommended severity level: <b>High</b> 
-      - <b>Status</b> – ensure the rule is <b>Enabled.</b>
-  1. When finished entering Analytic rule details, click <b>Next: Set rule logic.</b>
-  1. In <b>Set rule logic,</b> under <b>Rule query,</b> copy and paste the following KQL query:<br/>
-```markdown
-     CommonSecurityLog
-      | where DeviceProduct == "illusive"
-      | summarize arg_max(TimeGenerated, *) by DeviceCustomNumber2, AdditionalExtensions, TimeGenerated
-      | extend Category = extract(@'cat=([^;]+)(\;|$)', 1, AdditionalExtensions), HasForensics = extract(@'cs7=([^;]+)(\;|$)', 1, AdditionalExtensions)
-      | where Category == "illusive:alerts"
-      | extend isHostIsolated = false
-      | extend isProcessIsolated = false
-```
-   1. Under <b>Alert Enrichment,</b> expand <b>Entity Mapping</b> and add entities as below:
-      - Host > FullName : SourceHostName
-      - IP > Address : SourceIP
-      - Host > OMSAgentID : Computer
-   1. Under <b>Alert Enrichment,</b> expand <b>Custom details</b> and add key-value pairs as below:
-      - isHostIsolated : isHostIsolated
-      - isProcessIsolated : isProcessIsolated 
-      - IllusiveIncidentId : DeviceCustomNumber2
-      - HasForensics : HasForensics
-      - Account : SourceUserName
-   1. Under <b>Alert Enrichment,</b> expand <b>Alert details,</b> and configure the following fields:
-       - <b>Alert Name Format:</b> Illusive Incident: {{DeviceCustomNumber2}}
-       - <b>Alert Description Format:</b> {{DeviceCustomNumber2}} generated at {{TimeGenerated}}
-   1. Under <b>Query scheduling,</b> configure the following details:
-       - <b>Run query every</b> = “5 minutes”. This is because the minimum time for an analytic rule to trigger is 5 minutes.
-       - <b>Lookup data from the last</b> = “5 minutes”. This is because the lookup data (Illusive incidents inserted in Azure Sentinel) will run only for 5 minutes. 
-   1. Under <b>Alert Threshold,</b> set <b>Generate alert when number of query results</b> “is greater than 0”.
-   1. Under <b>Event grouping,</b> select <b>Trigger an alert for each event (preview).</b>
-   1. Keep <b>Suppression</b> “Off”.
-   1. Click <b>Next.</b>
-   1. On the <b>Incident setting (Preview)</b> tab, enable <b>Create incidents from alerts triggered by this analytics rule.</b>
-   1. Enable <b>Alert Grouping.</b><br/>
-<b>Note:</b> Up to 150 alerts can be grouped into a single incident. If more than 150 alerts are generated, a new incident will be created with the same incident details as the original. Additional alerts will be grouped into the new incident.
-   1. Under <b>Alert Grouping,</b> select the time range during which an alert’s associated events will be grouped into a single incident in the Sentinel system. (This can be configured based on customer requirements)
-   1. Under <b>Group alerts triggered by this analytics rule into a single incident by,</b> select <b>Grouping alerts into a single incident if the selected entity types and details match:</b> and select the <b>IllusiveIncidentId</b> entity as in the image below: 
-   1. Enable <b>Re-open closed matching incidents</b> to allow incidents to be reopened. 
-   1. On <b>Automated response</b> tab, from the dropdown list under the <b>Alert automation</b> section, select the configured Illusive solution playbooks: 
-       - <b>IllusiveSentinelIncidentEnrichment </b>
-       - <b>IllusiveSentinelIncidentResponse </b>
-   1. Then, click <b>Next:Review.</b>
-   1. On the <b>Review and create</b> tab, review all the entered data, and click <b>Save.</b>
-   1. The new analytic rule can be seen in the <b>Analytics>Active rules</b> table.
+        <table>
+          <tr>
+              <td><b>Field</b></td>
+              <td><b>Description and values</b></td>
+          </tr>
+          <tr>
+              <td>Description</td>
+              <td>Specify description of key. <br/>
+            - All Permissions<br/>
+            - Create Event Read<br/>
+            - Monitoring Data
+              </td>
+          </tr>
+          <tr>
+              <td>Permissions</td>
+              <td>Select the permission:</td>
+          </tr>
+          <tr>
+              <td>Restrict SourceIP</td>
+              <td>Limit the API key to be used only from the specified source IP address. (optional)</td>
+          </tr>
+        </table>
+    1. Click <b>Add API key</b>. The API Key is created and added to the list of keys shown.
+    1. Copy the header containing the key to a text file and save it securely. The key is valid for one year to access the REST API on this Management Server only.
+    1. To get the Illusive API URL, click <b>REST API Documentation</b>. This opens the Swagger API page. Copy the URL from the browser address bar.
 
 <a name="SIEM_Server">
       
 # Add a SIEM Server
 Configure Illusive to automatically send Illusive activity logs and event messages to a Linux based Syslog server. Sentinel will consume this information and trigger the Illusive solution playbooks.
+          <p align="center">  
+            <img width="400" src="./Images/illusive-syslog-server-integration-card.png"> </a>
+          </p>
 <br>
 Every Syslog message also contains the incident ID, which allows the SOC team to merge or aggregate events in the SIEM.
   1. Install a syslog on a Linux machine 
@@ -247,3 +198,141 @@ Every Syslog message also contains the incident ID, which allows the SOC team to
     </tr>
   </table>
   1. Click <b>Add</b>.
+  
+<a name="Deploy_Playbooks">
+  
+# Configure and Deploy Playbooks
+To configure and deploy the Incident Enrichment playbook, go to [Incident Enrichment Playbook]. 
+<br>
+To configure and deploy the Incident Response playbook, go to [Incident Response Playbook].
+  
+<a name="API_connection">
+  
+# API connection setup
+To connect the Illusive solution playbooks to Azure Sentinel, configure the API connection for each deployed playbook. 
+<br>
+<b>NOTE:</b> The API connection is the same for both the incident enrichment playbook and the incident response playbook. 
+
+          <p align="center">  
+            <img src="./Images/api-connection-setup.png"> </a>
+          </p>
+
+  1. Click the deployed playbook and then click <b>API connections.</b>
+  1. Under API connections, click <b>azuresentinel.</b>
+  1. On the <b>azuresentinel</b> card, click <b>Edit API connection.</b>
+  1. Under Authorize, click <b>Authorize</b> and provide authorization by signing in.
+  1. To save the authorization, click <b>Save.</b> To cancel, click <b>Discard.</b>
+
+<a name="Illusive_analytic_rule">
+  
+## Configure the Illusive analytic rule
+The analytic rule instructs Azure Sentinel to search for information of interest and to supply this information to the Illusive solution playbooks. 
+  1. Log onto http://portal.azure.com/ 
+  1. Click <b>Azure Sentinel.</b>
+  1. Select the resource group and workspace in which the Illusive playbooks are deployed. 
+  1. Select <b>Analytics.</b>
+  1. Click <b>Create>Scheduled query rule</b> and click <b>Next.</b>
+          <p align="center">  
+            <img src="./Images/sentinel-analytics-create-scheduled-query-rule.png"> </a>
+          </p>
+  1. Enter the analytics rule details:
+      - <b>Name</b>– Specify a display name for the rule. (e.g., “Illusive analytic rule”)
+      - <b>Description</b>– Add a description for what the rule does. 
+<br/><b>E.g.:</b>  Triggers a Sentinel alert upon detecting an Illusive event and creates a Sentinel incident. The Sentinel incident will correspond to the Illusive incident and will include all subsequent associated Illusive events. 
+      - <b>Tactics</b> – do not select any tactics. 
+      - <b>Severity</b> – select the severity of incidents created by the Illusive solution. Recommended severity level: <b>High</b> 
+      - <b>Status</b> – ensure the rule is <b>Enabled.</b>
+           <p align="center">  
+            <img width="400" src="./Images/sentinel-analysis-config.png"> </a>
+           </p>
+  1. When finished entering Analytic rule details, click <b>Next: Set rule logic.</b>
+  1. In <b>Set rule logic,</b> under <b>Rule query,</b> copy and paste the following KQL query:<br/>
+```markdown
+     CommonSecurityLog
+      | where DeviceProduct == "illusive"
+      | summarize arg_max(TimeGenerated, *) by DeviceCustomNumber2, AdditionalExtensions, TimeGenerated
+      | extend Category = extract(@'cat=([^;]+)(\;|$)', 1, AdditionalExtensions), HasForensics = extract(@'cs7=([^;]+)(\;|$)', 1, AdditionalExtensions)
+      | where Category == "illusive:alerts"
+      | extend isHostIsolated = false
+      | extend isProcessIsolated = false
+```
+   <p align="center">  
+     <img width="400" src="./Images/sentinel-analysis-set-rule-logic-code.png"> </a>
+   </p>
+
+   1. Under <b>Alert Enrichment,</b> expand <b>Entity Mapping</b> and add entities as below:
+      - Host > FullName : SourceHostName
+      - IP > Address : SourceIP
+      - Host > OMSAgentID : Computer
+       <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-alert-enrichment-config.png"> </a>
+       </p>
+
+   1. Under <b>Alert Enrichment,</b> expand <b>Custom details</b> and add key-value pairs as below:
+      - isHostIsolated : isHostIsolated
+      - isProcessIsolated : isProcessIsolated 
+      - IllusiveIncidentId : DeviceCustomNumber2
+      - HasForensics : HasForensics
+      - Account : SourceUserName
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-alert-enrichment-custom-details.png"> </a>
+        </p>
+
+   1. Under <b>Alert Enrichment,</b> expand <b>Alert details,</b> and configure the following fields:
+       - <b>Alert Name Format:</b> Illusive Incident: {{DeviceCustomNumber2}}
+       - <b>Alert Description Format:</b> {{DeviceCustomNumber2}} generated at {{TimeGenerated}}
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-alert-enrichment-alert-details.png"> </a>
+        </p>
+    
+   1. Under <b>Query scheduling,</b> configure the following details:
+       - <b>Run query every</b> = “5 minutes”. This is because the minimum time for an analytic rule to trigger is 5 minutes.
+       - <b>Lookup data from the last</b> = “5 minutes”. This is because the lookup data (Illusive incidents inserted in Azure Sentinel) will run only for 5 minutes.
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-query-scheduling.png"> </a>
+        </p>
+ 
+   1. Under <b>Alert Threshold,</b> set <b>Generate alert when number of query results</b> “is greater than 0”.
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-alert-threshold.png"> </a>
+        </p>
+        
+   1. Under <b>Event grouping,</b> select <b>Trigger an alert for each event (preview).</b>
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-alert-event-grouping.png"> </a>
+        </p>
+
+   1. Keep <b>Suppression</b> “Off”.
+   1. Click <b>Next.</b>
+   1. On the <b>Incident setting (Preview)</b> tab, enable <b>Create incidents from alerts triggered by this analytics rule.</b>
+   1. Enable <b>Alert Grouping.</b><br/>
+<b>Note:</b> Up to 150 alerts can be grouped into a single incident. If more than 150 alerts are generated, a new incident will be created with the same incident details as the original. Additional alerts will be grouped into the new incident.
+   1. Under <b>Alert Grouping,</b> select the time range during which an alert’s associated events will be grouped into a single incident in the Sentinel system. (This can be configured based on customer requirements)
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-alert-grouping.png"> </a>
+        </p>
+        
+   1. Under <b>Group alerts triggered by this analytics rule into a single incident by,</b> select <b>Grouping alerts into a single incident if the selected entity types and details match:</b> and select the <b>IllusiveIncidentId</b> entity as in the image below: 
+   1. Enable <b>Re-open closed matching incidents</b> to allow incidents to be reopened. 
+        <p align="center">  
+         <img width="400" src="./Images/sentinel-analysis-reopen-closed-matching-incidents.png"> </a>
+        </p>
+
+   1. On <b>Automated response</b> tab, from the dropdown list under the <b>Alert automation</b> section, select the configured Illusive solution playbooks: 
+       - <b>IllusiveSentinelIncidentEnrichment </b>
+       - <b>IllusiveSentinelIncidentResponse </b>
+   1. Then, click <b>Next:Review.</b>
+   1. On the <b>Review and create</b> tab, review all the entered data, and click <b>Save.</b>
+   1. The new analytic rule can be seen in the <b>Analytics>Active rules</b> table.
+
+# Access and view a playbook 
+You can view and manage Illusive playbooks as well as review playbook run history. This can be helpful for understanding how the playbook responds when triggered, and for troubleshooting. 
+1.	Find the playbook on the <b>Azure Sentinel</b> or <b>All resources</b> pages. 
+2.	Click on the playbook to view the playbook run History.
+3.	Select any executed playbook to view the results.
+
+Sample playbook history (incident response):
+        <p align="center">  
+         <img width="400" src="./Images/playbook-history-incident-response.png"> </a>
+        </p>
+
