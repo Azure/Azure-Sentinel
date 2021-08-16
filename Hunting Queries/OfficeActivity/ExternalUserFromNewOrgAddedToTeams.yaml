@@ -12,13 +12,12 @@ relevantTechniques:
   - T1136
 query: |
 
-  // If you have more than 14 days worth of Teams data change this value
-  let data_date = 14d;
-  // If you want to look at users further back than the last day change this value
-  let lookback_date = 1d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
   let known_orgs = (
-  OfficeActivity 
-  | where TimeGenerated > ago(data_date)
+  OfficeActivity
+  | where TimeGenerated between(ago(lookback)..starttime)
   | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberAdded" or Operation =~ "TeamsSessionStarted"
   // Extract the correct UPN and parse our external organization domain
@@ -26,8 +25,8 @@ query: |
   | extend Organization = tostring(split(split(UPN, "_")[1], "#")[0])
   | where isnotempty(Organization)
   | summarize by Organization);
-  OfficeActivity 
-  | where TimeGenerated > ago(lookback_date)
+  OfficeActivity
+  | where TimeGenerated between(starttime..endtime)
   | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberAdded"
   | extend UPN = tostring(parse_json(Members)[0].UPN)

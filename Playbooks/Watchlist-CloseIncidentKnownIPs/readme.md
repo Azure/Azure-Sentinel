@@ -15,12 +15,12 @@ For each Ip address included in the alert (entities of type IP):
 * Configure the step "Run query and list results" with the identifiers of the Sentinel workspace where the watchlist is stored.
 * The watchlist used in this example has at list one column named **ipaddress** which stores the safe address. See the csv file attached in this folder as an example.
 <br><br>
-Overall:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/designerView.png"/><br><br>
-For each IP:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/ForEach.png"/><br><br>
-Update incident by the results:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/end.png"/><br><br>
+
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/designerLight1.png"/><br><br>
+
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/designerLight2.png"/><br><br>
+
+<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-CloseIncidentKnownIPs/images/commentLight.png"/><br><br>
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-CloseIncidentKnownIPs%2Fazuredeploy.json)

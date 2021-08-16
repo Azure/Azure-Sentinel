@@ -1,7 +1,9 @@
 # Deploy a Function App for collecting Azure AD User Information data into Azure Sentinel
 This function app run daily, query Azure AD for all users and write the information to Log Analytics.
 
-Note:  There is a parser available [here](https://github.com/Azure/Azure-Sentinel/blob/master/solutions/AADUserInfo/Parsers/AADUserInfo.txt)
+### Notes:  
+* There is a parser available [here](https://github.com/Azure/Azure-Sentinel/blob/master/solutions/AADUserInfo/Parsers/AADUserInfo.txt)
+* The managed identity of the function app will need to be assigned to the ['Directory Reader'](https://portal.azure.com/#blade/Microsoft_Azure_PIMCommon/UserRolesViewModelMenuBlade/members/roleObjectId/88d8e3e3-8f55-4a1e-953a-9b9898b8876b/roleId/88d8e3e3-8f55-4a1e-953a-9b9898b8876b/roleTemplateId/88d8e3e3-8f55-4a1e-953a-9b9898b8876b/roleName/Directory%20readers/isRoleCustom//resourceScopeId/%2F/resourceId/f7ca9621-6ba3-4d52-a241-e0ed3ea6a78a) role within Azure AD ['Roles and administrators'](https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RolesAndAdministrators) section
 
 ### Deploy the Function App
 The easiest way is via the provided ARM templates:
@@ -9,7 +11,7 @@ The easiest way is via the provided ARM templates:
 #### 1: Deploy via Azure ARM Template
 1.  Deploy the template.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAADUserInfo%2FData%20Conectors%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw%2Egithubusercontent%2Ecom%2FAzure%2FAzure%2DSentinel%2Fmaster%2FDataConnectors%2FAADUserInfo%2Fazuredeploy%2Ejson)
 
 Alternatively you can deploy the elements manually.
 #### 2: Deploy via VS Code
