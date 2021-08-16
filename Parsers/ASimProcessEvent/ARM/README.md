@@ -16,16 +16,17 @@ For more information, see:
 <br>
 
 The template deploys the following:
-* imProcess - Process Events from all normalized process events sources
-* imProcessCreate - Process creation Events from all normalized process events sources
-* imProcessTerminate - Process termination Events from all normalized process events sources
-* vimProcessEventsMicrosoft365D - Process events from Microsoft 365 Defender for Endpoints
-* vimProcessCreateMicrosoftSysmon - Process creation events from Sysmon
-* vimProcessTerminateMicrosoftSysmon - Process termination events from Sysmon
-* vimProcessCreateLinuxSysmon - Process creation events from Sysmon on Linux
-* vimProcessCreateMicrosoftSecurityEvents - Process creation events from Security Events
-* vimProcessTerminateMicrosoftSecurityEvents - Process termination Events from Security Events
-* vimProcessEmpty - Empty ASim Process table
+* Source Agnostic parsers:
+  * imProcess - Process events from all normalized process events sources
+  * imProcessCreate - Process creation events from all normalized process events sources
+  * imProcessTerminate - Process termination events from all normalized process events sources
+  * vimProcessEmpty - Empty ASim Process table
+* Source specific parsers:
+  * **Microsoft 365 Defender for Endpoints** - vimProcessEventsMicrosoft365D
+  * **Sysmon for Windows** - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
+  * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
+  * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
+  * **AzudeDefender for IoT (AD4IoT)** - vimProcessEventAD4IoT  
 
 <br>
 

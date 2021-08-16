@@ -22,10 +22,14 @@ WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
 
+# Defines how many files can be processed simultaneously
+MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 100))
 
-MAX_FILES_COUNT_PER_PAGE = 50
-MAX_CONCURRENT_PROCESSING_FILES = 25
+# Defines page size while listing files from blob storage. New page is not processed while old page is processing.
+MAX_PAGE_SIZE = int(os.environ.get('MAX_PAGE_SIZE', 1000))
 
+# Defines max number of events that can be sent in one request to Azure Sentinel
+MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 1000))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -40,20 +44,20 @@ if not match:
 
 async def main(mytimer: func.TimerRequest):
     logging.info('Starting script')
-    conn = AzureBlobStorageConnector(AZURE_STORAGE_CONNECTION_STRING, CONTAINER_NAME, queue_max_size=MAX_CONCURRENT_PROCESSING_FILES)
+    logging.info('Concurrency parameters: MAX_CONCURRENT_PROCESSING_FILES {}, MAX_PAGE_SIZE {}, MAX_BUCKET_SIZE {}.'.format(MAX_CONCURRENT_PROCESSING_FILES, MAX_PAGE_SIZE, MAX_BUCKET_SIZE))
+    conn = AzureBlobStorageConnector(AZURE_STORAGE_CONNECTION_STRING, CONTAINER_NAME, MAX_CONCURRENT_PROCESSING_FILES)
     container_client = conn._create_container_client()
     async with container_client:
         cors = []
         async for blob in conn.get_blobs():
             cor = conn.process_blob(blob, container_client)
             cors.append(cor)
-            if len(cors) >= MAX_FILES_COUNT_PER_PAGE:
+            if len(cors) >= MAX_PAGE_SIZE:
                 await asyncio.gather(*cors)
                 cors = []
-                logging.info('Processed {} files with {} events.'.format(conn.total_blobs, conn.total_events))
-                if conn.check_if_script_runs_too_long():
-                    logging.info('Script is running too long. Stop processing new blobs.')
-                    break
+            if conn.check_if_script_runs_too_long():
+                logging.info('Script is running too long. Stop processing new blobs.')
+                break
 
         if cors:
             await asyncio.gather(*cors)
@@ -61,11 +65,12 @@ async def main(mytimer: func.TimerRequest):
 
     logging.info('Script finished. Processed files: {}. Processed events: {}'.format(conn.total_blobs, conn.total_events))
 
+
 class AzureBlobStorageConnector:
-    def __init__(self, conn_string, container_name, queue_max_size=20):
+    def __init__(self, conn_string, container_name, max_concurrent_processing_fiiles=10):
         self.__conn_string = conn_string
         self.__container_name = container_name
-        self.semaphore = asyncio.Semaphore(queue_max_size)
+        self.semaphore = asyncio.Semaphore(max_concurrent_processing_fiiles)
         self.script_start_time = int(time.time())
         self.total_blobs = 0
         self.total_events = 0
@@ -74,7 +79,7 @@ class AzureBlobStorageConnector:
         return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False)
 
     def _create_sentinel_client(self):
-        return AzureSentinelConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=10000)
+        return AzureSentinelConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
 
     async def get_blobs(self):
         container_client = self._create_container_client()
@@ -116,3 +121,5 @@ class AzureBlobStorageConnector:
             self.total_blobs += 1
             self.total_events += sentinel.successfull_sent_events_number
             logging.debug("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
+            if self.total_blobs % 100 == 0:
+                logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))
