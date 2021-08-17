@@ -3,11 +3,9 @@
 <img width="300" height="100" src="./Images/logo.jpg"> </a>
 </p>
 
-## Illusive Active Defense Product Suite
+# Illusive Active Defense Sentinel Solution
 
-# Microsoft Azure Sentinel
-
-  Playbook and setup for incident enrichment and response
+Instructions for configuring, running, and using the Illusive Active Defense Sentinel solution.
 
 # Table of Contents
 
@@ -33,7 +31,6 @@ Readme – General
 # Executive Summary
 
 Configure Sentinel and load custom playbooks to have Illusive open Sentinel incidents, populate them with Illusive-based information, and automate incident response.
-This document provides detailed instructions for setting, running, and using the Illusive Active Defense solution.
    <br>
    <b>Incident Enrichment – </b>leverages Sentinel analytic rules to discover Illusive-based alerts and report the associated data and forensics as Sentinel incident sets. 
 Use this playbook to enrich Sentinel security incidents originating from Illusive with Illusive incident and forensics information. Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource.   
