@@ -1,12 +1,18 @@
+<p align="left">  
+<img width="300" height="100" src="./Images/logo.jpg"> </a>
+</p>
+
 # Illusive Incident Enrichment Playbook
 
 The Incident Enrichment playbook leverages Sentinel analytic rules to discover Illusive-based alerts and report the associated data and forensics as Sentinel incident sets. 
 
 Use this playbook to enrich Sentinel security incidents originating from Illusive with Illusive incident and forensics information. Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource.
 
- 1. [Playbook Workflow](#playbook-workflow)
- 2. [Access Playbook](#Access_playbook)
- 3. [Playbook retroy mechanism](#playbook-retry-mechanism)
+ 1. [Playbook workflow](#playbook-workflow)
+ 2. [Playbook execution](#playbook-execution)
+ 3. [Playbook output](#playbook-output)
+ 4. [Access Playbook](#Access_playbook)
+ 5. [Playbook retry mechanism](#playbook-retry-mechanism) 
 
 <a name="playbook-workflow">
 
@@ -82,10 +88,15 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
     - If there is only one installed playbook in the workspace, clicking on <b>Go to resource group</b> will take you to the playbook page. 
     - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the All resources page. The deployed playbook will be available in the list.
 
+<a name="playbook-execution">
+
 ## Playbook Execution 
 - This playbook is triggered by a new Sentinel Alert that originates from a new Illusive event Syslog.
 - Sentinel uses Illusive API to fetch the incident details and update the corresponding Sentinel incident.
 - Illusive API is used again to fetch the event details and update the Sentinel incident with the event’s Illusive event id and triggering process information.
+
+ 
+<a name="playbook-output">
 
 ## Output
 - The Azure Sentinel incident is updated with the following Illusive incident information:
