@@ -1,6 +1,6 @@
-# Multiple ASIM Authentication Normalization Parser
+# ASIM Authentication Normalization source agnostic parser
 
-This template deploys the ASIM Authentication schema parser for Multiple. The parser is a part of the Azure Sentinel Information Mode.
+This template deploys the ASIM Authentication source agnostic parser. The parser is a part of the Azure Sentinel Information Mode.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 

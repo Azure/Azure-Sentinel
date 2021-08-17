@@ -3,7 +3,7 @@ Parser:
   Version: '1.0.0'
   LastUpdated: Aug 8, 2021
 Product:
-  Name: Microsoft Windows
+  Name: Microsoft Windows Event
 Normalization:
   Schema: Authentication
   Version: '0.1.0'
@@ -16,7 +16,6 @@ Description: |
       This Query Parser maps Windows sign in logs (WindowsEvent) to the Azure Sentinel Information Model authenticaion schema.
 ParserName: vimAuthenticationMicrosoftWindowsEvent
 ParserQuery: |  
-                   // need to insert changes, using: https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/ProductParsers/AuthenticationWindowsSecurityEvent.yaml
                           let LogonEvents=dynamic([4624,4625]);
                           let LogoffEvents=dynamic([4634,4647]);
                           let LogonTypes=datatable(LogonType:string, EventSubType:string)[
@@ -29,7 +28,7 @@ ParserQuery: |
                               9, 'NewCredentials',
                               10, 'RemoteInteractive',
                               11, 'CachedInteractive'];
-                          // https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000
+                          // for more information about this parser, please refer to: https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000
                           let LogonStatus=datatable 
                               (EventStatus:string,EventOriginalResultDetails:string, EventResultDetails:string)[
                               '0x80090325', 'SEC_E_UNTRUSTED_ROOT','Other',
@@ -93,7 +92,7 @@ ParserQuery: |
                                               TargetDomainName = tostring(Data.TargetDomainName),
                                               TargetSessionId = tostring(Data.TargetLogonId),
                                               TargetUserId = tostring(Data.TargetUserSid),
-                                              TargetUsername = TargetUsername = tostring(iff (Data.TargetDomainName == '-', Data.TargetUserName, strcat(Data.TargetDomainName, @"\" , Data.TargetUserName))),
+                                              TargetUsername = tostring(iff (Data.TargetDomainName == '-', Data.TargetUserName, strcat(Data.TargetDomainName, @"\" , Data.TargetUserName))),
                                               SrcDvcHostname = tostring(Data.WorkstationName),
                                               EventProduct = "Security Events"
                                   | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
@@ -104,24 +103,24 @@ ParserQuery: |
                                                               "4647 - User initiated logoff."),
                                           EventResult = iff(EventID == 4625, 'Failure', 'Success')
                                   | project-rename 
-                                      TargetDvcHostname = Computer
-                                  // , TargetUserType=AccountType - no AccountType in windowsEvents
-                                  // , EventOriginalUid = EventOriginId - no EventOriginalId in WindowsEvents
-                                  , EventOriginId=EventID
-                                  | extend  EventCount=int(1)
-                                          , EventSchemaVersion='0.1.0'
-                                          , ActorUserIdType='SID'
-                                          , TargetUserIdType='SID'
-                                          , EventVendor='Microsoft'  
-                                          , EventStartTime =TimeGenerated
-                                          , EventEndTime=TimeGenerated
-                                          , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')
-                                          , ActorUsername = tostring(Data.SubjectUserName)
-                                          , ActorUsernameType= iff(Data.SubjectDomainName == '-','Simple', 'Windows' )
-                                          , TargetUsername = tostring(Data.TargetUsername)
-                                          , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
-                                          , SrcDvcOs = 'Windows'
-                                          , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
+                                      TargetDvcHostname = Computer,
+                                  //  TargetUserType=AccountType, - no AccountType in windowsEvents
+                                  //  EventOriginalUid = EventOriginId, - no EventOriginalId in WindowsEvents
+                                      EventOriginId=EventID
+                                  | extend  EventCount=int(1),
+                                          EventSchemaVersion='0.1.0',
+                                          ActorUserIdType='SID',
+                                          TargetUserIdType='SID',
+                                          EventVendor='Microsoft',  
+                                          EventStartTime =TimeGenerated,
+                                          EventEndTime=TimeGenerated,
+                                          EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon'),
+                                          ActorUsername = tostring(Data.SubjectUserName),
+                                          ActorUsernameType= iff(Data.SubjectDomainName == '-','Simple', 'Windows' ),
+                                          TargetUsername = tostring(Data.TargetUsername),
+                                          TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows'),
+                                          SrcDvcOs = 'Windows',
+                                          EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
                                   | lookup LogonStatus on EventStatus
                                   | lookup LogonTypes on LogonType
                                       /// ** Aliases 
