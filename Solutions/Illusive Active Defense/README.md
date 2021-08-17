@@ -11,8 +11,22 @@
 
 # Table of Contents
 
-1. [Executive Summary](#executive_summary)
-   - [Azure Application Setup](#azureappsetup)
+Readme – General
+ 1. [Executive Summary](#executive_summary)
+ 2. [Basic Requirements](#BasicRequirements)
+ 3. [Workflow](#workflowlink)
+ 4. [Locate the Sentinel workspace](#Sentinel_Workspace)
+ 5. [Azure Application Setup](#azureappsetup)
+     - [Register an Azure App](#Register_Azure_App)
+     - [Collect App Information](#Collect_App_Information)
+     - [Generate and save a Client Secret](#Generate_ClientSecret)
+     - [Add User Impersonation API permission](#Add_UserImpersonation)
+ 6. [Generate an Illusive API Key](#Illusive_API_Key)
+ 7. [Add a SIEM Server](#SIEM_Server)
+ 8. [Configure and Deploy Playbooks](#Deploy_Playbooks)
+ 9. [API connection setup](#API_connection)
+10. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
+11. [Access and view the playbook](#Access_playbook)
 
 <a name="executive_summary">
 
@@ -30,11 +44,15 @@ Use the playbook to quickly stop or slow down ransomware attacks and critical in
 <b>Analytic Rule –</b> Trigger a Sentinel alert upon detecting an Illusive event and create a Sentinel incident. The Sentinel incident will correspond to the Illusive incident and will include all subsequent associated Illusive events.
    <br>
   
+<a name="BasicRequirements">
+  
 ## Basic Requirements (set up in advance) 
    
 To use the Illusive Active Defense solution, you must have the following: 
  - An Azure AD subscription with a configured Sentinel workspace
  - An Illusive ADS (deceptions) license
+  
+<a name="workflowlink">
 
 ## Workflow 
     
@@ -55,6 +73,7 @@ The workspace <b>name</b>, as well as the <b>Subscription</b> and <b>resource gr
   <br>
 Steps to locate the Sentinel Workspace name, subscription, and resource group:
    <br>
+  
 1. In the [Azure portal](https://portal.azure.com/), go to <b>Azure Sentinel</b>. 
 2. Type "Azure Sentinel" in the <b>Search bar</b>, or click on the Azure Sentinel icon.
 3. On the Azure Sentinel page, in the list, find the workspace where you want to create the playbook and its associated API connection.
@@ -69,6 +88,8 @@ Steps to locate the Sentinel Workspace name, subscription, and resource group:
   The Illusive solution playbooks run with an Azure application with the required API permissions.
 
   This procedure sets out the general registration and configuration requirements that apply to both the Incident Enrichment and Incident Response playbooks. 
+  
+<a name="Register_Azure_App">
     
 ## Register an Azure App
    
@@ -87,6 +108,8 @@ Steps to locate the Sentinel Workspace name, subscription, and resource group:
     Conform to company naming conventions. Do not use “illusive” or any other word that might reveal the existence of Illusive in the environment. 
 6. Under <b>Supported account types</b>, select <b>Accounts in this organizational directory only</b>.
 7. To complete the initial app registration, click <b>Register</b>.
+  
+<a name="Collect_App_Information">
 
 ## Collect App Information
 You need the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b> to configure Illusive solution playbooks. 
@@ -95,6 +118,8 @@ You need the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b>
          <p align="center">  
             <img src="./Images/App_registration_app-information.png"> </a>
          </p>
+  
+<a name="Generate_ClientSecret">
 
 ## Generate and save a Client Secret
 You need specify a secret <b>Value</b> to configure Illusive solution playbooks.
@@ -107,6 +132,8 @@ You need specify a secret <b>Value</b> to configure Illusive solution playbooks.
         <p align="center">  
             <img src="./Images/App_registration_secret-value.png"> </a>
         </p>
+  
+<a name="Add_UserImpersonation">
 
 ## Add the User Impersonation API Permission
   The user_impersonation permission is used to read Azure Sentinel incidents.  
@@ -324,6 +351,8 @@ The analytic rule instructs Azure Sentinel to search for information of interest
   23. Then, click <b>Next:Review.</b>
   24. On the <b>Review and create</b> tab, review all the entered data, and click <b>Save.</b>
   25. The new analytic rule can be seen in the <b>Analytics>Active rules</b> table.
+
+<a name="Access_playbook">
 
 # Access and view a playbook 
 You can view and manage Illusive playbooks as well as review playbook run history. This can be helpful for understanding how the playbook responds when triggered, and for troubleshooting. 
