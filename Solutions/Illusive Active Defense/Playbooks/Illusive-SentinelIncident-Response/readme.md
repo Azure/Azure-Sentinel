@@ -186,7 +186,7 @@ You can view and manage the playbook as well as review the playbook run history.
 
 Sample playbook history:
 <p align="center">  
-   <img src="./Images/playbook-history-incident-enrichment.png"> </a>
+   <img src="./Images/playbook-history-incident-response.PNG"> </a>
 </p>
 
 <a name="playbook-retry-mechanism">
