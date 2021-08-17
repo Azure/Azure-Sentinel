@@ -9,7 +9,6 @@ Instructions for configuring, running, and using the Illusive Active Defense Sen
 
 # Table of Contents
 
-Readme – General
  1. [Executive Summary](#executive_summary)
  2. [Basic Requirements](#BasicRequirements)
  3. [Workflow](#workflowlink)
@@ -236,11 +235,9 @@ To configure and deploy the Incident Response playbook, go to [Incident Response
 To connect the Illusive solution playbooks to Azure Sentinel, configure the API connection for each deployed playbook. 
 <br>
 <b>NOTE:</b> The API connection is the same for both the incident enrichment playbook and the incident response playbook. 
-
-          <p align="center">  
-            <img src="./Images/api-connection-setup.png"> </a>
-          </p>
-
+     <p align="center">  
+       <img src="./Images/api-connection-setup.png"> </a>
+     </p>
   1. Click the deployed playbook and then click <b>API connections.</b>
   2. Under API connections, click <b>azuresentinel.</b>
   3. On the <b>azuresentinel</b> card, click <b>Edit API connection.</b>
