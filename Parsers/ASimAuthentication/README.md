@@ -33,5 +33,5 @@ This template deploys the following parsers:
      * Service Principals - vimAuthenticationAADServicePrincipalSignInLogs
    * **AWS** - vimAuthenticationAWSCloudTrail
    * **Okta** - vimAuthenticationOktaSSO
-   * **Windows Security Events** - vimAuthenticationWindowsSecurityEvent
+   * **Windows Security Events** collecting using the Log Analytics Agent or Azure Monitor Agent - vimAuthenticationWindowsSecurityEvent
    * **Azure Defneder for IoT**, reporting Linux authentication events - vimAuthenticationAD4IoT
