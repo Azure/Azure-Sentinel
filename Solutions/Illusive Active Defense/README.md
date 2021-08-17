@@ -198,7 +198,7 @@ Configure Illusive to automatically send Illusive activity logs and event messag
           </p>
 <br>
 Every Syslog message also contains the incident ID, which allows the SOC team to merge or aggregate events in the SIEM.
-  1. Install a syslog on a Linux machine. 
+  1. Install a syslog on a Linux machine. <!-- See instructions here: https://docs.microsoft.com/en-us/azure/sentinel/connect-syslog <!-- [See instructions here.](https://docs.microsoft.com/en-us/azure/sentinel/connect-syslog) -->
   2. Configure the Linux machine as a syslog server in the Illusive Console.
       1. In the Illusive Console, navigate to <b>Settings>Reporting</b> and scroll down to <b>Syslog Servers.</b>
       2. In the <b>Host Name</b> server field, supply the server IP address or host name.
