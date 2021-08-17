@@ -15,5 +15,6 @@ For more information, see:
 
 The template deploys the following:
  * vimProcessEventAD4IoT  
+ * vimAuthenticationAD4IoT
 
 <br>
