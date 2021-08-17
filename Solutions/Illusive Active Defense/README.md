@@ -163,31 +163,31 @@ You need the Illusive REST API URL and an Illusive API key to configure Illusive
         </p>        
   1. In the Illusive Console, navigate to Settings>General>API Keys. 
   2. Enter values in the following fields:   
-        <table>
-          <tr>
-              <td><b>Field</b></td>
-              <td><b>Description and values</b></td>
-          </tr>
-          <tr>
-              <td>Description</td>
-              <td>Specify description of key. <br/>
-            - All Permissions<br/>
-            - Create Event Read<br/>
-            - Monitoring Data
-              </td>
-          </tr>
-          <tr>
-              <td>Permissions</td>
-              <td>Select the permission:</td>
-          </tr>
-          <tr>
-              <td>Restrict SourceIP</td>
-              <td>Limit the API key to be used only from the specified source IP address. (optional)</td>
-          </tr>
-        </table>
-    3. Click <b>Add API key</b>. The API Key is created and added to the list of keys shown.
-    4. Copy the header containing the key to a text file and save it securely. The key is valid for one year to access the REST API on this Management Server only.
-    5. To get the Illusive API URL, click <b>REST API Documentation</b>. This opens the Swagger API page. Copy the URL from the browser address bar.
+           <table>
+             <tr>
+                 <td><b>Field</b></td>
+                 <td><b>Description and values</b></td>
+             </tr>
+             <tr>
+                 <td>Description</td>
+                 <td>Specify description of key. <br/>
+               - All Permissions<br/>
+               - Create Event Read<br/>
+               - Monitoring Data
+                 </td>
+             </tr>
+             <tr>
+                 <td>Permissions</td>
+                 <td>Select the permission:</td>
+             </tr>
+             <tr>
+                 <td>Restrict SourceIP</td>
+                 <td>Limit the API key to be used only from the specified source IP address. (optional)</td>
+             </tr>
+           </table>
+  3. Click <b>Add API key</b>. The API Key is created and added to the list of keys shown.
+  4. Copy the header containing the key to a text file and save it securely. The key is valid for one year to access the REST API on this Management Server only.
+  5. To get the Illusive API URL, click <b>REST API Documentation</b>. This opens the Swagger API page. Copy the URL from the browser address bar.
 
 <a name="SIEM_Server">
       
