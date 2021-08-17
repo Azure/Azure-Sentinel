@@ -19,7 +19,7 @@ Instructions for configuring, running, and using the Illusive Active Defense Sen
      - [Generate and save a Client Secret](#Generate_ClientSecret)
      - [Add User Impersonation API permission](#Add_UserImpersonation)
  6. [Generate an Illusive API Key](#Illusive_API_Key)
- 7. [Add a SIEM Server](#SIEM_Server)
+ 7. [Add a Syslog Server](#SIEM_Server)
  8. [Configure and Deploy Playbooks](#Deploy_Playbooks)
  9. [API connection setup](#API_connection)
 10. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
