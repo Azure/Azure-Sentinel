@@ -4,11 +4,19 @@ The Incident Enrichment playbook leverages Sentinel analytic rules to discover I
 
 Use this playbook to enrich Sentinel security incidents originating from Illusive with Illusive incident and forensics information. Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource.
 
+ 1. [Playbook Workflow](#playbook-workflow)
+ 2. [Access Playbook](#Access_playbook)
+ 3. [Playbook retroy mechanism](#playbook-retry-mechanism)
+
+<a name="playbook-workflow">
+
 ## Playbook Workflow
 
  1. Perform the general solution setup. [(see instructions here)](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/tree/Illusive/Solutions/Illusive%20Active%20Defense)
- 1. Create the Illusive playbook.
+ 2. [Create the Illusive playbook.](#create-illusive-playbook)
 
+<a name="create-illusive-playbook">
+ 
 ## Create the Illusive playbook
 
 Deploying the Illusive Incident Enrichment playbook requires a custom deployment template. 
@@ -97,6 +105,8 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
    - The proximity of the compromised host to high value assets (Risk insights) - stepsToCrownJewel, stepsToDomainAdmin
    - Triggering process information for each event - “Event Id: {event_id} Process Information: {Response of triggering process info}”
 
+<a name="Access_playbook">
+
 ## Access and view the playbook 
 
 You can view and manage the playbook as well as review the playbook run history. This can be helpful for troubleshooting or for understanding playbook behavior and results. 
@@ -110,6 +120,8 @@ You can view and manage the playbook as well as review the playbook run history.
    <img src="./Images/playbook-history-sample.png"> </a>
 </p>  -->
 
+<a name="playbook-retry-mechanism">
+ 
 ## Playbook retry mechanism
 
 <p align="center">  
