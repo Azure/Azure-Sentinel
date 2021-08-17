@@ -1,4 +1,4 @@
-# Incident Response
+# Illusive Incident Response Playbook
 
 The Incident Response playbook leverages Sentinel analytic rules and CrowdStrike or Microsoft Defender for Endpoint integration to automate incident response when specified Illusive incidents are discovered. 
 <br/>
