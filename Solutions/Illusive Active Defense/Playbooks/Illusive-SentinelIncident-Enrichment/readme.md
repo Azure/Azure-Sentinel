@@ -126,10 +126,10 @@ You can view and manage the playbook as well as review the playbook run history.
 2. Click on the playbook to view the playbook run History.
 3. Select any executed playbook to view the results.
 
-<!-- Sample playbook history:
+Sample playbook history:
 <p align="center">  
-   <img src="./Images/playbook-history-sample.png"> </a>
-</p>  -->
+   <img src="./Images/playbook-history-incident-enrichment.png"> </a>
+</p>
 
 <a name="playbook-retry-mechanism">
  
