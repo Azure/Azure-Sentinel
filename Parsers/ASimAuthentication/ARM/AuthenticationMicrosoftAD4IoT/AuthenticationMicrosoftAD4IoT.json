@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationAD4IoT",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Azure Defender for IoT Authentication Parser",
+            "category": "Security",
+            "FunctionAlias": "vimAuthenticationAD4IoT",
+            "query": "let Authentication_AD4IoT=()\n  {\n    SecurityIoTRawEvent \n    | where RawEventName == \"Login\" \n    | extend\n      EventDetails = todynamic(EventDetails)\n      //\n    | extend\n      // Event\n      EventOriginalUid = tostring(EventDetails.OriginalEventId), // OK\n      EventProduct = 'Azure Defender for IoT', // OK \n      EventVendor = 'Microsoft', // OK\n      EventSchemaVersion = '0.1.0', // OK\n      EventStartTime = todatetime(EventDetails.TimestampUTC), // OK\n      EventEndTime = todatetime(TimeGenerated), // OK\n      EventType = iff (EventDetails.Operation == 'Logout', 'Logoff', 'Logon'), // OK \n      EventResult = iff (EventDetails.Operation == 'LoginFailed', 'Failure', 'Success') // OK \n      //\n    | extend\n      ActingProcessId = tostring(EventDetails.ProcessId), // OK \n      ActingProcessName = tostring(EventDetails.Executable), // OK // -- Linux input device or service used to authenticate, for example pts/1, tty1, pts/0, ssh:notty \n      DvcOs = iif (EventDetails.MessageSource == \"Linux\", \"Linux\", \"Windows\"), // OK // -- Intermediate fix\n      TargetUsernameType = \"Simple\",\n      TargetUsername = tostring(EventDetails.UserName),\n      SrcIpAddr = tostring(EventDetails.RemoteAddress) // OK\n    | project-rename\n      DvcHostname = DeviceId, // OK\n      EventProductVersion = AgentVersion, // OK // -- Not available in Windows\n      _ResourceId = AssociatedResourceId, // OK\n      _SubscriptionId = AzureSubscriptionId // OK\n      //\n      // -- aliases\n    | extend \n      User = TargetUsername, \n      Process = ActingProcessName, \n      Dvc = DvcHostname,\n      SrcDvcIpAddr = SrcIpAddr,\n      IpAddr = SrcIpAddr\n   };\n   Authentication_AD4IoT",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
