@@ -4,10 +4,10 @@
 // Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
 let EventData = Ubiquiti_CL
 | extend EventVendor = 'Ubiquiti'
-| extend EventTime = extract(@'\<\d+\>(.*)\s\w+,[A-Fa-f0-9]{12}', 1, Message)
-| extend DvcType = extract(@'\d+\:\d+\:\d+\s(\w+),[A-Fa-f0-9]{12}' , 1, Message)
-| extend DvcMacAddr = replace(@'(:)$', @'', replace(@'(\w{2})', @'\1:', extract(@',([A-Fa-f0-9]{12}),v' , 1, Message)))
-| extend FirmwareVersion = extract(@'[A-Fa-f0-9]{12},v(.*?)\:', 1, Message);
+| extend EventTime = extract(@'\<\d+\>(\w+\s+\w+\s+\d+:\d+:\d+)\s\w+,', 1, Message)
+| extend DvcType = iif(extract(@'\d+\:\d+\:\d+\s(\w+),[A-Fa-f0-9]{12}', 1, Message)!="", extract(@'\d+\:\d+\:\d+\s(\w+),[A-Fa-f0-9]{12}', 1, Message), extract(@'\d+\:\d+\:\d+\s[A-Fa-f0-9]{12},([A-Za-z-]+)-', 1, Message))
+| extend DvcMacAddr = replace(@'(:)$', @'', replace(@'(\w{2})', @'\1:', extract(@'([A-Fa-f0-9]{12}),' , 1, Message)))
+| extend FirmwareVersion = iif(extract(@'[A-Fa-f0-9]{12},v(.*?)\:', 1, Message)!="", extract(@'[A-Fa-f0-9]{12},v(.*?)\:', 1, Message), extract(@'[A-Fa-f0-9]{12},[A-Za-z-]+([\d\.\+]+)[\:\s]', 1, Message));
 let ubiquiti_dropbear_events =() {
 EventData
 | where Message contains 'dropbear'
@@ -20,7 +20,7 @@ let ubiquiti_hostapd_events =() {
 EventData
 | where Message contains 'hostapd'
 | extend EventCategory = 'hostapd'
-| extend WlanId = extract(@'hostapd:\s(\w+)\s', 1, Message)
+| extend WlanId = extract(@'hostapd:\s(\w+)', 1, Message)
 | extend SrcType = extract(@':\s(\w+)\s[A-Fa-f0-9:]{17}', 1, Message)
 | extend SrcMacAddr = extract(@':\s(\w+)\s([A-Fa-f0-9:]{17})', 2, Message)
 | extend DstMacAddr = extract(@'addr=([a-fA-F0-9:]{17})', 1, Message)
@@ -29,7 +29,7 @@ EventData
 };
 let ubiquiti_firewall_events =() {
 EventData
-| where Message matches regex @'kernel:\s+\[\S+-\w\]'
+| where Message matches regex @'kernel:\s+\[.+\]\s+IN=\w+\s+OUT=\w+\s+'
 | extend EventCategory = 'firewall'
 | extend FlowId = extract(@'ID=(.*?)\s', 1, Message)
 | extend DvcInboundInterface = extract(@'IN=(.*?)\s', 1, Message)
@@ -58,11 +58,12 @@ EventData
 let ubiquiti_dns_timeout_events =() {
 EventData
 | where Message contains "DNS request timed out"
+| extend EventCategory = 'dnstimeout'
 | extend EventMessage = 'DNS request timed out'
 | extend SrcType = extract(@'\[(\w+):\s[a-fA-F0-9:]{17}\]', 1, Message)
 | extend DvcMacAddr = extract(@'\[\w+:\s([a-fA-F0-9:]{17})\]', 1, Message)
 | extend DnsQuery = extract(@'QUERY:(.*?)\]', 1, Message)
-| extend DnsServer = extract(@'DNS_SERVER(\s)?:(.*?)\]', 1, Message)
+| extend DnsServer = extract(@'DNS_SERVER\s?:(.*?)\]', 1, Message)
 };
 let ubiquiti_stahtd_events =() {
 EventData
@@ -76,7 +77,7 @@ EventData
 };
 let ubiquiti_EVT_AP_STA_ASSOC_TRACKER_DBG =() {
 EventData
-| where Message contains 'libubnt'
+//| where Message contains 'libubnt'
 | where Message contains 'EVT_AP_STA_ASSOC_TRACKER_DBG'
 | extend EventCategory = 'libubnt'
 | extend WlanId = extract(@'vap:\s(.*?)', 1, Message)
@@ -86,7 +87,7 @@ EventData
 };
 let ubiquiti_EVENT_STA_ =() {
 EventData
-| where Message contains 'libubnt'
+//| where Message contains 'libubnt'
 | where Message contains 'EVENT_STA_'
 | extend EventCategory = 'libubnt'
 | extend WlanId = extract(@'EVENT_STA_(JOIN|LEAVE|IP)\s(\w+):', 2, Message)
