@@ -11,7 +11,7 @@ for file in $filesThatWereChanged
 	if [[ "$file" == *"Detections/"* ]];
 	then
 		echo $file is a detection
-		diffs=$(echo $(git diff origin/master -U0 $file))
+		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change $file))
 		if [[ "$diffs" == *"version:"* ]];
 		then
 			echo "all good - the version was updated"
