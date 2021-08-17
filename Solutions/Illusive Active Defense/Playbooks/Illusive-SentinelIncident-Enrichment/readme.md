@@ -1,4 +1,4 @@
-# Incident Enrichment
+# Illusive Incident Enrichment Playbook
 
 The Incident Enrichment playbook leverages Sentinel analytic rules to discover Illusive-based alerts and report the associated data and forensics as Sentinel incident sets. 
 
