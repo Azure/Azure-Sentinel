@@ -20,20 +20,6 @@ param($Timer)
 # Get the current Universal Time
 $currentUTCtime = (Get-Date).ToUniversalTime()
 
-$logAnalyticsUri = $env:logAnalyticsUri
-
-if ([string]::IsNullOrEmpty($logAnalyticsUri))
-{
-    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
-}
-
-# Returning if the Log Analytics Uri is in incorrect format.
-# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
-{
-    throw "Qualys KB: Invalid Log Analytics Uri."
-}
-
 # The 'IsPastDue' property is 'true' when the current function invocation is later than was originally scheduled
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
@@ -52,6 +38,19 @@ $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
 $filterParameters = $env:filterParameters       
 $time = $env:timeInterval
+$logAnalyticsUri = $env:logAnalyticsUri
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $CustomerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "Qualys VM: Invalid Log Analytics Uri."
+}
 
 $base =  [regex]::matches($uri, '(https:\/\/[\w\.]+\/api\/\d\.\d\/fo)').captures.groups[1].value
 $body = "action=login&username=$($username)&password=$($password)"  
