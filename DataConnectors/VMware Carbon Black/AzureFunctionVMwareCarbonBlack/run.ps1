@@ -100,8 +100,8 @@ function CarbonBlackAPI()
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
 
-    $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time)).ToString("yyyy-MM-ddTHH:mm:ssZ")
-    $now = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
+    $now = [System.DateTime]::UtcNow
 
     # Remove if addition slash or space added in hostName
     $hostName = $hostName.Trim() -replace "[.*/]$",""
