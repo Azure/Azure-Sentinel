@@ -15,6 +15,10 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
+#Requires -Modules @{ModuleName='AWS.Tools.Common';ModuleVersion='4.1.5.0'}
+#Requires -Modules @{ModuleName='AWS.Tools.S3';ModuleVersion='4.1.5.0'}
+#Requires -Modules @{ModuleName='AWS.Tools.SecretsManager';ModuleVersion='4.1.5.0'}
+
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 $logAnalyticsUri = $env:logAnalyticsUri
@@ -22,6 +26,59 @@ $logAnalyticsUri = $env:logAnalyticsUri
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
+}
+
+Function EventsFieldsMapping {
+    Param (
+        $events
+    )
+    Write-Host "Started Field Mapping for event logs"
+    
+    $fieldMappings = @{
+        'shortDescription' = 'event_description'
+        'createTime' = 'backend_timestamp'
+        'eventId' = 'event_id'
+        'longDescription' = 'event_description'
+        'eventTime' = 'device_timestamp'
+        'securityEventCode' = 'alert_id'
+        'eventType' = 'type'
+        'incidentId' = 'alert_id'
+        'deviceDetails_deviceIpAddress' = 'device_external_ip'
+        'deviceDetails_deviceIpV4Address' = 'device_external_ip'
+        'deviceDetails_deviceId' = 'device_id'
+        'deviceDetails_deviceName' = 'device_name'
+        'deviceDetails_deviceType' = 'device_os'
+        'deviceDetails_msmGroupName' = 'device_group'
+    }
+    
+    $fieldMappings.GetEnumerator() | ForEach-Object {
+        if (!$events.ContainsKey($_.Name))
+        {
+            $events[$_.Name] = $events[$_.Value]
+        }
+    }
+}
+
+Function Expand-GZipFile {
+    Param(
+        $infile,
+        $outfile       
+    )
+	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
+    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)	
+    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)	
+    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)	
+	
+    $buffer = New-Object byte[](1024)	
+    while ($true) {
+        $read = $gzipstream.Read($buffer, 0, 1024)		
+        if ($read -le 0) { break }		
+		$output.Write($buffer, 0, $read)		
+	}
+	
+    $gzipStream.Close()
+    $output.Close()
+    $inputfile.Close()
 }
 
 # The function will call the Carbon Black API and retrieve the Audit, Event, and Notifications Logs
@@ -38,6 +95,11 @@ function CarbonBlackAPI()
     $AuditLogTable = "CarbonBlackAuditLogs"
     $EventLogTable = "CarbonBlackEvents"
     $NotificationTable  = "CarbonBlackNotifications"
+    $OrgKey = $env:CarbonBlackOrgKey #"7DESJ9GN"
+    $s3BucketName = $env:s3BucketName #"vmwarecarbonblackeventlogsbucket" 
+    $prefixFolder = $env:s3BucketPrefixFolder #"carbon-black-events"
+    $AWSAccessKeyId = $env:AWSAccessKeyId
+    $AWSSecretAccessKey = $env:AWSSecretAccessKey
 
     $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time)).ToString("yyyy-MM-ddTHH:mm:ssZ")
     $now = [System.DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -62,9 +124,7 @@ function CarbonBlackAPI()
     }
 
     $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-    $eventURI = "$($hostName)/integrationServices/v3/event?startTime=$($startTime)&endTime=$($now)"
-    $eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)"))
-
+    
     if ($auditLogsResult.success -eq $true)
     {
         $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
@@ -84,38 +144,45 @@ function CarbonBlackAPI()
         Write-Host "AuditLogsResult API status failed , Please check."
     }
 
-    if ($eventsResult.success -eq $true)
-    {
-        $totalResult = $eventsResult.totalResults
-        $EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
-        if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
-        {
-			$totalResult = $eventsResult.totalResults
-			$start= 1
-			$rows=100
-			for ($start; $start -le $totalResult; $start+=$rows)
-			{
-				$eventPaginationURI = "&start=$($start)&rows=$($rows)"
-				Write-Host("Pagination URI : $($eventURI)$($eventPaginationURI)")  
-				$eventsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($eventURI)$($eventPaginationURI)"))
-				$EventLogsJSON = $eventsResult.results | ConvertTo-Json -Depth 5
-				if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
-				{
-					$responseObj = (ConvertFrom-Json $EventLogsJSON)
-					$status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
-					Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-				}
-				Write-Host("Total Events result count $($eventsResult.totalResults) `n Events result count : $($eventsResult.results.Count) starting from : $($start)")
-			}
+    IF ($Null -ne $s3BucketName) {
+        Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
+
+        while ($startTime -le $now) {
+            $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
+            Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "/tmp"
+            Write-Host "Object $keyPrefix is downloaded."
+    
+            if (Test-Path -Path "/tmp/$keyPrefix") {
+                Get-ChildItem -Path "/tmp" -Recurse -Include *.gz | 
+                Foreach-Object {
+                    $filename = $_.FullName
+                    $infile = $_.FullName				
+                    $outfile = $_.FullName -replace ($_.Extension, '')
+                    Expand-GZipFile $infile.Trim() $outfile.Trim()
+                    $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
+                    $filename = $filename -replace ($_.Extension, '')
+                    $filename = $filename.Trim()
+                
+                    $logEvents = Get-Content -Raw -LiteralPath ($filename) 
+                    $logevents = ConvertFrom-Json $LogEvents -AsHashTable
+                    EventsFieldsMapping -events $logEvents
+                    $EventLogsJSON = $logEvents | ConvertTo-Json -Depth 5
+    
+                    if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
+                    {
+                        $responseObj = (ConvertFrom-Json $EventLogsJSON)
+                        $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
+                        Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+                    }
+    
+                    $null = Remove-Variable -Name LogEvents
+                }
+    
+                Remove-Item -LiteralPath "/tmp/$keyPrefix" -Force -Recurse
+            }
+    
+            $startTime = $startTime.AddMinutes(1)
         }
-        else
-        {
-            Write-Host "No new Carbon Black Events as of $([DateTime]::UtcNow)"
-        }
-    }
-    else
-    {
-        Write-Host "EventsResult API status failed , Please check."
     }
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
