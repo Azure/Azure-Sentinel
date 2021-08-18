@@ -48,6 +48,16 @@ Function EventsFieldsMapping {
         'deviceDetails_deviceName' = 'device_name'
         'deviceDetails_deviceType' = 'device_os'
         'deviceDetails_msmGroupName' = 'device_group'
+        'netFlow_peerFqdn' = 'netconn_domain'
+        'netFlow_peerIpAddress' = 'remote_ip'
+        'processDetails_name' = 'process_name'
+        'processDetails_commandLine' = 'process_cmdline'
+        'processDetails_fullUserName' ='process_username'
+        'processDetails_processId'='process_pid'
+        'processDetails_parentCommandLine' = 'process_cmdline'
+        'processDetails_parentName' = 'parent_path'
+        'processDetails_parentPid' = 'parent_pid'
+        'processDetails_targetCommandLine' = 'target_cmdline'
     }
     
     $fieldMappings.GetEnumerator() | ForEach-Object {
@@ -94,9 +104,9 @@ function CarbonBlackAPI()
     $AuditLogTable = "CarbonBlackAuditLogs"
     $EventLogTable = "CarbonBlackEvents"
     $NotificationTable  = "CarbonBlackNotifications"
-    $OrgKey = $env:CarbonBlackOrgKey #"7DESJ9GN"
-    $s3BucketName = $env:s3BucketName #"vmwarecarbonblackeventlogsbucket" 
-    $prefixFolder = $env:s3BucketPrefixFolder #"carbon-black-events"
+    $OrgKey = $env:CarbonBlackOrgKey
+    $s3BucketName = $env:s3BucketName
+    $prefixFolder = $env:s3BucketPrefixFolder
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
 
@@ -149,7 +159,7 @@ function CarbonBlackAPI()
         while ($startTime -le $now) {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "/tmp"
-            Write-Host "Object $keyPrefix is downloaded."
+            Write-Host "Files under $keyPrefix are downloaded."
     
             if (Test-Path -Path "/tmp/$keyPrefix") {
                 Get-ChildItem -Path "/tmp" -Recurse -Include *.gz | 
