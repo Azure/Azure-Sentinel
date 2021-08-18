@@ -15,8 +15,8 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
-#Requires -Modules @{ModuleName='AWS.Tools.Common';ModuleVersion='4.1.14.0'}
-#Requires -Modules @{ModuleName='AWS.Tools.S3';ModuleVersion='4.1.14.0'}
+#Requires -Modules @{ModuleName='AWS.Tools.Common';ModuleVersion='4.1.14'}
+#Requires -Modules @{ModuleName='AWS.Tools.S3';ModuleVersion='4.1.14'}
 
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
