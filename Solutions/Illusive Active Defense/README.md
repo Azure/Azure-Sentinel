@@ -257,15 +257,43 @@ The analytic rule instructs Azure Sentinel to search for information of interest
             <img src="./Images/sentinel-analytics-create-scheduled-query-rule.png"> </a>
           </p>
   6. Enter the analytics rule details:
-      - <b>Name</b>– Specify a display name for the rule. (e.g., “Illusive analytic rule”)
-      - <b>Description</b>– Add a description for what the rule does. 
-<br/><b>E.g.:</b>  Triggers a Sentinel alert upon detecting an Illusive event and creates a Sentinel incident. The Sentinel incident will correspond to the Illusive incident and will include all subsequent associated Illusive events. 
-      - <b>Tactics</b> – do not select any tactics. 
-      - <b>Severity</b> – select the severity of incidents created by the Illusive solution. Recommended severity level: <b>High</b> 
-      - <b>Status</b> – ensure the rule is <b>Enabled.</b>
-           <p align="center">  
-            <img src="./Images/sentinel-analysis-config.png"> </a>
-           </p>
+
+       <table>
+         <tr>
+           <th><b>Field</b></th>
+           <th><b>Instructions</b></th>
+         </tr>
+         <tr>
+           <td>Name</td>
+           <td>Specify a display name for the rule. (e.g., “Illusive analytic rule”)</td>
+         </tr>
+         <tr>
+           <td>Description</td>
+           <td>Add a description for what the rule does.</td>
+         </tr>
+         <tr>
+           <td>Description</td>
+           <td>Add a description for what the rule does. 
+             <br/><b>E.g.:</b>  Triggers a Sentinel alert upon detecting an Illusive event and creates a Sentinel incident. The Sentinel incident will correspond to the Illusive incident and will include all subsequent associated Illusive events.</td>
+         </tr>
+         <tr>
+           <td>Tactics</td>
+           <td>Do not select any tactics.</td>
+         </tr>
+         <tr>
+           <td>Severity</td>
+           <td>Select the severity level of incidents created by the Illusive solution. 
+            <br> 
+            Recommended severity level: <b>High</b></td>
+         </tr>
+         <tr>
+           <td>Status</td>
+           <td>Ensure the rule is <b>Enabled.</b></td>
+         </tr>
+       </table>
+       <p align="center">  
+        <img src="./Images/sentinel-analysis-config.png"> </a>
+       </p>
   7. When finished entering Analytic rule details, click <b>Next: Set rule logic.</b>
   8. In <b>Set rule logic,</b> under <b>Rule query,</b> copy and paste the following KQL query:<br/>
 ```markdown
