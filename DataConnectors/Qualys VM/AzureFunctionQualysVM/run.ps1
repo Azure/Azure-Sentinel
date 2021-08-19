@@ -29,7 +29,7 @@ if ($Timer.IsPastDue) {
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
 $TimeStampField = "DateValue"
-$TableName = "QualysHostDetection"
+$TableName = "RegionTestQualysHostDetection"
 
 # Build the headers for the Qualys API request
 $username = [uri]::EscapeDataString($env:apiUsername)
