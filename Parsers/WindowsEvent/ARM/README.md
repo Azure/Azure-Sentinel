@@ -15,6 +15,5 @@ The template deploys the following:
  * vimRegistryEventMicrosoftWindowsEvent
  * vimProcessCreationMicrosoftWindowsEvents
  * vimProcessTerminationMicrosoftWindowsEvents
- * vimAuthenticationMicrosoftWindowsEvent  
 
 <br>

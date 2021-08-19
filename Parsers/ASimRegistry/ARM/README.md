@@ -23,7 +23,7 @@ This template deploys the following:
 * vimRegistryEventsMicrosoft365D - Registry events from Microsoft 365 Defender for Endpoints
 * vimRegistryEventMicrosoftSysmon - Registry events from Sysmon (Events 12,13 and 14) collected using the Log Analytics Agent or the Azure Monitor Agent to the Event table.
 * vimRegistryEventMicrosoftSecurityEvents - Registry Events from Windows Events (Event 4657) collected using the Log Analytics Agent or the Azure Monitor Agent to the SecuirtyEvent table.
-* vimRegistryEventMicrosoftWindowsEvent - Registry Events from Windows Events (Event 4657) collected using the Log Analytics Agent or the Azure Monitor Agent to the WindowsEvent table.
+* vimRegistryEventMicrosoftWindowsEvent - Registry Events from Windows Events (Event 4657) collected using the Azure Monitor Agent to the WindowsEvent table.
 
 <br>
 
