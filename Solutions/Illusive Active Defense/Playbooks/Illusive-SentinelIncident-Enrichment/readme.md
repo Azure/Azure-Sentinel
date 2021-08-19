@@ -20,7 +20,7 @@ Use this playbook to enrich Sentinel security incidents originating from Illusiv
 
  1. Perform the general solution setup. [(see instructions here)](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/tree/Illusive/Solutions/Illusive%20Active%20Defense)
  2. [Create the Illusive playbook.](#create-illusive-playbook)
- 3. [Set up the playbook's API connection](#API_connection)
+ 3. [Connect the playbook to Azure Sentinel](#API_connection)
 
 <a name="create-illusive-playbook">
  
@@ -88,7 +88,7 @@ This completes the playbook deployment.
       
 <a name="API_connection">
 
-## Set up the playbook's API connection
+## Connect the playbook to Azure Sentinel
 Connect the playbook to Azure Sentinel by configuring the playbook's API connection. 
      <p align="center">  
        <img src="./Images/api-connection-setup.png"> </a>
