@@ -67,7 +67,7 @@ namespace Teams.CustomConnector.Common
                     keyVaultSecret = await secretClient.GetSecretAsync(key);
                 });
 
-                return keyVaultSecret?.Value;
+                return keyVaultSecret.Value;
             }
             catch (System.Exception ex)
             {
