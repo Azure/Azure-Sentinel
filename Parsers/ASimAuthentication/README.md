@@ -34,4 +34,5 @@ This template deploys the following parsers:
    * **AWS** - vimAuthenticationAWSCloudTrail
    * **Okta** - vimAuthenticationOktaSSO
    * **Windows Security Events** collecting using the Log Analytics Agent or Azure Monitor Agent - vimAuthenticationWindowsSecurityEvent
+   * **Windows Events** collecting using the Azure Monitor Agent - vimAuthenticationMicrosoftWindowsEvent. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
    * **Azure Defneder for IoT**, reporting Linux authentication events - vimAuthenticationAD4IoT
