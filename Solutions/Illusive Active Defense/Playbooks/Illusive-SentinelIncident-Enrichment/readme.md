@@ -20,6 +20,7 @@ Use this playbook to enrich Sentinel security incidents originating from Illusiv
 
  1. Perform the general solution setup. [(see instructions here)](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/tree/Illusive/Solutions/Illusive%20Active%20Defense)
  2. [Create the Illusive playbook.](#create-illusive-playbook)
+ 3. [Set up the playbook's API connection](#API_connection)
 
 <a name="create-illusive-playbook">
  
@@ -79,14 +80,28 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
       <p align="center">  
          <img src="./Images/custom-deployment-review-create.png"> </a>
       </p>
-1. On successful validation, click <b>Create</b>.
-   This completes the playbook deployment. 
-      <p align="center">  
+1. On successful validation, click <b>Create</b>.  
+This completes the playbook deployment. 
+      <p align="center">
          <img src="./Images/custom-deployment-is-complete.png"> </a>
       </p>
-1. To view the playbook, click <b>Go to resource group</b>.
-    - If there is only one installed playbook in the workspace, clicking on <b>Go to resource group</b> will take you to the playbook page. 
-    - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the All resources page. The deployed playbook will be available in the list.
+      
+<a name="API_connection">
+
+## Set up the playbook's API connection
+Connect the playbook to Azure Sentinel by configuring the playbook's API connection. 
+     <p align="center">  
+       <img src="./Images/api-connection-setup.png"> </a>
+     </p>
+  1. From <b>Your custom deployment is complete</b>, click <b>Go to all resources</b>. 
+     - If there is only one installed playbook in the workspace, clicking on <b>Go to resource group</b> will take you to the playbook page. 
+     - If there are multiple installed playbooks in the workspace, clicking on <b>Go to resource group</b> will take you to the All resources page. The playbook will be available in the list.
+  2. Click the deployed playbook and then click <b>API connections.</b>
+  3. Under API connections, click <b>azuresentinel</b>.
+  4. On the <b>azuresentinel</b> card, click <b>Edit API connection</b>.
+  5. Edit the <b>Display Name</b>. (optional)
+  6. Under Authorize, click <b>Authorize</b> and provide authorization by signing in.
+  7. To save the authorization, click <b>Save</b>. To cancel, click <b>Discard</b>.
 
 <a name="playbook-execution">
 
