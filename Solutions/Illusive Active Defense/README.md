@@ -9,25 +9,24 @@ Instructions for configuring, running, and using the Illusive Active Defense Sen
 
 # Table of Contents
 
- 1. [Executive Summary](#executive_summary)
- 2. [Basic Requirements](#BasicRequirements)
+ 1. [Executive summary](#executive_summary)
+ 2. [Basic requirements](#BasicRequirements)
  3. [Workflow](#workflowlink)
  4. [Locate the Sentinel workspace](#Sentinel_Workspace)
- 5. [Azure Application Setup](#azureappsetup)
-     - [Register an Azure App](#Register_Azure_App)
-     - [Collect App Information](#Collect_App_Information)
+ 5. [Azure application setup](#azureappsetup)
+     - [Register an Azure app](#Register_Azure_App)
+     - [Collect app information](#Collect_App_Information)
      - [Generate and save a Client Secret](#Generate_ClientSecret)
-     - [Add User Impersonation API permission](#Add_UserImpersonation)
- 6. [Generate an Illusive API Key](#Illusive_API_Key)
- 7. [Add a Syslog Server](#SIEM_Server)
- 8. [Configure and Deploy Playbooks](#Deploy_Playbooks)
- 9. [API connection setup](#API_connection)
+     - [Add the User Impersonation API permission](#Add_UserImpersonation)
+ 6. [Generate an Illusive API key](#Illusive_API_Key)
+ 7. [Configure Illusive to send logs to a Linux-based syslog server](#SIEM_Server)
+ 8. [Configure and deploy playbooks](#Deploy_Playbooks)
 10. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
 11. [Access and view the playbook](#Access_playbook)
 
 <a name="executive_summary">
 
-# Executive Summary
+# Executive summary
 
 Configure Sentinel and load custom playbooks to have Illusive open Sentinel incidents, populate them with Illusive-based information, and automate incident response.
    <br>
@@ -42,27 +41,27 @@ Use the playbook to quickly stop or slow down ransomware attacks and critical in
   
 <a name="BasicRequirements">
   
-## Basic Requirements (set up in advance) 
+## Basic requirements (set up in advance) 
    
 To use the Illusive Active Defense solution, you must have the following: 
  - An Azure AD subscription with a configured Sentinel workspace
  - An Illusive ADS (deceptions) license
+ - A Linux-based syslog server. To set up the syslog server, [see these instructions from Microsoft](https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/sentinel/connect-syslog.md). Then, go to <b>Data connectors</b>, find and select the <b>CEF connector</b> 
   
 <a name="workflowlink">
 
 ## Workflow 
     
   1. [Locate the Sentinel workspace](#Sentinel_Workspace)
-  2. [Azure Application Setup](#azureappsetup)
-  3. [Generate an Illusive API Key](#Illusive_API_Key)
-  4. [Add a Syslog Server](#SIEM_Server)
-  5. [Configure and Deploy Playbooks](#Deploy_Playbooks)
-  6. [API connection setup](#API_connection)
-  7. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
+  2. [Azure application setup](#azureappsetup)
+  3. [Generate an Illusive API key](#Illusive_API_Key)
+  4. [Configure Illusive to send logs to a Linux-based syslog server](#SIEM_Server)
+  5. [Configure and deploy playbooks](#Deploy_Playbooks)
+  6. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
    
 <a name="Sentinel_Workspace">
   
-## Locate the Sentinel Workspace
+## Locate the Sentinel workspace
    
 The workspace <b>name</b>, as well as the <b>Subscription</b> and <b>resource group</b> it belongs to are required later on during this configuration.
 
@@ -80,14 +79,14 @@ Steps to locate the Sentinel Workspace name, subscription, and resource group:
 
 <a name="azureappsetup">
    
-# Azure Application Setup
+# Azure application setup
   The Illusive solution playbooks run with an Azure application with the required API permissions.
 
   This procedure sets out the general registration and configuration requirements that apply to both the Incident Enrichment and Incident Response playbooks. 
   
 <a name="Register_Azure_App">
     
-## Register an Azure App
+## Register an Azure app
    
 1. Login to [http://portal.azure.com/](http://portal.azure.com/) 
 2. If you have access to multiple tenants, in the top menu, use the Directory + subscription filter to select the tenant in which you want to register the application.
@@ -107,7 +106,7 @@ Steps to locate the Sentinel Workspace name, subscription, and resource group:
   
 <a name="Collect_App_Information">
 
-## Collect App Information
+## Collect app information
 You need the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b> to configure Illusive solution playbooks. 
  1. Go to the created application’s <b>Overview</b> page.
  2. Copy and save the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b>. You need this information to configure the Illusive playbooks.
@@ -131,7 +130,7 @@ You need specify a secret <b>Value</b> to configure Illusive solution playbooks.
   
 <a name="Add_UserImpersonation">
 
-## Add the User Impersonation API Permission
+## Add the User Impersonation API permission
   The user_impersonation permission is used to read Azure Sentinel incidents.  
   Additional API permissions are required for the Incident Response playbook. These are specified in the [Incident Response playbook deployment instructions](./Playbooks/Illusive-SentinelIncident-Response).
 
@@ -156,7 +155,7 @@ You need specify a secret <b>Value</b> to configure Illusive solution playbooks.
 
 <a name="Illusive_API_Key">
   
-# Generate an Illusive API Key
+# Generate an Illusive API key
 You need the Illusive REST API URL and an Illusive API key to configure Illusive solution playbooks.
         <p align="center">  
             <img src="./Images/illusive-api-key-card.png"> </a>
@@ -191,21 +190,20 @@ You need the Illusive REST API URL and an Illusive API key to configure Illusive
 
 <a name="SIEM_Server">
       
-# Add a syslog Server
-Configure Illusive to automatically send Illusive activity logs and event messages to a Linux based Syslog server. Sentinel will consume this information and trigger the Illusive solution playbooks.
-          <p align="center">  
-            <img src="./Images/illusive-syslog-server-integration-card.png"> </a>
-          </p>
-<br>
-Every Syslog message also contains the incident ID, which allows the SOC team to merge or aggregate events in the SIEM.
-  1. Install a syslog on a Linux machine. [See instructions here.](https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/sentinel/connect-syslog.md)
-  2. Configure the Linux machine as a syslog server in the Illusive Console.
-      1. In the Illusive Console, navigate to <b>Settings>Reporting</b> and scroll down to <b>Syslog Servers.</b>
-      2. In the <b>Host Name</b> server field, supply the server IP address or host name.
-      3. In the <b>Port</b> field, supply the Syslog server’s communication port. (Default <b>514</b>)
-      4. From the <b>Protocol</b> dropdown menu, select <b>TCP.</b><br>
-    <b>Recommendation:</b> For high reliability, select the TCP protocol.
-      5. From the <b>Audit messages</b> drop-down menu, select one of the following (either option is okay; this integration only requires the event messages):
+# Configure Illusive to send logs to a Linux-based syslog server
+Configure Illusive to automatically send Illusive activity logs and event messages to a Linux based Syslog server. Every Syslog message also contains an Illusive incident ID. Sentinel will consume this information and trigger the Illusive solution playbooks. 
+ 
+If you haven't yet configured the syslog server, [see these instructions from Microsoft](https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/sentinel/connect-syslog.md). Then, go to <b>Data connectors</b> and find and select the <b>Common event format connector</b>.
+
+  1. In the Illusive Console, navigate to <b>Settings>Reporting</b> and scroll down to <b>Syslog Servers.</b>
+     <p align="center">  
+       <img src="./Images/illusive-syslog-server-integration-card.png"> </a>
+     </p>
+  2. In the <b>Host Name</b> server field, supply the server IP address or host name.
+  3. In the <b>Port</b> field, supply the Syslog server’s communication port. (Default <b>514</b>)
+  4. From the <b>Protocol</b> dropdown menu, select <b>TCP.</b><br>
+<b>Recommendation:</b> For high reliability, select the TCP protocol.
+  5. From the <b>Audit messages</b> drop-down menu, select one of the following (either option is okay; this integration only requires the event messages):
           <table>
             <tr>
               <th><b>Option</b></th>
@@ -220,30 +218,15 @@ Every Syslog message also contains the incident ID, which allows the SOC team to
               <td><b>Sends only Illusive event messages and system health data</b> to your Syslog server</td>
             </tr>
           </table>
-      6. Click <b>Add</b>.
+  6. Click <b>Add</b>.
   
 <a name="Deploy_Playbooks">
   
-# Configure and Deploy Playbooks
+# Configure and deploy playbooks
 To configure and deploy the Incident Enrichment playbook, go to [Incident Enrichment Playbook](./Playbooks/Illusive-SentinelIncident-Enrichment). 
 <br>
 To configure and deploy the Incident Response playbook, go to [Incident Response Playbook](./Playbooks/Illusive-SentinelIncident-Response).
   
-<a name="API_connection">
-  
-# API connection setup
-To connect the Illusive solution playbooks to Azure Sentinel, configure the API connection for each deployed playbook. 
-<br>
-<b>NOTE:</b> The API connection is the same for both the incident enrichment playbook and the incident response playbook. 
-     <p align="center">  
-       <img src="./Images/api-connection-setup.png"> </a>
-     </p>
-  1. Click the deployed playbook and then click <b>API connections.</b>
-  2. Under API connections, click <b>azuresentinel.</b>
-  3. On the <b>azuresentinel</b> card, click <b>Edit API connection.</b>
-  4. Under Authorize, click <b>Authorize</b> and provide authorization by signing in.
-  5. To save the authorization, click <b>Save.</b> To cancel, click <b>Discard.</b>
-
 <a name="Illusive_analytic_rule">
   
 ## Configure the Illusive analytic rule
