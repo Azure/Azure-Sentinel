@@ -25,4 +25,5 @@ This template deploys the following:
 * vimRegistryEventMicrosoftSecurityEvents - Registry Events from Windows Events (Event 4657) collected using the Log Analytics Agent or the Azure Monitor Agent to the SecuirtyEvent table.
 * vimRegistryEventMicrosoftWindowsEvent - Registry Events from Windows Events (Event 4657) collected using the Azure Monitor Agent to the WindowsEvent table. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
 
+
 <br>
