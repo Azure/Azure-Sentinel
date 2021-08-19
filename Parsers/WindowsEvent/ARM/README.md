@@ -13,7 +13,7 @@ For more information, see:
 
 The template deploys the following:
  * vimRegistryEventMicrosoftWindowsEvent
- * vimProcessCreationMicrosoftWindowsEvents
- * vimProcessTerminationMicrosoftWindowsEvents
+ * vimProcessCreateMicrosoftWindowsEvents
+ * vimProcessTerminateMicrosoftWindowsEvents
 
 <br>

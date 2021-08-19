@@ -26,7 +26,7 @@ The template deploys the following:
   * **Sysmon for Windows** - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
   * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
-  * **Windows Events**, collecting using the Azure Monitor Agent - vimProcessCreationMicrosoftWindowsEvents, vimProcessTerminationMicrosoftWindowsEvents
+  * **Windows Events**, collecting using the Azure Monitor Agent - vimProcessCreateMicrosoftWindowsEvents, vimProcessTerminateMicrosoftWindowsEvents
   * **AzudeDefender for IoT (AD4IoT)** - vimProcessEventAD4IoT 
 
 <br>
