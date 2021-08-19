@@ -101,7 +101,7 @@ namespace Teams.CustomConnector.StorageHandler
                     if (await blockBlob.ExistsAsync())
                     {
                         var result = await blockBlob.DownloadAsync();
-                        StreamReader reader = new StreamReader(result.Value.Content);
+                        using StreamReader reader = new StreamReader(result.Value.Content);
                         string text = reader.ReadToEnd();
                         operationDetails = JsonSerializer.Deserialize<OperationDetails>(text);
                         return operationDetails;
