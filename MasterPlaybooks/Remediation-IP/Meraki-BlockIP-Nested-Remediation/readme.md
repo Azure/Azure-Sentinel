@@ -22,13 +22,13 @@
 
 To deploy Cisco Meraki Custom connector click on the below button.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json&version=GBPaloAlto-PAN-OS) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://dev.azure.com/SentinelAccenture/Sentinel-Accenture%20Logic%20Apps%20connectors/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FPaloAlto-PAN-OS-BlockIP%2Fazuredeploy.json&version=GBPaloAlto-PAN-OS) 
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FConnector%2FMerakiConnector%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FConnector%2FMerakiConnector%2Fazuredeploy.json)
 
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
- [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fdev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FMeraki-Block-IP-Address%2Fazuredeploy.json&version=GBCiscoMeraki)  [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fdev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FPlaybooks%2FMeraki-Block-IP-Address%2Fazuredeploy.json&version=GBCiscoMeraki)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FMeraki-BlockIP-Nested-Remediation%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FMeraki-BlockIP-Nested-Remediation%2Fazuredeploy.json)
+
 
  2. Fill in the required parameters for deploying the playbook.
 

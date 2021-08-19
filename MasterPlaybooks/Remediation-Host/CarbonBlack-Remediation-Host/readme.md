@@ -24,10 +24,14 @@
 
 To deploy CarbonBlack Custom connector click on the below button.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewallConnector/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewallConnector/azuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CarbonBlack/CarbonBlackConnector/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CarbonBlack/CarbonBlackConnector/azuredeploy.json)
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-Host%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-Host%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json)
+
+
 2. Fill in the required paramteres:
 
 |Parameter|Description|
@@ -49,7 +53,6 @@ Once deployment is complete, you will need to authorize CarbonBlack connection.
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky device.
 2. Configure the automation rules to trigger this playbook
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fdev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FMasterPlaybook-Host-Remediation%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json&version=GBMasterPlaybooks&_a=contents)  [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fdev.azure.com/SentinelAccenture/_git/Sentinel-Accenture%20Logic%20Apps%20connectors?path=%2FMasterPlaybook-Host-Remediation%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json&version=GBMasterPlaybooks&_a=contents)
 
 ## Playbook steps explained
 
