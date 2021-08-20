@@ -16,7 +16,7 @@ When this playbook gets triggered, it performs below actions:
 2. FortinetConnector needs to be deployed prior to the deployment of this playbook under the same subscription. 
 3. Function App needs to be deployed prior to the deployment of this playbook under the same subscription. 
 4. FortinetConnector API key should be known. Refer this link [how to generate the API Key](https://www.insoftservices.uk/fortigate-rest-api-token-authentication) 
-5. Managed Identity should be created. [Create user assigned manage identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal)
+5. Managed Identity should be created. [Create user assigned manage identity](/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal)
 
 ### Deploy Custom Connector
 
