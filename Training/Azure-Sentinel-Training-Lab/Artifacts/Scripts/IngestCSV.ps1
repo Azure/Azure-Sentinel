@@ -114,9 +114,16 @@ Function Write-OMSLogfile {
     return $returnCode
 }
 
-Function SendToLogA ($url, $eventsTable) {    	
-	Invoke-WebRequest -Uri $url -OutFile "query_data.csv"
-    $eventsData = Import-Csv "query_data.csv"
+Function SendToLogA ($url, $eventsTable) {
+try
+{
+Invoke-WebRequest -Uri $url -OutFile "query_data.csv" -ErrorAction Stop
+}
+catch
+{
+Write-Host $_.Exception.Response
+}
+$eventsData = Import-Csv "query_data.csv"
     
     #Test Size; Log A limit is 30MB
     $tempdata = @()
