@@ -24,12 +24,12 @@
 
 To deploy CarbonBlack Custom connector click on the below button.
 
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CarbonBlack/CarbonBlackConnector/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CarbonBlack/CarbonBlackConnector/azuredeploy.json)
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-Host%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-Host%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json)
 
 
 2. Fill in the required paramteres:

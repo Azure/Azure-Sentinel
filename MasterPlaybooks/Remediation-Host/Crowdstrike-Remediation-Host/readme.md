@@ -19,7 +19,7 @@
 
 To deploy Crowdstrike base playbook click on the below button.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CrowdStrike/Playbooks/CrowdStrike_Base/azuredeploy.json)  [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CrowdStrike/Playbooks/CrowdStrike_Base/azuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CrowdStrike/Playbooks/CrowdStrike_Base/azuredeploy.json)  [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/CrowdStrike/Playbooks/CrowdStrike_Base/azuredeploy.json)
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
