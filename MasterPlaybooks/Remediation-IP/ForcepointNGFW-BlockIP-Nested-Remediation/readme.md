@@ -6,8 +6,8 @@
  2. For each IP address in the list, checks if the IP address is already present in IP List Name or not.
  3. List of all IP addresses not present in IP List Name is blocked in the firewall by the playbook.
 
- ![Forcepoint](./Images/PlaybookdesignerLight.png)<br>
-![Forcepoint](./Images/PlaybookdesignerDark.png)<br>
+ ![Forcepoint](./Images/PlaybookDesignerLight.png)<br>
+![Forcepoint](./Images/PlaybookDesignerDark.png)<br>
  
  ## Pre-requisites for deployment
  1. Deploy the Forcepoint SMC Custom Connector before the deployment of this playbook under the same subscription and same resource group as will be used for this playbook. Capture the name of the connector during deployment.

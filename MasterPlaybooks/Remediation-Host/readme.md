@@ -1,8 +1,10 @@
 # Master Playbook Host Remediation 
 
-Master playbook is integrated with multiple firewall end products like CarbonBlack and Crowdstrike.
+Master playbook is integrated with multiple firewall Endpoint protection products.  
+ - CarbonBlack 
+ - Crowdstrike.
 
-Firewall end products are deployed as child/nested playbooks.
+Endpoint protection products are deployed as child/nested playbooks.
 
 If a malicious host is detected from the Azure sentinel, master playbook calls all the child/nested playbooks and each firewall product will take remidiation steps needed on that host and comments will be passed to the master playbook from the child/nested playbooks involving multiple products. 
 
@@ -101,10 +103,23 @@ Get the list of Hosts as entities from the Incident.
  4. Response from each nested playbook is attached to incident comment and consolidated incident comment is created.
  5. If all the nested playbooks returns success response , the incident will be closed.
 
-**Incident Comment for error handling**
+**Incident Comment**
 
  ![Master](./Images/IncidentCommentLight.png)
   ![Master](./Images/IncidentCommentDark.png)
+
+**Incident Comment: Exception occurred**
+
+### If any of the nested playbook throws exception then Incident Comment looks like below: (e.g. Crowdstrike)
+
+ ![Master](./Images/IncidentComment_Error.PNG)
+
+**Incident Comment: Ran Successfully**
+
+### If the nested playbook ran Successfully then Incident Comment looks like below: (e.g. CarbonBlack)
+
+![Master](./Images/IncidentComment_Success.PNG)
+
 
 
 

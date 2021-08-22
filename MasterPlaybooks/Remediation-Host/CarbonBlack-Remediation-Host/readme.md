@@ -6,8 +6,8 @@
  2. Enriches the incident with device information by fetching from CarbonBlack
  2. Incident information is sent as response to master playbook.
 
-![CarbonBlack](./Images/PlaybookdesignerLight.png)<br>
-![CarbonBlack](./Images/PlaybookdesignerDark.png)<br>
+![CarbonBlack](./Images/PlaybookDesignerLight.png)<br>
+![CarbonBlack](./Images/PlaybookDesignerDark.png)<br>
 
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription and same resource group. Capture the name of connector during deployment.

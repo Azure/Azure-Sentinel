@@ -8,8 +8,8 @@ When this playbook gets triggered, it performs below actions:
 3. If IP address is blocked in security policy rule, then it unblocks that IP address.
 4. If IP address is not blocked in security policy rule, then it blocks that IP address.
 
-![Fortinet](./Images/PlaybookdesignerLight.png)<br>
-![Fortinet](./Images/PlaybookdesignerDark.png)<br>
+![Fortinet](./Images/PlaybookDesignerLight.png)<br>
+![Fortinet](./Images/PlaybookDesignerDark.png)<br>
 
 ### Prerequisites 
 1. Sentinel IP block group should be created in the VM.

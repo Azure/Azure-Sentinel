@@ -11,13 +11,13 @@ When this playbook gets triggered and it performs below actions:
 3. Appends the malicious IP address list to list of IP addresses received from IP Group.
 4. Updates IP Group with the new list of IP addresses.
 
-![AzureFirewall](./Images/PlaybookdesignerLight.png)<br>
-![AzureFirewall](./Images/PlaybookdesignerDark.png)<br>
+![AzureFirewall](./Images/PlaybookDesignerLight.png)<br>
+![AzureFirewall](./Images/PlaybookDesignerDark.png)<br>
 
 ### Prerequisites 
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. 
 1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. 
-1. IP Group must be created in portal. [Refer here](/azure/firewall/ip-groups) on how to create IP Group. User must have access tp IP Group.
+1. IP Group must be created in portal. [Refer here](https://docs.microsoft.com/azure/firewall/ip-groups) on how to create IP Group. User must have access tp IP Group.
 1. Client ID, Tenant ID and Client Secret for your application registered in your AAD. 
 
 ### Deploy Custom Connector

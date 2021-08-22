@@ -6,14 +6,14 @@
  3. Enrich the incident with device information from Crowdstrike
  4. Incident information is sent as response to master playbook.
 
- ![CrowdStrike](./Images/PlaybookdesignerLight.png)<br>
-![CrowdStrike](./Images/PlaybookdesignerDark.png)<br>
+ ![CrowdStrike](./Images/PlaybookDesignerLight.png)<br>
+![CrowdStrike](./Images/PlaybookDesignerDark.png)<br>
 
 ### Prerequisites 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists. [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)
 2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment.
 3. CrowdStrike Base playbook needs to be deployed prior to the deployment of this playbook under the same subscription and under the same resource group. Capture the name of playbook during deployment.
-4. CrowdStrike Base playbook needs to be added in the access policy of the Key Vault [learn how](/azure/key-vault/general/assign-access-policy-portal)
+4. CrowdStrike Base playbook needs to be added in the access policy of the Key Vault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)
 
 ### Deploy Base Playbook
 
