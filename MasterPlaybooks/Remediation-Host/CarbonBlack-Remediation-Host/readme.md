@@ -41,7 +41,7 @@ To deploy CarbonBlack Custom connector click on the below button.
 |**Organization Key**| Enter the Organization key|
     
 ### Post-Deployment instructions 
-####a. Authorize connections
+#### a. Authorize connections
 Once deployment is complete, you will need to authorize CarbonBlack connection.
 1.	Click the CarbonBlack connection
 2.  Click **Edit API connection**
@@ -49,41 +49,41 @@ Once deployment is complete, you will need to authorize CarbonBlack connection.
 4.  Click Save
 
 
-####b. Configurations in Sentinel
+#### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky device.
 2. Configure the automation rules to trigger this playbook
 
 
 ## Playbook steps explained
 
-###When Azure Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 Azure Sentinel incident is created. The playbook receives the incident as the input.
 
-###Entities - Get Hosts
+### Entities - Get Hosts
 Get the list of risky devices as entities from the Incident
 
-###Initialize variable to assign the Organization Id
+### Initialize variable to assign the Organization Id
 Initialize an string variable to assign the Organization Id provided by Client while deploying the playbook and used as parameter while calling the search devices with organization API action.
 
-###Initialize variable to assign the CarbonBlack devices information
+### Initialize variable to assign the CarbonBlack devices information
 Initialize an array variable to assign the CarbonBlack devices used as source to format the HTML with the devices information
 
-###Initialize variable to assign the quarantined devices information
+### Initialize variable to assign the quarantined devices information
 Initialize an array variable to assign the quarantined devices information used as source to format the HTML with the action taken on devices
 
-###For each-Hosts
+### For each-Hosts
 This action will perform the below actions
  a. Make a call to CarbonBlack API with the parameters such as Organization Key and Quary [ Contains device name ]
  b. Verify the CarbonBlack returned the results and Check the device is quarantined
  c. If the device is not quarantined then isolate it.
 
-###Construct HTML table - CarbonBlack devices information
+### Construct HTML table - CarbonBlack devices information
 This action will construct the HTML table with devices information
 
-###Construct HTML table - Quarantined devices through playbook
+### Construct HTML table - Quarantined devices through playbook
 This action will construct the HTML table with Quarantined devices through playbook
 
-###Send Response with device information
+### Send Response with device information
 This action will send response to master playbook with devices information
 
 
