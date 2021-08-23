@@ -186,6 +186,7 @@ function BuildArmTemplate($playbookResource) {
             "title"= ""
             "description"= ""
             "prerequisites"= ""
+            "prerequisitesDeployTemplateFile"= ""
             "lastUpdateTime"= ""
             "entities"= @()
             "tags"= @()
