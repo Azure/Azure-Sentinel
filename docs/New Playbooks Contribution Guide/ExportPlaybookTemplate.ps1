@@ -134,7 +134,7 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
         $existingConnectionProperties = SendArmGetCall -relativeUrl "$($apiConnectionReference.Value.connectionId)?api-version=2016-06-01"
     }
     catch {
-        $existingConnectionProperties = $null
+
     }
     
     $existingConnectorProperties = SendArmGetCall -relativeUrl "$($apiConnectionReference.Value.id)?api-version=2016-06-01"
@@ -166,7 +166,7 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
     
     # Evaluate and add connection-specific parameters
     Foreach ($connectorParameter in $existingConnectorProperties.properties.connectionAlternativeParameters.PSObject.Properties) {
-        if ($connectorParameter.Name -eq "authentication" -or $connectorParameter -contains "token:") {
+        if ($connectorParameter.Name -eq "authentication" -or $connectorParameter -match "token:") {
             continue
         }
 
