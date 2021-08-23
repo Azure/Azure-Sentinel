@@ -3,7 +3,7 @@
     [string]$PlaybookSubscriptionId,
     [string]$PlaybookResourceGroupName,
     [string]$PlaybookResourceName,
-    [boolean]$AddGalleryMetadata = $false
+    [boolean]$GenerateForGallery = $false
 )
 
 # Ask for user sign in if not signed in to generate a new token
@@ -103,21 +103,54 @@ function GetPlaybookResource() {
     })
 
     # Update properties to fit ARM template structure
-    $playbookResource.id = $null
+    if ($GenerateForGallery) {
+        if (!$playbookResource.tags) {
+            $playbookResource.tags = @{
+                "hidden-SentinelTemplateName"= $playbookResource.name
+                "hidden-SentinelTemplateVersion"= "1.0"
+            }
+        }
+        else {
+            if (!$playbookResource.tags["hidden-SentinelTemplateName"]) {
+                Add-Member -InputObject $playbookResource.tags -Name "hidden-SentinelTemplateName" -Value $playbookResource.name -MemberType NoteProperty
+            }
+
+            if (!$playbookResource.tags["hidden-SentinelTemplateVersion"]) {
+                Add-Member -InputObject $playbookResource.tags -Name "hidden-SentinelTemplateVersion" -Value "1.0" -MemberType NoteProperty
+            }
+        }
+
+        # The azuresentinel connection will use MSI when exported for the gallery, so the playbook must support it too
+        if ($playbookResource.identity.type -ne "SystemAssigned") {
+            if (!$playbookResource.identity) {
+                Add-Member -InputObject $playbookResource -Name "identity" -Value @{
+                    "type"= "SystemAssigned"
+                } -MemberType NoteProperty
+            }
+            else {
+                $playbookResource.identity = @{
+                    "type"= "SystemAssigned"
+                }
+            }
+        }
+    }
+
+    $playbookResource.PSObject.Properties.remove("id")
     $playbookResource.location = "[resourceGroup().location]"
     $playbookResource.name = "[parameters('PlaybookName')]"
     Add-Member -InputObject $playbookResource -Name "apiVersion" -Value "2017-07-01" -MemberType NoteProperty
     Add-Member -InputObject $playbookResource -Name "dependsOn" -Value @() -MemberType NoteProperty
 
     # Remove properties specific to an instance of a deployed playbook
-    $playbookResource.properties.createdTime = $null
-    $playbookResource.properties.changedTime = $null
-    $playbookResource.properties.version = $null
-    $playbookResource.properties.accessEndpoint = $null
+    $playbookResource.properties.PSObject.Properties.remove("createdTime")
+    $playbookResource.properties.PSObject.Properties.remove("changedTime")
+    $playbookResource.properties.PSObject.Properties.remove("version")
+    $playbookResource.properties.PSObject.Properties.remove("accessEndpoint")
+    $playbookResource.properties.PSObject.Properties.remove("endpointsConfiguration")
 
     if ($playbookResource.identity) {
-        $playbookResource.identity.principalId = $null
-        $playbookResource.identity.tenantId = $null
+        $playbookResource.identity.PSObject.Properties.remove("principalId")
+        $playbookResource.identity.PSObject.Properties.remove("tenantId")
     }
 
     return $playbookResource
@@ -130,16 +163,31 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
     $connectorType = if ($apiConnectionReference.Value.id.ToLowerInvariant().Contains("/managedapis/")) { "managedApis" } else { "customApis" } 
     $connectionAuthenticationType = if ($apiConnectionReference.Value.connectionProperties.authentication.type -eq "ManagedServiceIdentity") { "Alternative" } else  { $null }    
     
+    # We always convert azuresentinel connections to MSI during export
+    if ($GenerateForGallery -and $connectionName -eq "azuresentinel" -and !$connectionAuthenticationType) {
+        $connectionAuthenticationType = "Alternative"
+
+        if (!$apiConnectionReference.Value.ConnectionProperties) {
+            Add-Member -InputObject $apiConnectionReference.Value -Name "ConnectionProperties" -Value @{} -MemberType NoteProperty
+        }
+        $apiConnectionReference.Value.connectionProperties = @{
+            "authentication"= @{
+                "type"= "ManagedServiceIdentity"
+            }
+        }
+    }
+
     try {
         $existingConnectionProperties = SendArmGetCall -relativeUrl "$($apiConnectionReference.Value.connectionId)?api-version=2016-06-01"
     }
     catch {
-
+        $existingConnectionProperties = $null
     }
     
     $existingConnectorProperties = SendArmGetCall -relativeUrl "$($apiConnectionReference.Value.id)?api-version=2016-06-01"
 
-    $apiConnectionResources.Add(@{
+    # Create API connection resource
+    $apiConnectionResource = @{
         "type"= "Microsoft.Web/connections"
         "apiVersion"= "2016-06-01"
         "name"= "[variables('$connectionVariableName')]"
@@ -153,15 +201,22 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
                 "id"= "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/$connectorType/$connectionName')]"
             }
         }
-    }) | Out-Null
+    }
+    if (!$apiConnectionResource.properties.parameterValueType) {
+        $apiConnectionResource.properties.Remove("parameterValueType")
+    }
+        $apiConnectionResources.Add($apiConnectionResource) | Out-Null
 
+    # Update API connection reference in the playbook resource
     $apiConnectionReference.Value = @{
         "connectionId"= "[resourceId('Microsoft.Web/connections', variables('$connectionVariableName'))]"
         "connectionName" = "[variables('$connectionVariableName')]"
         "id" = "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/$connectorType/$connectionName')]"
         "connectionProperties" = $apiConnectionReference.Value.connectionProperties
     }
-
+    if (!$apiConnectionReference.Value.connectionProperties) {
+        $apiConnectionReference.Value.Remove("connectionProperties")
+    }
     $playbookResource.dependsOn += "[resourceId('Microsoft.Web/connections', variables('$connectionVariableName'))]"
     
     # Evaluate and add connection-specific parameters
@@ -188,7 +243,7 @@ function BuildArmTemplate($playbookResource) {
         "resources"= @($playbookResource)+$apiConnectionResources
     }
 
-    if ($AddGalleryMetadata) {
+    if ($GenerateForGallery) {
         $armTemplate.metadata = @{
             "title"= ""
             "description"= ""
