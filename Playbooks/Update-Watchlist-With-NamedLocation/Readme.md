@@ -2,7 +2,7 @@
 
 
 author: Maria de Sousa-Valadas </br>
-version: 1.0
+version: 1.1
 
 
 This Logic App runs on a scheduled basis (every 7 days by default) and checks if new IP ranges have been added to your Named Location. If there are new IP ranges, they will be added to your preexisting Azure Sentinel Watchlist, which you can then use in queries, analytics, hunting queries, etc. for correlation.
