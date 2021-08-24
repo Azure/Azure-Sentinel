@@ -1,3 +1,5 @@
+# Anomalies Preview Unusual Mass Downgrade AIP Label
+
 The anomaly simulation package is provided by the Azure Sentinel Customizable Anomalies team to enable demo results for a specific anomaly rule named: 
 "(Preview) Unusual mass downgrade AIP label" in your Azure Sentinel instance.
 
