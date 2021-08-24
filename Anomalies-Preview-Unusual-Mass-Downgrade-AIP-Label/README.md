@@ -43,7 +43,7 @@ When complete your will have a:
 
 Script execution and data ingestion simulates what would happen in the event the anomaly rule is triggered.
 
-<img src= "/images/AIPRule.PNG" >
+<img src= "Anomalies-Preview-Unusual-Mass-Downgrade-AIP-Label/images/AIPRule.PNG" >
   
 # Details on ML and Anomalies: 
 https://techcommunity.microsoft.com/t5/azure-sentinel/democratize-machine-learning-with-customizable-ml-anomalies/ba-p/2346338
