@@ -1,7 +1,7 @@
 # Update-Watchlist-With-NamedLocation
 
 
-author: Maria de Sousa-Valadas
+author: Maria de Sousa-Valadas </br>
 version: 1.0
 
 
@@ -32,6 +32,6 @@ This Logic App runs on a scheduled basis (every 7 days by default) and checks if
 2.	The logic app is set to run every 7 days. You can modify the frequency on the first step.
  
  
-##Configure connections:
+## Configure connections:
 1.	On the step "Get secret" you will need to update your connection. Select Change Connection, then Add new, and finally Connect with managed identity (preview). Fill in the information. As you have previously granted permission to the keyvault, you should be able to select the Secret.
 2.	In the last step, you may need to update your connection to Azure Sentinel as well.
