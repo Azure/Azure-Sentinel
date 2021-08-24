@@ -1,6 +1,6 @@
 # Multiple ASIM ProcessEvent Normalization Parser
 
-This template deploys the Multiple ASIM ProcessEvent schema parser. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM ProcessEvent schema parser for Multiple. The parser is a part of the Azure Sentinel Information Mode.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
