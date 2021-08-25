@@ -50,6 +50,6 @@ https://techcommunity.microsoft.com/t5/azure-sentinel/democratize-machine-learni
 
 
 # Work with anomaly detection analytics rules in Azure Sentinel
-https://docs.microsoft.com/en-us/azure/sentinel/work-with-anomaly-rules
+https://docs.microsoft.com/azure/sentinel/work-with-anomaly-rules
 
 
