@@ -10,7 +10,7 @@ Learn more about the integration via the https://docs.microsoft.com/connectors/i
 
 ## Reputation Threat Metrix
 
-![Threat Metrix](./Graphics/ip_threat_metrix.png)
+![Threat Metrix](./Graphics/domain_threat_metrix.png)
 
 ## Links to deploy the Enrich-Sentinel-IPQualityScore-URL-Reputation playbook template:
 
