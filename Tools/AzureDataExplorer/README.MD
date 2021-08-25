@@ -106,9 +106,7 @@ The high-level architecture should look like the following:
 	
 	D. **Create update policy** 
 	
-	E. **Modify retention for target table**
-	
-	**Note**:If you want to create Log Analytics workspace **tables** on Azure Data Explorer, you can run Create-LA-Tables-ADX.ps1
+	E. **Modify retention for target table**	
 	
 7. Then Event Hub namespaces are created. In this step, the script create Event Hub namespaces for groups of up to 10 tables.  
    **Note:** Event Hub Standard tier has limitation of having a maximum of 10 Event Hub topics.
@@ -124,3 +122,5 @@ The high-level architecture should look like the following:
 	b. If No, the script will exit, and user has to create data connection for each table in Azure Data Explorer by selecting appropriate Raw, Mapping Tables and Event Hub topic.  
 
 10. A log file is generated at the end of the script named:  ```ADXMigration_<<TimeStamp>>.csv```. The log includes every script action and should be used to identify performance or configuration issues and to gain insights to perform root cause analysis in the case of failures.  
+
+**Note**:If your requirement is only to create targetted tables on Azure Data Explorer (ADX) without creating Data Export rules on Log Analytics, EventHubs and Data Connection rules on Azure Data Explorer, then simply run this script to create tables **Create-LA-Tables-ADX.ps1**
