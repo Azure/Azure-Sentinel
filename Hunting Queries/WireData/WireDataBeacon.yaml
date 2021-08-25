@@ -2,10 +2,10 @@ id: 33aa0e01-87e2-43ea-87f9-2f7e3ff1d532
 name: Detect beacon like pattern based on repetitive time intervals in Wire Data Traffic
 description: |
   'This query will identify beaconing patterns from Wire Data logs based on timedelta patterns. The query leverages various KQL functions
-  to calculate time delta and then compare it with total events observed in a day to find percentage of beaconing.  
+  to calculate time delta and then compare it with total events observed in a day to find percentage of beaconing.
   Results of such beaconing patterns to untrusted public networks can be a good starting point for investigation.
-  References: Blog about creating dataset to identify network beaconing via repetitive time intervals seen against total traffic 
-  between same source-destination pair. 
+  References: Blog about creating dataset to identify network beaconing via repetitive time intervals seen against total traffic
+  between same source-destination pair.
   http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/'
 requiredDataConnectors:
   - connectorId: AzureMonitor(WireData)
@@ -14,34 +14,32 @@ requiredDataConnectors:
 tactics:
   - CommandAndControl
 relevantTechniques:
-  - T1043
-  - T1065
+  - T1071
+  - T1571
 query: |
 
-  let starttime = 7d; 
-  let endtime = 1d; 
-  let TimeDeltaThreshold = 10; 
-  let TotalEventsThreshold = 15; 
-  let PercentBeaconThreshold = 95; 
-  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.'; 
+  let lookback = 1d;
+  let TimeDeltaThreshold = 10;
+  let TotalEventsThreshold = 15;
+  let PercentBeaconThreshold = 95;
+  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
   WireData
-  | where TimeGenerated between (ago(starttime)..ago(endtime)) 
-  | extend RemoteIPType = iff(RemoteIP matches regex PrivateIPregex,"private" ,"public" ) 
-  | where RemoteIPType =="public" 
-  | project TimeGenerated , LocalIP , LocalPortNumber , RemoteIP, RemotePortNumber, ReceivedBytes, SentBytes 
-  | sort by LocalIP asc,TimeGenerated asc, RemoteIP asc, RemotePortNumber asc 
+  | where TimeGenerated > lookback
+  | extend RemoteIPType = iff(RemoteIP matches regex PrivateIPregex,"private" ,"public" )
+  | where RemoteIPType =="public"
+  | project TimeGenerated , LocalIP , LocalPortNumber , RemoteIP, RemotePortNumber, ReceivedBytes, SentBytes
+  | sort by LocalIP asc,TimeGenerated asc, RemoteIP asc, RemotePortNumber asc
   | serialize
-  | extend nextTimeGenerated = next(TimeGenerated, 1), nextLocalIP = next(LocalIP, 1) 
-  | extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated) 
-  | where LocalIP == nextLocalIP 
-  //Whitelisting criteria/ threshold criteria 
-  | where TimeDeltainSeconds > TimeDeltaThreshold  
+  | extend nextTimeGenerated = next(TimeGenerated, 1), nextLocalIP = next(LocalIP, 1)
+  | extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)
+  | where LocalIP == nextLocalIP
+  //Whitelisting criteria/ threshold criteria
+  | where TimeDeltainSeconds > TimeDeltaThreshold
   | where RemotePortNumber != "0"
-  | project TimeGenerated, TimeDeltainSeconds, LocalIP, LocalPortNumber,RemoteIP,RemotePortNumber, ReceivedBytes, SentBytes 
-  | summarize count(), sum(ReceivedBytes), sum(SentBytes), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), LocalIP, RemoteIP, RemotePortNumber 
-  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds)=arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes=sum(sum_SentBytes),TotalReceivedBytes=sum(sum_ReceivedBytes) by bin(TimeGenerated, 1h), LocalIP, RemoteIP, RemotePortNumber 
-  | where TotalEvents > TotalEventsThreshold  
-  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100 
+  | project TimeGenerated, TimeDeltainSeconds, LocalIP, LocalPortNumber,RemoteIP,RemotePortNumber, ReceivedBytes, SentBytes
+  | summarize count(), sum(ReceivedBytes), sum(SentBytes), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), LocalIP, RemoteIP, RemotePortNumber
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds)=arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes=sum(sum_SentBytes),TotalReceivedBytes=sum(sum_ReceivedBytes) by bin(TimeGenerated, 1h), LocalIP, RemoteIP, RemotePortNumber
+  | where TotalEvents > TotalEventsThreshold
+  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
   | where BeaconPercent > PercentBeaconThreshold
   | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP
-  
