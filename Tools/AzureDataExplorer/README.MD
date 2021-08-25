@@ -15,6 +15,11 @@ To learn about architectural options please refer to my colleague's [Javier Sori
 
 3. Please verify ADXSupportedTables.json file with [SupportedTables Section] (https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)    
    **Note**: If supported table is not listed in ADXSupportedTables.json, please updated your local file
+   
+4. Permissions required
+	- Azure Log Analytics workspace 'Read' permissions
+	- Azure Data Explorer 'Contributor' permissions either at Database or Cluster level
+   
 
 ## Azure Data Explorer Architecture
 
@@ -66,7 +71,7 @@ The high-level architecture should look like the following:
   
    [![Download](./images/Download.png)](https://aka.ms/Sentinel-AzureDataExplorer-Automation)
  
-2. Extract the folder and open "Migrate-LA-to-ADX.ps1" either in Visual Studio Code or PowerShell  
+2. Extract the folder and open "Migrate-LA-to-ADX.ps1" either in Visual Studio Code/PowerShell(Admin)
 
    **Note**  
    The script runs from the user's machine. You must allow PowerShell script execution. To do so, run the following command:
@@ -86,7 +91,7 @@ The high-level architecture should look like the following:
 	a. Retrieve all the tables from the workspace and then create Raw, Mappings table in ADX (or)  
 	b. Provide a list of tables from the workspace  
 	
-5. Then the following modules are installed, if needed.
+5. Script will download and install the following modules, if its not installed on your machine
 	```
 	Az.Resources
 	Az.OperationalInsights
@@ -102,6 +107,8 @@ The high-level architecture should look like the following:
 	D. **Create update policy** 
 	
 	E. **Modify retention for target table**
+	
+	**Note**:If you want to create Log Analytics workspace **tables** on Azure Data Explorer, you can run Create-LA-Tables-ADX.ps1
 	
 7. Then Event Hub namespaces are created. In this step, the script create Event Hub namespaces for groups of up to 10 tables.  
    **Note:** Event Hub Standard tier has limitation of having a maximum of 10 Event Hub topics.
