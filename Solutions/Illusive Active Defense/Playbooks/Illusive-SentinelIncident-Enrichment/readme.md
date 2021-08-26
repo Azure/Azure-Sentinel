@@ -37,7 +37,7 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 
 ### Deploy a custom template
 
-Before deploying the custom template, download the **azuredeploy.json** for the *Incident Enrichment* playbook from the GitHub repository [using this link](Solutions/Illusive Active Defense/Playbooks/Illusive-SentinelIncident-Enrichment/azuredeploy.json).
+Before deploying the custom template, download the **azuredeploy.json** for the *Incident Enrichment* playbook from the GitHub repository [using this link](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/blob/2f67abd268398e63da0071b5f7027a49829a5dbd/Solutions/Illusive%20Active%20Defense/Playbooks/Illusive-SentinelIncident-Enrichment/azuredeploy.json).
 
 1. On the Azure home page, filter for Deploy a custom template.
        <p align="center">  
