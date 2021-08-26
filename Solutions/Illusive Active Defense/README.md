@@ -113,9 +113,9 @@ You need the **Application (client) ID** and the **Directory (tenant) ID** to co
 1. Go to the created application’s **Overview** page.
 2. Copy and save the **Application (client) ID** and the **Directory (tenant) ID**. You need this information to configure the Illusive playbooks.
 
-         <p align="center">  
-            <img src="./Images/App_registration_app-information.png"> </a>
-         </p>
+    <p align="center">  
+       <img src="./Images/App_registration_app-information.png"> </a>
+    </p>
   
 <a name="Generate_ClientSecret">
 
@@ -241,11 +241,11 @@ There are several paths for deploying the Illusive Sentinel solution.
 - Deploy just the Incident Enrichment playbook, go to [Incident Enrichment Playbook](./Playbooks/Illusive-SentinelIncident-Enrichment).
 - Deploy just the Incident Response playbook, go to [Incident Response Playbook](./Playbooks/Illusive-SentinelIncident-Response).
 
-<a name="solution-package-deployment>
+<a name="solution-package-deployment">
 
 ## Deploy the solution package
 
-- Before deploying the Illusive solution package, download the **mainTemplate.json** from the GitHub repository [using this link](Solutions/Illusive Active Defense/Playbooks/Illusive-SentinelIncident-Enrichment/azuredeploy.json).
+- Before deploying the Illusive solution package, download the **mainTemplate.json** from the GitHub repository [using this link](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/blob/bd6e870691fd26ee2998c915d2902a9a36015d7c/Solutions/Illusive%20Active%20Defense/Package/mainTemplate.json).
 - The playbook should be deployed under the same resource group, subscription, and workspace as the Azure app.
 - The Illusive API key should contain only the API key and no keywords such as “Bearer” or “Basic”.
 - You will not be prompted for missing information when saving the custom deployment configuration. If the playbook is incorrect or incomplete, the incident response playbook will not be able to isolate hosts, and you will get a playbook execution level error message.
@@ -263,7 +263,7 @@ There are several paths for deploying the Illusive Sentinel solution.
         <img src="./Images/deploy-custom-template-load-file.png"> </a>
      </p>
      <p align="center">  
-        <img src="./Images/deploy-custom-template-edit-template-incident-response.png"> </a>
+        <img src="./Images/deploy-custom-template-edit-template-main-template.png"> </a>
      </p>
 4. Under **Custom Deployment>Basics:**
     - Specify the **Subscription** that contains the dedicated Azure app that will run the Illusive Sentinel solution 
