@@ -159,31 +159,31 @@ $eventsData = Import-Csv "query_data.csv"
 
 #Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/securityEvents.csv" -EventsTable "SecurityEvent"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/securityEvents.csv" -EventsTable "SecurityEvent"
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/disable_accounts.csv" -EventsTable "SigninLogs"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/disable_accounts.csv" -EventsTable "SigninLogs"
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/office_activity_inbox_rule.csv" -EventsTable "OfficeActivity"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/office_activity_inbox_rule.csv" -EventsTable "OfficeActivity"
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/azureActivity_adele.csv" -EventsTable "AzureActivity"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/azureActivity_adele.csv" -EventsTable "AzureActivity"
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/office_activity.csv" -EventsTable "OfficeActivity"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/office_activity.csv" -EventsTable "OfficeActivity"
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/sign-in_adelete.csv" -EventsTable "SigninLogs"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/sign-in_adelete.csv" -EventsTable "SigninLogs"
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/model_evasion_detection_CL_alerts.csv" -EventsTable "OfficeActivity"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/model_evasion_detection_CL_alerts.csv" -EventsTable "OfficeActivity"
 
 Write-Host $status
 
