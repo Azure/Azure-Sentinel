@@ -40,7 +40,7 @@ A prescheduled backend job will move events matchings the rule,                 
 When complete your will have a:
 
 - new customer log
-- log entries "(Preview) Unusual mass downgrade AIP label")
+- log entries "/Unusual-Mass-Downgrade-AIP-Label/images/AIPRule.PNG")
 - Entries in the Anomalies table you can query to show "Unsual mass downgrade AIP Label" events matching the rule
 
 Script execution and data ingestion simulates what would happen in the event the anomaly rule is triggered.
