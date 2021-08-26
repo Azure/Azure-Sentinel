@@ -20,7 +20,7 @@ Instructions for configuring, running, and using the Illusive Active Defense Sen
      - [Add the User Impersonation API permission](#Add_UserImpersonation)
  6. [Generate an Illusive API key](#Illusive_API_Key)
  7. [Configure Illusive to send logs to a Linux-based syslog server](#SIEM_Server)
- 8. [Configure and deploy playbooks](#Deploy_Playbooks)
+ 8. [Deploy solution package or deploy playbooks](#Deploy_Playbooks)
  9. [Configure the Illusive analytic rule](#Illusive_analytic_rule)
  10. [Access and view the playbook](#Access_playbook)
 
@@ -233,12 +233,112 @@ If you haven't yet configured the syslog server, [see these instructions from Mi
   
 <a name="Deploy_Playbooks">
   
-# Configure and deploy playbooks
+# Deploy solution package or deploy playbooks
 
-To configure and deploy the Incident Enrichment playbook, go to [Incident Enrichment Playbook](./Playbooks/Illusive-SentinelIncident-Enrichment). 
-<br>
-To configure and deploy the Incident Response playbook, go to [Incident Response Playbook](./Playbooks/Illusive-SentinelIncident-Response).
-  
+There are several paths for deploying the Illusive Sentinel solution.
+
+- Deploy the complete solution package. Continue with [Deploy the solution package](#solution-package-deployment) below.
+- Deploy just the Incident Enrichment playbook, go to [Incident Enrichment Playbook](./Playbooks/Illusive-SentinelIncident-Enrichment).
+- Deploy just the Incident Response playbook, go to [Incident Response Playbook](./Playbooks/Illusive-SentinelIncident-Response).
+
+<a name="solution-package-deployment>
+
+## Deploy the solution package
+
+- Before deploying the Illusive solution package, download the **mainTemplate.json** from the GitHub repository [using this link](Solutions/Illusive Active Defense/Playbooks/Illusive-SentinelIncident-Enrichment/azuredeploy.json).
+- The playbook should be deployed under the same resource group, subscription, and workspace as the Azure app.
+- The Illusive API key should contain only the API key and no keywords such as “Bearer” or “Basic”.
+- You will not be prompted for missing information when saving the custom deployment configuration. If the playbook is incorrect or incomplete, the incident response playbook will not be able to isolate hosts, and you will get a playbook execution level error message.
+
+1. On Azure home page, filter for **Deploy a custom template.**
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-search.png"> </a>
+     </p>
+2. Under **Custom Deployment>Select a template,** click **Build your own template in the editor.**
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-page.png"> </a>
+     </p>
+3. From **Edit template,** click **Load file,** the **mainTemplate.json** file provided by Illusive and click **Save.**
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-load-file.png"> </a>
+     </p>
+     <p align="center">  
+        <img src="./Images/deploy-custom-template-edit-template-incident-response.png"> </a>
+     </p>
+4. Under **Custom Deployment>Basics:**
+    - Specify the **Subscription** that contains the dedicated Azure app that will run the Illusive Sentinel solution 
+    - Specify the **Resource group** that contains the Workspace where you want to install the playbook.
+    - Under **Instance details:**
+      <table>
+       <tr>
+        <td><b>Field</b></td>
+        <td><b>Instructions<b></td>
+       </tr>
+       <tr>
+        <td>Region</td>
+        <td>Filled automatically based on the subscription and cannot be changed.</td>
+       </tr>
+       <tr>
+        <td>Location</td>
+        <td>Specify the resource group location.</td>
+       </tr>
+       <tr>
+        <td>Workspace-location</td>
+        <td>Specify the workspace location.</td>
+       </tr>
+       <tr>
+        <td>Workspace</td>
+        <td>Specify the Azure Sentinel <b>Workspace Name</b> where you want to create the playbook.</td>
+       </tr>
+       <tr>
+        <td>Analytic1-id</td>
+        <td>Specify the id of the Illusive analytic rule.</td>
+       </tr>
+       <tr>
+        <td>Illusive API URL <br/> Illusive API Key</td>
+        <td>Supply the authentication parameters required to access the Illusive API
+         <b>Important:</b> Enter the API key without the keyword</td>
+       </tr>
+       <tr>
+        <td>Azure-Sentinel Client ID:  <br/> Azure-Sentinel Client Secret:  <br/> Azure-Sentinel Tenant ID:</td>
+        <td>Supply the authentication parameters required to access the Azure-Sentinel API</td>
+       </tr>
+       <tr>
+        <td>EDR deployed</td>
+        <td>The EDR which is deployed in the organization and can be used for incident mitigation <br> 
+        <b>Note</b> Though it is possible to enter integration information for both CrowdStrike and Microsoft Defender for Endpoint, the Illusive solution requires you to select just one tool for incident response.
+        </td>
+       </tr>
+       <tr>
+        <td>CrowdStrike API URL <br/> CrowdStrike Client ID <br/> CrowdStrike Client Secret</td>
+        <td>If <b>EDR deployed = CrowdStrike,</b> specify CrowdStrike authentication parameters<br>
+        <b>Note</b> Use the generic CrowdStrike API URL: <https://api.crowdstrike.com>. The playbook will fail to execute if the URL contains a hyphen  which is not supported by Sentinel (i.e., certain region-specific URLs).</td>
+       </tr>
+       <tr>
+        <td>Azure MDE Client ID <br/>Azure MDE Client Secret <br/>Azure MDE Tenant ID</td>
+        <td>If <b>EDR deployed = MDE<b>, specify MDE authentication parameters</td>
+       </tr>
+      </table>
+        <p align="center">  
+          <img src="./Images/custom-deployment-basics-incident-response.PNG"> </a>
+        </p>      
+5. When finished entering details, click **Review + Create.**
+        <p align="center">  
+          <img src="./Images/custom-deployment-review-create.png"> </a>
+        </p>      
+6. On successful validation, click **Create**.  
+        <p align="center">
+          <img src="./Images/custom-deployment-is-complete.png"> </a>
+        </p>
+7. Perform steps 2, 3 and 5 in the Incident Response playbook workflow:
+
+   1. [Add API permissions to the Azure app](./Playbooks/Illusive-SentinelIncident-Response#add-api-permissions) for incident response capabilities.
+   2. [Enable Microsoft Defender for Endpoint](./Playbooks/Illusive-SentinelIncident-Response#enable-mde)
+   3. [Connect the playbook to Azure Sentinel](./Playbooks/Illusive-SentinelIncident-Response#connect-the-playbook-to-azure-sentinel)
+   4. Continue with [Configure the Illusive analytic rule](#Illusive_analytic_rule) below.
+
+<!-- heading of URL in case the above links don't work: 
+https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/tree/Illusive/Solutions/Illusive%20Active%20Defense -->
 <a name="Illusive_analytic_rule">
   
 ## Configure the Illusive analytic rule
@@ -292,6 +392,7 @@ The analytic rule instructs Azure Sentinel to search for information of interest
        </p>
 7. When finished entering Analytic rule details, click **Next: Set rule logic.**
 8. In **Set rule logic,** under **Rule query,** copy and paste the following KQL query:
+   **Note:** You can skip this step if you deployed the complete solution package using the **mainTemplate.json**, which automatically configures the rule query.   
     ```markdown
         CommonSecurityLog
           | where DeviceProduct == "illusive"
@@ -304,7 +405,7 @@ The analytic rule instructs Azure Sentinel to search for information of interest
    <p align="center">  
      <img src="./Images/sentinel-analysis-set-rule-logic-code.png"> </a>
    </p>
-9. Under **Alert Enrichment,** expand **Entity Mapping** and add entities as below:
+9.  Under **Alert Enrichment,** expand **Entity Mapping** and add entities as below:
       - Host > FullName : SourceHostName
       - IP > Address : SourceIP
       - Host > OMSAgentID : Computer
