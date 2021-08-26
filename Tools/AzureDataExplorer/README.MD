@@ -15,6 +15,11 @@ To learn about architectural options please refer to my colleague's [Javier Sori
 
 3. Please verify ADXSupportedTables.json file with [SupportedTables Section] (https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=portal#supported-tables)    
    **Note**: If supported table is not listed in ADXSupportedTables.json, please updated your local file
+   
+4. Permissions required
+	- Azure Log Analytics workspace 'Read' permissions
+	- Azure Data Explorer 'Contributor' permissions either at Database or Cluster level
+   
 
 ## Azure Data Explorer Architecture
 
@@ -66,7 +71,7 @@ The high-level architecture should look like the following:
   
    [![Download](./images/Download.png)](https://aka.ms/Sentinel-AzureDataExplorer-Automation)
  
-2. Extract the folder and open "Migrate-LA-to-ADX.ps1" either in Visual Studio Code or PowerShell  
+2. Extract the folder and open "Migrate-LA-to-ADX.ps1" either in Visual Studio Code/PowerShell(Admin)
 
    **Note**  
    The script runs from the user's machine. You must allow PowerShell script execution. To do so, run the following command:
@@ -86,7 +91,7 @@ The high-level architecture should look like the following:
 	a. Retrieve all the tables from the workspace and then create Raw, Mappings table in ADX (or)  
 	b. Provide a list of tables from the workspace  
 	
-5. Then the following modules are installed, if needed.
+5. Script will download and install the following modules, if its not installed on your machine
 	```
 	Az.Resources
 	Az.OperationalInsights
@@ -101,7 +106,7 @@ The high-level architecture should look like the following:
 	
 	D. **Create update policy** 
 	
-	E. **Modify retention for target table**
+	E. **Modify retention for target table**	
 	
 7. Then Event Hub namespaces are created. In this step, the script create Event Hub namespaces for groups of up to 10 tables.  
    **Note:** Event Hub Standard tier has limitation of having a maximum of 10 Event Hub topics.
@@ -117,3 +122,5 @@ The high-level architecture should look like the following:
 	b. If No, the script will exit, and user has to create data connection for each table in Azure Data Explorer by selecting appropriate Raw, Mapping Tables and Event Hub topic.  
 
 10. A log file is generated at the end of the script named:  ```ADXMigration_<<TimeStamp>>.csv```. The log includes every script action and should be used to identify performance or configuration issues and to gain insights to perform root cause analysis in the case of failures.  
+
+**Note**:If your requirement is only to create targetted tables on Azure Data Explorer (ADX) without creating Data Export rules on Log Analytics, EventHubs and Data Connection rules on Azure Data Explorer, then simply run this script to create tables **Create-LA-Tables-ADX.ps1**
