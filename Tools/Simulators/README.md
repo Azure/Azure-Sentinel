@@ -1,7 +1,7 @@
 # Directory contains various Azure-Sentinel simulators 
 
 ## - Anomalies 
-       - Unusual Mass Downgrade AIP Label
+       - (Preview) Unusual Mass Downgrade AIP Label
        
 ## - Detections
        
