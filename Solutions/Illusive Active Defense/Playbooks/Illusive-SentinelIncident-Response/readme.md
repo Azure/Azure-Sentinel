@@ -85,7 +85,7 @@ Allow the Illusive Incident Response playbook to stop an attack by triggering an
 
 Deploying the Illusive Incident Enrichment playbook requires a custom deployment template.
 
-Before deploying the custom template, download the **azuredeploy.json** for the *Incident Response* playbook from the GitHub repository [using this link](Solutions/Illusive Active Defense/Playbooks/Illusive-SentinelIncident-Response/azuredeploy.json).
+Before deploying the custom template, download the **azuredeploy.json** for the *Incident Response* playbook from the GitHub repository [using this link](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/blob/2f67abd268398e63da0071b5f7027a49829a5dbd/Solutions/Illusive%20Active%20Defense/Playbooks/Illusive-SentinelIncident-Response/azuredeploy.json).
 
 - The playbook should be deployed under the same resource group, subscription, and workspace as the Azure app.
 - The Illusive API key should contain only the API key and no keywords such as “Bearer” or “Basic”.
