@@ -1,3 +1,7 @@
-# Directory contains various Sentinel Anomaly Simulators
+# Directory contains various Sentinel simulators
 
-                  # Unusual-Mass-Downgrade-AIP-Label 
+# - Anomalies
+       
+# - Detections
+       
+# - Hunting
