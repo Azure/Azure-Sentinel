@@ -187,7 +187,7 @@ $status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentine
 
 Write-Host $status
 
-$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/solarigate-beacon-umbrella.csv" -EventsTable "Cisco_Umbrella_dns"
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/solarigate-beacon-umbrella.csv" -EventsTable "Cisco_Umbrella_dns"
 
 Write-Host $status
 
