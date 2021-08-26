@@ -25,21 +25,30 @@ relevantTechniques:
 query: |
   SecurityAlert 
   | where AlertName == "Unfamiliar sign-in properties"
-  | summarize count() by WorkspaceSubscriptionId,CompromisedEntity,AlertName
-  | join 
+  | extend Extprop = parsejson(Entities)
+  | mv-expand Extprop
+  | extend Extprop = parsejson(Extprop)
+  | extend CmdLine = iff(Extprop['Type']=="process", Extprop['CommandLine'], '')
+  | extend File = iff(Extprop['Type']=="file", Extprop['Name'], '')
+  | extend Account = Extprop['Name']
+  | extend Domain = Extprop['UPNSuffix']
+  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
+  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
+  | extend Process = iff(isnotempty(CmdLine), CmdLine, File)
+  | summarize count() by AlertName,AlertSeverity,CompromisedEntity,Account
+  | join kind=inner
   (
   SigninLogs
   | where AppDisplayName == "Azure Portal"
   // 50126 - Invalid username or password, or invalid on-premises username or password.
-  // 50020? - The user doesn't exist in the tenant.
-  | where ResultType in ("50126", "50020")
+  | where ResultType == "50126"
   | extend OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
   | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
   | project  UserDisplayName, UserPrincipalName, AppDisplayName, ResultType, ResultDescription, StatusCode, StatusDetails, Location, State,IPAddress
   | extend AccountCustomEntity = UserPrincipalName
-  ) on $left.CompromisedEntity == $right.AccountCustomEntity
-  | project AccountCustomEntity,State,StatusCode,StatusDetails,IPAddress,ResultDescription,AppDisplayName,Location,AlertName
+  ) on $left.Account == $right.AccountCustomEntity
+  | project AccountCustomEntity = tolower(AccountCustomEntity),State,StatusCode,StatusDetails,IPAddress,ResultDescription,AppDisplayName,Location,AlertName
   | join kind=inner
   (
   AuditLogs
@@ -53,9 +62,10 @@ query: |
   | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
     tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
   | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName)) 
+  | project InitiatedBy = tolower(InitiatedBy), ActivityDateTime, ActivityDisplayName,IpAddress, AADOperationType, AADTenantId
   ) on $left.AccountCustomEntity == $right.InitiatedBy
   | project AccountCustomEntity,AppDisplayName,IPAddress,Location,StatusCode,StatusDetails
-entityMappings:
+    entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
