@@ -35,13 +35,13 @@ The script will ingest the demo data into your Sentinel instance.  You should se
 Inside the log you will have 62 events marked:        
 # "(Preview) Unusual mass downgrade AIP label". 
 
-A prescheduled backend job will move events matchings the rule,                  "(Preview) Unusual mass downgrade AIP label") to the Anomalies table.  Depending on when you run the script it may intially take 12 hours to record in the anomalies table as the job is scheduled to run once daily by region.
+A prescheduled backend job will move events matchings the rule,"(Preview) Unusual mass downgrade AIP label") to the Anomalies table.  Depending on when you run the script it may intially take 12 hours to record in the anomalies table as the job is scheduled to run once daily by region.
 
 When complete your will have a:
 
-- new customer log
-- log entries "/Unusual-Mass-Downgrade-AIP-Label/images/AIPRule.PNG")
-- Entries in the Anomalies table you can query to show "Unsual mass downgrade AIP Label" events matching the rule
+- custom log - "InformationProtectionLogs_CL"
+- 62 log entries "Preview/Unusual-Mass-Downgrade-AIP-Label"
+- You can query the Anomalies Table to show the "Preview/Unsual Mass Downgrade AIP Label" events matching the anomaly rule
 
 Script execution and data ingestion simulates what would happen in the event the anomaly rule is triggered.
 
