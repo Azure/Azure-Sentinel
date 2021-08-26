@@ -1,4 +1,4 @@
-# Directory contains various Sentinel simulators
+# Directory contains various Azure-Sentinel simulators
 
 # - Anomalies
        
