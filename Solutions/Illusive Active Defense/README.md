@@ -320,7 +320,7 @@ There are several paths for deploying the Illusive Sentinel solution.
        </tr>
       </table>
         <p align="center">  
-          <img src="./Images/custom-deployment-basics-incident-response.PNG"> </a>
+          <img src="./Images/custom-deployment-basics-main-template.png"> </a>
         </p>      
 5. When finished entering details, click **Review + Create.**
         <p align="center">  
