@@ -17,7 +17,7 @@ Permissions to create a resource group in your Azure subscription.
 
 1. Click on the button below. Make sure that you open it in a new tab so you keep these instructions open.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTraining%2FAzure-Sentinel-Training-Lab%2FArtifacts%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTraining%2FAzure-Sentinel-Training-Lab%2FArtifacts%2Fazuredeploy.json)
 
 2. Fill out the defferent fields:
     - **Subscription**: choose the Azure subscription where you would like to deploy the Azure Sentinel lab
