@@ -1,7 +1,10 @@
-# Directory contains various Azure-Sentinel simulators
+# Directory contains various Azure-Sentinel simulators 
 
-# - Anomalies
+## - Anomalies 
+       - Unusual Mass Downgrade AIP Label
        
-# - Detections
+## - Detections
        
-# - Hunting
+## - Hunting
+
+<img src= "/Tools/Simulators/Anomalies/Unusual-Mass-Downgrade-AIP-Label/images/sentinel-capabilities.png" width=250>
