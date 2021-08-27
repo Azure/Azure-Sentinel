@@ -5,7 +5,7 @@ This playbook uses the IPQS Fraud and Risk Scoring connector to automatically en
 
 Learn more about the integration via the https://docs.microsoft.com/connectors/ipqsfraudandriskscor/ or visit https://www.ipqualityscore.com/contact-us to request a trial key.
 
-## Screenshots
+## Sentinel Incident Comments Screenshot
 
 ![Incident Comments](./Graphics/comments.png)
 
