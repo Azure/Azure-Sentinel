@@ -1,13 +1,13 @@
-# Cisco ASIM Dns Normalization Parser
+# Cisco ASIM DNS Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Cisco. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM DNS schema parser for Cisco. The parser is a part of the Azure Sentinel Information Model.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Dns normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
+- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
 
 <br>
  

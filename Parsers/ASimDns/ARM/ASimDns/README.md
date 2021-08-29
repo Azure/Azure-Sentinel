@@ -1,13 +1,13 @@
-# Source agnostic ASIM Dns Normalization Parser
+# Source agnostic ASIM DNS Normalization Parser
 
-This template deploys the ASIM Source agnostic Dns schema parser. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM Source agnostic DNS schema parser. The parser is a part of the Azure Sentinel Information Model.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Dns normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
+- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
 
 <br>
  
