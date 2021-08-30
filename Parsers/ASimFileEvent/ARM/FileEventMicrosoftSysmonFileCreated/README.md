@@ -1,6 +1,6 @@
 # Windows Sysmon ASIM FileEvent Normalization Parser
 
-This template deploys the ASIM FileEvent schema parser for Windows Sysmon. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM FileEvent schema parser for Windows Sysmon. The parser is a part of the Azure Sentinel Information Mode.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
