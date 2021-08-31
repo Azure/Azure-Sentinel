@@ -23,7 +23,7 @@ This user will be used to grant access to the Key Vault secret.
 7. Go to the keyvault-GitHubPlaybooks connection resource.
 8. Click Edit API Connection.
 9. Click Authorize.  Sign in as the user.  Click Save.
-10. The playbooks are deployed as disabled since the json files and connection has to be authorized.  Go to each playbook and click Enable.
+10. The playbooks are deployed as disabled since the json files and connection has to be authorized.  Go to your Sentinel workspace. Click Automation. Click the Playbooks tab. Find Get-GitHubAuditEntry, Get-GitHubRepoLogs and Get-GitHubVulnerabilityAlerts and click enable.
 
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/GitHub] to make the logs useful
 
