@@ -1,151 +1,103 @@
-# Azure Sentinel
-Welcome to the Azure Sentinel repository! This repository contains out of the box detections, exploration queries, hunting queries, workbooks, playbooks and much more to help you get ramped up with Azure Sentinel and provide you security content to secure your environment and hunt for threats. You can also submit to [issues](https://github.com/Azure/Azure-Sentinel/issues) for any samples or resources you would like to see here as you onboard to Azure Sentinel. This repository welcomes contributions and refer to this repository's [wiki](https://aka.ms/threathunters) to get started. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
+# Registration Data Access Protocol (RDAP) Query Engine
+----
+Author:  Matt Egen 
 
-# Resources
-* [Azure Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2073774&clcid=0x409)
-* [Security Community Webinars](https://aka.ms/securitywebinars)
-* [Getting started with GitHub](https://help.github.com/en#dotcom)
+mattegen@microsoft.com
 
-We value your feedback. Here are some channels to help surface your questions or feedback:
-1. General product specific Q&A - Join in the [Azure Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/Azure-Sentinel/bd-p/AzureSentinel)
-1. Product specific feature requests - Upvote or post new on [Azure Sentinel feedback forums](https://feedback.azure.com/forums/920458-azure-sentinel)
-1. Report product or contribution bugs - File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
-1. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
+<a href="https://twitter.com/FlyingBlueMonki?ref_src=twsrc%5Etfw" class="twitter-follow-button" data-show-count="true">Follow @FlyingBlueMonki on Twitter</a>
 
+With the ever increasing number of new domains on the Internet as well as all of the new Top Level Domains (TLD), it's often hard to know if a user has gone to a potentially malicious new site that has just popped up online.  To help with this, a SOC team or analyst could track for users accessing newly registered domains.  One way to do this is to query the Registration Data Access Protocol (RDAP).  RDAP allows you to access domain name registration data (much like its predecesor the WHOIS protocol does today) but via an API call and with a better, more machine readable structure to the data.  This Azure Function queries an Azure Sentinel environment, finds domain names of interest, and then conducts an RDAP lookup to retrieve information about the domain for investigators and analysts.  There is also an Azure Sentinel Analytic rule that can then alert if evidence of a domain that was registered in the last 30 days should be found.  
 
-# Contributing
+Please note:  This version only stores the registration date of the domains successfully resolved, but you could modify it to store more information such as who registered the domain, address information, contact data etc.
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.microsoft.com.
+Also note: Not all TLD's support RDAP.  The current version of the code does not account for this _except_ to ignore TLD's you specifiy.  A future version of this function is planned to support traditional WHOIS lookups as well if there is enough interest.
 
-## Add in your new or updated contributions to GitHub
-Note: If you are a first time contributor to this repository, [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo) before cloning. 
+## Setup Steps
+When deploying this Azure Function you will need some values to fill in the blanks for the Azure Resource Manager (ARM) Template:
 
-Brand new or update to a contribution via these methods:
-* Submit for review directly on GitHub website 
-    * Browse to the folder you want to upload your file to
-    * Choose Upload Files and browse to your file. 
-    * You will be required to create your own branch and then submit the Pull Request for review.
-* Use [GitHub Desktop](https://help.github.com/en/desktop/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
-    * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
-    * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
-    * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
-    * Do your additions/updates in GitHub Desktop 
-    * [Push your changes to GitHub](https://help.github.com/en/github/using-git/pushing-commits-to-a-remote-repository)
+### Function Name
+The name you want to give the Azure Function.  The Default is "RDAPQuery".  A unique string will be attached to this in order to deconflict with any potential pre-existing functions you may have.  For example, the template may create a name like "rdapquerytbdem24sevgdq"
 
-## Pull Request
-* After you push your changes, you will need to submit the [Pull Request (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests)
-* After submission, check the [Pull Request](https://github.com/Azure/Azure-Sentinel/pulls) for comments
-* Make changes as suggested and update your branch or explain why no change is needed. Resolve the comment when done.
-
-### Pull Request Detection Template Structure Validation Check
-As part of the PR checks we run a structure validation to make sure all required parts of the YAML structure are included.  For Detections, there is a new section that must be included.  See the [contribution guidelines](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries#now-onto-the-how) for more information.  If this section or any other required section is not included, then a validation error will occur similar to the below.
-The example is specifically if the YAML is missing the entityMappings section:
-
-```
-A total of 1 test files matched the specified pattern.
-[xUnit.net 00:00:00.95]     Kqlvalidations.Tests.DetectionTemplateStructureValidationTests.Validate_DetectionTemplates_HaveValidTemplateStructure(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [FAIL]
-  X Kqlvalidations.Tests.DetectionTemplateStructureValidationTests.Validate_DetectionTemplates_HaveValidTemplateStructure(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [104ms]
-  Error Message:
-   Expected object to be <null>, but found System.ComponentModel.DataAnnotations.ValidationException with message "An old mapping for entity 'AccountCustomEntity' does not have a matching new mapping entry."
-```
-
-### Pull Request Kql Validation Check
-As part of the PR checks we run a syntax validation of the kql queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
-![Azurepipeline](.github/Media/Azurepipeline.png)
-In the pipeline you can see which test failed and what is the cause:
-![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
-
-Example error message:
-```
-A total of 1 test files matched the specified pattern.
-[xUnit.net 00:00:01.81]     Kqlvalidations.Tests.KqlValidationTests.Validate_DetectionQueries_HaveValidKql(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [FAIL]
-  X Kqlvalidations.Tests.KqlValidationTests.Validate_DetectionQueries_HaveValidKql(detectionsYamlFileName: "ExcessiveBlockedTrafficGeneratedbyUser.yaml") [21ms]
-  Error Message:
-   Template Id:fa0ab69c-7124-4f62-acdd-61017cf6ce89 is not valid Errors:The name 'SymantecEndpointProtection' does not refer to any known table, tabular variable or function., Code: 'KS204', Severity: 'Error', Location: '67..93',The name 'SymantecEndpointProtection' does not refer to any known table, tabular variable or function., Code: 'KS204', Severity: 'Error', Location: '289..315'
-```
-If you are using custom logs table (a table which is not defined on all workspaces by default) you should verify
-your table schema is defined in json file in the folder *Azure-Sentinel\\.script\tests\KqlvalidationsTests\CustomTables*
-
-**Example for table tablexyz.json**
-```json
-{
-  "Name": "tablexyz",
-  "Properties": [
-    {
-      "Name": "SomeDateTimeColumn",
-      "Type": "DateTime"
-    },
-    {
-      "Name": "SomeStringColumn",
-      "Type": "String"
-    },
-    {
-      "Name": "SomeDynamicColumn",
-      "Type": "Dynamic"
-    }
-  ]
-}
-```
-### Run Kql Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
-* You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\KqlvalidationsTests\`
-* Execute `dotnet test`
-
-Example of output (in Ubuntu):
-```
-Welcome to .NET Core 3.1!
----------------------
-SDK Version: 3.1.403
-
-Telemetry
----------
-The .NET Core tools collect usage data in order to help us improve your experience. The data is anonymous. It is collected by Microsoft and shared with the community. You can opt-out of telemetry by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your favorite shell.
-
-Read more about .NET Core CLI Tools telemetry: https://aka.ms/dotnet-cli-telemetry
-
-----------------
-Explore documentation: https://aka.ms/dotnet-docs
-Report issues and find source on GitHub: https://github.com/dotnet/core
-Find out what's new: https://aka.ms/dotnet-whats-new
-Learn about the installed HTTPS developer cert: https://aka.ms/aspnet-core-https
-Use 'dotnet --help' to see available commands or visit: https://aka.ms/dotnet-cli-docs
-Write your first app: https://aka.ms/first-net-core-app
---------------------------------------------------------------------------------------
-Test run for /mnt/c/git/Azure-Sentinel/.script/tests/KqlvalidationsTests/bin/Debug/netcoreapp3.1/Kqlvalidations.Tests.dll(.NETCoreApp,Version=v3.1)
-Microsoft (R) Test Execution Command Line Tool Version 16.7.0
-Copyright (c) Microsoft Corporation.  All rights reserved.
-
-Starting test execution, please wait...
-
-A total of 1 test files matched the specified pattern.
-
-Test Run Successful.
-Total tests: 171
-     Passed: 171
- Total time: 25.7973 Seconds
-```
-
-### Detection schema validation tests
-Similarly to KQL Validation, there is an automatic validation of the schema of a detection.
-The schema vlidation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids ([valid connectors Ids list](https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateSchemaValidation/ValidConnectorIds.json)), etc.
-A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
-
-### Run Detection Schema Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
-* You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
-* Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
-* Execute `dotnet test`
+### Azure AD App Permissions
+The Azure Function needs permission to read the Log Analytics Workspace that your Azure Sentinel instance is attached to.  For guidance on creating an Azure AD App Registration, please see [QuickStart: Register App](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app).  For this application you will need the following permissions:  
+````
+Log Analytics API
+Data.Read
+````
+After registering your application, you will need the Client ID and Client Secret for the ARM Template.
 
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+### Azure Tenant ID
+To authenticate, the Azure Function will need to know your Tenant ID to call the proper Azure AD authentication end point
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+## Azure Log Analytics Resource Location
+This value is used in building the Token to read data from your Log Analytics environment.  It specifies the service you're trying to access.  It is in the format of "https://[location].api.loganalytics.io".  For example, a resource in westus2 is "https://westus2.api.loganalytics.io".  You should specify the entire path (e.g. "https://westus2.api.loganalytics.io" not just "westus2"
 
-For information on what you can contribute and further details, refer to the ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) section on the project's [wiki](https://aka.ms/threathunters).
+
+### Workspace ID and Workspace Shared Key
+The Azure Function will write data to the Log Analytics Workspace that your Azure Sentinel instance is attached to.  This data is available on the Agents Management page of your Log Analytics Workspace.  You can get to this page in Sentinel by going to Settings --> Workspace Settings --> Agents Management.  While there is only one Workspace ID, there are two possible keys for you to choose from, either one will work.
+
+### Log Analytics Custom Log Name
+The name you want to use for your resolved domains.  The default is ResolvedDomains.  Note:  Log Analytics will automatically append "\_CL" to the end of whatever string you enter here.
+
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FFlyingBlueMonkey%2FRDAPQuery%2Fmaster%2Fazuredeploy.json)
+
+### Post Template Configuration
+After deploying the ARM Template, you should go in to your Azure Sentinel instance and create the GetDomainsForRDAP function.  An example is included in this repo, but you can use any function you want so long as it returns a field named "Domain" that has the domain you are looking up information for.  
+
+## Description and Workflow
+----
+RDAP Query Engine is comprised of two main components each of which has some subcomponents
+### The Log Analytics Queries and Custom Tables
+GetDomainsForRDAP - Log Analytics Function
+Since we're looking for information about domains in our Azure Sentinel environment, we have to first get those domains.  For this version, I'm only searching in one table: DeviceNetworkEvents.  DeviceNetworkEvents is a table from M365 Defender and has the networking events that occurred on the enrolled devices in my environment.  To get the domains, I've created a function called GetDomainsForRDAP which looks like this:
+
+````
+// A dynamic list of domains and TLDs to not bother searching for
+let ExcludedDomains = dynamic(["cn","io", "ms"]);
+DeviceNetworkEvents
+| where TimeGenerated >= ago(1h)
+| where isnotempty(RemoteUrl)
+// A little cleanup just in case
+| extend parsedDomain = case(RemoteUrl contains "//", parse_url(RemoteUrl).Host, RemoteUrl)
+| extend cleanDomain = split(parsedDomain,"/")[0]
+| extend splitDomain = split(cleanDomain,".")
+| extend Domain = tolower(strcat(splitDomain[array_length(splitDomain)-2],".",splitDomain[array_length(splitDomain)-1]))
+| extend TLD = splitDomain[array_length(splitDomain)-1]
+| where TLD !in(ExcludedDomains)
+| where Domain !in(ExcludedDomains)
+| summarize DistinctDomain = dcount(Domain) by Domain
+| project Domain
+// | join kind=leftanti (ResolvedDomains_CL | where TimeGenerated >= ago(90d)) on $left.Domain == $right.domainName_s //Uncomment this line after the FIRST run of the Azure Function.  Otherwise the query will throw an error until the ResolvedDomains_CL table is instantiated
+````
+This function extracts the domain values from the DeviceNetworkEvents table, de-duplicates them, and then does a leftanti join to the ResolvedDomains_CL table (leftanti meaning "show me everything in the left table (DeviceNetworkEvents) that's not in the right table (ResolvedDomains_CL)").  ResolvedDomains_CL is where the Azure Function stores its results.  Thus if we've already looked up this domain in the last 90 days (or longer depending on how long you want to retain the data) we don't bother looking it up again.  The resulting domains are used in the Azure Function to resolve their information in RDAP.  Note:  Using a Log Analytics function like this means that we can change the source data (include more / different sources) by just changing the function query without having to modify the RDAP Query Engine code itself.
+
+### ResolvedDomains - Log Analytics Custom Log
+This is the custom log where RDAP Query Engine writes its results to.  In my current implementation the tables consists of the domain name (domainName_s) and domain registration date (registrationDate_t).  There is a LOT more information available in an RDAP record, however for this particular case I merely wanted to know when a domain was registered so that if a user were to travel to a domain that was registered within the last 30 days I could raise an alert.  This is a configurable value.
+
+### Newly Registered Domain Detected - Azure Sentinel Analytic Rule
+This rule is based on the information contained in the ResolvedDomains_CL log table.  It runs once an hour and looks for any new records in the ResolvedDomains_CL table that have a registration date within the last 30 days
+````
+ResolvedDomains_CL
+| where TimeGenerated >= ago(1h)
+| where registrationDate_t >= ago(30d)
+````
+If so, it then raises an alert in Azure Sentinel for an analyst to investigate
+
+## The Azure Function
+Now that we understand where the source data is coming from, time to look at the Azure Function itself.  The basic Azure Function triggered every 30 minutes and the first thing it does is call into LogAnalytics and runs the GetDomainsForRDAP Function.  For each domain that is returned, it extracts the Top Level Domain (TLD) and calls the RDAP BootStrap server to find the server that handles that particular TLD.  For example, if the domain we're looking up is crazyfunnyhats.com the function extracts the TLD as "com", calls the bootstrap server (https://data.iana.org/rdap/dns.json) and discovers that the COM TLD is serviced by "https://rdap.verisign.com/com/v1/".  It then calls that service endpoint with the properly constructed URI ("https://rdap.verisign.com/com/v1/domain/crazyfunnyhats.com") parses the results and then calls the Log Analytics API to insert the registration data into the ResolvedDomains_CL table.
+
+![Workflow Diagram](/Documentation/ProcessWorkflow.jpg)
+
+## Gotchas / Issues / Bugs
+----
+The following are some issues I’ve run into on this project.  I am still working on more elegant solutions for them, but for now the workarounds (if available) seem to work.
+
+##### GetDomainsForRDAP returns IP addresses (both IPv4 and IPv6) and they don't resolve
+This is an artifact of the way that DeviceNetworkEvents returns data.  If the target was an IP address then DeviceNetworkEvents returns that information.  Since RDAP Query Engine doesn't process IP addresses at this time there are some remnants left in the GetDomainsForRDAP query.  These are ignored / error out in the subsequent RDAP query so they don't cause any issues.  Future plans are to clean up the GetDomainsForRDAP function to ignore these scenarios completely.
+
+
+
+
+
