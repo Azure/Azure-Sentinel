@@ -1,0 +1,39 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as StealthwatchEvent and specifying Legacy Category.
+// This function maps Digital Guargian DLP events to normalization schema (https://docs.microsoft.com/azure/sentinel/normalization-schema).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. StealthwatchEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+Syslog
+| where SyslogMessage has 'Stealthwatch'
+| extend EventVendor = 'Cisco'
+| extend EventProduct = 'Stealthwatch'
+| extend EventProductVersion = extract(@'Stealthwatch\|([0-9\.]+)\|', 1, SyslogMessage)
+| mv-apply ExtractedFields = extract_all(@'\|(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}>< ]+)', dynamic(["key","value"]), SyslogMessage) on (
+    project packed = pack(tostring(ExtractedFields[0]), tostring(ExtractedFields[1]))
+    | summarize bag = make_bag(packed)
+)
+| evaluate bag_unpack(bag)
+| extend EventStartTime=todatetime(start)
+| extend EventEndTime=todatetime(end)
+| project-rename EventOriginalUid=alarmID
+                , EventSeverity=alarmSev
+                , EventStatus=alarmStatus
+                , EventType=cat
+                , SrcDvcDomain=domain
+                , DstIpAddr=dst
+                , DstPortNumber=dstPort
+                , EventMessage=msg
+                , Protocol=proto
+                , SrcGeoCountry=sourceHG
+                , SrcHostSnapshot=sourceHostSnapshot
+                , SrcIpAddr=src
+                , DvcIpAddr=flowCollectorIP
+                , DvcHostname=flowCollectorName
+                , SrcUserName=sourceUser
+                , DstUserName=targetUser
+                , DstGeoCountry=targetHG
+                , DstDvcHostname=targetHostname
+                , DstHostSnapshot=targetHostSnapshot
+| project-away start
+             , end
+             , SyslogMessage
