@@ -1,0 +1,1 @@
+If you are looking for V1 ASIM Network Sessoin parsers refer to the ASimNetworkSessionV1 folder. This folder will host V2 which will be released in the near future. 
