@@ -1,5 +1,7 @@
 # NetworkSessions - Azure Sentinel Information Model
 
+**Note: this folder contains ASIM V1 Netwrok Session parsers**
+
 This template deploys the following:
 * imNetworkSessions - Network Session events from all normalized network providers
 * vimNwSCheckPoint
