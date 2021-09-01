@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionFirewallWindowsEvent",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Microsoft Windows Firewall Network Sessions (WindowsEvent)",
+            "category": "Security",
+            "FunctionAlias": "vimNetworkSessionFirewallWindowsEvent",
+            "query": "let LayerCodeTable = datatable (LayerCode:string,LayerName:string)\n      [\n'%%14596', 'IP Packet',\n'%%14597', 'Transport',\n'%%14598', 'Forward',\n'%%14599', 'Stream',\n'%%14600', 'Datagram Data',\n'%%14601', 'ICMP Error',\n'%%14602', 'MAC 802.3',\n'%%14603', 'MAC Native',\n'%%14604', 'vSwitch',\n'%%14608', 'Resource Assignment',\n'%%14609', 'Listen',\n'%%14610', 'Receive/Accept',\n'%%14611', 'Connect',\n'%%14612', 'Flow Established',\n'%%14614', 'Resource Release',\n'%%14615', 'Endpoint Closure',\n'%%14616', 'Connect Redirect',\n'%%14617', 'Bind Redirect',\n'%%14624', 'Stream Packet'\n];\nlet ProtocolTable = datatable (Protocol:int, NetworkProtocol: string)\n      [\n        1, 'ICMP',\n        3, 'GGP',\n        6, 'TCP',\n        8, 'EGP',\n        12, 'PUP',\n        17, 'UDP',\n        20, 'HMP',\n        27, 'RDP',\n        46, 'RSVP',\n        47, 'PPTP data over GRE',\n        50, 'ESP',\n        51, 'AH',\n        66, 'RVD',\n        88, 'IGMP',\n        89, 'OSPF'        \n        ];\nlet Directions = datatable (DirectionCode:string,NetworkDirection:string)\n        [\n        '%%14592', 'Inbound',\n        '%%14593', 'Outbound',\n        '%%14594', 'Forward',\n        '%%14595', 'Bidirectional'\n        ];\nlet WindowsFirewall_WindowsEvent=(){\n    WindowsEvent\n    | where EventID in (5150, 5151, 5152, 5153, 5154, 5155, 5156, 5157, 5158, 5159)\n    | extend EventType = \"Traffic\",\n        EventSchemaVersion=\"0.1.0\",\n        EventCount=toint(1),\n        EventVendor = \"Microsoft\",\n        EventProduct = \"WindowsFirewall\",\n        EventTimeIngested = ingestion_time(),\n        EventSeverity=tostring(EventData.Severity),\n        SrcApplicationName = tostring(EventData.Application),\n        SrcIpAddr = tostring(EventData.SourceAddress),\n        SrcPortNumber = toint(EventData.SourcePort),\n        DstPortNumber = toint(EventData.DestPort),\n        DstIpAddr = tostring(EventData.DestAddress),\n        DstUserId = tostring(EventData.RemoteUseID),\n        DstUserIdType = \"SID\",\n        LayerCode = tostring(EventData.LayerName),\n        DirectionCode = tostring(EventData.Direction),\n        NetworkRuleNumber = tostring(EventData.FilterRTID),\n        Protocol = toint(EventData.Protocol)\n    | lookup Directions on DirectionCode\n    | lookup LayerCodeTable on LayerCode\n    | lookup ProtocolTable on Protocol\n    | project-away Protocol, LayerCode, DirectionCode\n};WindowsFirewall_WindowsEvent",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}
