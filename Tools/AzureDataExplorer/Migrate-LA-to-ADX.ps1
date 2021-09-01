@@ -529,6 +529,7 @@ function New-ADXDataConnectionRules {
         Register-AzResourceProvider -ProviderNamespace Microsoft.Kusto        
         Write-Log -Message "Creating Azure Data Explorer data connection" -LogFileName $LogFileName -Severity Information
         $ADXClusterName = $ADXClusterURL.split('.')[0].replace("https://", "").Trim()
+	$ADXClusterLocation = $ADXClusterURL.split('.')[1]
         foreach ($AdxEH in $AdxEventHubs) {            
             Write-Verbose "Executing: Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup -NamespaceName $AdxEH"            
             try {
@@ -557,7 +558,7 @@ function New-ADXDataConnectionRules {
                                                                         
                         $DataConnBody = @"
                         {
-                            "location": "$LogAnalyticsLocation",
+                            "location": "$ADXClusterLocation",
                             "kind": "EventHub",
                             "properties": {
                               "eventHubResourceId": "$EventHubResourceId",                              
