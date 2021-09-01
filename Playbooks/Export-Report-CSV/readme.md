@@ -6,7 +6,7 @@ mattegen@microsoft.com
 
 <a href="https://twitter.com/FlyingBlueMonki?ref_src=twsrc%5Etfw" class="twitter-follow-button" data-show-count="true">Follow @FlyingBlueMonki on Twitter</a>
 
-Do you have a need to run scheduled exports of data from your Azure Sentinel environment?  If so, this is the Playbook for you!  Running on a daily recurrence trigger it exports data from Azure Sentinel on a daily/weekly/monthly scheudule as a .csv file via SMTP email connection using a WatchList() as the data source for the reports
+Do you have a need to run scheduled exports of data from your Azure Sentinel environment?  If so, this is the Playbook for you!  Running on a daily recurrence trigger it exports data from Azure Sentinel on a daily/weekly/monthly schedule as a .csv file via SMTP email connection using a WatchList() as the data source for the reports
 
 ## Connectors and Prerequisites
 ----
@@ -18,7 +18,7 @@ This Playbook uses the built in SMTP connector for Azure Logic Apps.  Unlike the
 Report items are based on a schedule of daily, weekly, or monthly, stored in a watchlist called "Reporting".  The Playbook executes an Azure Monitor Logs query for the various reports using a query like this:  "\_GetWatchlist("Reporting") | where Schedule == "Daily"".  It then iterates through the returned values to run the reports and send the emails out.
 
 ###### Watchlist Structure
-The watchlist has a set structure that you have to follow.  I've included a sample in this repo.
+The watchlist has a set structure that you have to follow.  I've included a sample in this repo.  When you create your Watchlist, you'll want to also make sure to set the "SearchKey field" to "Schedule".
 - Title:  The name of the report.  This is used in the subject line of the email, the body of the email, and as the filename for the .CSV attachment
 - Schedule: The schedule to run the report.  Acceptable values: Daily, Weekly, Monthly (please note it is cAsE sEnSiTiVe)
 - QueryBody:  The query you want to run to generate the report.  PLEASE NOTE:  You have to flatten the query in to one line by removing carriage returns / line feeds.  For example:
@@ -27,6 +27,7 @@ SigninLogs | where TimeGenerated >= ago(24h) | where UserPrincipalName == blah@b
 ````
 Because of this you cannot use inline comments (e.g.: //my comment).
 - Recipients:  A semicolon separated list of email recipients.  PLEASE NOTE:  If you are using unauthenticated email via O365, these must ALL be in your domain. Unauthenticated email via O365 cannot be sent to external recipients.
+
 
 ## Gotchas / Issues / Bugs
 ----

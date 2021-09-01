@@ -1,6 +1,6 @@
 # Azure Sentinel Information Model (ASIM) ProcessEvent parsers 
 
-This template deploys all ASIM ProcessEvent parsers. The template is part of the Azure Sentinel Information Mode (ASIM).
+This folder includes the the Azure Sentinel Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
@@ -19,7 +19,7 @@ For more information, see:
 
 This template deploys the following parsers:
 
-* Source Agnostic parsers:
+* Source agnostic parsers:
   * imProcess - Process events from all normalized process events sources
   * imProcessCreate - Process creation events from all normalized process events sources
   * imProcessTerminate - Process termination events from all normalized process events sources
@@ -30,6 +30,7 @@ This template deploys the following parsers:
   * **Sysmon for Windows** - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
   * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
+  * **Windows Events** collecting using the Azure Monitor Agent - vimProcessCreateMicrosoftWindowsEvents, vimProcessCreationMicrosoftWindowsEvents. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
   * **Azude Defender for IoT (AD4IoT)** - vimProcessEventAD4IoT  
 
 ## Analytics rules
