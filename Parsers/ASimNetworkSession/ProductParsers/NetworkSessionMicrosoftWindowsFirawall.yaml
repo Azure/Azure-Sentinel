@@ -13,104 +13,209 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AzSentinelNormalization
 Description: |
-        This Query Parser maps Microsoft Windows Firewall Events (WindowsEvent) to the Azure Sentinel Information Model Network Session schema.
+        This Query Parser maps Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) to the Azure Sentinel Information Model Network Session schema.
         Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
 ParserName: vimNetworkSessionMicrosoftWindowsFirewall
 ParserQuery: |
-      let WindowsFirewall=(){
-      let LayerCodeTable = datatable (LayerCode:string,LayerName:string)[
-              '%%14596', 'IP Packet',
-              '%%14597', 'Transport',
-              '%%14598', 'Forward',
-              '%%14599', 'Stream',
-              '%%14600', 'Datagram Data',
-              '%%14601', 'ICMP Error',
-              '%%14602', 'MAC 802.3',
-              '%%14603', 'MAC Native',
-              '%%14604', 'vSwitch',
-              '%%14608', 'Resource Assignment',
-              '%%14609', 'Listen',
-              '%%14610', 'Receive/Accept',
-              '%%14611', 'Connect',
-              '%%14612', 'Flow Established',
-              '%%14614', 'Resource Release',
-              '%%14615', 'Endpoint Closure',
-              '%%14616', 'Connect Redirect',
-              '%%14617', 'Bind Redirect',
-              '%%14624', 'Stream Packet'];
-      let ProtocolTable = datatable (Protocol:int, NetworkProtocol: string)[
-              1, 'ICMP',
-              3, 'GGP',
-              6, 'TCP',
-              8, 'EGP',
-              12, 'PUP',
-              17, 'UDP',
-              20, 'HMP',
-              27, 'RDP',
-              46, 'RSVP',
-              47, 'PPTP data over GRE',
-              50, 'ESP',
-              51, 'AH',
-              66, 'RVD',
-              88, 'IGMP',
-              89, 'OSPF'];
-      let Directions = datatable (DirectionCode:string,NetworkDirection:string, isOutBound:bool)[
-                      '%%14592', 'Inbound', false,
-                      '%%14593', 'Outbound', true,
-                      '%%14594', 'Forward',false,
-                      '%%14595', 'Bidirectional', false];
-      let RawFireWallEvents = 
-          WindowsEvent
-          | where EventID between (5150 .. 5159)
-          | extend 
-              EventType = "NetworkSession",
-              EventSchemaVersion="0.2.0",
-              EventCount=toint(1),
-              EventVendor = "Microsoft",
-              EventProduct = "WindowsFirewall",
-              EventSeverity=tostring(EventData.Severity),
-              SrcAppName = tostring(EventData.Application),
-              SrcIpAddr = tostring(EventData.SourceAddress),
-              SrcPortNumber = toint(EventData.SourcePort),
-              DstPortNumber = toint(EventData.DestPort),
-              DstIpAddr = tostring(EventData.DestAddress),
-              DstUserId = tostring(EventData.RemoteUseID),
-              DstUserIdType = "SID",
-              LayerCode = tostring(EventData.LayerName),
-              DirectionCode = tostring(EventData.Direction),
-              NetworkRuleNumber = tostring(EventData.FilterRTID),
-              Protocol = toint(EventData.Protocol)
-              | lookup LayerCodeTable on LayerCode
-              | lookup ProtocolTable on Protocol;
-      let OutboundEvents = 
-          RawFireWallEvents
-          | lookup Directions on DirectionCode
-          | where isOutBound
-          | extend 
-                  SrcAppName = tostring(EventData.Application),
-                  SrcIpAddr = tostring(EventData.SourceAddress),
-                  SrcHostId = tostring(EventData.RemoteMachineID),
-                  SrcPortNumber = toint(EventData.SourcePort),
-                  SrcProcessId = tostring(EventData.ProcessId),
-                  DstPortNumber = toint(EventData.DestPort),
-                  DstIpAddr = tostring(EventData.DestAddress),
-                  DstUserId = tostring(EventData.RemoteUseID),
-                  DstUserIdType = "SID";
-      let InboundEvents = 
-          RawFireWallEvents
-          | lookup Directions on DirectionCode
-          | where not(isOutBound)
-          | extend 
-                  DstAppName = tostring(EventData.Application),
-                  DstIpAddr	 = tostring(EventData.SourceAddress),
-                  DstHostId = tostring(EventData.RemoteMachineID),
-                  DstPortNumber = toint(EventData.SourcePort),
-                  DstProcessId = tostring(EventData.ProcessID),
-                  SrcPortNumber = toint(EventData.DestPort),
-                  SrcIpAddr = tostring(EventData.DestAddress),
-                  SrcUserId = tostring(EventData.RemoteUseID),
-                  SrcUserIdType = "SID";
-      union InboundEvents, OutboundEvents
-          | project-away Protocol, LayerCode, DirectionCode
-      }; WindowsFirewall
-      | where EventID between (5152 .. 5153)
+      // Data tables for mapping raw values into string
+        let LayerCodeTable = datatable (LayerCode:string,LayerName:string)[
+                      '%%14596', 'IP Packet',
+                      '%%14597', 'Transport',
+                      '%%14598', 'Forward',
+                      '%%14599', 'Stream',
+                      '%%14600', 'Datagram Data',
+                      '%%14601', 'ICMP Error',
+                      '%%14602', 'MAC 802.3',
+                      '%%14603', 'MAC Native',
+                      '%%14604', 'vSwitch',
+                      '%%14608', 'Resource Assignment',
+                      '%%14609', 'Listen',
+                      '%%14610', 'Receive/Accept',
+                      '%%14611', 'Connect',
+                      '%%14612', 'Flow Established',
+                      '%%14614', 'Resource Release',
+                      '%%14615', 'Endpoint Closure',
+                      '%%14616', 'Connect Redirect',
+                      '%%14617', 'Bind Redirect',
+                      '%%14624', 'Stream Packet'];
+        let ProtocolTable = datatable (Protocol:int, NetworkProtocol: string)[
+                      1, 'ICMP',
+                      3, 'GGP',
+                      6, 'TCP',
+                      8, 'EGP',
+                      12, 'PUP',
+                      17, 'UDP',
+                      20, 'HMP',
+                      27, 'RDP',
+                      46, 'RSVP',
+                      47, 'PPTP data over GRE',
+                      50, 'ESP',
+                      51, 'AH',
+                      66, 'RVD',
+                      88, 'IGMP',
+                      89, 'OSPF'];
+        let Directions = datatable (DirectionCode:string,NetworkDirection:string, isOutBound:bool)[
+                    '%%14592', 'Inbound', false,
+                    '%%14593', 'Outbound', true,
+                    '%%14594', 'Forward',false,
+                    '%%14595', 'Bidirectional', false];
+        ///////////////////////////////////////////////////////
+        // this query extract data fields from EventData column from SecurityEvent table
+        ///////////////////////////////////////////////////////
+        let WindowsFirewall_SecurityEvent=(){ // Event IDs between (5151 .. 5159)
+        // will be extracting Event specific fields from 'EventData' field
+        let SecurityEvent_5154 =
+        SecurityEvent
+        | where EventID == 5154
+        | parse EventData with * '<Data Name="ProcessId">'ProcessId'</Data>' *
+                                '<Data Name="Application">'Application'</Data>'*
+                                '<Data Name="SourceAddress">'SourceAddress'</Data>'*
+                                '<Data Name="SourcePort">'SourcePort'</Data>'*
+                                '<Data Name="Protocol">'Protocol'</Data>'*
+                                '<Data Name="FilterRTID">'NetworkRuleNumber'</Data>'*
+                                '<Data Name="LayerName">'LayerCode'</Data>'*
+                                '<Data Name="LayerRTID">'LayerRTID'</Data>'*;
+        let SecurityEvent_5156 =
+        SecurityEvent
+        | where EventID == 5156
+        | parse EventData with * '<Data Name="ProcessID">'ProcessID'</Data>' *
+                                '<Data Name="Application">'Application'</Data>'*
+                                '<Data Name="Direction">'DirectionCode'</Data>'*
+                                '<Data Name="SourceAddress">'SourceAddress'</Data>'*
+                                '<Data Name="SourcePort">'SourcePort'</Data>'*
+                                '<Data Name="DestAddress">'DestAddress'</Data>'*
+                                '<Data Name="DestPort">'DestPort'</Data>'*
+                                '<Data Name="Protocol">'Protocol'</Data>'*
+                                '<Data Name="FilterRTID">'NetworkRuleNumber'</Data>'*
+                                '<Data Name="LayerName">'LayerCode'</Data>'*
+                                '<Data Name="LayerRTID">'LayerRTID'</Data>'*
+                                '<Data Name="RemoteUserID">'RemoteUserID'</Data>'*;
+        let SecurityEvent_5157 =
+        SecurityEvent
+        | where EventID == 5157
+        | parse EventData with * '<Data Name="ProcessID">'ProcessID'</Data>' *
+                                '<Data Name="Application">'Application'</Data>'*
+                                '<Data Name="Direction">'DirectionCode'</Data>'*
+                                '<Data Name="SourceAddress">'SourceAddress'</Data>'*
+                                '<Data Name="SourcePort">'SourcePort'</Data>'*
+                                '<Data Name="DestAddress">'DestAddress'</Data>'*
+                                '<Data Name="DestPort">'DestPort'</Data>'*
+                                '<Data Name="Protocol">'Protocol'</Data>'*
+                                '<Data Name="FilterRTID">'NetworkRuleNumber'</Data>'*
+                                '<Data Name="LayerName">'LayerCode'</Data>'*
+                                '<Data Name="LayerRTID">'LayerRTID'</Data>'*
+                                '<Data Name="RemoteUserID">'RemoteUserID'</Data>'*
+                                '<Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*;
+        let SecurityEvent_5158 =
+        SecurityEvent
+        | where EventID == 5158
+        | parse EventData with * '<Data Name="ProcessId">'ProcessId'</Data>' *
+                                '<Data Name="Application">'Application'</Data>'*
+                                '<Data Name="SourceAddress">'SourceAddress'</Data>'*
+                                '<Data Name="SourcePort">'SourcePort'</Data>'*
+                                '<Data Name="Protocol">'Protocol'</Data>'*
+                                '<Data Name="FilterRTID">'NetworkRuleNumber'</Data>'*
+                                '<Data Name="LayerName">'LayerCode'</Data>'*
+                                '<Data Name="LayerRTID">'LayerRTID'</Data>'*;
+        let processSecurityEvent = union isfuzzy=true SecurityEvent_5154, SecurityEvent_5156, SecurityEvent_5157, SecurityEvent_5158
+        | extend 
+                      toint(Protocol);
+        let OutboundEvents = 
+                  processSecurityEvent
+                  | lookup Directions on DirectionCode
+                  | where isOutBound
+                  | project-rename 
+                          SrcAppName = Application,
+                          SrcIpAddr = SourceAddress,
+                          SrcHostId = RemoteMachineID,
+                          SrcPortNumber = SourcePort,
+                          SrcProcessId = ProcessId,
+                          DstPortNumber = DestPort,
+                          DstIpAddr = DestAddress,
+                          DstUserId = RemoteUserID
+                |  extend
+                          DstUserIdType = "SID";
+              let InboundEvents = 
+                  processSecurityEvent
+                  | lookup Directions on DirectionCode
+                  | where not(isOutBound)
+                  | extend 
+                          DstAppName = Application,
+                          DstIpAddr	 = SourceAddress,
+                          DstHostId = RemoteMachineID,
+                          DstPortNumber = SourcePort,
+                          DstProcessId = ProcessId,
+                          SrcPortNumber = DestPort,
+                          SrcIpAddr = DestAddress,
+                          SrcUserId = RemoteUserID
+                  |  extend
+                          DstUserIdType = "SID";
+              union isfuzzy=true InboundEvents, OutboundEvents
+        };
+        //////////////////////////////////////////////////////
+        // this query extract the data from WindowsEvent table
+        //////////////////////////////////////////////////////
+        let WindowsFirewall_WindowsEvent=(){   
+            let RawFireWallEvents = 
+                  union isfuzzy=true WindowsEvent
+                  | where EventID between (5150 .. 5159)
+                  | extend 
+                      EventSeverity=tostring(EventData.Severity),
+                      LayerCode = tostring(EventData.LayerName),
+                      DirectionCode = tostring(EventData.Direction),
+                      NetworkRuleNumber = tostring(EventData.FilterRTID),
+                      Protocol = toint(EventData.Protocol);
+              let OutboundEvents = 
+                  RawFireWallEvents
+                  | lookup Directions on DirectionCode
+                  | where isOutBound
+                  | extend 
+                          SrcAppName = tostring(EventData.Application),
+                          SrcIpAddr = tostring(EventData.SourceAddress),
+                          SrcHostId = tostring(EventData.RemoteMachineID),
+                          SrcPortNumber = toint(EventData.SourcePort),
+                          SrcProcessId = tostring(EventData.ProcessId),
+                          DstPortNumber = toint(EventData.DestPort),
+                          DstIpAddr = tostring(EventData.DestAddress),
+                          DstUserId = tostring(EventData.RemoteUseID),
+                          DstUserIdType = "SID";
+              let InboundEvents = 
+                  RawFireWallEvents
+                  | lookup Directions on DirectionCode
+                  | where not(isOutBound)
+                  | extend 
+                          DstAppName = tostring(EventData.Application),
+                          DstIpAddr	 = tostring(EventData.SourceAddress),
+                          DstHostId = tostring(EventData.RemoteMachineID),
+                          DstPortNumber = toint(EventData.SourcePort),
+                          DstProcessId = tostring(EventData.ProcessID),
+                          SrcPortNumber = toint(EventData.DestPort),
+                          SrcIpAddr = tostring(EventData.DestAddress),
+                          SrcUserId = tostring(EventData.RemoteUseID),
+                          SrcUserIdType = "SID";
+              union isfuzzy=true InboundEvents, OutboundEvents
+              };
+        // Main query -> outputs both schemas as one normalized table
+        union isfuzzy=true WindowsFirewall_SecurityEvent, WindowsFirewall_WindowsEvent
+            | extend 
+                    DvcAction = iff(EventID in (5154, 5156, 5158), "Allow", "Deny"),
+                    DvcHostname = Computer,
+                    DvcOs = 'Windows',
+                    EventType = "NetworkSession",
+                    EventSchema = "NetworkSession",
+                    EventSchemaVersion="0.2.0",
+                    EventCount=toint(1),
+                    EventVendor = "Microsoft",
+                    EventProduct = "WindowsFirewall",
+                    EventResult = "Success",
+                    EventStartTime = TimeGenerated,
+                    EventEndTime = TimeGenerated,
+                    EventOriginalUid = EventOriginId,
+                    EventSeverity = "Informational"
+            | lookup LayerCodeTable on LayerCode
+            | lookup ProtocolTable on Protocol
+            | project-away LayerCode, DirectionCode, Protocol
+            | extend
+                Dvc = DvcHostname
+
+
