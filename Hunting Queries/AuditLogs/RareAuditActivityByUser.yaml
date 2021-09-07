@@ -16,11 +16,12 @@ relevantTechniques:
   - T1136
 query: |
 
-  let current = 1d;
-  let auditLookback = 14d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
   let propertyIgnoreList = dynamic(["TargetId.UserType", "StsRefreshTokensValidFrom", "LastDirSyncTime", "DeviceOSVersion", "CloudDeviceOSVersion", "DeviceObjectVersion"]);
   let AuditTrail = AuditLogs 
-  | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
+  | where TimeGenerated >= auditLookback and TimeGenerated < starttime
   | where isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
   | extend InitiatedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
   | extend InitiatedByIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
@@ -32,7 +33,7 @@ query: |
   | where PropertyName !in~ (propertyIgnoreList) and (PropertyName !~ "Action Client Name" and newValue !~ "DirectorySync") and (PropertyName !~ "Included Updated Properties" and newValue !~ "LastDirSyncTime")
   | summarize count() by OperationName, InitiatedByUser, InitiatedByIPAddress, TargetUserPrincipalName, PropertyName, TargetResourceName;
   let AccountMods = AuditLogs 
-  | where TimeGenerated >= ago(current)
+  | where TimeGenerated >= starttime
   | where isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
   | extend InitiatedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
   | extend InitiatedByIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
@@ -51,3 +52,13 @@ query: |
   | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), make_set(Activity), make_set(PropertyName) by Type, InitiatedByUser, InitiatedByIPAddress, OperationName, TargetUserPrincipalName, TargetResourceName
   | order by InitiatedByUser asc, StartTime asc
   | extend timestamp = StartTime, AccountCustomEntity = InitiatedByUser, HostCustomEntity = iff(set_PropertyName has_any ('DeviceOSType', 'CloudDeviceOSType'), TargetResourceName, ''), IPCustomEntity = InitiatedByIPAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

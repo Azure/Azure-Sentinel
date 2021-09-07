@@ -6,16 +6,34 @@ param(
 
 
 function CheckModules($module) {
-    $service = Get-Module -ListAvailable -Name $module
-    if (-Not $service) {        
-        Write-Host "Module does not exist"
-        Install-Module -Name $module -Scope CurrentUser -Force
-    }    
+    $installedModule = Get-InstalledModule -Name $module -ErrorAction SilentlyContinue
+    if ($null -eq $installedModule) {
+        Write-Warning "The $module PowerShell module is not found"
+        #check for Admin Privleges
+        $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+
+        if (-not ($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
+            #Not an Admin, install to current user
+            Write-Warning -Message "Can not install the $module module. You are not running as Administrator"
+            Write-Warning -Message "Installing $module module to current user Scope"
+            Install-Module -Name $module -Scope CurrentUser -Force
+            Import-Module -Name $module -Force
+        }
+        else {
+            #Admin, install to all users
+            Write-Warning -Message "Installing the $module module to all users"
+            Install-Module -Name $module -Force
+            Import-Module -Name $module -Force
+        }
+    }
+    #Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
+    #Import-Module will bring the module and its functions into your current powershell session, if the module is installed.  
 }
 
 CheckModules("Az.Resources")
 CheckModules("Az.OperationalInsights")
 CheckModules("Az.SecurityInsights")
+CheckModules("Az.MonitoringSolutions")
 
 Write-Host "`r`nIf not logged in to Azure already, you will now be asked to log in to your Azure environment. `nFor this script to work correctly, you need to provide credentials of a Global Admin or Security Admin for your organization. `nThis will allow the script to enable all required connectors.`r`n" -BackgroundColor Magenta
 
@@ -62,14 +80,11 @@ $solutions = Get-AzOperationalInsightsIntelligencePack -resourcegroupname $Resou
 if (($solutions | Where-Object Name -eq 'SecurityInsights').Enabled) {
     Write-Host "Azure Sentinel is already installed on workspace $($Workspace)"
 }
-else {
-    Set-AzSentinel -WorkspaceName $Workspace -Confirm:$false
+else {    
+    New-AzMonitorLogAnalyticsSolution -Type SecurityInsights -ResourceGroupName $ResourceGroup -Location $WorkspaceObject.Location -WorkspaceResourceId $WorkspaceObject.ResourceId
 }
 
 $msTemplates = Get-AzSentinelAlertRuleTemplate -WorkspaceName $Workspace -ResourceGroupName $ResourceGroup | where Kind -EQ MicrosoftSecurityIncidentCreation
-
-#Resource URL to authentincate against
-$Resource = "https://management.azure.com/"
 
 #Urls to be used for Sentinel API calls
 $baseUri = "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"

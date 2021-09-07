@@ -9,24 +9,37 @@ import * as logger from "./utils/logger";
 import { ConnectorCategory } from "./utils/dataConnector";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
-  let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  if(isPotentialConnectorJson(jsonFile))
-  {
-    let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
-    let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/"+ connectorCategory +"_ConnectorSchema.json", "utf8"));
-    isValidSchema(jsonFile, schema);
-    isValidId(jsonFile.id);
-    isValidDataType(jsonFile.dataTypes);
 
-     /* Disabling temporarily till we get confirmation from PM*/
-    // isValidFileName(filePath
-    isValidPermissions(jsonFile.permissions, connectorCategory);
+  if(!filePath.includes('Templates'))
+  {  
+    let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+    if(isPotentialConnectorJson(jsonFile))
+    {
+      if(!jsonFile.dataTypes[0].name.includes("Event"))
+      {
+        let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
+        let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/"+ connectorCategory +"_ConnectorSchema.json", "utf8"));
+        isValidSchema(jsonFile, schema);
+        isValidId(jsonFile.id);
+        isValidDataType(jsonFile.dataTypes);
+
+        /* Disabling temporarily till we get confirmation from PM*/
+        // isValidFileName(filePath
+        isValidPermissions(jsonFile.permissions, connectorCategory);
+      }
+      else{
+        console.warn(`Skipping File as it is of type Events : ${filePath}`)
+      }
+    }
+    else{      
+      console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
+    } 
   }
   else{
-    console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
-  }
-
-    return ExitCode.SUCCESS;
+    console.warn(`Skipping Files under Templates folder : ${filePath}`)
+  } 
+  return ExitCode.SUCCESS;
   }
 
 function isPotentialConnectorJson(jsonFile: any) {
@@ -47,6 +60,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("Event"))
+  {
+    return ConnectorCategory.Event;
+  }
   else if(dataTypes[0].name.endsWith("_CL"))
   {
     let isAzureFunction:boolean = false;
@@ -61,7 +78,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
 }
 
 let fileTypeSuffixes = ["json"];
-let filePathFolderPrefixes = ["DataConnectors"];
+let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {

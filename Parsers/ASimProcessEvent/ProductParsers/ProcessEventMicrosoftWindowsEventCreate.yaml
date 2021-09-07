@@ -1,0 +1,74 @@
+Parser:
+  Title: ASIM Microsoft WindowsEvent Process Creation Events Parser
+  Version: '1.0.0'
+  LastUpdated: Aug 11, 2021
+Product:
+  Name: Windows Event
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc 
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM WindowsEvents Parser
+ParserName: vimProcessCreateMicrosoftWindowsEvents
+ParserQuery: |
+            let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)
+                [
+                  'S-1-16-0', '0x00000000', 'SECURITY_MANDATORY_UNTRUSTED_RID', 'Untrusted',
+                  'S-1-16-4096', '0x00001000', 'SECURITY_MANDATORY_LOW_RID', 'Low integrity',
+                  'S-1-16-8192', '0x00002000', 'SECURITY_MANDATORY_MEDIUM_RID', 'Medium integrity',
+                  'S-1-16-8448', '0x00002100', 'SECURITY_MANDATORY_MEDIUM_PLUS_RID', 'Medium high integrity',
+                  'S-1-16-12288', '0X00003000', 'SECURITY_MANDATORY_HIGH_RID', 'High integrity',
+                  'S-1-16-16384', '0x00004000', 'SECURITY_MANDATORY_SYSTEM_RID', 'System integrity',
+                  'S-1-16-20480', '0x00005000', 'SECURITY_MANDATORY_PROTECTED_PROCESS_RID', 'Protected process'
+                ];
+              let ProcessEvents=(){
+                            WindowsEvent
+                            | where EventID == 4688
+                            // -- Map
+                            | extend
+                              // Event
+                                EventCount = int(1),
+                                EventVendor = 'Microsoft',
+                                EventProduct = 'Security Event',
+                                EventSchemaVersion = '0.1.0',
+                                EventResult = 'Success',
+                                EventStartTime = todatetime(TimeGenerated),
+                                EventEndTime = todatetime(TimeGenerated),
+                                EventType = 'ProcessCreated',
+                                EventOriginalType = tostring(EventID),
+                                // EventOriginalUid = EventOriginId, will be added later to the schema
+                              // Device
+                                // DvcId = SourceComputerId, 
+                                DvcHostname = Computer,
+                                DvcOs = 'Windows',
+                              // Users
+                                ActorUserId = tostring(EventData.SubjectUserSid),
+                                ActorUserIdType = 'SID',
+                                ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
+                                ActorUsernameType = iff(EventData.SubjectDomainName == '-','Simple', 'Windows'),
+                                ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
+                              // ActorType = AccountType, No such field in WindowsEvent
+                                TargetUserId = tostring(EventData.TargetUserSid), 
+                                TargetUserIdType = 'SID',
+                                TargetUsername = tostring(iff (EventData.TargetDomainName == '-', EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName))),
+                                TargetUsernameType = iff (EventData.TargetDomainName == '-', 'Simple', 'Windows'),
+                                TargetUserSessionId = tostring(toint(EventData.TargetLogonId)),    
+                              // Processes 
+                                ActingProcessId = tostring(toint(EventData.ProcessId)),
+                                ActingProcessName = tostring(EventData.ParentProcessName),
+                                TargetProcessId = tostring(EventData.NewProcessId),
+                                TargetProcessName = tostring(EventData.NewProcessName),
+                                TargetProcessCommandLine = tostring(EventData.CommandLine),
+                                TargetProcessTokenElevation = tostring(EventData.TokenElevationType),
+                                MandatoryLabel = tostring(EventData.MandatoryLabel)
+                              | lookup MandatoryLabelLookup on MandatoryLabel
+                            // -- Aliases
+                              | extend
+                                User = TargetUsername,
+                                Dvc = DvcHostname,
+                                Process = TargetProcessName
+                            }; ProcessEvents

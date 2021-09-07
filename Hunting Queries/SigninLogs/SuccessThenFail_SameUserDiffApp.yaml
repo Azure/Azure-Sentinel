@@ -15,28 +15,25 @@ relevantTechniques:
   - T1021
 query: |
 
-  let timeFrame = ago(1d);
   let logonDiff = 1m;
-  let Success = SigninLogs 
-  | where TimeGenerated >= timeFrame 
-  | where ResultType == "0" 
+  let Success = SigninLogs
+  | where ResultType == "0"
   | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online", "Office 365 SharePoint Online")
   | project SuccessLogonTime = TimeGenerated, UserPrincipalName, IPAddress , SuccessAppDisplayName = AppDisplayName;
-  let Fail = SigninLogs 
-  | where TimeGenerated >= timeFrame 
-  | where ResultType !in ("0", "50140") 
-  | where ResultDescription !~ "Other" 
+  let Fail = SigninLogs
+  | where ResultType !in ("0", "50140")
+  | where ResultDescription !~ "Other"
   | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online", "Office 365 SharePoint Online")
   | project FailedLogonTime = TimeGenerated, UserPrincipalName, IPAddress , FailedAppDisplayName = AppDisplayName, ResultType, ResultDescription;
-  let InitialDataSet = 
+  let InitialDataSet =
   Success | join kind= inner (
   Fail
-  ) on UserPrincipalName, IPAddress 
+  ) on UserPrincipalName, IPAddress
   | where isnotempty(FailedAppDisplayName)
   | where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and SuccessAppDisplayName != FailedAppDisplayName;
-  let InitialHits = 
+  let InitialHits =
   InitialDataSet
-  | summarize FailedLogonTime = min(FailedLogonTime), SuccessLogonTime = min(SuccessLogonTime) 
+  | summarize FailedLogonTime = min(FailedLogonTime), SuccessLogonTime = min(SuccessLogonTime)
   by UserPrincipalName, SuccessAppDisplayName, FailedAppDisplayName, IPAddress, ResultType, ResultDescription;
   // Only take hits where there is 5 or less distinct AppDisplayNames on the success side as this limits highly active applications where failures occur more regularly
   let Distribution =
@@ -44,8 +41,17 @@ query: |
   | summarize count(SuccessAppDisplayName) by SuccessAppDisplayName, ResultType
   | where count_SuccessAppDisplayName <= 5;
   InitialHits | join (
-     Distribution 
+     Distribution
   ) on SuccessAppDisplayName, ResultType
-  | project UserPrincipalName, SuccessLogonTime, IPAddress, SuccessAppDisplayName, FailedLogonTime, FailedAppDisplayName, ResultType, ResultDescription 
+  | project UserPrincipalName, SuccessLogonTime, IPAddress, SuccessAppDisplayName, FailedLogonTime, FailedAppDisplayName, ResultType, ResultDescription
   | extend timestamp = SuccessLogonTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
-  
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

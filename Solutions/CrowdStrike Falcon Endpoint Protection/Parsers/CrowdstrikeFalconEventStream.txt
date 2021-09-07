@@ -1,0 +1,75 @@
+// Title:           CrowdStrike Falcon Endpoint Protection Parser
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    01/04/21
+// Comment:         Initial Release
+//  
+// DESCRIPTION:
+// This parser takes raw CrowdStrike Falcon Event Stream logs from a Syslog (CEF) stream and parses the logs into a normalized schema.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name as CrowdStrikeFalconEventStream
+// 3. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// CEF:0|CrowdStrike|FalconHost|1.0|streamStopped|streamStopped|1|cat=AuthActivityAuditEvent duser=api-client-id:5563f751aee74f428597b5135f866e0f deviceProcessName=Crowdstrike Streaming API cn3Label=Offset cn3=148452 outcome=true deviceCustomDate1Label=Timestamp deviceCustomDate1=Dec 25 2020 15:50:02 rt=1608911402451
+//
+// 
+CommonSecurityLog
+| where DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost"
+// Additional Extensions
+| extend EventType = extract(@"cat=([^;]+)(\;|$)",1,AdditionalExtensions),
+         Outcome = extract(@"outcome=([^;]+)(\;|$)",1,AdditionalExtensions),
+         Technique = extract(@"reason=([^;]+)(\;|$)",1,AdditionalExtensions),
+         PatternDisposition = extract(@"CSMTRPatternDisposition=([^;]+)(\;|$)",1,AdditionalExtensions),
+         SessionStartTime = unixtime_seconds_todatetime(toint(extract(@"sessionStartTimestamp=([^;]+)(\;|$)",1,AdditionalExtensions))),
+         SessionEndTime = unixtime_seconds_todatetime(toint(extract(@"sessionEndTimestamp=([^;]+)(\;|$)",1,AdditionalExtensions)))
+// Device Custom Number Values
+| extend ParentProcessId = iif(DeviceCustomNumber1Label == "ParentProcessId" , DeviceCustomNumber1, toint("")),
+         ChildProcessId = iif(DeviceCustomNumber2Label == "ProcessId" , DeviceCustomNumber2, toint("")),
+         Offset = iif(DeviceCustomNumber3Label == "Offset", DeviceCustomNumber3, toint(""))
+| project-away DeviceCustomNumber1Label, DeviceCustomNumber1,DeviceCustomNumber2Label, DeviceCustomNumber2,DeviceCustomNumber3Label, DeviceCustomNumber3
+// Device Custom Date Values
+| extend EventTimestamp = iif(DeviceCustomDate1Label == "Timestamp", todatetime(DeviceCustomDate1), todatetime("")),
+         ExeWrittenTime = iif(DeviceCustomDate1Label == "ExeWrittenTimestamp", todatetime(DeviceCustomDate1), todatetime("")),
+         DnsRequestTime = iif(DeviceCustomDate1Label == "DNS Request Time", todatetime(DeviceCustomDate1), todatetime("")),
+         NetworkAccessTime = iif(DeviceCustomDate1Label == "Network Access Timestamp", todatetime(DeviceCustomDate1), todatetime("")),
+         DocAccessTime = iif(DeviceCustomDate1Label == "DocAccessTimestamp" or DeviceCustomDate1Label == "Document Accessed Timestamp", todatetime(DeviceCustomDate1), todatetime("")),
+         HashSpreadingEventTime = iif(DeviceCustomDate2Label == "HashSpreadingEventTime", todatetime(DeviceCustomDate2), todatetime("")),
+         HashSpreadingSensorTime = iif(DeviceCustomDate2Label == "HashSpreadingSensorEventTime", todatetime(DeviceCustomDate2), todatetime(""))
+| project-away DeviceCustomDate1Label, DeviceCustomDate1, DeviceCustomDate2Label, DeviceCustomDate2
+// Device Custom String Values
+| extend ScanResultName = iif(DeviceCustomString1Label == "ScanResultNam", DeviceCustomString1, ""),
+         WrittenExeFileName = iif(DeviceCustomString2Label == "WrittenExeFileName", DeviceCustomString2, ""),
+         QuarantineFileSHA256 = iif(DeviceCustomString2Label == "QuarantineFileSHA256", DeviceCustomString2, ""),
+         ScanResultEngine = iif(DeviceCustomString2Label == "ScanResultEngine", DeviceCustomString2, ""),
+         AccessedDocFileName = iif(DeviceCustomString2Label == "AccessedDocFileName", DeviceCustomString2, ""),
+         WrittenExeFilePath = iif(DeviceCustomString3Label == "WrittenExeFilePath", DeviceCustomString3, ""),
+         AccessedDocFilePath = iif(DeviceCustomString3Label == "AccessedDocFilePath", DeviceCustomString3, ""),
+         QuarantineFilePath = iif(DeviceCustomString3Label == "QuarantineFilePath", DeviceCustomString3, ""),
+         ScanResultVersion = iif(DeviceCustomString4Label == "ScanResultVersion", DeviceCustomString4, ""),
+         CommandLine = iif(DeviceCustomString5Label == "CommandLine", DeviceCustomString5, ""),
+         FalconHostLink = iif(DeviceCustomString6Label == "FalconHostLink", DeviceCustomString6, "")
+| project-away DeviceCustomString1Label, DeviceCustomString1, DeviceCustomString2Label, DeviceCustomString2, DeviceCustomString3Label, DeviceCustomString3, DeviceCustomString4Label, DeviceCustomString4, DeviceCustomString5Label, DeviceCustomString5, DeviceCustomString6Label, DeviceCustomString6
+// Data Field Normalization
+| project-rename DstHostName = DestinationHostName,
+         DstNtDomain = DestinationNTDomain,
+         DstUserName = DestinationUserName,
+         DstIpAddr = DestinationTranslatedAddress,
+         SrcMacAddr = SourceMACAddress,
+         SrcIpAddr = SourceIP
+| extend EventType = iif(DeviceEventClassID == "DetectionSummaryEvent" or DeviceEventClassID contains "Detection Summary Event", "DetectionSummaryEvent", EventType), 
+         ReceiptTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+         SensorId = extract(@"/detail/([^/]+)\/",1,FalconHostLink),
+         Severity = case(LogSeverity == 1, "Informational",
+                         LogSeverity == 2, "Low",
+                         LogSeverity == 3, "Medium",
+                         LogSeverity == 4, "High",
+                         LogSeverity == 5, "Critical",
+                         LogSeverity)

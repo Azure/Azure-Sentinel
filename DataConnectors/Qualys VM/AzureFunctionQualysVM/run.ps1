@@ -38,6 +38,19 @@ $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
 $filterParameters = $env:filterParameters       
 $time = $env:timeInterval
+$logAnalyticsUri = $env:logAnalyticsUri
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $CustomerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "Qualys VM: Invalid Log Analytics Uri."
+}
 
 $base =  [regex]::matches($uri, '(https:\/\/[\w\.]+\/api\/\d\.\d\/fo)').captures.groups[1].value
 $body = "action=login&username=$($username)&password=$($password)"  
@@ -135,8 +148,8 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             -method $method `
             -contentType $contentType `
             -resource $resource
-        $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
-
+        
+        $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $headers = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
@@ -144,7 +157,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             "time-generated-field" = $TimeStampField;
     	}
 
-    	$response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    	$response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     	return $response.StatusCode
 
     }
