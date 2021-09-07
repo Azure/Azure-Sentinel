@@ -20,11 +20,19 @@ This module assumes that you have completed [Module 1](Module-1-Setting-up-the-e
 
 ![incident2](../Images/incident2.png)
 
-4. Read the description of the incident. As you can see, an IOC related to Solorigate attack has been found. In this case, host **ClientPC** is involved.
+4. Read the description of the incident. As you can see, one of the domain IOCs related to Solorigate attack has been found. In this case, domain **avsvmcloud.com** is involved. 
+
+5. Optionally, you can click on *View full details* to drill down to inspect the raw events that triggered this alert. For that, click on *Link to LA* as shown in the screenshot:
+
+![incident2](../Images/incident-details.png)
+
+6. As you can see, the events were originated in Cisco Umbrella DNS, and the analytic rule uses *Azure Sentinel Information Model* (ASIM) to normalize these events from any DNS source. Read more about [ASIM](https://docs.microsoft.com/en-us/azure/sentinel/normalization) and the [DNS schema](https://docs.microsoft.com/en-us/azure/sentinel/dns-normalization-schema).
+
+![incident2](../Images/raw-events.png)
 
 ### Exercise 2: Hunting for more evidence
 
-1. As a next step, you would like to identify any other hosts that might have been compromised as well. As part of your research, you find the following [guidance from Microsoft](https://techcommunity.microsoft.com/t5/azure-sentinel/solarwinds-post-compromise-hunting-with-azure-sentinel/ba-p/1995095). In this article, you can find a query that will do a SolarWinds inventory check query. We will use this query to find any other affected hosts.
+1. As a next step, you would like to identify the hosts that might have been compromised. As part of your research, you find the following [guidance from Microsoft](https://techcommunity.microsoft.com/t5/azure-sentinel/solarwinds-post-compromise-hunting-with-azure-sentinel/ba-p/1995095). In this article, you can find a query that will do a SolarWinds inventory check query. We will use this query to find any other affected hosts.
 
 2. Switch to *Hunting* in the Azure Sentinel menu.
 
@@ -69,7 +77,7 @@ Now, we will add the IP address related to the incident to our list of IOCs, so 
 
 ![incident11](../Images/incident11.png)
 
-4. Enter the following details in the *New indicator* dialog. Then click *Apply*.
+4. Enter the following details in the *New indicator* dialog, with *Valid from* being today's date and *Valid until* being two months after. Then click *Apply*.
 
 ![incident12](../Images/incident12.png)
 

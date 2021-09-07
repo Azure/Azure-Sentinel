@@ -11,21 +11,21 @@ This module assumes that you have completed [Module 1](Module-1-Setting-up-the-e
 
 ### Exercise 1: Review Azure Sentinel incident tools and capabilities
 
-As a SOC analyst the entry point to consume Security incidents(tickets) in Sentinel is the Incident page.
+As a SOC analyst, the entry point to consume Security incidents (tickets) in Sentinel is the Incident page.
 
-1. In the left navigation menu press on the incident and open the incident page. This page will show by default all the open incident in the last 24hr.
+1. In the left navigation menu click on *Incidents* to open the incidents page. This page will show by default all the open incidents in the last 24hr.
 
 2. When we want to change the time window, present only incident from specific severity or to see also closed incident, we can use the filters bar:
 
 ![Select Microsoft incident creation rule](../Images/m5-incident-filter.gif?raw=true)
 
-3. On the incident page select the "Model Evasion in Critical ML model" incident. In the right pane you can see the incident preview with the high level information about the incident. 
+3. On the incident page select the *Sign-ins from IPs that attempt sign-ins to disabled accounts* incident. In the right pane you can see the incident preview with the high level information about the incident. 
 
-4. As you are the SME SOC analyst that deal and investigate fraud tickets, you need to take ownership on this incident. On the right page change the unassigned to "Assign to me" and also change the status from New to active.
+4. As you are the SME SOC analyst that deal and investigate tickets, you need to take ownership on this incident. On the right pane, change the unassigned to *Assign to me* and also change the status from *New* to *Active*.
  
 ![Select Microsoft incident creation rule](../Images/m5-assigen_ticket.gif?raw=true)
 
-5. Another way to consume incidents and also get high level view on the general SOC health is through the Security Operations Efficiency Workbook(we will have separated module on workbook)
+5. Another way to consume incidents and also get high level view on the general SOC health is through the *Security efficiency workbook*.
 
 We have 2 options to open the workbook:
 
@@ -42,10 +42,15 @@ We have 2 options to open the workbook:
 ### Exercise 2: Handling Incident **"Sign-ins from IPs that attempt sign-ins to disabled accounts"**
 
 1. Open Azure Sentiel incident page.
+
 2. Locate the incident **"Sign-ins from IPs that attempt sign-ins to disabled accounts"**
+
 3. Press on the incident and look on the right pane for the incident preview, please notice that in this pane we are surfacing the incident entities that belong to this incident.
+
 4. Take ownership on the incident and change its status to **Active**
+
 5. Navigate to incident full details by pressing **View full details** and execute playbook to bring Geo IP data (user will notice tags being added).
+
 6. Navigate to the **Alerts** tab and press the number of **Events**. This action will redirect you to Raw logs that will present the alert evidence to support the investigation 
 
 ![Select Microsoft incident creation rule](../Images/m5-select_events.gif?raw=true)
