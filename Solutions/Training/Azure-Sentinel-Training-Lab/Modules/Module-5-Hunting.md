@@ -26,7 +26,7 @@ This module assumes that you have completed [Module 1](Module-1-Setting-up-the-e
 
 ![incident2](../Images/incident-details.png)
 
-6. As you can see, the events were originated in Cisco Umbrella DNS, and the analytic rule uses *Azure Sentinel Information Model* (ASIM) to normalize these events from any DNS source. Read more about [ASIM](https://docs.microsoft.com/en-us/azure/sentinel/normalization) and the [DNS schema](https://docs.microsoft.com/en-us/azure/sentinel/dns-normalization-schema).
+6. As you can see, the events were originated in Cisco Umbrella DNS, and the analytic rule uses *Azure Sentinel Information Model* (ASIM) to normalize these events from any DNS source. Read more about [ASIM](https://docs.microsoft.com/azure/sentinel/normalization) and the [DNS schema](https://docs.microsoft.com/azure/sentinel/dns-normalization-schema).
 
 ![incident2](../Images/raw-events.png)
 
