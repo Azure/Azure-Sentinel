@@ -17,7 +17,7 @@ Some of the data connectors that will be used in this lab, require some specific
 
 This exercise shows you how to enable the Azure Activity data connector. This connector will bring into your Azure Sentinel workspace all the audit events for actions performed in your Azure subscription.
 
-**NOTE**: To do this exercise, your user must have Reader permissions to any subscription whose logs you want to stream into Azure Sentinel. 
+**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Azure Sentinel. 
 
 1. Go to you Azure Sentinel workspace and select **Data Connectors** under **Configuration** section.
 
@@ -73,7 +73,7 @@ This exercise shows you how to enable the Azure Defender data connector. This co
 
 ### Exercise 3: Enable Threat Intelligence TAXII data connector
 
-This exercise shows you how to enable the Threat Intelligence - TAXII data connector. This connector allows you to send send threat indicators from TAXII servers to Azure Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes.
+This exercise shows you how to enable the Threat Intelligence - TAXII data connector. This connector allows you to send threat indicators from TAXII servers to Azure Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes.
 
 **NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable Azure Defender within Azure Security Center.
 
