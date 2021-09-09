@@ -27,7 +27,9 @@ The template deploys the following parsers:
 * Source Specific Parsers:
   * **Microsoft DNS Server**, collected using the Log Analytics Agent - ASimDnsMicrosoftOMS (regular), vimDnsMicrosoftOMS (parametrized)
   * **Cisco Umbrella** - ASimDnsCiscoUmbrella (regular), vimDnsCiscoUmbrella (parametrized)
-  * **Infoblox NIOS** - ASimDnsInfobloxNIOS (regular), vimDnsInfobloxNIOS (paramtrized) 
+  * **Infoblox NIOS** - ASimDnsInfobloxNIOS (regular), vimDnsInfobloxNIOS (paramtrized)
+  * **GCP DNS** - ASimDnsGcp (regular), vimDnsGcp  (paramtrized)
+  * **Corelight Zeek DNS events** - ASimDnsCorelightZeek (regular), vimDnsCorelightZeek  (paramtrized)
 
 use regular parsers when you want to query interactively your DNS logs. Use parameterized parsers when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query
 
