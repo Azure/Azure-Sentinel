@@ -1,1 +1,1 @@
-If you are looking for V1 ASIM Network Sessoin parsers refer to the [ASimNetworkSessionV1](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession/ASimNetworkSessionV1) folder. This folder will host V2 which will be released in the near future. 
+If you are looking for V1 ASIM Network Session parsers refer to the [ASimNetworkSessionV1](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession/ASimNetworkSessionV1) folder. This folder will host V2 which will be released in the near future. 
