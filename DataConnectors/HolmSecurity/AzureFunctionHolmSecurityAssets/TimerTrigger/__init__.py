@@ -100,10 +100,10 @@ def send_web_assets():
         json_response = response.json()
         json_data = []
         for result in json_response.get("results"):
-            uri = result.get("uri")
+            uuid = result.get("uuid")
             json_data.append(
                 {
-                "uri": uri,
+                "uuid": uuid,
                 "severity": severity,
                 }
             )
