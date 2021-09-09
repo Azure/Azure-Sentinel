@@ -1,0 +1,86 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as KasperskySCEvent and specifying Legacy Category.
+// This function maps Kaspersky Security Center events to normalization schema (https://docs.microsoft.com/azure/sentinel/normalization-schema).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. KasperskySCEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+CommonSecurityLog
+| where DeviceVendor =~ 'KasperskyLab'
+| extend EventVendor = 'KasperskyLab'
+| extend EventProduct = 'SecurityCenter'
+| extend EventSchemaVersion = 0.1
+| extend EventCount = 1
+| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1
+                     , DeviceCustomNumber2Label, DeviceCustomNumber2
+                     , DeviceCustomNumber3Label, DeviceCustomNumber3
+                     , DeviceCustomString1Label, DeviceCustomString1
+                     , DeviceCustomString2Label, DeviceCustomString2
+                     , DeviceCustomString3Label, DeviceCustomString3
+                     , DeviceCustomString4Label, DeviceCustomString4
+                     , DeviceCustomString5Label, DeviceCustomString5
+                     , DeviceCustomString6Label, DeviceCustomString6
+                     , DeviceCustomDate1Label, DeviceCustomDate1
+                     , DeviceCustomDate2Label, DeviceCustomDate2)
+| evaluate bag_unpack(packed)
+| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><" ]+)', dynamic(["key","value"]), AdditionalExtensions) on (
+    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
+    | summarize bag = make_bag(packed1)
+)
+| evaluate bag_unpack(bag)
+| extend EventEndTime = todatetime(ReceiptTime)
+| project-rename EventProductVersion=DeviceVersion
+                , EventId=DeviceEventClassID
+                , EventSeverity=LogSeverity
+                , DstPortNumber=DestinationPort
+                , DstIpAddr=DestinationIP
+                , DstDvcHostname=DestinationHostName
+                , DstUserName=DestinationUserName
+                , DvcIpAddr=DeviceAddress
+                , DvcHostname=DeviceName
+                , NetworkApplicationProtocol=Protocol
+                , SrcPortNumber=SourcePort
+                , SrcIpAddr=SourceIP
+                , Id=ExternalID
+                , SrcDvcHostname=SourceHostName
+                , AdditionalInfo=cs7
+                , GroupName=cs9
+                , Service=cs10
+| extend EventType=Activity
+| extend ActingProcessFileProduct = extract(@'Application: (.*?)\\[rn]', 1, Message)
+| extend ActingProcessName = extract(@'Application\\Name: (.*?)\\[rn]', 1, Message)
+| extend ActingProcessId = extract(@'Process ID: (\d+)\\[rn]', 1, Message)
+| extend EventResult = extract(@'Result\\\\Description: (\w+)\\[rn]', 1, Message)
+| extend PossibleImpact = extract(@'Result\\\\Type: (.*?)\\[rn]', 1, Message)
+| extend ThreatLevel = extract(@'Threat level: (.*?)\\[rn]', 1, Message)
+| extend ResultPrecision = extract(@'Result\\\\Precision: (\w+)\\[rn]', 1, Message)
+| extend Object = extract(@'Object: (.*?)\\[rn]', 1, Message)
+| extend ObjectType = extract(@'Object\\\\Type: (.*?)\\[rn]', 1, Message)
+| extend ObjectPath = extract(@'Object\\\\Path: (.*?)\\[rn]', 1, Message)
+| extend ObjectName = extract(@'Object\\\\Name: (.*?)\\[rn]', 1, Message)
+| extend EventReason = extract(@'Reason: (.*?)\\[rn]', 1, Message)
+| extend DatabaseReleaseTime = todatetime(extract(@'Database release date: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', 1, replace_regex(Message, @'Database release date: (\d{2})/(\d{2})/(\d{4}) (\d{2}:\d{2}:\d{2})', @'Database release date: \3-\2-\1 \4')))
+| project-away Message
+            , Activity
+            , ReceiptTime
+            , DeviceVendor
+            , DeviceProduct
+            , DeviceCustomNumber1
+            , DeviceCustomNumber1Label
+            , DeviceCustomNumber2
+            , DeviceCustomNumber2Label
+            , DeviceCustomNumber3
+            , DeviceCustomNumber3Label
+            , DeviceCustomString1
+            , DeviceCustomString1Label
+            , DeviceCustomString2
+            , DeviceCustomString2Label
+            , DeviceCustomString3
+            , DeviceCustomString3Label
+            , DeviceCustomString4
+            , DeviceCustomString4Label
+            , DeviceCustomString5
+            , DeviceCustomString5Label
+            , DeviceCustomString6
+            , DeviceCustomString6Label
+            , cs7Label
+            , cs9Label
+            , cs10Label
