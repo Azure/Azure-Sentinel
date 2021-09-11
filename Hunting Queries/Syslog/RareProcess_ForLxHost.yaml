@@ -23,19 +23,15 @@ query: |
   let perc_threshold = 0.01;
   let host_threshold = 14;
   let basic=materialize(
-    Syslog
-      | where TimeGenerated >= lookback
-      | summarize FullCount = count()
-                  , Count= countif(TimeGenerated between (starttime .. endtime))
-                  , min_TimeGenerated=min(TimeGenerated)
-                  , max_TimeGenerated=max(TimeGenerated)
-                        by Computer, ProcessName
-      | where Count > 0 and Count < count_threshold);
+  Syslog | where TimeGenerated >= lookback
+  | summarize FullCount = count(), Count= countif(TimeGenerated between (starttime .. endtime)), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated) 
+  by Computer, ProcessName
+  | where Count > 0 and Count < count_threshold);
   let basic_avg = basic
-      | summarize Avg = avg(FullCount) by  ProcessName;
+  | summarize Avg = avg(FullCount) by  ProcessName;
   basic | project-away FullCount
-    | join kind=inner
+  | join kind=inner
   basic_avg
-    on ProcessName | project-away ProcessName1
-    | where Count < host_threshold or (Count <= Avg*perc_threshold and Count < count_threshold)
-    | extend HostCustomEntity=Computer
+  on ProcessName | project-away ProcessName1
+  | where Count < host_threshold or (Count <= Avg*perc_threshold and Count < count_threshold)
+  | extend timestamp = StartTime, HostCustomEntity=Computer
