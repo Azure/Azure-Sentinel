@@ -27,4 +27,4 @@ The template deploys the following parsers:
 
 - Source specific parsers:
   - **Microsoft 365 Defender for Endpoints** - vimNetworkSessionMicrosoft365Defender
-  - **Azure Defender for IoT (AD4IoT)** - vimNetworkSessionAD4IoT
+  - **Azure Defender for IoT (MD4IoT)** - vimNetworkSessionMD4IoT
