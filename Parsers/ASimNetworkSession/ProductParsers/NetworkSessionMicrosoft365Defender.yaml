@@ -16,7 +16,7 @@ Description: |
   This Query Parser maps M365 Defender network events to the Azure Sentinel Information Model Network Session schema.
 ParserName: vimNetworkSessionMicrosoft365Defender
 ParserQuery: |
-  let M365Defender=(){
+ let M365Defender=(){
   let DirectionLookup=datatable(ActionType:string,NetworkDirection:string,Outbound:boolean)[
     'ConnectionSuccess','Outbound', true
     ,'ConnectionFailed', 'Outbound', true
@@ -24,7 +24,7 @@ ParserQuery: |
     ,'InboundConnectionAccepted', 'Inbound', false
     ,'ConnectionFound', 'Unknown', false
     ,'ListeningConnectionCreated', 'Listening', false 
-  ]; // !! Consider how to handle all fields
+  ];
   // -- Common preprocessing to both input and outbound events
   let RawNetworkEvents =
     DeviceNetworkEvents
@@ -39,23 +39,21 @@ ParserQuery: |
       EventEndTime = TimeGenerated,
       EventType = 'NetworkSession',
       EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
-      UserIdType = "SID"
+      UserIdType = "SID",
       DvcIdType = "MDEid"
     | project-rename
-      NetworkProtocol = Protocol
+      NetworkProtocol = Protocol,
       DvcFQDN = DeviceName
     | extend
       User = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
       UsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),
       SplitHostname = split(DvcFQDN,"."),
-      UrlFQDN = extract (...)
-    | extend
-      SplitUrl = split(UrlFQDN)
+      SplitUrl = split(RemoteUrl,".")
     | extend  
       DvcHostname = SplitHostname[0],
-      DvcDomain = strcat_array(array_slice(SplitHostname, 1, -1),
+      DvcDomain = strcat_array(array_slice(SplitHostname, 1, -1), '.'),
       UrlHostname = SplitUrl[0],
-      UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1),
+      UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1), '.'),
       SrcDomainType = "FQDN",
       DvcDomainType = "FQDN",
       DstDomainType = "FQDN"
@@ -79,7 +77,7 @@ ParserQuery: |
        SrcUserId = InitiatingProcessAccountSid,
        SrcUserUpn = InitiatingProcessAccountUpn
     | extend
-       SrcUsername = User
+       SrcUsername = User,
        SrcDvcIdType = "MDEid"
     | project-rename
        DstHostname = UrlHostname,
@@ -87,6 +85,28 @@ ParserQuery: |
     | extend  
        SrcHostname = DvcHostname,
        SrcDomain = DvcDomain
+    // Processes
+    | extend
+       SrcProcessId = tostring(InitiatingProcessId),
+       ParentProcessId = tostring(InitiatingProcessParentId)
+    | project-rename
+       SrcProcessName = InitiatingProcessFileName,
+       SrcProcessCommandLine = InitiatingProcessCommandLine,
+       SrcProcessCreationTime = InitiatingProcessCreationTime,
+       SrcProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+       SrcProcessTokenElevation = InitiatingProcessTokenElevation,
+       ParentProcessName = InitiatingProcessParentFileName,
+       ParentProcessCreationTime = InitiatingProcessParentCreationTime
+       // SrcProcessFileSize = InitiatingProcessFileSize,
+       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
+       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
+       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
+       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
+       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
+       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
+    | extend
+       Process = SrcProcessName,
+       ProcessId = SrcProcessId
   ;
   let InboundNetworkEvents = 
     RawNetworkEvents
@@ -100,19 +120,40 @@ ParserQuery: |
        DstUsernameType = UsernameType,
        DstUserAadId = InitiatingProcessAccountObjectId,
        DstUserId = InitiatingProcessAccountSid,
-       DstUserUpn = InitiatingProcessAccountUpn,
+       DstUserUpn = InitiatingProcessAccountUpn
     | extend
        DstUsername = User,
-       DstDvcIdType = "MDEid",
+       DstDvcIdType = "MDEid"
     | project-rename
        SrcHostname = UrlHostname,
        SrcDomain = UrlDomain
     | extend  
        DstHostname = DvcHostname,
        DstDomain = DvcDomain
+    // Processes
+    | extend
+       DstProcessId = tostring(InitiatingProcessId),
+       ParentProcessId = tostring(InitiatingProcessParentId)
+    | project-rename
+       DstProcessName = InitiatingProcessFileName,
+       DstProcessCommandLine = InitiatingProcessCommandLine,
+       DstProcessCreationTime = InitiatingProcessCreationTime,
+       DstProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+       DstProcessTokenElevation = InitiatingProcessTokenElevation,
+       ParentProcessName = InitiatingProcessParentFileName,
+       ParentProcessCreationTime = InitiatingProcessParentCreationTime
+       // SrcProcessFileSize = InitiatingProcessFileSize,
+       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
+       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
+       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
+       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
+       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
+       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
+    | extend
+       Process = DstProcessName,
+       ProcessId = DstProcessId
   ;
-  union (InboundNetworkEvents, OutboundNetworkEvents)  
-    | project-away UrlDomain, UrlFQDN, UrlHostname
+  union InboundNetworkEvents, OutboundNetworkEvents
   };
   M365Defender
 
