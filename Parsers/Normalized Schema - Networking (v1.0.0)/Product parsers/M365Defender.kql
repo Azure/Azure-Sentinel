@@ -1,0 +1,62 @@
+// Title:           M365 Defender Network Events
+// Author:          Microsoft
+// Parser Version: 1.0.0
+// Schema version: 1.0.0
+// Last Updated:    06/15/2020
+// Comment:         Initial Release
+// Usage Instruction : 
+// Paste below query in Sentinel, click on Save button and select as Function from drop down by specifying function name and alias.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries
+// Reference: Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Reference: Sentinel normalization documentation: https://aka.ms/sentinelnormalizationdocs
+//
+// Note: This parser only populates and shows relevant fields within the networking schema. Please use the meta parser to see all relevant fields, or union this parser with the empty network schema. 
+// Alias name: M365Def-Network-NormalizedParser (please change hypens(-) to underscores(_) when creating the alias)
+let M365Defender=(){
+	let Direction=datatable(ActionType:string,NetworkDirection:string)[
+	    'ConnectionSuccess','Outbound'
+		,'ConnectionFailed', 'Outbound'
+		,'ConnectionRequest','Outbound'
+		,'InboundConnectionAccepted', 'Inbound'
+		,'ConnectionFound', 'Unkown'
+		,'ListeningConnectionCreated', 'Listening'];
+ DeviceNetworkEvents 
+ | extend EventType = "Traffic"
+ ,EventCount = 1
+ ,EventEndTime = TimeGenerated
+ ,EventMessage = ActionType
+ ,DvcIpAddr = LocalIP
+ ,DvcHostname = DeviceName
+ ,EventProduct = "M365 Defender for Endpoint"
+ ,EventVendor = "Microsoft"
+    // Types: 
+    // - ConnectionFailed
+    //   An attempt to establish a network connection from the device failed.
+    // - ConnectionRequest
+    //   The device initiated a network connection.
+    // - InboundConnectionAccepted
+    //   The device accepted a network connection initiated by another device.
+    // - ConnectionFound
+    //   An active network connection was found on the device.
+    // - ConnectionSuccess
+    //   The TCP three-way handshake was completed.
+    // - ListeningConnectionCreated
+    //   A process has started listening for connections on a certain port.
+ ,EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
+ ,EventResultDetails = ActionType
+ ,EventSchemaVersion = '1.0.0'
+ ,EventStartTime = TimeGenerated
+ ,DstIpAddr = RemoteIP
+ ,DstPortNumber = RemotePort
+ ,SrcIpAddr = LocalIP
+ ,SrcPortNumber = LocalPort
+ ,SrcUserSid = InitiatingProcessAccountSid
+ ,SrcUserAadId = InitiatingProcessAccountObjectId
+ ,SrcUsername = InitiatingProcessAccountName
+ ,SrcUserUpn = InitiatingProcessAccountUpn
+ ,SrcUserDomain = InitiatingProcessAccountDomain
+ ,NetworkProtocol = Protocol
+ ,UrlOriginal = RemoteUrl
+| lookup kind=leftouter Direction on ActionType};
+ M365Defender
+
