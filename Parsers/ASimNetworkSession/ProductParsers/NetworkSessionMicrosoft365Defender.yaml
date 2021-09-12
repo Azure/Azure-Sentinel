@@ -34,13 +34,14 @@ ParserQuery: |
       EventCount = int(1),
       EventProduct = 'M365 Defender for Endpoint',
       EventVendor = 'Microsoft',
+      EventSchema = 'NetworkSession',
       EventSchemaVersion = '0.1.0',
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
       EventType = 'NetworkSession',
       EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
-      UserIdType = "SID",
-      DvcIdType = "MDEid"
+      EventSeverity = "Informational",
+      DvcIdType = 'MDEid'
     | project-rename
       NetworkProtocol = Protocol,
       DvcFQDN = DeviceName
@@ -56,7 +57,8 @@ ParserQuery: |
       UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1), '.'),
       SrcDomainType = "FQDN",
       DvcDomainType = "FQDN",
-      DstDomainType = "FQDN"
+      DstDomainType = "FQDN",
+      DvcIpAddr = LocalIP
     | extend
       Dvc = DvcHostname  
     | project-rename
@@ -70,21 +72,26 @@ ParserQuery: |
     | project-rename
        DstIpAddr = RemoteIP,
        SrcIpAddr = LocalIP,
-       DstPort = RemotePort,
-       SrcPort = LocalPort,
+       DstPortNumber = RemotePort,
+       SrcPortNumber = LocalPort,
        SrcUsernameType = UsernameType,
        SrcUserAadId = InitiatingProcessAccountObjectId,
        SrcUserId = InitiatingProcessAccountSid,
-       SrcUserUpn = InitiatingProcessAccountUpn
+       SrcUserUpn = InitiatingProcessAccountUpn,
+       SrcUserDomain = InitiatingProcessAccountDomain
     | extend
        SrcUsername = User,
-       SrcDvcIdType = "MDEid"
+       SrcDvcId = DvcId,
+       SrcDvcIdType = 'MDEid',
+       SrcUserIdType = "SID"
     | project-rename
        DstHostname = UrlHostname,
-       DstDomain = UrlDomain
+       DstDomain = UrlDomain,
+       DstFQDN = RemoteUrl
     | extend  
        SrcHostname = DvcHostname,
-       SrcDomain = DvcDomain
+       SrcDomain = DvcDomain,
+       SrcFQDN = DvcDomain
     // Processes
     | extend
        SrcProcessId = tostring(InitiatingProcessId),
@@ -106,7 +113,9 @@ ParserQuery: |
        // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
     | extend
        Process = SrcProcessName,
-       ProcessId = SrcProcessId
+       ProcessId = SrcProcessId,
+       SrcAppName = SrcProcessName,
+       SrcAppType = "Process"
   ;
   let InboundNetworkEvents = 
     RawNetworkEvents
@@ -115,21 +124,26 @@ ParserQuery: |
     | project-rename
        SrcIpAddr = RemoteIP,
        DstIpAddr = LocalIP,
-       SrcPort = RemotePort,
-       DstPort = LocalPort,
+       SrcPortNumber = RemotePort,
+       DstPortNumber = LocalPort,
        DstUsernameType = UsernameType,
        DstUserAadId = InitiatingProcessAccountObjectId,
        DstUserId = InitiatingProcessAccountSid,
-       DstUserUpn = InitiatingProcessAccountUpn
+       DstUserUpn = InitiatingProcessAccountUpn,
+       DstUserDomain = InitiatingProcessAccountDomain
     | extend
        DstUsername = User,
-       DstDvcIdType = "MDEid"
-    | project-rename
+       DstDvcId = DvcId,
+       DstDvcIdType = 'MDEid',
+       DstUserIdType = 'SID'
+   | project-rename
        SrcHostname = UrlHostname,
-       SrcDomain = UrlDomain
+       SrcDomain = UrlDomain,
+       SrcFQDN = RemoteUrl
     | extend  
        DstHostname = DvcHostname,
-       DstDomain = DvcDomain
+       DstDomain = DvcDomain,
+       DstFQDN = DvcFQDN
     // Processes
     | extend
        DstProcessId = tostring(InitiatingProcessId),
@@ -151,9 +165,14 @@ ParserQuery: |
        // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
     | extend
        Process = DstProcessName,
-       ProcessId = DstProcessId
+       ProcessId = DstProcessId,
+       DstAppName = DstProcessName,
+       DstAppType = "Process"
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
+  | extend // aliases
+     Hostname = DstHostname,
+     IpAddr = SrcIpAddr 
   };
   M365Defender
 
