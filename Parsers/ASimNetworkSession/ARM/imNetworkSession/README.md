@@ -1,4 +1,4 @@
-# Source agnostic ASIM NetworkSession Normalization Parser
+# Source agnostic ASIM Network Sessions Normalization Parser
 
 This template deploys the ASIM NetworkSession schema parser for Source agnostic. The parser is a part of the Azure Sentinel Information Model.
 
