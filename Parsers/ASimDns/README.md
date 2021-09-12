@@ -19,15 +19,17 @@ For more information, see:
 
 The template deploys the following parsers:
 
-* Source Agnostic parsers:
-  * **ASimDns** - Use this parser when you want to query interactively your DNS logs.
-  * **imDns** - Use this parser, which supports the optimization parameters desribed below, when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query 
-  * **vimDnsEmpty** - Emtpy ASIM DNS table
+- Source Agnostic parsers:
+  - **ASimDns** - Use this parser when you want to query interactively your DNS logs.
+  - **imDns** - Use this parser, which supports the optimization parameters desribed below, when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query 
+  - **vimDnsEmpty** - Emtpy ASIM DNS table
 
-* Source Specific Parsers:
-  * **Microsoft DNS Server**, collected using the Log Analytics Agent - ASimDnsMicrosoftOMS (regular), vimDnsMicrosoftOMS (parametrized)
-  * **Cisco Umbrella** - ASimDnsCiscoUmbrella (regular), vimDnsCiscoUmbrella (parametrized)
-  * **Infoblox NIOS** - ASimDnsInfobloxNIOS (regular), vimDnsInfobloxNIOS (paramtrized) 
+- Source Specific Parsers:
+  - **Microsoft DNS Server**, collected using the Log Analytics Agent - ASimDnsMicrosoftOMS (regular), vimDnsMicrosoftOMS (parametrized)
+  - **Cisco Umbrella** - ASimDnsCiscoUmbrella (regular), vimDnsCiscoUmbrella (parametrized)
+  - **Infoblox NIOS** - ASimDnsInfobloxNIOS (regular), vimDnsInfobloxNIOS (parametrized)
+  - **GCP DNS** - ASimDnsGcp (regular), vimDnsGcp  (parametrized)
+  - **Corelight Zeek DNS events** - ASimDnsCorelightZeek (regular), vimDnsCorelightZeek  (parametrized)
 
 use regular parsers when you want to query interactively your DNS logs. Use parameterized parsers when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query
 
