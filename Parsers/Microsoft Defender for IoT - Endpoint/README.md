@@ -9,11 +9,11 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAD4IoTARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelMD4IoTARM)
 
 <br>
 
 The template deploys the following:
- * vimProcessEventAD4IoT  
+ * vimProcessEventMD4IoT  
 
 <br>
