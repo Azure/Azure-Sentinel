@@ -464,7 +464,6 @@ Retry-Action({
 
 
 
-
 Write-Output `n`n'CloudTrail Defenition'
  Retry-Action({
 	$script:cloudTrailName = Read-Host 'Please insert cloudTrail name'
