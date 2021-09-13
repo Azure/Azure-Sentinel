@@ -8,7 +8,7 @@
 1. [Domain - C&C DNS Name - Indicator Processor - Deployment](#deployDOMAINindicatorprocessor)
 1. [URL - Recently Reported by Insikt Group - Indicator Processor - Deployment](#deployURLindicatorprocessor)
 1. [HASH - Observed in Underground Virus Test Sites - Indicator Processor - Deployment](#deployHASHindicatorprocessor)
-1. [IOC (IP, Domain, URL, Hash) Enrichment Playbook ](#deployIOCEnrichment)
+1. [IOC (IP, Domain, URL, Hash) Enrichment Playbook - Deployment](#deployIOCEnrichment)
 
 <a name="overview">
 
