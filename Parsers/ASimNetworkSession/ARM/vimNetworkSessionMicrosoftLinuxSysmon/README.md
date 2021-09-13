@@ -1,4 +1,4 @@
-# Sysmon for Sysmon ASIM NetworkSessions Normalization Parser
+# Sysmon for Linux ASIM NetworkSessions Normalization Parser
 
 This template deploys the ASIM NetworkSessions schema parser for Sysmon for Sysmon. The parser is a part of the Azure Sentinel Information Model.
 
@@ -10,6 +10,5 @@ For more information, see:
 - [Azure Sentinel NetworkSessions normalization schema reference](https://aka.ms/AzSentinelNetworkSessionsDoc)
 
 <br>
- 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSession%2FARM%2FvimNetworkSessionMicrosoftLinuxSysmon%2FvimNetworkSessionMicrosoftLinuxSysmon.json)
