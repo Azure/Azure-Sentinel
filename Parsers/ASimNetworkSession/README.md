@@ -28,3 +28,4 @@ The template deploys the following parsers:
 - Source specific parsers:
   - **Microsoft 365 Defender for Endpoints** - vimNetworkSessionMicrosoft365Defender
   - **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimNetworkSessionMD4IoT
+  - **Microsoft Sysmon for Linux** - vimDnsMicrosoftSysmon
