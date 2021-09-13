@@ -1,0 +1,67 @@
+id: f3a52abd-b82a-4554-a67f-6da55933e398
+name: (Private Preview) CMMC Recovery Control Family Monitoring
+description: |
+  'CMMC Control Assessments have Deviated from Configured Threshold Baselines'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityRecommendation
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+// Prerequisite 1: Onboard Azure Security Center (https://docs.microsoft.com/azure/security-center/security-center-get-started)
+// Prerequisite 2: Add the Azure Security Center: CMMC Assessment to Your Dashboard (https://docs.microsoft.com/azure/security-center/update-regulatory-compliance-packages?WT.mc_id=Portal-fx#add-a-regulatory-standard-to-your-dashboard)
+// Prerequisite 3: Continuously Export Security Center Data to Log Analytics Workspace (https://docs.microsoft.com/azure/security-center/continuous-export?WT.mc_id=Portal-fx)
+let Policymap = datatable(RecommendationName:string, ControlFamily:string, ControlNumber: string, MaturityLevel:string, 800171Map:string, 80053Map:string)
+[
+"Audit virtual machines without disaster recovery configured",	"Recovery",	"RE.2.137",	"ML-2",	"NA",	"CP-9, CP-9(1)",
+"Azure Backup should be enabled for virtual machines",	"Recovery",	"RE.2.137",	"ML-2",	"NA",	"CP-9, CP-9(1)",
+"Long-term geo-redundant backup should be enabled for Azure SQL Databases",	"Recovery",	"RE.2.137",	"ML-2",	"NA",	"CP-9, CP-9(1)",
+"Geo-redundant backup should be enabled for Azure Database for PostgreSQL",	"Recovery",	"RE.2.137",	"ML-2",	"NA",	"CP-9, CP-9(1)",
+"Geo-redundant backup should be enabled for Azure Database for MySQL",	"Recovery",	"RE.2.137",	"ML-2",	"NA",	"CP-9, CP-9(1)",
+"Audit virtual machines without disaster recovery configured",	"Recovery",	"RE.3.139",	"ML-3",	"NA",	"CP-9, CP-9(3), CP-9(5)",
+"Azure Backup should be enabled for virtual machines",	"Recovery",	"RE.3.139",	"ML-3",	"NA",	"CP-9, CP-9(3), CP-9(5)",
+"Long-term geo-redundant backup should be enabled for Azure SQL Databases",	"Recovery",	"RE.3.139",	"ML-3",	"NA",	"CP-9, CP-9(3), CP-9(5)",
+"Geo-redundant backup should be enabled for Azure Database for PostgreSQL",	"Recovery",	"RE.3.139",	"ML-3",	"NA",	"CP-9, CP-9(3), CP-9(5)",
+"Geo-redundant backup should be enabled for Azure Database for MySQL",	"Recovery",	"RE.3.139",	"ML-3",	"NA",	"CP-9, CP-9(3), CP-9(5)"
+];
+SecurityRecommendation
+| join kind=rightouter Policymap on RecommendationName
+| where ControlFamily == "Recovery"
+| summarize
+    Assessments = count(),
+    Success = countif(RecommendationState == 'Healthy' or RecommendationState == 'NotApplicable'),
+    Failed = countif(RecommendationState == 'Unhealthy')
+    by ControlFamily, ControlNumber, MaturityLevel, RecommendationName
+| extend SuccessRatePercentage = (Success * 100 / Assessments)
+| extend FailedRatePercentage = (Failed * 100 / Assessments)
+| extend RemediationLink = strcat("https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22")
+| project
+    ControlNumber,
+    ControlFamily,
+    MaturityLevel,
+    RecommendationName,
+    Assessments,
+    SuccessRatePercentage,
+    FailedRatePercentage,
+    RemediationLink
+| where RecommendationName <> ""
+// | where RecommendationName <> "" //Filter Out or Suppress Recommendations
+// | where MaturityLevel == "ML-3" //Filter by Maturity Level 
+| where FailedRatePercentage > 30 //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within Organizational Needs
+| sort by FailedRatePercentage desc
+| limit 250
+| extend Url = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RemediationLink
+version: 1.0.0

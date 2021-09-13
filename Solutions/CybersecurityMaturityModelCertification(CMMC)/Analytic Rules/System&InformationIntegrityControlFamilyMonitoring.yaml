@@ -1,0 +1,70 @@
+id: c928e599-ba68-48b5-9109-5290ea69f0f5
+name: (Private Preview) CMMC System & Information Integrity Control Family Monitoring
+description: |
+  'CMMC Control Assessments have Deviated from Configured Threshold Baselines'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityRecommendation
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+// Prerequisite 1: Onboard Azure Security Center (https://docs.microsoft.com/azure/security-center/security-center-get-started)
+// Prerequisite 2: Add the Azure Security Center: CMMC Assessment to Your Dashboard (https://docs.microsoft.com/azure/security-center/update-regulatory-compliance-packages?WT.mc_id=Portal-fx#add-a-regulatory-standard-to-your-dashboard)
+// Prerequisite 3: Continuously Export Security Center Data to Log Analytics Workspace (https://docs.microsoft.com/azure/security-center/continuous-export?WT.mc_id=Portal-fx)
+let Policymap = datatable(RecommendationName:string, ControlFamily:string, ControlNumber: string, MaturityLevel:string, 800171Map:string, 80053Map:string)
+[
+"Microsoft Antimalware for Azure should be configured to automatically update protection signatures",	"System & Information Integrity",	"SI.1.210",	"ML-1",	"3.14.1",	"SI-2,SI-3,SI-5",
+"Vulnerabilities in security configuration on your machines should be remediated",	"System & Information Integrity",	"SI.1.210",	"ML-1",	"3.14.1",	"SI-2,SI-3,SI-5",
+"Ensure that 'HTTP Version' is the latest, if used to run the Function app",	"System & Information Integrity",	"SI.1.210",	"ML-1",	"3.14.1",	"SI-2,SI-3,SI-5",
+"Python should be updated to the latest version for your function app",	"System & Information Integrity",	"SI.1.210",	"ML-1",	"3.14.1",	"SI-2,SI-3,SI-5",
+"Ensure that 'HTTP Version' is the latest, if used to run the Web app",	"System & Information Integrity",	"SI.1.210",	"ML-1",	"3.14.1",	"SI-2,SI-3,SI-5",
+"Microsoft Antimalware for Azure should be configured to automatically update protection signatures",	"System & Information Integrity",	"SI.1.211",	"ML-1",	"3.14.2",	"SI-2,SI-3,SI-5",
+"Microsoft IaaSAntimalware extension should be deployed on Windows servers",	"System & Information Integrity",	"SI.1.211",	"ML-1",	"3.14.2",	"SI-2,SI-3,SI-5",
+"Endpoint protection health issues should be resolved on your machines",	"System & Information Integrity",	"SI.1.211",	"ML-1",	"3.14.2",	"SI-2,SI-3,SI-5",
+"Endpoint protection health failures should be remediated on virtual machine scale sets",	"System & Information Integrity",	"SI.1.211",	"ML-1",	"3.14.2",	"SI-2,SI-3,SI-5",
+"Microsoft Antimalware for Azure should be configured to automatically update protection signatures",	"System & Information Integrity",	"SI.1.212",	"ML-1",	"3.14.4",	"SI-3",
+"Microsoft Antimalware for Azure should be configured to automatically update protection signatures",	"System & Information Integrity",	"SI.1.213",	"ML-1",	"3.14.5",	"SI-3",
+"Microsoft IaaSAntimalware extension should be deployed on Windows servers",	"System & Information Integrity",	"SI.1.213",	"ML-1",	"3.14.5",	"SI-3",
+"Endpoint protection health issues should be resolved on your machines",	"System & Information Integrity",	"SI.1.213",	"ML-1",	"3.14.5",	"SI-3"
+];
+SecurityRecommendation
+| join kind=rightouter Policymap on RecommendationName
+| where ControlFamily == "System & Information Integrity"
+| summarize
+    Assessments = count(),
+    Success = countif(RecommendationState == 'Healthy' or RecommendationState == 'NotApplicable'),
+    Failed = countif(RecommendationState == 'Unhealthy')
+    by ControlFamily, ControlNumber, MaturityLevel, RecommendationName
+| extend SuccessRatePercentage = (Success * 100 / Assessments)
+| extend FailedRatePercentage = (Failed * 100 / Assessments)
+| extend RemediationLink = strcat("https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22")
+| project
+    ControlNumber,
+    ControlFamily,
+    MaturityLevel,
+    RecommendationName,
+    Assessments,
+    SuccessRatePercentage,
+    FailedRatePercentage,
+    RemediationLink
+| where RecommendationName <> ""
+// | where RecommendationName <> "" //Filter Out or Suppress Recommendations
+// | where MaturityLevel == "ML-3" //Filter by Maturity Level 
+| where FailedRatePercentage > 30 //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within Organizational Needs
+| sort by FailedRatePercentage desc
+| limit 250
+| extend Url = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RemediationLink
+version: 1.0.0
