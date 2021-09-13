@@ -10,7 +10,7 @@ This template deploys the following:
 * vimAuthenticationOktaSSO
 * vimAuthenticationWindowsSecurityEvent
 * vimAuthenticationMicrosoftWindowsEvent
-* vimAuthenticationAD4IoT
+* vimAuthenticationMD4IoT
 * AADSTSErrorCodes
 
 
