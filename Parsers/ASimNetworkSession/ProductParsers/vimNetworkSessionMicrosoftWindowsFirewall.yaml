@@ -3,7 +3,7 @@ Parser:
   Version: '0.1'
   LastUpdated: Sep 1, 2021
 Product:
-  Name: Microsoft Windows Firewall
+  Name: WindowsFirewall
 Normalization:
   Schema: NetworkSessions
   Version: '0.2.0'
@@ -101,15 +101,15 @@ ParserQuery: |
                                     '\x0d\x0a  <Data Name="SourcePort">'SourcePort'</Data>'
                                     '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
                                     '\x0d\x0a  <Data Name="DestPort">'DestPort'</Data>'
-                                    '\x0d\x0a  <Data Name="Protocol">'Protocol'</Data>'
+                                    '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
                                     '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
                                     '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
                                     '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
                                     '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
                                     '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*;
-            union isfuzzy=true SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159 | extend toint(Protocol)
+            union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
             | lookup Directions on DirectionCode
-            | extend // need to fix this extend -> need to take the column name out
+            | extend
                   SrcAppName = iff(isOutBound, Application, ""),
                   DstAppName = iff(not(isOutBound), Application, ""),
                   SrcIpAddr = iff(isOutBound, DestAddress, SourceAddress),
@@ -136,7 +136,7 @@ ParserQuery: |
                           Protocol = toint(EventData.Protocol),
                           DirectionCode = iff(EventID in (5154, 5155, 5158, 5159), "%%14609",tostring(EventData.Direction))
                       | extend iff(EventID in (5154, 5155, 5158, 5159), DirectionCode="%%14609",DirectionCode = tostring(EventData.Direction) )
-                      | lookup Directions on DirectionCode // need to fix this extend -> need to take the column name out
+                      | lookup Directions on DirectionCode 
                       | extend  SrcAppName = iff(isOutBound, tostring(EventData.Application), ""),
                                 DstAppName = iff(not(isOutBound), tostring(EventData.Application), ""),
                                 SrcIpAddr = iff(isOutBound, tostring(EventData.DestAddress), tostring(EventData.SourceAddress)),
@@ -151,7 +151,7 @@ ParserQuery: |
                                 SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), "")
                   };
             // Main query -> outputs both schemas as one normalized table
-            union isfuzzy=true WindowsFirewall_SecurityEvent, WindowsFirewall_WindowsEvent
+            union WindowsFirewall_SecurityEvent, WindowsFirewall_WindowsEvent
                 | extend 
                         DvcAction = iff(EventID in (5154, 5156, 5158), "Allow", "Deny"),
                         DvcOs = 'Windows',

@@ -1,6 +1,6 @@
-# Microsoft Windows Firewall ASIM NetworkSessions Normalization Parser
+# WindowsFirewall ASIM NetworkSessions Normalization Parser
 
-This template deploys the ASIM NetworkSessions schema parser for Microsoft Windows Firewall. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM NetworkSessions schema parser for WindowsFirewall. The parser is a part of the Azure Sentinel Information Model.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
