@@ -29,7 +29,8 @@ query: |
     | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
     // Picking up only IOC's that contain the entities we want
     | where isnotempty(DomainName)
-    | where Active == true;
+    | where Active == true
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId;
   let Domains= toscalar(DomainTIs |summarize make_set(DomainName));
   DomainTIs
     | join (
@@ -37,8 +38,7 @@ query: |
         | where isnotempty(DnsQuery)
         | extend DNS_TimeGenerated = TimeGenerated
   ) on $left.DomainName==$right.DnsQuery
-  | where DNS_TimeGenerated >= TimeGenerated and DNS_TimeGenerated < ExpirationDateTime
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where DNS_TimeGenerated < ExpirationDateTime
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, QueryType
   | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Dvc, IPCustomEntity = SrcIpAddr, URLCustomEntity = Url
 entityMappings:
