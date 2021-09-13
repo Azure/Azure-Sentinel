@@ -1,4 +1,4 @@
-# Sysmon for Sysmon ASIM NetworkSessions Normalization Parser
+# Sysmon for Linux ASIM NetworkSessions Normalization Parser
 
 This template deploys the ASIM NetworkSessions schema parser for Sysmon for Sysmon. The parser is a part of the Azure Sentinel Information Model.
 
