@@ -28,3 +28,5 @@ The template deploys the following parsers:
 - Source specific parsers:
   - **Microsoft 365 Defender for Endpoints** - vimNetworkSessionMicrosoft365Defender
   - **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimNetworkSessionMD4IoT
+  - **Microsoft Sysmon for Linux** - vimDnsMicrosoftSysmon
+  - **Windows Events Firewall** - Windows firewall activity as collected using Windows Events 515x, collected using either the Log Analytics Agent or the Azure Monitor Agent into either the Event or the WindowsEvent table, vimNetworkSessionMicrosoftWindowsEventFirewall 
