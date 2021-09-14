@@ -50,7 +50,7 @@ Supported parameters:
 |  srcipaddr |  string | '*' |
 |  domain_has_any|  dynamic | dynamic([]) |
 |  responsecodename |  string | '*' |
-|  dnsresponsename |  string | '*' |
+|  response_has_ipv4 |  string | '*' |
 |  response_has_any|  dynamic| dynamic([])|
 |  eventtype|  string | 'lookup' |
 
