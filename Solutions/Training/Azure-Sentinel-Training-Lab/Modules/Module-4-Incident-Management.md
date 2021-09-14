@@ -189,7 +189,7 @@ Now, we will add the IP address related to the incident to our list of IOCs, so 
 
 ![incident12](../Images/incident12.png)
 
-### Exercise 6: Hand over incident
+### Exercise 6: Handover incident
 We will now prepare the incident for handover to forensics team.
 
 1. Go to *Incidents* and select the Solorigate incident assigned to you. Click on *View full details*.
