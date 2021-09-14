@@ -10,6 +10,5 @@ For more information, see:
 - [Azure Sentinel Dns normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
 
 <br>
- 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FASimDnsMicrosoftSysmon%2FASimDnsMicrosoftSysmon.json)

@@ -30,7 +30,7 @@ ParserParams:
   - Name: responsecodename
     Type: string
     Default: '*'
-  - Name: dnsresponsename
+  - Name: response_has_ipv4
     Type: string
     Default: '*'
   - Name: response_has_any_prefix
@@ -69,7 +69,7 @@ ParserQuery: |
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
     , domain_has_any:dynamic=dynamic([]) 
-    , responsecodename:string='*', dnsresponsename:string='*'
+    , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
   ) 
   {
@@ -77,10 +77,12 @@ ParserQuery: |
       | where Source == "Microsoft-Windows-Sysmon" and EventID==22
       // -- Pre-parsing filtering (srcipaddr not available, responsecodename not optimizable)
       | where
-        (isnull(starttime) or TimeGenerated >= starttime)
+        (eventtype=='lookup')
+        and (srcipaddr=='*')
+        and (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
         and (array_length(domain_has_any) ==0 or EventData has_any (domain_has_any))
-        and (dnsresponsename=='*' or has_ipv4(EventData,dnsresponsename) )
+        and (response_has_ipv4=='*' or has_ipv4(EventData,response_has_ipv4) )
         and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(EventData, response_has_any_prefix))
       // --
       | parse EventData with 
@@ -106,7 +108,7 @@ ParserQuery: |
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
     , domain_has_any:dynamic=dynamic([]) 
-    , responsecodename:string='*', dnsresponsename:string='*'
+    , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
   ) 
   {
@@ -114,10 +116,12 @@ ParserQuery: |
     | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
       // -- Pre-parsing filtering (srcipaddr not available)
     | where
-      (isnull(starttime) or TimeGenerated >= starttime)
+      (eventtype=='lookup')
+      and (srcipaddr=='*')
+      and (isnull(starttime) or TimeGenerated >= starttime)
       and (isnull(endtime) or TimeGenerated <= endtime)
       and (array_length(domain_has_any) ==0 or EventData has_any (domain_has_any))
-      and (dnsresponsename=='*' or has_ipv4(EventData,dnsresponsename) )
+      and (response_has_ipv4=='*' or has_ipv4(EventData,response_has_ipv4) )
       and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(EventData, response_has_any_prefix))
     | extend DnsResponseCode = toint(EventData.QueryStatus)
     | lookup RCodeTable on DnsResponseCode
@@ -139,17 +143,17 @@ ParserQuery: |
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
     , domain_has_any:dynamic=dynamic([]) 
-    , responsecodename:string='*', dnsresponsename:string='*'
+    , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
   ) 
   {
     union isfuzzy=true 
-      ParsedDnsEvent_Event(starttime, endtime, srcipaddr, domain_has_any, responsecodename, dnsresponsename, response_has_any_prefix, eventtype)
-    , ParsedDnsEvent_WindowsEvent (starttime, endtime, srcipaddr, domain_has_any, responsecodename, dnsresponsename, response_has_any_prefix, eventtype)
+      ParsedDnsEvent_Event(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
+    , ParsedDnsEvent_WindowsEvent (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
   // -- Post-filtering accurately now that message is parsed
   | where
     (array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any))
-     and (dnsresponsename=='*' or has_ipv4(DnsResponseName,dnsresponsename) )
+     and (response_has_ipv4=='*' or has_ipv4(DnsResponseName,response_has_ipv4) )
      and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix))
   // --
   | project-rename 
@@ -179,4 +183,4 @@ ParserQuery: |
        Query=DnsQuery,
        ResponseCodeName=DnsResponseCodeName 
   };
-  ParsedDnsEvent (starttime, endtime, srcipaddr, domain_has_any, responsecodename, dnsresponsename, response_has_any_prefix, eventtype)
+  ParsedDnsEvent (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)

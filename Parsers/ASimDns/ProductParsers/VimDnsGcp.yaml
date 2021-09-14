@@ -31,7 +31,7 @@ ParserParams:
   - Name: responsecodename
     Type: string
     Default: '*'
-  - Name: dnsresponsename
+  - Name: response_has_ipv4
     Type: string
     Default: '*'
   - Name: response_has_any_prefix
@@ -45,19 +45,20 @@ ParserQuery: |
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
     , domain_has_any:dynamic=dynamic([]) 
-    , responsecodename:string='*', dnsresponsename:string='*'
+    , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
   ){
       GCP_DNS_CL
     | where resource_type_s == "dns_query"
     //  Pre-parsing filtering:
     | where
-      (isnull(starttime) or TimeGenerated >= starttime) // OK
-      and (isnull(endtime) or TimeGenerated <= endtime) // OK
-      and (srcipaddr=='*' or has_ipv4(payload_sourceIP_s, srcipaddr)) // OK
-      and (array_length(domain_has_any) ==0 or payload_queryName_s has_any (domain_has_any)) // OK
-      and (responsecodename=='*' or payload_responseCode_s == responsecodename) // OK
-      and (dnsresponsename=='*' or has_ipv4(payload_rdata_s,dnsresponsename) )
+      (eventtype=='lookup') // -- for now we support only lookup events
+      and (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+      and (srcipaddr=='*' or has_ipv4(payload_sourceIP_s, srcipaddr))
+      and (array_length(domain_has_any) ==0 or payload_queryName_s has_any (domain_has_any))
+      and (responsecodename=='*' or payload_responseCode_s == responsecodename)
+      and (response_has_ipv4=='*' or has_ipv4(payload_rdata_s,response_has_ipv4) )
       and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(payload_rdata_s, response_has_any_prefix))
     // *****************************************************************
     | project-rename
@@ -93,4 +94,4 @@ ParserQuery: |
         ResponseCodeName=DnsResponseCodeName,
         QueryTypeName=DnsQueryTypeName
     };
-    DNSQuery_GcpDns (starttime, endtime, srcipaddr, domain_has_any, responsecodename, dnsresponsename, response_has_any_prefix, eventtype)
+    DNSQuery_GcpDns (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
