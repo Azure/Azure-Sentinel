@@ -15,5 +15,6 @@ The template deploys the following:
  * vimRegistryEventMicrosoftWindowsEvent
  * vimProcessCreateMicrosoftWindowsEvents
  * vimProcessTerminateMicrosoftWindowsEvents
+ * vimNetworkSessionMicrosoftWindowsEventFirewall
 
 <br>
