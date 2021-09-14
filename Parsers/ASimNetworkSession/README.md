@@ -15,6 +15,8 @@ For more information, see:
 
 <br>
 
+This page refers to Version 0.2 of the ASIM NetworkSession schema. If you are looking for Version 0.1 ASIM Network Session parsers refer to the [ASimNetworkSessionV1](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession/ASimNetworkSessionV1) folder.
+
 ## Parsers
 
 The template deploys the following parsers:
