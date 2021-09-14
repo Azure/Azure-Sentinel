@@ -7,7 +7,7 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel NetworkSessions normalization schema reference](https://aka.ms/AzSentinelNetworkSessionsDoc)
+- [Azure Sentinel NetworkSessions normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
 
 <br>
  
