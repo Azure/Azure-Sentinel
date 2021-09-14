@@ -4,6 +4,6 @@ This template deploys all [ASIM](https://aka.ms/AzSentinelNormalization) parsers
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelASimARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASim%2FASimFullDeployment.json)
 
 <br>
