@@ -1,0 +1,47 @@
+id: a31b8389-6315-4fb6-b13f-b892172a2428
+name: Insider Risk - Uncommon Action Volume Observed
+description: |
+  'The User Threshold for Uncommon Action Volume is Exceeded'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let UncommonActionVolume = BehaviorAnalytics
+  | extend UncommonActionVolume = tostring(ActivityInsights.UncommonHighVolumeOfActions)
+  | where UncommonActionVolume == "True"
+  | summarize count() by UserPrincipalName
+  | project-rename UncommonActionVolume = count_;
+  let UncommonAction = BehaviorAnalytics
+  | extend UncommonAction = tostring(ActivityInsights.ActionUncommonlyPerformedByUser)
+  | where UncommonAction == "True"
+  | summarize count() by UserPrincipalName
+  | project-rename UncommonAction = count_;
+  let Uncommon = UncommonActionVolume | join(UncommonAction) on UserPrincipalName;
+  let FirstTimeDeviceLogon = BehaviorAnalytics
+  | extend FirstTimeDeviceLogon = tostring(ActivityInsights.FirstTimeUserLoggedOnToDevice)
+  | where FirstTimeDeviceLogon == "True"
+  | summarize count() by UserPrincipalName
+  | project-rename FirstTimeDeviceLogon = count_;
+  let FirstTimeUserAction = BehaviorAnalytics
+  | extend FirstTimeUserAction = tostring(ActivityInsights.FirstTimeUserPerformedAction)
+  | where FirstTimeUserAction == "True"
+  | summarize count() by UserPrincipalName
+  | project-rename FirstTimeUserAction = count_;
+  let FirstTime = FirstTimeUserAction | join(FirstTimeDeviceLogon) on UserPrincipalName;
+  Uncommon | join kind=fullouter(FirstTime) on UserPrincipalName
+  | where UserPrincipalName <> ""
+  | where UncommonActionVolume > 10 // Adjust & Tune Thresholds within Organizational Requirements
+  | project UserPrincipalName, UncommonActionVolume, UncommonAction, FirstTimeUserAction, FirstTimeDeviceLogon
+  | sort by UncommonActionVolume desc 
+  | limit 250
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: UserPrincipalName
