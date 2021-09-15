@@ -1,0 +1,40 @@
+id: b81ed294-28cf-48c3-bac8-ac60dcef293b
+name: (Private Preview) Insider Risk - Sensitive Data Access Outside Organziational Geolocations
+description: |
+  'Sensitive Data Access Outside Organizational Geolocations'
+severity: High
+  - connectorId: AzureInformationProtection
+    dataTypes:
+      - InformationProtectionLogs_CL 
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs 
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  InformationProtectionLogs_CL
+  | extend UserPrincipalName = UserId_s
+  | where LabelName_s <> ""
+  | join (SigninLogs) on UserPrincipalName
+  | extend City = tostring(LocationDetails.city)
+  // | where City <> "New York" // Configure Location Details within Organizational Requirements
+  | extend State = tostring(LocationDetails.state)
+  // | where State <> "Texas" // Configure Location Details within Organizational Requirements
+  | extend Country_Region = tostring(LocationDetails.countryOrRegion)
+  // | where Country_Region <> "US" // Configure Location Details within Organizational Requirements
+  | summarize count() by UserPrincipalName, LabelName_s, Activity_s, City, State, Country_Region
+  | sort by count_ desc
+  | limit 250
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: UserPrincipalName
+version: 1.0.0
