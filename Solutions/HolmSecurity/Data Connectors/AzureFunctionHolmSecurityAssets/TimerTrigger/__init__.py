@@ -15,7 +15,7 @@ SEVERITY_LIST =  ("info", "low", "high", "medium", "critical")
 TOKEN = os.environ['token']
 CUSTOMER_ID = os.environ['workspaceId']
 SHARED_KEY = os.environ['workspaceKey']
-BASE_URL = "https://api.d1se1.holmsec.com/v2"
+BASE_URL = os.environ['api_url']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + CUSTOMER_ID + '.ods.opinsights.azure.com'
@@ -118,5 +118,9 @@ def main(mytimer: func.TimerRequest) -> None:
 
     if mytimer.past_due:
         logging.info('The timer is past due!')
+    
+    send_net_assets()
+    send_web_assets()
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    
