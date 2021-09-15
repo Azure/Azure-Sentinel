@@ -42,13 +42,16 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 [**Module 4 – Incident Management**](./Modules/Module-4-Incident-Management.md)
 - [Review Azure Sentinel incident tools and capabilities](./Modules/Module-4-Incident-Management.md#exercise-1-review-azure-sentinel-incident-tools-and-capabilities)
 - [Handling Incident "Sign-ins from IPs that attempt sign-ins to disabled accounts"](./Modules/Module-4-Incident-Management.md#exercise-2-handling-incident-sign-ins-from-ips-that-attempt-sign-ins-to-disabled-accounts)
+- [Acknowledge a new incident](./Modules/Module-4-Incident-Management.md#exercise-3-Acknowledge-a-new-incident)
+- [Hunting for more evidence](./Modules/Module-4-Incident-Management.md#exercise-4-Hunting-for-more-evidence)
+- [Add IOC to Threat Intelligence](./Modules/Module-4-Incident-Management.md#exercise-5-Add-IOC-to-Threat-Intelligence)
+- [Handover incident](./Modules/Module-4-Incident-Management.md#exercise-6-Handover-incident)
  
 [**Module 5 – Hunting**](./Modules/Module-5-Hunting.md)
-- [Acknowldge incident](./Modules/Module-5-Hunting.md#exercise-1-acknowledge-incident)
-- [Hunting for more evidence](./Modules/Module-5-Hunting.md#exercise-2-hunting-for-more-evidence)
-- [Add IOC to Threat Intelligence](./Modules/Module-5-Hunting.md#exercise-3-add-ioc-to-threat-intelligence)
-- [Hand over incident](./Modules/Module-5-Hunting.md#exercise-4-hand-over-incident)
- 
+- [Hunting on a specific MITRE technique](./Modules/Module-5-Hunting.md#exercise-1-Hunting-on-a-specific-MITRE-technique)
+- [Bookmarking hunting query results](./Modules/Module-5-Hunting.md#exercise-2-Bookmarking-hunting-query-results)
+- [Promote a bookmark to an incident](./Modules/Module-5-Hunting.md#exercise-3-Promote-a-bookmark-to-an-incident)
+
 [**Module 6 – Watchlists**](./Modules/Module-6-Watchlists.md)
 - [Create a Watchlist](./Modules/Module-6-Watchlists.md#exercise-1-create-a-watchlist)
 - [Whitelist IP addresses in the analytics rule](./Modules/Module-6-Watchlists.md#exercise-2-whitelist-ip-addresses-in-the-analytics-rule)
