@@ -5,6 +5,7 @@ import time
 import os
 import re
 import logging
+import memory_profiler
 
 import azure.functions as func
 
@@ -37,6 +38,9 @@ match = re.match(pattern, str(LOG_ANALYTICS_URI))
 if not match:
     raise Exception("Invalid Log Analytics Uri.")
 
+root_logger = logging.getLogger()
+root_logger.handlers[0].setFormatter(logging.Formatter("%(name)s: %(message)s"))
+profiler_logstream = memory_profiler.LogFile('memory_profiler_logs', True)
 
 async def main(mytimer: func.TimerRequest):
     logging.info('Script started.')
@@ -66,6 +70,7 @@ class PrismaCloudConnector:
         self.last_alert_ts = None
         self.last_audit_ts = None
 
+    @memory_profiler.profile(stream=profiler_logstream)
     async def process_alerts(self):
         last_alert_ts_ms = await self.alerts_state_manager.get()
         max_period = (int(time.time()) - MAX_PERIOD_MINUTES * 60) * 1000
@@ -90,6 +95,7 @@ class PrismaCloudConnector:
             logging.info('{} alerts have been sent'.format(self.sent_alerts))
         await self.save_alert_checkpoint()
 
+    @memory_profiler.profile(stream=profiler_logstream)
     async def process_audit_logs(self):
         last_log_ts_ms = await self.auditlogs_state_manager.get()
         max_period = (int(time.time()) - MAX_PERIOD_MINUTES * 60) * 1000
