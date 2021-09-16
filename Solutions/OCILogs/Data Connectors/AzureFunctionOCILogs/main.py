@@ -26,6 +26,11 @@ LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
     LOG_ANALYTICS_URI = 'https://' + WORKSPACE_ID + '.ods.opinsights.azure.com'
 
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+match = re.match(pattern, str(LOG_ANALYTICS_URI))
+if not match:
+    raise Exception("Invalid Log Analytics Uri.")
+
 
 def main(mytimer: func.TimerRequest):
     logging.info('Function started.')
