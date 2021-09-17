@@ -22,7 +22,7 @@ The template deploys parsers for the following products:
 * vimFileEventMicrosoftFileStorage - Microsoft Azure File Storage
 * vimFileEventMicrosoftSharePoint - Microsoft SharePoint
 * vimFileEventMicrosoftSysmonFileCreated - Sysmon File Created event (EventId 11)
-* vimFileEventMicrosoftSysmonFileDeleted - Sysmon File Deleted events (EventId 23, 26) 
+* vimFileEventMicrosoftSysmonFileDeleted - Sysmon File Deleted events (EventId 23, 26)
 
 <br>
 
