@@ -4,6 +4,8 @@ This template deploys all [Microsoft Defender for IoT - Endpoint](https://azure.
 
 When deploying the parsers, you make sure that telemetry from MD4IoT is analyzed using the built-in Azure Sentinel Analytics. You also enable analysts easier access to the telemetry using a known, standard, schema.
 
+Note: Please ensure that the subscription, resource group and location are the same as your current Azure Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
+
 **Note: to get the best value from ASIM and make sure that Microsoft Defender for IoT - Endpoint telemetry is included in Azure Sentinel Analytics, deploy the [full ASIM parser suite](https://aka.ms/AzSentinelASim).**
 
 For more information, see:
