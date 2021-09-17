@@ -15,10 +15,10 @@ from .state_manager import StateManager
 ARMORBLOX_API_TOKEN = os.environ["ArmorbloxAPIToken"]
 ARMORBLOX_INSTANCE_NAME = os.environ.get("ArmorbloxInstanceName", "").strip()
 ARMORBLOX_INSTANCE_URL = os.environ.get("ArmorbloxInstanceURL", "").strip()
-INCIDENT_API_PATH = "api/v1beta1/organizations/{}/incidents"
-INCIDENT_API_PAGE_SIZE = 100
-INCIDENT_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-INCIDENT_API_TIME_DELTA_IN_MINUTES = 60
+ARMORBLOX_INCIDENT_API_PATH = "api/v1beta1/organizations/{}/incidents"
+ARMORBLOX_INCIDENT_API_PAGE_SIZE = 100
+ARMORBLOX_INCIDENT_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES = 60
 CUSTOM_TABLE_NAME = "Armorblox"
 CHUNKSIZE = 10000
 SENTINEL_WORKSPACE_ID = os.environ["WorkspaceID"]
@@ -54,10 +54,10 @@ class Armorblox:
             logging.info("The last time point is: {}".format(past_time))
         else:
             logging.info("There is no last time point, trying to get incidents for last day.")
-            past_time = (current_time - datetime.timedelta(minutes=INCIDENT_API_TIME_DELTA_IN_MINUTES)).strftime(INCIDENT_API_TIME_FORMAT)
+            past_time = (current_time - datetime.timedelta(minutes=ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES)).strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
 
-        state.post(current_time.strftime(INCIDENT_API_TIME_FORMAT))
-        return past_time, current_time.strftime(INCIDENT_API_TIME_FORMAT)
+        state.post(current_time.strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT))
+        return past_time, current_time.strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
 
     def _process_incidents(self, url, headers, params):
         response = requests.get(url, headers=headers, params=params)
@@ -73,7 +73,7 @@ class Armorblox:
         params = {
             "from_date": self.from_date,
             "to_date": self.to_date,
-            "page_size": INCIDENT_API_PAGE_SIZE
+            "page_size": ARMORBLOX_INCIDENT_API_PAGE_SIZE
         }
 
         headers = {
@@ -84,13 +84,13 @@ class Armorblox:
         url = ""
         if ARMORBLOX_INSTANCE_URL:
             tenant_name = urlparse(ARMORBLOX_INSTANCE_URL).netloc.split(".")[0]
-            path = INCIDENT_API_PATH.format(tenant_name)
+            path = ARMORBLOX_INCIDENT_API_PATH.format(tenant_name)
             if not ARMORBLOX_INSTANCE_URL.endswith("/"):
                 path = "/" + path
 
             url = ARMORBLOX_INSTANCE_URL + path
         else:
-            url = "https://{}.armorblox.io/{}".format(ARMORBLOX_INSTANCE_NAME, INCIDENT_API_PATH.format(ARMORBLOX_INSTANCE_NAME))
+            url = "https://{}.armorblox.io/{}".format(ARMORBLOX_INSTANCE_NAME, ARMORBLOX_INCIDENT_API_PATH.format(ARMORBLOX_INSTANCE_NAME))
 
         self._process_incidents(url, headers, params)
         return self.incidents_list
