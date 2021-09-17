@@ -15,7 +15,11 @@ from .state_manager import StateManager
 ARMORBLOX_API_TOKEN = os.environ["ArmorbloxAPIToken"]
 ARMORBLOX_INSTANCE_NAME = os.environ.get("ArmorbloxInstanceName", "").strip()
 ARMORBLOX_INSTANCE_URL = os.environ.get("ArmorbloxInstanceURL", "").strip()
-TABLE_NAME = "Armorblox"
+ARMORBLOX_INCIDENT_API_PATH = "api/v1beta1/organizations/{}/incidents"
+ARMORBLOX_INCIDENT_API_PAGE_SIZE = 100
+ARMORBLOX_INCIDENT_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES = 60
+CUSTOM_TABLE_NAME = "Armorblox"
 CHUNKSIZE = 10000
 SENTINEL_WORKSPACE_ID = os.environ["WorkspaceID"]
 SENTINEL_WORKSPACE_KEY = os.environ["WorkspaceKey"]
@@ -31,7 +35,7 @@ if not match:
     raise Exception("Armorblox Data Connector: Invalid Log Analytics URI")
 
 if (ARMORBLOX_INSTANCE_NAME == "") and (ARMORBLOX_INSTANCE_URL == ""):
-   raise Exception("Armorblox instance name and URL can both not be empty")
+   raise Exception("At least one of Armorblox instance name or URL need to be provided")
 
 
 class Armorblox:
@@ -42,7 +46,7 @@ class Armorblox:
 
     @staticmethod
     def generate_date():
-        current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+        current_time = datetime.datetime.utcnow().replace(second=0)
         state = StateManager(connection_string=CONNECTION_STRING)
         past_time = state.get()
 
@@ -50,10 +54,10 @@ class Armorblox:
             logging.info("The last time point is: {}".format(past_time))
         else:
             logging.info("There is no last time point, trying to get incidents for last day.")
-            past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            past_time = (current_time - datetime.timedelta(minutes=ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES)).strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
 
-        state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-        return past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        state.post(current_time.strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT))
+        return past_time, current_time.strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
 
     def _process_incidents(self, url, headers, params):
         response = requests.get(url, headers=headers, params=params)
@@ -69,7 +73,7 @@ class Armorblox:
         params = {
             "from_date": self.from_date,
             "to_date": self.to_date,
-            "page_size": 100
+            "page_size": ARMORBLOX_INCIDENT_API_PAGE_SIZE
         }
 
         headers = {
@@ -78,16 +82,15 @@ class Armorblox:
         }
 
         url = ""
-        path = "api/v1beta1/organizations/{}/incidents"
         if ARMORBLOX_INSTANCE_URL:
             tenant_name = urlparse(ARMORBLOX_INSTANCE_URL).netloc.split(".")[0]
-            path = path.format(tenant_name)
-            if ARMORBLOX_INSTANCE_URL.endswith("/"):
-                url = ARMORBLOX_INSTANCE_URL + path
-            else:
-                url = ARMORBLOX_INSTANCE_URL + "/" + path
+            path = ARMORBLOX_INCIDENT_API_PATH.format(tenant_name)
+            if not ARMORBLOX_INSTANCE_URL.endswith("/"):
+                path = "/" + path
+
+            url = ARMORBLOX_INSTANCE_URL + path
         else:
-            url = "https://{}.armorblox.io/{}".format(ARMORBLOX_INSTANCE_NAME, path.format(ARMORBLOX_INSTANCE_NAME))
+            url = "https://{}.armorblox.io/{}".format(ARMORBLOX_INSTANCE_NAME, ARMORBLOX_INCIDENT_API_PATH.format(ARMORBLOX_INSTANCE_NAME))
 
         self._process_incidents(url, headers, params)
         return self.incidents_list
@@ -135,7 +138,7 @@ class Sentinel:
         headers = {
             "content-type": content_type,
             "Authorization": signature,
-            "Log-Type": TABLE_NAME,
+            "Log-Type": CUSTOM_TABLE_NAME,
             "x-ms-date": rfc1123date
         }
         response = requests.post(uri, data=body, headers=headers)
