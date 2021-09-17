@@ -1,0 +1,53 @@
+id: 06c52a66-fffe-4d3b-a05a-646ff65b7ec2
+name: Connection from external IP to OMI related Ports
+description: |
+  'This query identifies connection attempts from the external IP addresses to the management ports(5985,5986,1270) related to Open Management Infrastructure(OMI). 
+   OMI is the Linux equivalent of Windows WMI and helps users manage configurations across remote and local environments. 
+   The query aims to find attacks targeting OMI vulnerability (CVE-2021-38647). The query primarily leverages the Network Session normalization schema(imNetworkSession) 
+   as well as a few other logs to look for this activity. The Network normalizing parsers can be deployed in a click using an ARM Template shared in the link below:
+   Reference: https://www.wiz.io/blog/omigod-critical-vulnerabilities-in-omi-azure
+   Reference: https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession
+requiredDataConnectors:
+  - connectorId: AzureNetworkWatcher
+    dataTypes:
+      - AzureNetworkAnalytics_CL
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+tactics:
+  - Reconnaissance
+  - Initial Access	
+relevantTechniques:
+  - T1595
+  - T1190
+query: |
+  let Port = dynamic(["5985","5986","1270"]); 
+  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
+  (union isfuzzy=true
+  (imNetworkSession
+  | extend SourceIPType = iff(SrcIpAddr matches regex PrivateIPregex,"private" ,"public" )
+  | where SourceIPType =="public"
+  | where DstPortNumber in(Port)
+  | where EventResult != 'Failure'
+  | project TimeGenerated, EventProduct, EventResourceId, EventResult, SourceIp = SrcIpAddr, DestinationIp = DstIpAddr,Type, Computer, DestinationPort= DstPortNumber, SrcPortNumber, Protocol = NetworkProtocol, RemoteCountry = SrcGeoCountry, SrcGeoCity, RemoteLatitude = SrcGeoLatitude, RemoteLongitude = SrcGeoLongitude
+  | extend Timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = SourceIp 
+  ),
+  (VMConnection
+  | where Direction == "inbound"
+  | extend SourceIPType = iff(SourceIp matches regex PrivateIPregex,"private" ,"public" )
+  | where SourceIPType =="public"
+  | where ProcessName == 'omiengine'
+  | where DestinationPort in (Port)
+  | project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, Protocol, RemoteCountry, RemoteLatitude, RemoteLongitude, Type
+  | extend Timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = SourceIp
+  ),
+  (AzureNetworkAnalytics_CL
+  | extend SourceIPType = iff(SrcIP_s matches regex PrivateIPregex,"private" ,"public" )
+  | where SourceIPType =="public"
+  | where L7Protocol_s has 'wsman'
+  | where DestPort_d  in(Port)
+  | parse VM_s with * '/' VM 
+  | project TimeGenerated, SourceIp = SrcIP_s, DestinationIp = DestIP_s, DestinationPort = DestPort_d, Protocol = L7Protocol_s, NSGRule_s, VM, Type
+  | extend Timestamp = TimeGenerated, HostCustomEntity = VM, IPCustomEntity = SourceIp
+  )
+  )
