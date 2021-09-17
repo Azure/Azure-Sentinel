@@ -2,6 +2,8 @@
 
 This template deploys all the [Sysmon for Windows](https://docs.microsoft.com/sysinternals/downloads/sysmon) Azure Sentinel ASIM parsers. The template is part of the [Azure Sentinel Information Mode (ASIM)](https://aka.ms/AzSentinelNormalization). The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
+Note: Please ensure that the subscription, resource group and location are the same as your current Azure Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
+
 When deploying the parsers, you:
 
 - Make sure that telemetry from Sysmon is analyzed using the built-in Azure Sentinel Analytics. You also enable analysts easier access to the telemetry using a known, standard, schema.
