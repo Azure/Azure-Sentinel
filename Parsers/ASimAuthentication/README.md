@@ -13,6 +13,8 @@ For more information, see:
 
 To deploy all parsers to your workspace using ARM templates use the button below:
 
+Note: Please ensure that the subscription, resource group and location are the same as your current Azure Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
+
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthenticationARM)
 
 <br>
