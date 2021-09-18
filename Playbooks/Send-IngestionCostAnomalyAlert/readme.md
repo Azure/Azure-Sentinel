@@ -11,31 +11,31 @@ Scroll to the bottom of this document and click the "Deploy to Azure" button
 
 Fill in the parameters, changing the default values as required for your environment
 
-![02-parameters](../Send-IngestionAnomalyAlert/images/02-parameters.png)
+![02-parameters](../Send-IngestionCostAnomalyAlert/images/02-parameters.png)
 
 Select your newly deployed app from the resource group
 
-![03-selectapp](../Send-IngestionAnomalyAlert/images/03-selectapp.png)
+![03-selectapp](../Send-IngestionCostAnomalyAlert/images/03-selectapp.png)
 
 Click on edit to make the connections to Log Analytics and Office 365
 
-![04-editapp](../Send-IngestionAnomalyAlert/images/04-editapp.png)
+![04-editapp](../Send-IngestionCostAnomalyAlert/images/04-editapp.png)
 
 Defince the frequency the playbook should execute. Default is daily so you get alerted at the earliest sign of an ingestion anomaly
 
-![05-recurrence](../Send-IngestionAnomalyAlert/images/05-recurrence.png)
+![05-recurrence](../Send-IngestionCostAnomalyAlert/images/05-recurrence.png)
 
 Make the connections to your Log Analytics workspace using an account with the appropriate permissions. Do the same for Office 365.
 
-![06-connections](../Send-IngestionAnomalyAlert/images/06-connections.png)
+![06-connections](../Send-IngestionCostAnomalyAlert/images/06-connections.png)
 
 Save the app
 
-![07-saveapp](../Send-IngestionAnomalyAlert/images/07-saveapp.png)
+![07-saveapp](../Send-IngestionCostAnomalyAlert/images/07-saveapp.png)
 
 Enable the app
 
-![08-enableapp](../Send-IngestionAnomalyAlert/images/08-enableapp.png)
+![08-enableapp](../Send-IngestionCostAnomalyAlert/images/08-enableapp.png)
 
 
 <em> For more information on the anomaly function read this [this document](https://docs.microsoft.com/azure/data-explorer/kusto/query/series-decompose-anomaliesfunction)</em>

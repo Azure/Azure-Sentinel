@@ -1,20 +1,20 @@
-# F5 Big IP Block IP Playbook
+# F5 BIG-IP Block IP Playbook
 
-![F5 Big IP](../logo.jpg)
+![F5 BIG-IP](../logo.jpg)
 
 ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
- 2. For each IP address in the list, checks if the IP address is present in IP Address list of F5 Big IP firewall.
+ 2. For each IP address in the list, checks if the IP address is present in IP Address list of F5 BIG-IP firewall.
  3. If IP address not present in IP address list, then adds the IP address to IP address list.
 
- ![F5 Big IP](./Images/PlaybookDesignerLight.png)
+ ![F5 BIG-IP](./Images/PlaybookDesignerLight.png)
 
-![F5 Big IP](./Images/PlaybookDesignerDark.png)
+![F5 BIG-IP](./Images/PlaybookDesignerDark.png)
 
 
  ## Pre-requisites for deployment
-1. Deploy the F5 Big IP Base Playbook before the deployment of this playbook under the same subscription and same resource group and under the same location/region. Capture the name of the playbook during deployment.
+1. Deploy the F5 BIG-IP Base Playbook before the deployment of this playbook under the same subscription and same resource group and under the same location/region. Capture the name of the playbook during deployment.
 2. A Firewall policy rule should be created for blocking of IP.
 3. An address list should be created for blocking IP.
 4. The address list should be a part of Firewall policy rule.
@@ -72,7 +72,7 @@
 - Update the incident with status close.
 
 ## Incident comment 
-![F5 Big IP](./Images/IncidentCommentLight.png)
+![F5 BIG-IP](./Images/IncidentCommentLight.png)
 
-![F5 Big IP](./Images/IncidentCommentDark.png)
+![F5 BIG-IP](./Images/IncidentCommentDark.png)
 
