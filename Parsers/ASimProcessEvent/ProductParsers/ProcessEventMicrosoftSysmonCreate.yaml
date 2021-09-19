@@ -1,6 +1,6 @@
 Parser:
   Title: ASIM Sysmon Process Creation Event Parser
-  Version: '0.2'
+  Version: '0.3'
   LastUpdated: Aug 30, 2021
 Product:
   Name: Microsoft Windows Events Sysmon
@@ -16,8 +16,7 @@ References:
 ParserName: vimProcessCreateMicrosoftSysmon
 ParserQuery: | 
     // this is the parser for sysmon from Event table
-        let ParsedProcessEvent_Event=(){
-        // Create the raw table from the raw XML file structure
+        let Sysmon11_Event=(){
         Event 
             | where Source == "Microsoft-Windows-Sysmon" and EventID==1
             | parse EventData with * '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readibliy 
@@ -29,7 +28,7 @@ ParserQuery: |
                                 '</Data><Data Name="Description">'Description
                                 '</Data><Data Name="Product">'Product
                                 '</Data><Data Name="Company">'Company'</Data>' *
-            |extend  OriginalFileName = extract (@'"OriginalFileName">([^<]+)<',1,EventData) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure
+            | extend  OriginalFileName = extract (@'"OriginalFileName">([^<]+)<',1,EventData) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure
             | parse EventData with *
                                 '<Data Name="CommandLine">'CommandLine'</Data>'
                                 '<Data Name="CurrentDirectory">'CurrentDirectory
@@ -43,7 +42,8 @@ ParserQuery: |
                                 '}</Data><Data Name="ParentProcessId">'ParentProcessId
                                 '</Data><Data Name="ParentImage">'ParentImage
                                 '</Data><Data Name="ParentCommandLine">'ParentCommandLine
-                                '</Data>' *
+                                '</Data>' new_ver_data
+            | parse new_ver_data with '<Data Name="ParentUser">' ActorUsername '</Data>' * // this field exists in new versions of Sysmon
             | extend    TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
                         TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
                         TargetProcessIMPHASH=extract(@'IMPHASH=(\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file
@@ -61,9 +61,7 @@ ParserQuery: |
                         EventResult = 'Success',
                         EventOriginalType = tostring(EventID),
                         DvcOs = "Windows",
-                        TargetUserSessionId = tostring(LogonId)  ,           
-                        TargetUsernameType = "Windows",
-                        ActorUsernameType = "Windows",
+                        TargetUserSessionId = tostring(LogonId),           
                         TargetUsername = User,
                         TargetProcessCommandLine = CommandLine,
                         TargetProcessCurrentDirectory = CurrentDirectory
@@ -82,16 +80,19 @@ ParserQuery: |
                         ActingProcessId = ParentProcessId,
                         ActingProcessGuid = ParentProcessGuid,                          
                         ActingProcessCommandLine = ParentCommandLine,
-                        ActingProcessName = ParentImage,
-                        ActorUsername = UserName
-            | extend // aliases
-                        // User = TargetUserName,
+                        ActingProcessName = ParentImage
+            | extend 
+                        TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
+                        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                        // aliases
+                        User = TargetUsername,
                         Process = TargetProcessName,
                         Dvc = DvcHostname,
                         Hash = coalesce(TargetProcessSHA256, TargetProcessSHA1, TargetProcessMD5) // which appears first - will be aliases to "Hash"
-            }; 
+            | project-away EventData, RuleName, ParameterXml, new_ver_data
+            };
     // this is the parser for sysmon from WindowsEvent table
-        let ParsedProcessEvent_WindowsEvent=(){
+       let ParsedProcessEvent_WindowsEvent=(){
         WindowsEvent
         | where Provider == "Microsoft-Windows-Sysmon" and EventID==1
         | extend hash = split(EventData.Hashes,'=')
@@ -133,11 +134,12 @@ ParserQuery: |
                 ActingProcessGuid = tostring(EventData.ParentProcessGuid),                          
                 ActingProcessCommandLine = tostring(EventData.ParentCommandLine),
                 ActingProcessName = tostring(EventData.ParentImage),
-                ActorUsername = tostring(EventData.UserName)
-        | project-rename 
+                ActorUsername = tostring(EventData.ParentUser)
+        | extend TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
+                 ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                 // aliases 
                 DvcHostname = Computer,
-                Hash = hash_value
-                };
-    union isfuzzy=true ParsedProcessEvent_Event,
-                      ParsedProcessEvent_WindowsEvent
-
+                Hash = hash_value,
+                User = ActorUsername
+        | project-away EventData
+                }; union isfuzzy=true ParsedProcessEvent_WindowsEvent, Sysmon11_Event
