@@ -33,6 +33,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [JsonProperty("triggerThreshold", Required = Required.Always)]
         [Range(0, 10000)]
         public int TriggerThreshold { get; set; }
+    }
 
     public enum AlertTriggerOperator
     {
