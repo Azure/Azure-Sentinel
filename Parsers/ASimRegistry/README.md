@@ -4,6 +4,8 @@ This template deploys all ASIM Registry parsers. The template is part of the Azu
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
+Note: Please ensure that the subscription, resource group and location are the same as your current Azure Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
+
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
