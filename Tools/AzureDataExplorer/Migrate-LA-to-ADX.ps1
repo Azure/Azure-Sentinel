@@ -607,6 +607,7 @@ function New-ADXDataConnectionRules {
 
 Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
+Get-RequiredModules("Az.EventHub")
 
 # Check Powershell version, needs to be 5 or higher
 if ($host.Version.Major -lt 5) {
