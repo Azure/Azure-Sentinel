@@ -149,7 +149,7 @@ One of the main values of the TI data is on Analytics rules. In this exercise we
 
 ![TImapping](../Images/TI4.png)
 
-3. As you can see, there is a long list of resulting alert templates. These all will correlate your different data sources with the IOCs present in your TI table (ThreatIntelligenceIndicator), to detect any trace of malicious indicators of comprise in your organization's logs. You can see more information about these rules [here](https://docs.microsoft.com/azure/sentinel/work-with-threat-indicators#detect-threats-with-threat-indicator-based-analytics).
+3. As you can see, there is a long list of resulting alert templates. These all will correlate your different data sources with the IOCs present in your TI table (ThreatIntelligenceIndicator), to detect any trace of malicious indicators of compromise in your organization's logs. You can see more information about these rules [here](https://docs.microsoft.com/azure/sentinel/work-with-threat-indicators#detect-threats-with-threat-indicator-based-analytics).
 
 4. As you may know, it is free to enable analytics rules in Azure Sentinel, so the best practice is to enable all the ones that apply to data sources that you are ingesting.
 
@@ -176,17 +176,17 @@ Workbooks provide powerful interactive dashboards that give you insights into al
 
 3. Select the **Save** button and choose an Azure location to store the workbook. This step is required if you are going to modify the workbook in any way and save your changes.
 
-![TImatching](../Images/TI4.png)
+![TImatching](../Images/TI5.png)
 
 4. Now select the **View saved workbook** button to open the workbook for viewing and editing. 
 
 5. You will find some pre-built visualizations that show you the indicators imported into Sentinel over time, by type and provider. To modify or add a new chart, select the **Edit** button at the top of the page to enter editing mode for the workbook.
 
-![TIworkbook](../Images/TI5.png)
+![TIworkbook](../Images/TI6.png)
 
 6. Let's now add a new chart of threat indicators by threat type. To do this, scroll to the very bottom of the page and select **Add Query**.
 
-![TIworkbook](../Images/TI6.png)
+![TIworkbook](../Images/TI7.png)
 
 7. Add the following text to the Log Analytics workspace Log Query text box:
 
@@ -197,7 +197,7 @@ ThreatIntelligenceIndicator
 
 8. In the Visualization drop-down, select **Bar chart**.
 
-![TIworkbook](../Images/TI7.png)
+![TIworkbook](../Images/TI8.png)
 
 9. Select the Done editing button. You’ve created a new chart for your workbook 😀.
 
