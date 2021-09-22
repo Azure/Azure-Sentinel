@@ -1,0 +1,85 @@
+id: a4fb4255-f55b-4c24-b396-976ee075d406
+name: (Private Preview) Insider Risk - High User Security Alert Correlations
+description: |
+  'The User Threshold for User Security Alert Correlations is Exceeded'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert (ASC)
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (MCAS)
+  - connectorId: OfficeATP
+    dataTypes:
+      - SecurityAlert (Office 365)
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  let LastTimeObserved = SecurityIncident
+  | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+  | mv-expand AlertIds
+  | extend AlertId = tostring(AlertIds)
+  | join kind= innerunique ( 
+            SecurityAlert 
+            )
+            on $left.AlertId == $right.SystemAlertId
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | mv-expand todynamic(Entities)
+  | where Entities["Type"] =~ "account"
+  | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+            Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+  | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | where UPN <> ""
+  | project UPN, AlertName, Severity, ProductName, TimeGenerated | summarize arg_max(AlertName, Severity, ProductName, TimeGenerated) by UPN;
+  SecurityIncident
+  | summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber
+  | mv-expand AlertIds
+  | extend AlertId = tostring(AlertIds)
+  | join kind= innerunique ( 
+            SecurityAlert 
+            )
+            on $left.AlertId == $right.SystemAlertId
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | mv-expand todynamic(Entities)
+  | where Entities["Type"] =~ "account"
+  | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+            Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+  | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | where UPN <> ""
+  | project UPN, AlertName, Severity, ProductName
+  | evaluate basket(0.01)
+  | where UPN <> ""
+  | project UPN, Percent, AlertName, Severity, ProductName
+  | where Percent > 10 // Adjust & Tune within Organzational Requirements
+  | sort by Percent desc
+  | join (LastTimeObserved) on UPN
+  | extend LastObserved = TimeGenerated
+  | project UPN, AlertName, Severity, ProductName, Percent, LastObserved
+  | extend AccountCustomEntity = UPN
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: UPN
+version: 1.0.0
