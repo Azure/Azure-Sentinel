@@ -8,14 +8,15 @@ tactics:
 relevantTechniques:
   - T1195
 query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*10);
   // Add any known allowed sources and source locations to the filter below.
   let allowed_sources = dynamic([]);
   let allowed_locations = dynamic([]);
-  let lookback = 30d;
-  let timeframe = 3d;
   let known_packages = (
   AzureDevOpsAuditing
-  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where TimeGenerated > ago(lookback) and TimeGenerated < starttime
   // Look for feeds created or modified at either the organization or project level
   | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
   | where Details has "UpstreamSources, added"
@@ -28,7 +29,7 @@ query: |
   | summarize by SourceLocation);
   // Look for internal feeds being added from a new location
   AzureDevOpsAuditing
-  | where TimeGenerated > ago(timeframe)
+  | where TimeGenerated between(starttime..endtime)
   | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
   | where Details has "UpstreamSources, added"
   | extend FeedName = tostring(Data.FeedName)

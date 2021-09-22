@@ -1,0 +1,230 @@
+{
+   "$schema":"https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+   "contentVersion":"1.0.0.0",
+   "parameters":{
+      "PlaybookName":{
+         "defaultValue":"AD4IoT-MailByProductionLine",
+         "type":"String"
+      }
+   },
+   "variables":{
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]",
+      "AzureOffice365ConnectionName":"[concat('office365', parameters('PlaybookName'))]"
+   },
+   "resources": [
+               {
+           "type": "Microsoft.Web/connections",
+           "apiVersion": "2016-06-01",
+           "name": "[variables('AzureSentinelConnectionName')]",
+           "location": "[resourceGroup().location]",
+           "properties": {
+               "displayName": "[variables('AzureSentinelConnectionName')]",
+               "customParameterValues": {
+               },
+               "api": {
+                   "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+               }
+           }
+       },
+        {
+           "type": "Microsoft.Web/connections",
+           "apiVersion": "2016-06-01",
+           "name": "[variables('AzureOffice365ConnectionName')]",
+           "location": "[resourceGroup().location]",
+           "properties": {
+               "displayName": "[variables('AzureOffice365ConnectionName')]",
+               "customParameterValues": {},
+               "api": {
+                   "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                   }
+           }
+       },
+       {
+           "type": "Microsoft.Logic/workflows",
+           "apiVersion": "2017-07-01",
+           "name": "[parameters('PlaybookName')]",
+           "location": "[resourceGroup().location]",
+           "dependsOn": [
+               "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+               "[resourceId('Microsoft.Web/connections', variables('AzureOffice365ConnectionName'))]"
+           ],
+           "properties": {
+                "state": "Enabled",
+            "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Condition": {
+                "actions": {
+                    "Compose_-_Owner_email_address": {
+                        "inputs": "@first(body('Run_query_and_list_results')?['value'])?['mail']",
+                        "runAfter": {},
+                        "type": "Compose"
+                    },
+                    "Send_an_email_(V2)": {
+                        "inputs": {
+                            "body": {
+                                "Body": "<p>@{triggerBody()?['object']?['properties']?['title']} was detcted on IP address @{body('Parse_JSON')?['SourceDeviceAddress']}<br>\n<br>\n@{triggerBody()?['object']?['properties']?['description']}<br>\nView full incident in Azure Sentinel: @{triggerBody()?['object']?['properties']?['incidentUrl']}</p>",
+                                "Subject": "@{triggerBody()?['object']?['properties']?['title']} detected",
+                                "To": "@{outputs('Compose_-_Owner_email_address')}"
+                            },
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['office365']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "path": "/v2/Mail"
+                        },
+                        "runAfter": {
+                            "Compose_-_Owner_email_address": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection"
+                    }
+                },
+                "expression": {
+                    "and": [
+                        {
+                            "greater": [
+                                "@length(body('Run_query_and_list_results')?['value'])",
+                                0
+                            ]
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Run_query_and_list_results": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "If"
+            },
+            "Initialize_variable": {
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "WatchlistName",
+                            "type": "string",
+                            "value": "MailsBySensor"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            },
+            "Parse_JSON": {
+                "inputs": {
+                    "content": "@first(triggerBody()?['object']?['properties']?['Alerts'])?['properties']?['additionalData']",
+                    "schema": {
+                        "properties": {
+                            "Category": {
+                                "type": "string"
+                            },
+                            "CompromisedEntityId": {
+                                "type": "string"
+                            },
+                            "DestinationDevice": {
+                                "type": "string"
+                            },
+                            "DestinationDeviceAddress": {
+                                "type": "string"
+                            },
+                            "DeviceId": {
+                                "type": "string"
+                            },
+                            "ProcessedBySentinel": {
+                                "type": "string"
+                            },
+                            "Protocol": {
+                                "type": "string"
+                            },
+                            "SensorId": {
+                                "type": "string"
+                            },
+                            "SourceDeviceAddress": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "runAfter": {
+                    "Initialize_variable": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson"
+            },
+            "Run_query_and_list_results": {
+                "inputs": {
+                    "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| where Sensor == \"@{body('Parse_JSON')?['SensorId']}\"",
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/queryData",
+                    "queries": {
+                        "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                        "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                        "resourcetype": "Log Analytics Workspace",
+                        "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                        "timerange": "Last 12 hours"
+                    }
+                },
+                "runAfter": {
+                    "Parse_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+            }
+        },
+        "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                "inputs": {
+                    "body": {
+                        "callback_url": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                        }
+                    },
+                    "path": "/incident-creation"
+                },
+                "type": "ApiConnectionWebhook"
+            }
+        }
+    },
+    "parameters": {
+            "$connections":{
+               "value":{
+                  "azuresentinel":{
+                     "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                     "connectionName":"[variables('AzureSentinelConnectionName')]",
+                     "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                  },
+                  "office365":{
+                     "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureOffice365ConnectionName'))]",
+                     "connectionName":"[variables('AzureOffice365ConnectionName')]",
+                     "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                  }
+               }
+            }
+    }
+        
+      }
+       }
+       ]
+}

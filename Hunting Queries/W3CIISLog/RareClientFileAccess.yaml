@@ -1,7 +1,9 @@
 id: a787a819-40df-4c9f-a5ae-850d5a2a0cf6
 name: URI requests from single client
 description: |
-  'This will look for connections to files on the server that are requested by only a single client. This analytic will be effective where an actor is utilising relatively static operational IP addresses. The threshold can be modified. The larger the execution window for this query the more reliable the results returned.'
+  'This will look for connections to files on the server that are requested by only a single client. 
+  This analytic will be effective where an actor is utilising relatively static operational IP addresses. The threshold can be modified. 
+  The larger the execution window for this query the more reliable the results returned.'
 severity: Low
 requiredDataConnectors:
   - connectorId: AzureMonitor(IIS)
@@ -13,19 +15,19 @@ relevantTechniques:
   - T1190
 query: |
 
-  let timeRange = 7d;
+
   let clientThreshold = 1;
   let scriptExtensions = dynamic([".php", ".aspx", ".asp", ".cfml"]);
   let data = W3CIISLog
   | where csUriStem has_any(scriptExtensions)
   //Exclude local addresses, needs editing to match your network configuration
   | where cIP !startswith "10." and cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127." and cIP !startswith "172."
-  | summarize makelist(cIP), count(TimeGenerated) by csUriStem, sSiteName, csUserAgent;
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), makelist(cIP), count(TimeGenerated) by csUriStem, sSiteName, csUserAgent;
   data
   | mvexpand list_cIP
-  | distinct tostring(list_cIP), csUriStem, sSiteName, csUserAgent
-  | summarize dcount(list_cIP), makelist(list_cIP), makelist(sSiteName) by csUriStem, csUserAgent
+  | distinct StartTime, EndTime, tostring(list_cIP), csUriStem, sSiteName, csUserAgent
+  | summarize StartTime = min(StartTime), EndTime = max(StartTime), dcount(list_cIP), makelist(list_cIP), makelist(sSiteName) by csUriStem, csUserAgent
   | where dcount_list_cIP == clientThreshold 
   //Selects user agent strings that are probably browsers, comment out to see all
   | where csUserAgent startswith "Mozilla"
-
+  | extend timestamp = StartTime

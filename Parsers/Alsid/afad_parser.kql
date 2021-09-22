@@ -1,19 +1,20 @@
 // Title:           Alsid for Active Directory Data Parser
 // Author:          Alsid
-// Version:         1.0
-// Last Updated:    12/03/2020
+// Version:         1.1
+// Last Updated:    03/23/2021
+// Comment:         Add the Codename table mapping for IOAs
 //
 // DESCRIPTION:
 // This parser takes raw Alsid for AD logs from the relevant connector's data stream and parses the data into a normalized schema
 //
 // USAGE:
-// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window.
 // 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
 //    In order for the Alsid for AD logs to work with pre-built queries and workbooks the Function Alias must be set to - afad_parser
 // 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
 //
 //
-// REFERENCE: 
+// REFERENCE:
 // Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
 //
 //
@@ -61,7 +62,24 @@ let CodenameTable=datatable(Codename: string, Explanation: string) [
 "C-SENSITIVE-CERTIFICATES-ON-USER", "Ensure SDProp consistency",
 "C-SLEEPING-ACCOUNTS", "Sleeping accounts",
 "C-USER-PASSWORD", "User account using old password",
-"C-USERS-REVER-PWDS", "Reversible passwords"
+"C-USERS-REVER-PWDS", "Reversible passwords",
+// IOAs
+"DCSync","The DCSync command in Mimikatz allows an attacker to pretend to be a domain controller and retrieve password hashes and encryption keys from other domain controllers, without executing any code on the target.",
+"I-DCSync","The DCSync command in Mimikatz allows an attacker to pretend to be a domain controller and retrieve password hashes and encryption keys from other domain controllers, without executing any code on the target.",
+"Golden Ticket","A Golden Ticket attack is a type of attack in which an adversary gains control over an Active Directory Key Distribution Service Account (KRBTGT), and uses that account to create valid Kerberos Ticket Granting Tickets (TGTs).",
+"I-GoldenTicket","A Golden Ticket attack is a type of attack in which an adversary gains control over an Active Directory Key Distribution Service Account (KRBTGT), and uses that account to create valid Kerberos Ticket Granting Tickets (TGTs).",
+"Password Guessing","A brute force password guessing attack consists of an attacker submitting many passwords or passphrases with the hope of eventually guessing correctly. The attacker systematically checks all possible passwords and passphrases until the correct one is found.",
+"I-Bruteforce","A brute force password guessing attack consists of an attacker submitting many passwords or passphrases with the hope of eventually guessing correctly. The attacker systematically checks all possible passwords and passphrases until the correct one is found.",
+"Password Spraying","Password spraying is an attack that attempts to access a large number of accounts (usernames) with a few commonly used passwords - also known as the \"low-and-slow\" method.",
+"I-PasswordSpraying","Password spraying is an attack that attempts to access a large number of accounts (usernames) with a few commonly used passwords - also known as the \"low-and-slow\" method.",
+"DCShadow","DCShadow is another late-stage kill chain attack that allows an attacker with privileged credentials to register a rogue domain controller in order to push changes to a domain via domain replication.",
+"I-DCShadow","DCShadow is another late-stage kill chain attack that allows an attacker with privileged credentials to register a rogue domain controller in order to push changes to a domain via domain replication.",
+"OS Credential Dumping: LSASS Memory","After a user logs on, attackers may attempt to access credential material stored in the process memory of the Local Security Authority Subsystem Service (LSASS).",
+"I-ProcessInjectionLsass","After a user logs on, attackers may attempt to access credential material stored in the process memory of the Local Security Authority Subsystem Service (LSASS).",
+"Suspicious process","Attackers can use well-known tools to exploit a vulnerability.",
+"I-ProcessExec","Attackers can use well-known tools to exploit a vulnerability.",
+"Suspicious service","Before or after an exploit, malicious tools might require to create a service to gain privileges or to be executed in another context.",
+"I-ServiceInstall","Before or after an exploit, malicious tools might require to create a service to gain privileges or to be executed in another context."
 ];
 let Common = AlsidForADLog_CL
 | parse RawData with
@@ -83,14 +101,24 @@ let Deviances = Common
                      ProfileID:string "\" \""
                      ReasonCodename:string "\" \""
                      EventID:string "\""
-                     Attributes:string "\r\n";
+                     Attributes:string;
 let Changes = Common
 | where MessageType == 1
 | parse kind=regex DistinctPart with "\""
                      ADObject:string "\" \""
                      EventID:string "\" \""
                      EventType:string "\" "
-                     Attributes:string "\r?\n";
-union Changes, Deviances
+                     Attributes:string;
+let Attacks = Common
+| where MessageType == 2
+| parse DistinctPart with "\""
+                     Codename:string "\" \""
+                     Severity:string "\" \""
+                     SourceHostname:string "\" \""
+                     SourceIP:string "\" \""
+                     DestinationHostname:string "\" \""
+                     DestinationIP:string "\" \""
+                     Attributes:string;
+union Changes, Deviances, Attacks
 | project-away DistinctPart, Product, _ResourceId, _SubscriptionId
 | lookup kind=leftouter CodenameTable on Codename;

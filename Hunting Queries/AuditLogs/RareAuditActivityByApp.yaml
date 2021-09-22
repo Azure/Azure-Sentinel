@@ -1,7 +1,7 @@
 id: 5c799718-b361-4a91-9cb2-0c291e602707
 name: Rare Audit activity initiated by App
 description: |
-  'Compares the current day to the last 14 days of audits to identify new audit activities by 
+  'Compares the current day to the last 14 days of audits to identify new audit activities by
   OperationName, InitiatedByApp, UserPrincipalName, PropertyName, newValue
   This can be useful when attempting to track down malicious activity related to additions of new users,
   additions to groups, removal from groups by Azure Apps and automated approvals.'
@@ -16,12 +16,13 @@ relevantTechniques:
   - T1136
 query: |
 
-  let current = 1d;
-  let auditLookback = 14d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
   let propertyIgnoreList = dynamic(["TargetId.UserType", "StsRefreshTokensValidFrom", "LastDirSyncTime", "DeviceOSVersion", "CloudDeviceOSVersion", "DeviceObjectVersion"]);
   let appIgnoreList = dynamic(["Microsoft Azure AD Group-Based Licensing"]);
-  let AuditTrail = AuditLogs 
-  | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
+  let AuditTrail = AuditLogs
+  | where TimeGenerated between(auditLookback..starttime)
   | where isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).displayName))
   | extend InitiatedByApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
   | extend ModProps = TargetResources.[0].modifiedProperties
@@ -35,7 +36,7 @@ query: |
   | where InitiatedByApp !in~ (appIgnoreList) and OperationName !~ "Change user license"
   | summarize by OperationName, InitiatedByApp, TargetUserPrincipalName, InitiatedByIpAddress, TargetResourceName, PropertyName;
   let AccountMods = AuditLogs
-  | where TimeGenerated >= ago(current)
+  | where TimeGenerated >= starttime
   | where isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).displayName))
   | extend InitiatedByApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
   | extend ModProps = TargetResources.[0].modifiedProperties
@@ -47,12 +48,22 @@ query: |
   | extend PropertyName = tostring(ModProps.displayName), newValue = tostring(parse_json(tostring(ModProps.newValue))[0])
   | where PropertyName !in~ (propertyIgnoreList) and (PropertyName !~ "Action Client Name" and newValue !~ "DirectorySync") and (PropertyName !~ "Included Updated Properties" and newValue !~ "LastDirSyncTime")
   | where InitiatedByApp !in~ (appIgnoreList) and OperationName !~ "Change user license"
-  | extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId) 
+  | extend ModifiedProps = pack("PropertyName",PropertyName,"newValue",newValue, "Id", Id, "CorrelationId", CorrelationId)
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Activity = make_bag(ModifiedProps) by Type, InitiatedByApp, TargetUserPrincipalName, InitiatedByIpAddress, TargetResourceName, Category, OperationName, PropertyName;
   let RareAudits = AccountMods | join kind= leftanti (
-     AuditTrail 
+     AuditTrail
   ) on OperationName, InitiatedByApp, InitiatedByIpAddress, TargetUserPrincipalName;//, PropertyName; //uncomment if you want to see Rare Property changes.
   RareAudits
   | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), make_set(Activity), make_set(PropertyName) by InitiatedByApp, OperationName, TargetUserPrincipalName, InitiatedByIpAddress, TargetResourceName
   | order by TargetUserPrincipalName asc, StartTime asc
   | extend timestamp = StartTime, AccountCustomEntity = TargetUserPrincipalName, HostCustomEntity = iff(set_PropertyName has_any ('DeviceOSType', 'CloudDeviceOSType'), TargetResourceName, ''), IPCustomEntity = InitiatedByIpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

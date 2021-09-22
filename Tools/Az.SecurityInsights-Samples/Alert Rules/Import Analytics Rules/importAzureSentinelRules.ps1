@@ -84,19 +84,22 @@ if ($scheduledRulesExist -eq $true) {
     foreach ($newScheduledRule in $newScheduledRules) {
  
         $NewRuleObject = @{
-            DisplayName         = $newScheduledRule.DisplayName
-            Query               = $newScheduledRule.Query
-            QueryPeriod         = $newScheduledRule.QueryPeriod.Ticks
-            QueryFrequency      = $newScheduledRule.QueryFrequency.Ticks
-            TriggerThreshold    = $newScheduledRule.TriggerThreshold
-            Severity            = $newScheduledRule.Severity
+            DisplayName = $newScheduledRule.DisplayName
+            Query = $newScheduledRule.Query
+            QueryPeriod = $newScheduledRule.QueryPeriod.Ticks
+            QueryFrequency = $newScheduledRule.QueryFrequency.Ticks
+            TriggerThreshold = $newScheduledRule.TriggerThreshold
+            Severity = $newScheduledRule.Severity
             SuppressionDuration = $newScheduledRule.SuppressionDuration.Ticks
-            SuppressionEnabled  = $newScheduledRule.SuppressionEnabled
-            TriggerOperator     = $newScheduledRule.TriggerOperator
-            Scheduled           = $true
-            Enabled             = $true
+            SuppressionEnabled = $newScheduledRule.SuppressionEnabled
+            TriggerOperator = $newScheduledRule.TriggerOperator
+            Scheduled = $true
+            Enabled = $newScheduledRule.Enabled
         }
-        if ($Description) { $NewRuleObject.Description = $Description } #only add Description to the object if it contains a value
+    
+        if ($newScheduledRule.Description -ne "") {
+            $NewRuleObject += @{Description = $newScheduledRule.Description}
+        }
 
         #creating an array to store Tactics
         [System.Collections.Generic.List[System.String]]$TacticObject = @()

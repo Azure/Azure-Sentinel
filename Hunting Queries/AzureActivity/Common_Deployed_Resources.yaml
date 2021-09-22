@@ -3,7 +3,8 @@ name: Common deployed resources
 description: |
   'This query looks for common deployed resources (resource name and resource groups) and can be used
   in combination with other signals that show suspicious deployment to evaluate if the resource is one
-  that is commonly being deployed/created or unique.' 
+  that is commonly being deployed/created or unique.
+  To understand the basket() function better see - https://docs.microsoft.com/azure/data-explorer/kusto/query/basketplugin' 
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
@@ -14,10 +15,14 @@ relevantTechniques:
   - T1496
 query: |
 
-  let timeframe = 7d;
   AzureActivity
-  | where TimeGenerated >= ago(timeframe)
-  | where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment" 
-  | where ActivityStatus == "Succeeded" 
-  | project Resource, ResourceGroup 
+  | where OperationNameValue has_any (@"deployments/write", @"virtualMachines/write")  
+  | where ActivityStatusValue == "Succeeded"
+  | summarize by bin(TimeGenerated,1h), Resource, ResourceGroup, OperationNameValue, Caller
   | evaluate basket()
+  | where isnotempty(Caller) and isnotempty(Resource) and isnotempty(TimeGenerated)
+  | order by Percent desc, TimeGenerated desc
+  | extend timestamp = TimeGenerated
+  // remove comments below on filters if the goal is to see more common or more rare Resource, Resource Group and Caller combinations
+  //| where Percent <= 40 // <-- more rare
+  //| where Percent >= 60 // <-- more common
