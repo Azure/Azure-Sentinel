@@ -41,7 +41,7 @@ The Azure Function will write data to the Log Analytics Workspace that your Azur
 The name you want to use for your resolved domains.  The default is ResolvedDomains.  Note:  Log Analytics will automatically append "\_CL" to the end of whatever string you enter here.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FFlyingBlueMonkey%2FRDAPQuery%2Fmaster%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FTools%2FRDAP%2FRDAPQuery%2Fazuredeploy.json)
 
 ### Post Template Configuration
 After deploying the ARM Template, you should go in to your Azure Sentinel instance and create the GetDomainsForRDAP function.  An example is included in this repo, but you can use any function you want so long as it returns a field named "Domain" that has the domain you are looking up information for.  
