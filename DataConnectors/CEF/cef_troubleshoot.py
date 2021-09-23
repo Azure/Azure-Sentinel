@@ -13,7 +13,7 @@
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
 #       SUSE Linux Enterprise Server 12, 15
 #   32-bit
 #       CentOS 7 and 8
@@ -30,7 +30,6 @@ import sys
 import select
 import subprocess
 import time
-import re
 
 daemon_port = "514"
 agent_port = "25226"
@@ -705,45 +704,6 @@ def print_full_disk_warning():
     else:
         print_warning("No daemon was found on the machine")
 
-def OMI_vulnerability_patch_validation():
-    VERSION_MAJOR = 1
-    VERSION_MINOR = 13
-    VERSION_PATCH = 40
-    print("Validating that the OMI vulnerability patched is installed.")
-    OMI_version = subprocess.Popen(["dpkg", "-l"], stdout=subprocess.PIPE)
-    grep = subprocess.Popen(["grep", "omsagent"], stdin=OMI_version.stdout, stdout=subprocess.PIPE)
-
-    o, e = grep.communicate()
-    if e is not None:
-        print_error("Error: Could not validate omsagent version.")
-        return False
-    else:
-        content = o.decode(encoding='UTF-8')
-        tokens = content.split("omsagent ")[1].split(" ")
-        versionTokens = None
-        for token in tokens:
-                pattern = re.compile("^\d+.\d+.\d+.\d+")
-                isPatternMatch = pattern.match(token)
-                # if pattern match
-                if (not isPatternMatch is None):
-                    versionTokens = token.split(".")
-        # If no version match
-        if (versionTokens is None):
-            print_error("Error: Could not validate omsagent version.")
-            return False
-        installed_version_major = int(versionTokens[0])
-        installed_version_minor = int(versionTokens[1])
-        installed_version_patch = int(versionTokens[2])
-       
-        if (installed_version_major > VERSION_MAJOR or 
-            (installed_version_major == VERSION_MAJOR and installed_version_minor > VERSION_MINOR) or
-            (installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
-            print_ok("OMI vulnerability is closed, patched is installed.")
-            return True
-        else:
-            print_error("OMI vulnerability is open, please re-install the agent.")
-            return False
-
 
 def main():
     print_notice("Note this script should be run in elevated privileges")
@@ -776,7 +736,6 @@ def main():
         print_error("Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
     check_portal_auto_sync()
     print_full_disk_warning()
-    OMI_vulnerability_patch_validation()
     print_ok("Completed troubleshooting.")
     print(
         "Please check Log Analytics to see if your logs are arriving. All events streamed from these appliances appear in raw form in Log Analytics under CommonSecurityLog type")
