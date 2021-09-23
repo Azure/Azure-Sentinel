@@ -87,9 +87,12 @@
             "type": 2,
             "isRequired": true,
             "multiSelect": true,
-            "quote": "'",
+            "quote": "",
             "delimiter": ",",
             "query": "PurviewDataSensitivityLogs\r\n| distinct SourceType ",
+            "value": [
+              "value::all"
+            ],
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
@@ -101,10 +104,7 @@
             },
             "defaultValue": "value::all",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces",
-            "value": [
-              "AzureBlob"
-            ]
+            "resourceType": "microsoft.operationalinsights/workspaces"
           }
         ],
         "style": "pills",
@@ -116,8 +116,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## Azure Purview",
-        "style": "upsell"
+        "json": "## Azure Purview"
       },
       "name": "text - 16"
     },
@@ -178,7 +177,7 @@
         "size": 0,
         "title": "Number of Sources by Region",
         "timeContext": {
-          "durationMs": 2592000000
+          "durationMs": 0
         },
         "timeContextFromParameter": "Time",
         "queryType": 0,
@@ -211,11 +210,11 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let allAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where \"{DataSource:label}\" == \"All\" or SourceType in~ (split(\"{DataSource:label}\", \", \"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| distinct AssetPath, SourcePath, SourceType\r\n| summarize AssetCount = count() by SourceType;\r\n\r\nlet classifiedAssets =  PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where \"{DataSource:label}\" == \"All\" or SourceType in~ (split(\"{DataSource:label}\", \", \"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| mv-expand Classification\r\n| where Classification != \"\"\r\n| distinct AssetPath, SourcePath, SourceType\r\n| summarize AssetClassifiedCount = count() by SourceType;\r\n\r\nlet ClassifiedAssetsByResourceType = allAssets\r\n| join kind= leftouter classifiedAssets on SourceType\r\n| extend ClassifiedPercentage = strcat(round((100.0 * AssetClassifiedCount / AssetCount),2), \"%\")\r\n| extend AssetCount = strcat(AssetCount, \" assets found in total\")\r\n| project SourceType, AssetCount, AssetClassifiedCount, ClassifiedPercentage;\r\n\r\nClassifiedAssetsByResourceType",
+        "query": "let allAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where SourceType in~ (split(\"{DataSource}\", \",\"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| distinct AssetPath, SourcePath, SourceType\r\n| summarize AssetCount = count() by SourceType;\r\n\r\nlet classifiedAssets =  PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where SourceType in~ (split(\"{DataSource}\", \",\"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| mv-expand Classification\r\n| where Classification != \"\"\r\n| distinct AssetPath, SourcePath, SourceType\r\n| summarize AssetClassifiedCount = count() by SourceType;\r\n\r\nlet ClassifiedAssetsByResourceType = allAssets\r\n| join kind= leftouter classifiedAssets on SourceType\r\n| extend ClassifiedPercentage = strcat(round((100.0 * AssetClassifiedCount / AssetCount),2), \"%\")\r\n| extend AssetCount = strcat(AssetCount, \" assets found in total\")\r\n| project SourceType, AssetCount, AssetClassifiedCount, ClassifiedPercentage;\r\n\r\nClassifiedAssetsByResourceType",
         "size": 0,
         "title": "Number of Classified Assets Found Based on Resource Type",
         "timeContext": {
-          "durationMs": 2592000000
+          "durationMs": 0
         },
         "timeContextFromParameter": "Time",
         "queryType": 0,
@@ -241,13 +240,27 @@
                 "style": "decimal",
                 "maximumFractionDigits": 2,
                 "maximumSignificantDigits": 3
-              }
+              },
+              "emptyValCustomText": "0"
             }
           },
           "secondaryContent": {
             "columnMatch": "AssetCount"
           },
           "showBorder": true
+        },
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "sizeSettings": "AssetClassifiedCount",
+          "sizeAggregation": "Sum",
+          "legendMetric": "AssetClassifiedCount",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "type": "heatmap",
+            "colorAggregation": "Sum",
+            "nodeColorField": "AssetClassifiedCount",
+            "heatmapPalette": "greenRed"
+          }
         }
       },
       "conditionalVisibility": {
@@ -261,7 +274,7 @@
     {
       "type": 1,
       "content": {
-        "json": "To use the Asset Drilldown view, select a data source in the table below to get a list all assets scanned by Purview in that data source.",
+        "json": "To use the Asset Drilldown view, select the row of the data source in the Sources table below to get a list of all assets scanned by Purview in that data source. To view the data source within the Azure portal, click on the data source hyperlink in the Sources table. Within the Assets Drilldown, click on the Asset Path hyperlink to view the Details pane.",
         "style": "warning"
       },
       "conditionalVisibility": {
@@ -275,7 +288,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let allAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where \"{DataSource:label}\" == \"All\" or SourceType in~ (split(\"{DataSource:label}\", \", \"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| distinct AssetPath, SourcePath\r\n| summarize AssetCount = count() by DataSource = SourcePath;\r\n\r\nlet classifiedAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where \"{DataSource:label}\" == \"All\" or SourceType in~ (split(\"{DataSource:label}\", \", \"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| mv-expand Classification\r\n| where Classification != \"\"\r\n| distinct AssetPath, SourcePath, SourceType\r\n| summarize AssetClassifiedCount = count()  by DataSource = SourcePath;\r\n\r\nlet AssetsDrilldown = allAssets\r\n| join kind= leftouter classifiedAssets on DataSource\r\n| extend ClassifiedPercentage = round((100.0 * AssetClassifiedCount / AssetCount),1)\r\n| project DataSource, AssetCount, AssetClassifiedCount, ClassifiedPercentage;\r\n\r\nAssetsDrilldown\r\n\r\n\r\n\r\n",
+        "query": "let allAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where SourceType in~ (split(\"{DataSource}\", \",\"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| distinct AssetPath, SourcePath\r\n| summarize AssetCount = count() by DataSource = SourcePath;\r\n\r\nlet classifiedAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where SourceType in~ (split(\"{DataSource}\", \",\"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| mv-expand Classification\r\n| where Classification != \"\"\r\n| distinct AssetPath, SourcePath, SourceType\r\n| summarize AssetClassifiedCount = count()  by DataSource = SourcePath;\r\n\r\nlet AssetsDrilldown = allAssets\r\n| join kind= leftouter classifiedAssets on DataSource\r\n| extend ClassifiedPercentage = round((100.0 * AssetClassifiedCount / AssetCount),1)\r\n| project DataSource, AssetCount, AssetClassifiedCount, ClassifiedPercentage;\r\n\r\nAssetsDrilldown\r\n\r\n\r\n\r\n",
         "size": 0,
         "showAnalytics": true,
         "title": "Sources",
@@ -364,7 +377,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "\r\nlet classifiedAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where \"{DataSource:label}\" == \"All\" or SourceType in~ (split(\"{DataSource:label}\", \", \"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| where (split(\"{UserSelectedDataSource:value}\", \", \")) contains SourcePath\r\n| summarize arg_max(TimeGenerated, PurviewTenantId, PurviewSubscriptionId, PurviewAccountName, PurviewRegion, SourceName, SourceType, SourcePath, SourceSubscriptionId, SourceRegion, SourceCollectionName, SourceOwner, AssetName, AssetPath, AssetType, AssetCreationTime, AssetModifiedTime, AssetOwner, AssetLastScanTime, FileExtension, FileSize, ActivityType, ActivityTrigger, Classification, ClassificationCount, UserId, SensitivityLabelGuid, SensitivityLabelName) by AssetPath \r\n| project TimeGenerated, PurviewTenantId, PurviewSubscriptionId, PurviewAccountName, PurviewRegion, SourceName, SourceType, SourcePath, SourceSubscriptionId, SourceRegion, SourceCollectionName, SourceOwner, AssetName, AssetPath, AssetType, AssetCreationTime, AssetModifiedTime, AssetOwner, AssetLastScanTime, FileExtension, FileSize, ActivityType, ActivityTrigger, Classification, ClassificationCount, SensitivityLabelGuid,  SensitivityLabelName, UserId;\r\n\r\nlet labeledAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Labeling\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where \"{DataSource:label}\" == \"All\" or SourceType in~ (split(\"{DataSource:label}\", \", \"))\r\n| where SensitivityLabelName != int(null)\r\n| extend SensitivityLabel = iif(isempty(SensitivityLabelName), \"No Label\", SensitivityLabelName)\r\n| summarize arg_max(SensitivityLabel, SourceType) by AssetPath\r\n| project AssetPath, SensitivityLabel;\r\n\r\nlet table = classifiedAssets\r\n| join kind= leftouter labeledAssets on AssetPath\r\n| project TimeGenerated, PurviewTenantId, PurviewSubscriptionId, PurviewAccountName, PurviewRegion, SourceName, SourceType, SourcePath, SourceSubscriptionId, SourceRegion, SourceCollectionName, SourceOwner, AssetName, AssetPath, AssetType, AssetCreationTime, AssetModifiedTime, AssetOwner, AssetLastScanTime, FileExtension, FileSize, ActivityType, ActivityTrigger, Classification, ClassificationCount, SensitivityLabelGuid, SensitivityLabel, UserId\r\n| sort by ClassificationCount;\r\n\r\ntable\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+        "query": "\r\nlet classifiedAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Classification\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where SourceType in~ (split(\"{DataSource}\", \",\"))\r\n| extend CollectionName = iff(SourceCollectionName == \"\",\"No Collection\",SourceCollectionName)\r\n| where \"{Collection:label}\" == \"All\" or CollectionName in~ (split(\"{Collection:label}\", \", \"))\r\n| where (split(\"{UserSelectedDataSource:value}\", \", \")) contains SourcePath\r\n| summarize arg_max(TimeGenerated, PurviewTenantId, PurviewSubscriptionId, PurviewAccountName, PurviewRegion, SourceName, SourceType, SourcePath, SourceSubscriptionId, SourceRegion, SourceCollectionName, SourceOwner, AssetName, AssetPath, AssetType, AssetCreationTime, AssetModifiedTime, AssetOwner, AssetLastScanTime, FileExtension, FileSize, ActivityType, ClassificationActivityTrigger = ActivityTrigger, Classification, ClassificationCount, UserId, SensitivityLabelGuid, SensitivityLabelName) by AssetPath \r\n| project TimeGenerated, PurviewTenantId, PurviewSubscriptionId, PurviewAccountName, PurviewRegion, SourceName, SourceType, SourcePath, SourceSubscriptionId, SourceRegion, SourceCollectionName, SourceOwner, AssetName, AssetPath, AssetType, AssetCreationTime, AssetModifiedTime, AssetOwner, AssetLastScanTime, FileExtension, FileSize, ActivityType, ClassificationActivityTrigger, Classification, ClassificationCount, SensitivityLabelGuid,  SensitivityLabelName, UserId;\r\n\r\nlet labeledAssets = PurviewDataSensitivityLogs\r\n| where ActivityType == \"Labeling\" \r\n| where \"{PurviewAccount:label}\" == \"All\" or PurviewAccountName in~ (split(\"{PurviewAccount:label}\", \", \"))\r\n| where SourceType in~ (split(\"{DataSource}\", \",\"))\r\n| where SensitivityLabelName != int(null)\r\n| extend SensitivityLabel = iif(isempty(SensitivityLabelName), \"No Label\", SensitivityLabelName)\r\n| summarize arg_max(SensitivityLabel, SourceType, ActivityTrigger) by AssetPath\r\n| project AssetPath, SensitivityLabel, SensitivityLabelActivityTrigger = ActivityTrigger;\r\n\r\nlet table = classifiedAssets\r\n| join kind= leftouter labeledAssets on AssetPath\r\n| project TimeGenerated, PurviewTenantId, PurviewSubscriptionId, PurviewAccountName, PurviewRegion, SourceName, SourceType, SourcePath, SourceSubscriptionId, SourceRegion, SourceCollectionName, SourceOwner, AssetName, AssetPath, AssetType, AssetCreationTime, AssetModifiedTime, AssetOwner, AssetLastScanTime, FileExtension, FileSize, ActivityType, ClassificationActivityTrigger, SensitivityLabelActivityTrigger, Classification, ClassificationCount, SensitivityLabelGuid, SensitivityLabel, UserId\r\n| sort by ClassificationCount;\r\n\r\ntable\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
         "size": 0,
         "showAnalytics": true,
         "title": "Assets Drilldown",
@@ -469,11 +482,11 @@
               "formatter": 5
             },
             {
-              "columnMatch": "ActivityType",
+              "columnMatch": "ClassificationActivityTrigger",
               "formatter": 5
             },
             {
-              "columnMatch": "ActivityTrigger",
+              "columnMatch": "SensitivityLabelActivityTrigger",
               "formatter": 5
             },
             {
@@ -493,6 +506,10 @@
             },
             {
               "columnMatch": "UserId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "ActivityTrigger",
               "formatter": 5
             },
             {
@@ -562,9 +579,6 @@
             },
             {
               "columnId": "ActivityType"
-            },
-            {
-              "columnId": "ActivityTrigger"
             },
             {
               "columnId": "Classification"
@@ -759,7 +773,7 @@
     {
       "type": 1,
       "content": {
-        "json": "To use the Classifications Drilldown view, select a Classification in the table below to get a list all assets scanned by Purview with that classification.",
+        "json": "To use the Classifications Drilldown view, select a Classification in the Classifications table below to get a list all assets scanned by Purview with that classification. Within the Classifications Drilldown, click on the Asset Path hyperlink to view the Details pane.",
         "style": "warning"
       },
       "conditionalVisibility": {
@@ -778,7 +792,7 @@
         "showAnalytics": true,
         "title": "Classifications",
         "timeContext": {
-          "durationMs": 2592000000
+          "durationMs": 0
         },
         "timeContextFromParameter": "Time",
         "showRefreshButton": true,
@@ -883,7 +897,7 @@
         "showAnalytics": true,
         "title": "Classifications Drilldown- Asset Level",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 2592000000
         },
         "timeContextFromParameter": "Time",
         "showRefreshButton": true,
@@ -1193,7 +1207,7 @@
     {
       "type": 1,
       "content": {
-        "json": "To use the Sensitivity Labels Drilldown view, select a Sensitivity Label in the table below to get a list all assets scanned by Purview with that label.",
+        "json": "To use the Sensitivity Labels Drilldown view, select a Sensitivity Label in the table below to get a list all assets scanned by Purview with that label. Within the Asset Level Drilldown, click on the Asset Path hyperlink to view the Details pane.",
         "style": "warning"
       },
       "conditionalVisibility": {
@@ -1306,7 +1320,7 @@
         "showAnalytics": true,
         "title": "Sensitivity Labels Drilldown- Asset Level",
         "timeContext": {
-          "durationMs": 0
+          "durationMs": 2592000000
         },
         "timeContextFromParameter": "Time",
         "showRefreshButton": true,
