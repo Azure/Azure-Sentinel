@@ -27,20 +27,28 @@ tags:
 query: |
   let scx_execve=(){
   Syslog
-    | parse SyslogMessage with "type=" EventType " audit(" * "): " EventData
-    | where EventType =~ "AUOMS_EXECVE" and EventData has '/var/opt/microsoft/scx/tmp'
-    | project TimeGenerated, EventType, Computer, EventData
-    | parse EventData with * "syscall=" syscall " syscall_r=" * " success=" success " exit=" exit " a0" * " ppid=" ppid " pid=" pid " audit_user=" audit_user " auid=" auid " user=" user " uid=" uid " group=" group " gid=" gid "effective_user=" effective_user " euid=" euid " set_user=" set_user " suid=" suid " filesystem_user=" filesystem_user " fsuid=" fsuid " effective_group=" effective_group " egid=" egid " set_group=" set_group " sgid=" sgid " filesystem_group=" filesystem_group " fsgid=" fsgid " tty=" tty " ses=" ses " comm=\"" comm "\" exe=\"" exe "\"" * "cwd=\"" cwd "\"" * "name=\"" name "\"" * "cmdline=" cmdline " redactors=" *
+  | parse SyslogMessage with "type=" EventType " audit(" * "): " EventData
+  | where EventType =~ "AUOMS_EXECVE" and EventData has '/var/opt/microsoft/scx/tmp'
+  | project TimeGenerated, EventType, Computer, EventData
+  | extend EventData = trim_end('containerid=',EventData)
+  | parse kind=regex EventData with * "success=" success " exit=" * "ppid=" ppid "pid=" pid
+  "audit_user=" * "user=" user " uid=" uid " group=" * "comm=\"" comm "\" exe=\"" exe "\" subj=" *
+  "cwd=\"" cwd "\" name=\"" name "\" (inode|nametype)=" * "(proctitle|cmdline)=" cmdline
+    | extend cmdline = trim_end('redactors=.*',cmdline)
     | where uid == '0'
     | where cwd == '/var/opt/microsoft/scx/tmp'
     | where success == 'yes'
   };
   scx_execve
-    | where comm == 'sh' // ExecuteScript cmdline would trigger on /bin/sh /etc/opt/microsoft/scx/conf/tmpdir/scx_
-    | join kind=leftouter ( scx_execve ) on $left.Computer == $right.Computer, $left.pid == $right.ppid
-  | project-rename parentEventData=EventData,parentppid=ppid,parentpid=pid,parentcomm=comm,parentexe=exe,parentname=name,parentcmdline=cmdline,childEventData=EventData1,childppid=ppid1,childpid=pid1,childcomm=comm1,childexe=exe1,childname=name1,childcmdline=cmdline1
-  | project TimeGenerated, Computer, user, parentEventData,parentppid,parentpid,parentcomm,parentexe,parentname,parentcmdline,childEventData,childppid,childpid,childcomm,childexe,childname,childcmdline
-  | extend Timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = user, ExecuteType = iff(parentcmdline contains '/etc/opt/microsoft/scx/conf/tmpdir/scx', "ExecuteScript", "ExecuteShellCommand")
+  | where comm == 'sh' // ExecuteScript cmdline would trigger on /bin/sh /etc/opt/microsoft/scx/conf/tmpdir/scx_
+  | join kind=leftouter ( scx_execve ) on $left.Computer == $right.Computer, $left.pid == $right.ppid
+  | project-rename parentEventData=EventData,parentppid=ppid,parentpid=pid,parentcomm=comm,parentexe=exe,
+    parentname=name,parentcmdline=cmdline,childEventData=EventData1,childppid=ppid1,childpid=pid1,childcomm=comm1,
+    childexe=exe1,childname=name1,childcmdline=cmdline1
+  | project TimeGenerated, Computer, user, parentEventData,parentppid,parentpid,parentcomm,parentexe,parentname,
+    parentcmdline,childEventData,childppid,childpid,childcomm,childexe,childname,childcmdline
+  | extend Timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = user,
+    ExecuteType = iff(parentcmdline contains '/etc/opt/microsoft/scx/conf/tmpdir/scx',"ExecuteScript","ExecuteShellCommand")
 entityMappings: 
   - entityType: Host
     fieldMappings:
