@@ -940,31 +940,35 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Use File Name as Parser Name
                         $functionAlias = getFileNameFromPath $file
-                        $baseParserResource = [PSCustomObject] @{
-                            type       = "Microsoft.OperationalInsights/workspaces";
-                            apiVersion = "2020-08-01";
-                            name       = "[parameters('workspace')]";
-                            location   = "[parameters('workspace-location')]";
-                            resources  = @(
-                                [PSCustomObject] @{
-                                    type       = "savedSearches";
-                                    apiVersion = "2020-08-01";
-                                    name       = "$solutionName Data Parser";
-                                    dependsOn  = @(
-                                        "[variables('workspace-dependency')]"
-                                    );
-                                    properties = [PSCustomObject] @{
-                                        eTag          = "*";
-                                        displayName   = "$solutionName Data Parser";
-                                        category      = "Samples";
-                                        functionAlias = "$functionAlias";
-                                        query         = $content;
-                                        version       = 1;
-                                    }
-                                }
-                            )
+                        if ($parserCounter -eq 1) {
+                            $baseParserResource = [PSCustomObject] @{
+                                type       = "Microsoft.OperationalInsights/workspaces";
+                                apiVersion = "2020-08-01";
+                                name       = "[parameters('workspace')]";
+                                location   = "[parameters('workspace-location')]";
+                                resources  = @(
+                                    
+                                )
+                            }
+                            $baseMainTemplate.resources += $baseParserResource
                         }
-                        $baseMainTemplate.resources += $baseParserResource
+                        $parserObj = [PSCustomObject] @{
+                            type       = "savedSearches";
+                            apiVersion = "2020-08-01";
+                            name       = "$solutionName Data Parser";
+                            dependsOn  = @(
+                                "[variables('workspace-dependency')]"
+                            );
+                            properties = [PSCustomObject] @{
+                                eTag          = "*";
+                                displayName   = "$solutionName Data Parser";
+                                category      = "Samples";
+                                functionAlias = "$functionAlias";
+                                query         = $content;
+                                version       = 1;
+                            }
+                        }
+                        $baseMainTemplate.resources[$baseMainTemplate.resources.Length - 1].resources += $parserObj
 
                         # Update Parser Counter
                         $parserCounter += 1
