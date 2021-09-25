@@ -27,9 +27,9 @@ This Playbook will trigger immediately and inform SOC by sending either a mail o
 
 ## Sample notifications
 
-#Email
+## Email
 ![Notification_Email](./images/Notification_Email.png)  
 
-#Teams  
-![Teams_Notification](./images/Teams_Notification.png)
+## Teams  
+![Teams_Notification](./images/Teams_Notification.PNG)
 
