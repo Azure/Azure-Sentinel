@@ -306,6 +306,44 @@ class UmbrellaClient:
                         event['Blocked Categories'] = row[21].split(',')
                     except IndexError:
                         pass
+                     #Version 5 — The same as version 4, but adds three new fields: all Identities, all Identity Types, and Request Method for Proxy logs.
+                    try:
+                        event['All Identities'] = row[22]
+                    except IndexError:
+                        pass
+                    try:
+                        event[' All Identity Types'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Request Method'] = row[24]
+                    except IndexError:
+                        pass
+                    #Version 6 — The same as version 5 with these additional fields to Proxy logs: Certificate Errors, Destination Lists IDs, DLP Status, File Name, Rule ID, and Ruleset ID.
+                    try:
+                        event['Certificate Errors'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination List IDs'] = row[26].split(',')
+                    except IndexError:
+                        pass
+                    try:
+                        event['DLP Status'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['File Name'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Rule ID'] = row[29]
+                    except IndexError:
+                        pass                                                         
+                    try:
+                        event['Ruleset ID'] = row[30]
+                    except IndexError:
+                        pass                       
 
                     int_fields = [
                         'requestSize',
