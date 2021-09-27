@@ -6,7 +6,7 @@ In the event of a predetermined number of consecutive permanent failures, of the
     - Adds the words "AUTO DISABLED" to the beginning of the rule's name.
     - Adds the reason for the failure (and the disabling) to the rule's description.
 
-This Playbook will trigger immediately and inform SOC by sending either a mail or post message to Teams SOC Channel
+This Playbook will trigger immediately and inform Security teams by notifying them via mail or post message to Teams Channel
 
 ## Deployment
 
