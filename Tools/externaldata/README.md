@@ -5,7 +5,7 @@ The following project will provide the example externaldata()[] KQL queries and 
 
 To leverage the solution create a Azure storage account where you will store long term retention security logs into. Create and deploy a data export rule to azure storage onto the Log analytics workspace, updating the deployment template to include the table names that need to have the logs stored in log term retention.
 
-[Data Export ARM Template](https://docs.microsoft.com/en-us/azure/azure-monitor/logs/logs-data-export?tabs=json#create-or-update-data-export-rule)
+[Data Export ARM Template](https://docs.microsoft.com/azure/azure-monitor/logs/logs-data-export?tabs=json#create-or-update-data-export-rule)
 
 Once logs are archiving into the Azure Storage account you can use the following script to operationalize extenal data lookup tasks by generating the Base KQL query that will include the schema and the SAS Uri signatures needed for each blob in start and end time range for 8 hours.
 

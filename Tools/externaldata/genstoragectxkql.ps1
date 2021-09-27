@@ -71,7 +71,7 @@ $blobs = $blobs | Where-Object {$_.LastModified -ge $startdate -and $_.LastModif
 $expiredattime = (Get-Date).AddHours(8)
 
 # Obtain URL for first line of extenaldata() lookup kql file
-$url = 'https://raw.githubusercontent.com/swiftsolves-msft/kql/main/externaldata/' + $tablename + '.yaml'
+$url = 'https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/externaldata/' + $tablename + '.yaml'
 $firststring = Invoke-WebRequest -UseBasicParsing $url
 
 #Build Error handling for generic lookup with no schema found
