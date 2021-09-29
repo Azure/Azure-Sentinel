@@ -1,15 +1,16 @@
 # Send notifications on Azure Sentinel Analytical Rules - auto-disabled rules
 Author: Sreedhar Ande
 
-It's a rare occurrence that a scheduled query rule fails to run, but it can happen. As shown in the image below, several Scheduled Analytics Rules that had been Auto-disabled
+It's a rare occurrence that a scheduled query rule fails to run, but it can happen. As shown in the image below, several Scheduled Analytics Rules that had been Auto-disabled  
+
 ![Autodisabled_Rules](./images/Autodisabled_Rules.png)
 
-For more information, click here(https://docs.microsoft.com/en-us/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
+For more information, click [here](https://docs.microsoft.com/en-us/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
 
-In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:
-	- Disables the rule.
-    - Adds the words "AUTO DISABLED" to the beginning of the rule's name.
-    - Adds the reason for the failure (and the disabling) to the rule's description.
+In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:  
+    - Disables the rule.  
+    - Adds the words "AUTO DISABLED" to the beginning of the rule's name.  
+    - Adds the reason for the failure (and the disabling) to the rule's description.  
 
 This Playbook will trigger immediately and inform Security teams by notifying them via mail or post message to Teams Channel
 
@@ -36,5 +37,5 @@ This Playbook will trigger immediately and inform Security teams by notifying th
 ![Notification_Email](./images/Notification_Email.png)  
 
 ## Teams  
-![Teams_Notification](./images/Teams_Notification.png)
+![Teams_Notification](./images/Teams_Notification.PNG)
 
