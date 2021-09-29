@@ -1,0 +1,39 @@
+id: e9ae5729-b4b9-4f93-9bc0-34ed379c78f0
+name: CoreBackUp Deletion in correlation with Atypical Travel Activity
+description: |
+  'This query looks at Core Azure Backup deletion in correlation with atypical travel activity that would track when someone travels to geographically distant locations 
+  where one of the locations is unusual for the user and doesn't match past behavior.'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert (ASC)
+tactics:
+  - InitialAccess
+  - Impact
+relevantTechniques:
+  - T1190
+  - T1078
+query: |
+  SecurityAlert
+  | where AlertName  =="Atypical travel"
+  | extend IPAddress = tostring(parse_json(ExtendedProperties).["Current IP Address"])
+  | extend LoginLocation = tostring(parse_json(ExtendedProperties).["Current Location"])
+  | extend UserAccount = split(tostring(parse_json(ExtendedProperties).["User Account"]),"@")[0]
+  | extend MachineName = CompromisedEntity
+  | project StartTime,AlertName,IPAddress, LoginLocation,UserAccount,AlertSeverity,tostring(MachineName)
+  |  join kind=inner
+  (
+  CoreAzureBackup
+  | where State =~ "Deleted"
+  | where OperationName =~ "BackupItem"
+  | extend data = split(BackupItemUniqueId, ";")
+  | extend AzureLocation = data[0], VaultId=data[1], MachineName=data[2], DrivesBackedUp=data[3]
+  | project TimeGenerated, AzureLocation, VaultId, tostring(MachineName), DrivesBackedUp, State, BackupItemUniqueId, _ResourceId
+  )
+  on MachineName
+  | project StartTime,AlertName,MachineName,AccountCustomEntity=UserAccount,VaultId,AzureLocation,LoginLocation,DrivesBackedUp,State,BackupItemUniqueId,_ResourceId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
