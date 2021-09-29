@@ -5,7 +5,7 @@ It's a rare occurrence that a scheduled query rule fails to run, but it can happ
 
 ![Autodisabled_Rules](./images/Autodisabled_Rules.png)
 
-For more information, click [here](https://docs.microsoft.com/en-us/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
+For more information, click [here](https://docs.microsoft.com/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
 
 In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:  
     - Disables the rule.  
