@@ -38,9 +38,9 @@ In this exercise we will show you how to create a brand new Azure Sentinel works
 
 ![deployment](../Images/deployment3.png)
 
-    Click **Review + create** and then **Create** after the validation completes. The creation takes a few seconds.
+Click **Review + create** and then **Create** after the validation completes. The creation takes a few seconds.
 
-6.  You will be redirected back to the *Add Azure Sentinel to a workspace*. Type the name of your new workspace in the search box, select your workspace and click **Add** at the bottom.
+7.  You will be redirected back to the *Add Azure Sentinel to a workspace*. Type the name of your new workspace in the search box, select your workspace and click **Add** at the bottom.
 
 ![deployment](../Images/deployment4.png)
 
@@ -59,15 +59,14 @@ In this exercise you will deploy the Trainig Lab solution into your existing wor
 
 ![deployment](../Images/deployment6.png)
 
-3. In the Basics tab, select the Subscription, Resource Group and Workspace that you created in Exercise 1, or the details for your existing workspace. Optionally, review the different tabs (Workbooks, Analytics, Hunting Queries, Watchlists, Playbooks) in the solution. 
-
-When ready, click on **Review + create**.
+3. In the Basics tab, select the Subscription, Resource Group and Workspace that you created in Exercise 1, or the details for your existing workspace. Optionally, review the different tabs (Workbooks, Analytics, Hunting Queries, Watchlists, Playbooks) in the solution. When ready, click on **Review + create**.
 
 ![deployment](../Images/deployment7.png)
 
+
 4. Once validation is ok, click on **Create**. The deployment process takes **about 15 minutes**, this is because we want to make sure that all the ingested data is ready for you to use once finished.
 
-5. Once the deployment finishes, you can go back to Azure Sentinel and select your workspace. In the home page you should see some ingested data and three recent incidents as show here.
+5. Once the deployment finishes, you can go back to Azure Sentinel and select your workspace. In the home page you should see some ingested data and several recent incidents. Don't worry if you don't see 3 incidents like in the screenshot below, they might take a few minutes to be raised.
 
 ![deployment](../Images/deployment8.png)
 
