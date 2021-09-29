@@ -6,6 +6,8 @@ mattegen@microsoft.com
 
 <a href="https://twitter.com/FlyingBlueMonki?ref_src=twsrc%5Etfw" class="twitter-follow-button" data-show-count="true">Follow @FlyingBlueMonki on Twitter</a>
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FFlyingBlueMonkey%2FRDAPQuery%2Fmaster%2Fazuredeploy.json)
+
 With the ever increasing number of new domains on the Internet as well as all of the new Top Level Domains (TLD), it's often hard to know if a user has gone to a potentially malicious new site that has just popped up online.  To help with this, a SOC team or analyst could track for users accessing newly registered domains.  One way to do this is to query the Registration Data Access Protocol (RDAP).  RDAP allows you to access domain name registration data (much like its predecesor the WHOIS protocol does today) but via an API call and with a better, more machine readable structure to the data.  This Azure Function queries an Azure Sentinel environment, finds domain names of interest, and then conducts an RDAP lookup to retrieve information about the domain for investigators and analysts.  There is also an Azure Sentinel Analytic rule that can then alert if evidence of a domain that was registered in the last 30 days should be found.  
 
 Please note:  This version only stores the registration date of the domains successfully resolved, but you could modify it to store more information such as who registered the domain, address information, contact data etc.
@@ -41,7 +43,6 @@ The Azure Function will write data to the Log Analytics Workspace that your Azur
 The name you want to use for your resolved domains.  The default is ResolvedDomains.  Note:  Log Analytics will automatically append "\_CL" to the end of whatever string you enter here.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FFlyingBlueMonkey%2FRDAPQuery%2Fmaster%2Fazuredeploy.json)
 
 ### Post Template Configuration
 After deploying the ARM Template, you should go in to your Azure Sentinel instance and create the GetDomainsForRDAP function.  An example is included in this repo, but you can use any function you want so long as it returns a field named "Domain" that has the domain you are looking up information for.  
