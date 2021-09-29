@@ -69,13 +69,28 @@ class AzureSentinelConnectorAsync:
             'x-ms-date': rfc1123date
         }
 
-        async with session.post(uri, data=body, headers=headers) as response:
-            if (response.status >= 200 and response.status <= 299):
+        try_number = 1
+        while True:
+            try:
+                await self._make_request(session, uri, body, headers)
+            except Exception as err:
+                if try_number < 3:
+                    logging.warning('Error while sending data to Azure Sentinel. Try number: {}. Trying one more time. {}'.format(try_number, err))
+                    await asyncio.sleep(try_number)
+                    try_number += 1
+                else:
+                    logging.error(str(err))
+                    self.failed_sent_events_number += events_number
+                    raise err
+            else:
                 logging.debug('{} events have been successfully sent to Azure Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
-            else:
-                logging.error("Error during sending events to Azure Sentinel. Response code: {}".format(response.status))
-                self.failed_sent_events_number += events_number
+                break
+
+
+    async def _make_request(self, session, uri, body, headers):
+        async with session.post(uri, data=body, headers=headers) as response:
+            if not (200 <= response.status <= 299):
                 raise Exception("Error during sending events to Azure Sentinel. Response code: {}".format(response.status))
 
     def _check_size(self, queue):

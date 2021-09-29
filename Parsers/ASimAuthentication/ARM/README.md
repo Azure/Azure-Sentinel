@@ -9,6 +9,8 @@ This template deploys the following:
 * vimAuthenticationAWSCloudTrail
 * vimAuthenticationOktaSSO
 * vimAuthenticationWindowsSecurityEvent
+* vimAuthenticationMicrosoftWindowsEvent
+* vimAuthenticationMD4IoT
 * AADSTSErrorCodes
 
 
