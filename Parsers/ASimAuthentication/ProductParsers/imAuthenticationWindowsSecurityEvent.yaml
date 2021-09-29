@@ -14,7 +14,17 @@ References:
   Link: https:/aka.ms/AzSentinelNormalization
 Description: |
       This Query Parser maps Windows Active Directory sign in logs (SecurityEvent) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationWindowsSecurityEvent
+ParserName: vimAuthenticationWindowsSecurityEvent
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
@@ -73,8 +83,18 @@ ParserQuery: |
     '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',
     '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',
     '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];
-  let WinLogon=(){
-    SecurityEvent 
+  let WinLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
+    SecurityEvent
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime)
+      and (isnull(endtime)     or TimeGenerated <= starttime)
+      and (targetusername=='*' or TargetUserName has targetusername)
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
     | where EventID in (LogonEvents) or 
             EventID in (LogoffEvents)
     | project-rename 
@@ -135,4 +155,4 @@ ParserQuery: |
         , LogonTarget=TargetDvcHostname
         , Dvc=SrcDvcHostname
     };
-  WinLogon
+  WinLogon(starttime, endtime, targetusername)

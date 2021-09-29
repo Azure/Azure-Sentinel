@@ -14,10 +14,30 @@ References:
   Link: https://aka.ms/AzSentinelAuthenticationDoc
 Description: |
   This Query Parser maps Azure Active Directory Signin logs (SigninLogs) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationSigninLogs
+ParserName: vimAuthenticationSigninLogs
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
-  let AADSigninLogs=(){
+  let AADSigninLogs=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
   SigninLogs
+  // ************************************************************************* 
+  //       <Prefilterring>
+  // *************************************************************************
+  | where 
+    (isnull(starttime)   or TimeGenerated >= starttime) 
+    and (isnull(endtime)     or TimeGenerated <= starttime) 
+    and (targetusername=='*' or (UserPrincipalName hasprefix targetusername and (UserPrincipalName =~ targetusername or tostring(split(UserPrincipalName,'@')[0])=~targetusername) ))
+  // ************************************************************************* 
+  //       </Prefilterring>
+  // ************************************************************************* 
   | extend
     EventVendor = 'Microsoft'
     , EventProduct = 'AAD Sign In Logs'
@@ -78,4 +98,4 @@ ParserQuery: |
           User=TargetUsername
         , LogonTarget=TargetAppName
         , Dvc=EventVendor};
-       AADSigninLogs
+       AADSigninLogs(starttime, endtime, targetusername)

@@ -14,14 +14,34 @@ References:
   Link: https:/aka.ms/AzSentinelNormalization
 Description: |
       This Query Parser maps Okta sign in logs (Okta_CL) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationOktaSSO
+ParserName: vimAuthenticationOktaSSO
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
-  let OktaSignin=(){
+  let OktaSignin=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
     let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
     // https://developer.okta.com/docs/reference/api/event-types/#catalog
     Okta_CL
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime) 
+      and (isnull(endtime)     or TimeGenerated <= starttime)
+      and (targetusername=='*' or (targetusername=~actor_alternateId_s_s)
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
     | where eventType_s_s in (OktaSigninEvents)
     | extend 
         EventProduct='Okta'
@@ -81,4 +101,4 @@ ParserQuery: |
           User=TargetUsername
           , Dvc=EventVendor
     };
-  OktaSignin
+  OktaSignin(starttime, endtime, targetusername)

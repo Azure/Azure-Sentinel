@@ -14,10 +14,30 @@ References:
   Link: https://aka.ms/AzSentinelAuthenticationDoc
 Description: |
     This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationAADNonInteractiveUserSignInLogs
+ParserName: vimAuthenticationAADNonInteractiveUserSignInLogs
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
-  let AADNIAuthentication=(){
+  let AADNIAuthentication=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
     AADNonInteractiveUserSignInLogs
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime) 
+      and (isnull(endtime)     or TimeGenerated <= starttime)
+      and (targetusername=='*' or (UserPrincipalName hasprefix targetusername and (UserPrincipalName =~ targetusername or tostring(split(UserPrincipalName,'@')[0])=~targetusername) ))
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
     | extend
         EventVendor = 'Microsoft'
         , EventProduct = 'AAD Non Interactive'
@@ -76,4 +96,4 @@ ParserQuery: |
           User=TargetUsername
         , LogonTarget=ResourceIdentity
         , Dvc=EventVendor};
-  AADNIAuthentication
+  AADNIAuthentication(starttime, endtime, targetusername)

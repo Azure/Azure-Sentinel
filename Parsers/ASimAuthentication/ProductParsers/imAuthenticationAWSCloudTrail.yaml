@@ -14,10 +14,30 @@ References:
   Link: https:/aka.ms/AzSentinelNormalization
 Description: |
       This Query Parser maps Amazon Web Service sign in logs (AWSCloudTrail) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationAWSCloudTrail
+ParserName: vimAuthenticationAWSCloudTrail
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
-  let AWSLogon=(){
+  let AWSLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
   AWSCloudTrail
+  // ************************************************************************* 
+  //       <Prefilterring>
+  // *************************************************************************
+  | where 
+    (isnull(starttime)   or TimeGenerated >= starttime) 
+    and (isnull(endtime)     or TimeGenerated <= starttime) 
+    and (targetusername=='*' or (UserIdentityUserName =~ targetusername ))
+  // ************************************************************************* 
+  //       </Prefilterring>
+  // ************************************************************************* 
    | where EventName == 'ConsoleLogin'
    | extend
     EventVendor = 'AWS'
@@ -46,4 +66,4 @@ ParserQuery: |
         , LogonTarget=tostring(split(TargetUrl,'?')[0])
         , Dvc=EventVendor
     };
-    AWSLogon
+    AWSLogon(starttime, endtime, targetusername)

@@ -14,13 +14,33 @@ References:
   Link: https:/aka.ms/AzSentinelNormalization
 Description: |
       This Query Parser maps M365 Defender Device Logon Events (DeviceLogonEvents) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationM365Defender
+ParserName: vimAuthenticationM365Defender
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
   let FaliureReason=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[
     'InvalidUserNameOrPassword','No such user or password'
     ];
-  let AuthM365D=(){
+  let AuthM365D=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
     DeviceLogonEvents 
+  // ************************************************************************* 
+  //       <Prefilterring>
+  // *************************************************************************
+  | where 
+    (isnull(starttime)   or TimeGenerated >= starttime) 
+    and (isnull(endtime)     or TimeGenerated <= starttime) 
+    and (targetusername=='*' or (targetusername has AccountName and (targetusername =~ AccountName or targetusername=strcat(AccountDomain,'\\',AccountName) ) ))
+  // ************************************************************************* 
+  //       </Prefilterring>
+  // ************************************************************************* 
     //
     | project-rename 
        EventOriginalResultDetails=FailureReason 
@@ -90,5 +110,4 @@ ParserQuery: |
         User=TargetUsername 
         , LogonTarget=TargetDvcHostname
         , Dvc=TargetDvcHostname
-        };AuthM365D
-
+        };AuthM365D(starttime, endtime, targetusername)

@@ -14,10 +14,30 @@ References:
   Link: https://aka.ms/AzSentinelAuthenticationDoc
 Description: |
   This Query Parser maps Azure Active Directory Service Principal sign in logs (AADServicePrincipalSignInLogs) to the Azure Sentinel Information Model authenticaion schema.
-ParserName: ASimAuthenticationAADServicePrincipalSignInLogs
+ParserName: vimAuthenticationAADServicePrincipalSignInLogs
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername
+    Type: string
+    Default: '*'
 ParserQuery: |
-  let AADSvcPrincipal=(){
+  let AADSvcPrincipal=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername:string="*"){
     AADServicePrincipalSignInLogs
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime)
+      and (isnull(endtime)     or TimeGenerated <= starttime) 
+      and (targetusername=='*' or (ServicePrincipalName =~ targetusername))
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
     | extend
         EventVendor = 'Microsoft'
         , EventProduct = 'AAD Service Principal'
@@ -65,4 +85,4 @@ ParserQuery: |
           User=TargetUsername
       , LogonTarget=ResourceIdentity
       , Dvc=EventVendor};
-  AADSvcPrincipal
+  AADSvcPrincipal(starttime, endtime, targetusername)
