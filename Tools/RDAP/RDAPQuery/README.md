@@ -21,7 +21,7 @@ When deploying this Azure Function you will need some values to fill in the blan
 The name you want to give the Azure Function.  The Default is "RDAPQuery".  A unique string will be attached to this in order to deconflict with any potential pre-existing functions you may have.  For example, the template may create a name like "rdapquerytbdem24sevgdq"
 
 ### Azure AD App Permissions
-The Azure Function needs permission to read the Log Analytics Workspace that your Azure Sentinel instance is attached to.  For guidance on creating an Azure AD App Registration, please see [QuickStart: Register App](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app).  For this application you will need the following permissions:  
+The Azure Function needs permission to read the Log Analytics Workspace that your Azure Sentinel instance is attached to.  For guidance on creating an Azure AD App Registration, please see [QuickStart: Register App](https://docs.microsoft.com/azure/active-directory/develop/quickstart-register-app).  For this application you will need the following permissions:  
 ````
 Log Analytics API
 Data.Read
