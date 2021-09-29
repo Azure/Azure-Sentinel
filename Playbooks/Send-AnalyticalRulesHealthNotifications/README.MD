@@ -1,6 +1,11 @@
 # Send notifications on Azure Sentinel Analytical Rules - auto-disabled rules
 Author: Sreedhar Ande
 
+It's a rare occurrence that a scheduled query rule fails to run, but it can happen. As shown in the image below, several Scheduled Analytics Rules that had been Auto-disabled
+![Autodisabled_Rules](./images/Autodisabled_Rules.png)
+
+For more information, click here(https://docs.microsoft.com/en-us/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
+
 In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:
 	- Disables the rule.
     - Adds the words "AUTO DISABLED" to the beginning of the rule's name.
@@ -10,8 +15,8 @@ This Playbook will trigger immediately and inform Security teams by notifying th
 
 ## Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-AnalyticalRulesHealthNotifications%2Fazuredeploy.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-AnalyticalRulesHealthNotifications%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AnalyticsHealth-Enterprise) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/AnalyticsHealth-Gov)
 
 ## Post Deployment Steps
 
@@ -31,5 +36,5 @@ This Playbook will trigger immediately and inform Security teams by notifying th
 ![Notification_Email](./images/Notification_Email.png)  
 
 ## Teams  
-![Teams_Notification](./images/Teams_Notification.PNG)
+![Teams_Notification](./images/Teams_Notification.png)
 
