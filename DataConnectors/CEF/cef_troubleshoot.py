@@ -30,6 +30,7 @@ import sys
 import select
 import subprocess
 import time
+import re
 
 daemon_port = "514"
 agent_port = "25226"
@@ -689,6 +690,40 @@ def check_portal_auto_sync():
     return True
 
 
+def omi_vulnerability_patch_validation():
+    VERSION_MAJOR = 1
+    VERSION_MINOR = 13
+    VERSION_PATCH = 40
+    print_notice("Validating that the OMI vulnerability patched is installed.")
+    try:
+        OMI_version = subprocess.Popen(["dpkg", "-l"], stdout=subprocess.PIPE)
+    except Exception:
+        OMI_version = subprocess.Popen(["rpm", "-qa"], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(["grep", "omsagent"], stdin=OMI_version.stdout, stdout=subprocess.PIPE)
+    o, e = grep.communicate()
+    if e is not None:
+        print_error("Error: Could not validate omsagent version.")
+        return False
+    else:
+        content = o.decode(encoding='UTF-8')
+        agent_version = re.search("\\d+.\\d+.\\d+", content).group()
+        if agent_version is None:
+            print_error("Error: Could not validate omsagent version.")
+            return False
+        agent_subversion_list = agent_version.split('.')
+        installed_version_major = int(agent_subversion_list[0])
+        installed_version_minor = int(agent_subversion_list[1])
+        installed_version_patch = int(agent_subversion_list[2])
+        if (installed_version_major > VERSION_MAJOR or
+            (installed_version_major == VERSION_MAJOR and installed_version_minor > VERSION_MINOR) or
+            (installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
+            print_ok("OMI vulnerability is closed, patch is installed.")
+            return True
+        else:
+            print_error("OMI vulnerability is open, please re-install the agent.")
+            return False
+
+
 def print_full_disk_warning():
     warn_message = "Warning: please make sure your logging daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
@@ -735,6 +770,7 @@ def main():
     if not incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True):
         print_error("Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
     check_portal_auto_sync()
+    omi_vulnerability_patch_validation()
     print_full_disk_warning()
     print_ok("Completed troubleshooting.")
     print(
