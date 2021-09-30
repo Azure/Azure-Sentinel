@@ -329,21 +329,21 @@ class UmbrellaClient:
                     except IndexError:
                         pass
                     try:
-                        event['DLP Status'] = row[27]
+                        event['File Name'] = row[27]
                     except IndexError:
                         pass
                     try:
-                        event['File Name'] = row[28]
-                    except IndexError:
-                        pass
-                    try:
-                        event['Rule ID'] = row[29]
+                        event['Rule ID'] = row[28]
                     except IndexError:
                         pass                                                         
                     try:
-                        event['Ruleset ID'] = row[30]
+                        event['Ruleset ID'] = row[29]
                     except IndexError:
-                        pass                       
+                        pass
+                    try:
+                        event['DLP Status'] = row[30]
+                    except IndexError:
+                        pass                      
 
                     int_fields = [
                         'requestSize',
