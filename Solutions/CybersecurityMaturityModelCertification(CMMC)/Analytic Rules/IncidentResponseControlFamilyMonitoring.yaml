@@ -1,12 +1,12 @@
 id: 25e5d2e3-fc5f-4336-ade8-7af3a2b96af1
-name: (Private Preview) CMMC Incident Response Control Family Monitoring
+name: (Preview) CMMC Incident Response Control Family Monitoring
 description: |
   'CMMC Control Assessments have Deviated from Configured Threshold Baselines'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureSecurityCenter
     dataTypes:
-      - SecurityAlert (ASC)
+      - SecurityRecommendation
 queryFrequency: 7d
 queryPeriod: 7d
 triggerOperator: gt
@@ -16,47 +16,34 @@ tactics:
 relevantTechniques:
   - T1082
 query: |
-
-  let Policymap = datatable(RecommendationName:string, ControlFamily:string, ControlNumber:string, MaturityLevel:string, 800171Map:string, 80053Map:string)
-  [
-  "Vulnerability Assessment settings for SQL server should contain an email address to receive scan reports",	"Incident Response",	"IR.2.092",	"ML-2",	"3.6.1",	"IR-2, IR-4, IR-5, IR-6, IR-7",
-  "Subscriptions should have a contact email address for security issues",	"Incident Response",	"IR.2.092",	"ML-2",	"3.6.1",	"IR-2, IR-4, IR-5, IR-6, IR-7",
-  "Email notification to subscription owner for high severity alerts should be enabled",	"Incident Response",	"IR.2.092",	"ML-2",	"3.6.1",	"IR-2, IR-4, IR-5, IR-6, IR-7",
-  "Email notification for high severity alerts should be enabled",	"Incident Response",	"IR.2.092",	"ML-2",	"3.6.1",	"IR-2, IR-4, IR-5, IR-6, IR-7",
-  "Flow logs should be configured for every network security group",	"Incident Response",	"IR.2.093",	"ML-2",	"NA",	"AR-4, AU-13, IA-10, IR-4, IR-5, IR-6, PE-6, RA-6",
-  "Firewall should be enabled on Key Vault",	"Incident Response",	"IR.2.093",	"ML-2",	"NA",	"AR-4, AU-13, IA-10, IR-4, IR-5, IR-6, PE-6, RA-6",
-  "Endpoint protection health issues should be resolved on your machines",	"Incident Response",	"IR.2.093",	"ML-2",	"NA",	"AR-4, AU-13, IA-10, IR-4, IR-5, IR-6, PE-6, RA-6",
-  "Virtual networks should be protected by Azure Firewall",	"Incident Response",	"IR.2.093",	"ML-2",	"NA",	"AR-4, AU-13, IA-10, IR-4, IR-5, IR-6, PE-6, RA-6",
-  "Web Application Firewall (WAF) should use the specified mode for Azure Front Door Service",	"Incident Response",	"IR.2.093",	"ML-2",	"NA",	"AR-4, AU-13, IA-10, IR-4, IR-5, IR-6, PE-6, RA-6"
-  ];
+  let CMMCPolicyMapping = externaldata(RecommendationDisplayName:string,ControlFamily:string,ControlNumber:string,MaturityLevel:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/CMMCPolicyMapping.csv"] with (format="csv", ignoreFirstRecord=True);
   SecurityRecommendation
-  | join kind=rightouter Policymap on RecommendationName
-  | where ControlFamily == 'Incident Response'
-  | summarize
-      Assessments = count(),
-      Success = countif(RecommendationState == 'Healthy' or RecommendationState == 'NotApplicable'),
-      Failed = countif(RecommendationState == 'Unhealthy')
-      by ControlFamily, ControlNumber, MaturityLevel, RecommendationName
-  | extend SuccessRatePercentage = (Success * 100 / Assessments)
-  | extend FailedRatePercentage = (Failed * 100 / Assessments)
-  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
-  | project
-      ControlNumber,
-      ControlFamily,
-      MaturityLevel,
-      RecommendationName,
-      Assessments,
-      SuccessRatePercentage,
-      FailedRatePercentage,
-      RemediationLink
-  | where RecommendationName <> ''
-  // | where RecommendationName <> '' //Filter Out or Suppress Recommendations
-  // | where MaturityLevel == 'ML-3' //Filter by Maturity Level 
-  | where FailedRatePercentage > 30 //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within Organizational Needs
-  | sort by FailedRatePercentage desc
-  | limit 250
-  | extend URLCustomEntity = RemediationLink
-
+    | join kind=rightouter CMMCPolicyMapping on RecommendationDisplayName
+    | where ControlFamily == 'Incident Response'
+    | summarize
+        Assessments = count(),
+        Success = countif(RecommendationState == 'Healthy' or RecommendationState == 'NotApplicable'),
+        Failed = countif(RecommendationState == 'Unhealthy')
+        by ControlFamily, ControlNumber, MaturityLevel, RecommendationName
+    | extend SuccessRatePercentage = (Success * 100 / Assessments)
+    | extend FailedRatePercentage = (Failed * 100 / Assessments)
+    | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+    | project
+        ControlNumber,
+        ControlFamily,
+        MaturityLevel,
+        RecommendationName,
+        Assessments,
+        SuccessRatePercentage,
+        FailedRatePercentage,
+        RemediationLink
+    | where RecommendationName <> ''
+    // | where RecommendationName <> '' //Filter Out or Suppress Recommendations
+    // | where MaturityLevel == 'ML-3' //Filter by Maturity Level 
+    | where FailedRatePercentage > 30 //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within Organizational Needs
+    | sort by FailedRatePercentage desc
+    | limit 250
+    | extend URLCustomEntity = RemediationLink
 entityMappings:
   - entityType: URL
     fieldMappings:
