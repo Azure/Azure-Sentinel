@@ -58,6 +58,7 @@ syslog_ng_default_config_path = "/etc/syslog-ng/syslog-ng.conf"
 syslog_ng_documantation_path = "https://www.syslog-ng.com/technical-documents/doc/syslog-ng-open-source-edition/3.26/administration-guide/34#TOPIC-1431029"
 rsyslog_documantation_path = "https://www.rsyslog.com/doc/master/configuration/actions.html"
 log_forwarder_deployment_documentation = "https://docs.microsoft.com/azure/sentinel/connect-cef-agent?tabs=rsyslog"
+OMI_patch_docs_path = "https://msrc-blog.microsoft.com/2021/09/16/additional-guidance-regarding-omi-vulnerabilities-within-azure-vm-management-extensions/"
 tcpdump_time_restriction = 60
 file_read_permissions_octal_representation = 4
 mock_message_max = 5
@@ -720,10 +721,10 @@ def omi_vulnerability_patch_validation():
         if (installed_version_major > VERSION_MAJOR or
             (installed_version_major == VERSION_MAJOR and installed_version_minor > VERSION_MINOR) or
             (installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
-            print_ok("OMI vulnerability is closed, patch is installed.")
+            print_ok("Protected from OMI vulnerability, patch is installed")
             return True
         else:
-            print_error("OMI vulnerability is open, please re-install the agent.")
+            print_error("The patch installation failed and the OMI vulnerability still exists. Please re-install the agent completely. For further information please review - " + OMI_patch_docs_path)
             return False
 
 
