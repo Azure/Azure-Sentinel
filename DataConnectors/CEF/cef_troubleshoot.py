@@ -691,10 +691,13 @@ def check_portal_auto_sync():
 
 
 def omi_vulnerability_patch_validation():
+    """
+    Return: True is OMI Vulnerability patch is installed. Otherwise false.
+    """
     VERSION_MAJOR = 1
     VERSION_MINOR = 13
     VERSION_PATCH = 40
-    print_notice("Validating that the OMI vulnerability patched is installed.")
+    print_notice("Validating that the OMI vulnerability patch is installed.")
     try:
         OMI_version = subprocess.Popen(["dpkg", "-l"], stdout=subprocess.PIPE)
     except Exception:
