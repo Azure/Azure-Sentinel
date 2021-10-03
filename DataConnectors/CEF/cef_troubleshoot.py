@@ -721,7 +721,7 @@ def omi_vulnerability_patch_validation():
         if (installed_version_major > VERSION_MAJOR or
             (installed_version_major == VERSION_MAJOR and installed_version_minor > VERSION_MINOR) or
             (installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
-            print_ok("Protected from OMI vulnerability, patch is installed")
+            print_ok("Protected from OMI vulnerability, patch is installed.")
             return True
         else:
             print_error("The patch installation failed and the OMI vulnerability still exists. Please re-install the agent completely. For further information please review - " + OMI_patch_docs_path)
