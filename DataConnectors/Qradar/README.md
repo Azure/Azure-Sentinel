@@ -27,7 +27,7 @@ Therefore, we are inspired by the idea that Sentinel will become the main SOAR s
 ## How we built it
 - First and foremost, the connector was built using purely Python. Using both Qradar REST API and Azure API to collecting and ingesting Qradar's Offenses.  
 - At the beginning, the connector query Qradar REST API for pulling out all offenses in a specific timerange. 
-- After that, the connector to Log Analytics Workspace, using Kusto Query Language (KQL) to collect all existed offenses in
+- After that, the connector to Log Analytics Workspace, using Kusto Query Language (KQL) to collect all existed offenses in Log Analytics Workspace.
 - Before pushing new events Log Analytics, the connector looping through all offenses collected from QRadar REST API to check whether an offenses existed in Log Analytics or not.
 - Finally, the connector pushs new offenses to Log Analytics.
 
