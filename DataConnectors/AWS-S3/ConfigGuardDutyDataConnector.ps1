@@ -280,13 +280,13 @@ $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
 
 Write-Output `n`n'Kms Definition.'
 Retry-Action({
-	$kmaAliasName = Read-Host 'Please insert KMS alias Name'
-	$kmsKeyDescription = aws kms describe-key --key-id alias/$kmaAliasName 2>&1
+	$script:kmaAliasName = Read-Host 'Please insert KMS alias Name'
+	$script:kmsKeyDescription = aws kms describe-key --key-id alias/$kmaAliasName 2>&1
 	$isKmsNotExist = $lastexitcode -ne 0
 	if($isKmsNotExist)
 	{
-		$kmsKeyDescription = aws kms create-key
-		$kmsKeyId = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
+		$script:kmsKeyDescription = aws kms create-key
+		$kmsKeyId = ($script:kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
 		$tempForOutput = aws kms create-alias --alias-name alias/$kmaAliasName --target-key-id $kmsKeyId 2>&1
 		if($lastexitcode -eq 0)
 		{
@@ -318,7 +318,7 @@ if($currentKmsPolicy -ne $null)
 	$currentKmsPolicyObject = $currentKmsPolicy | ConvertFrom-Json 	
 	$currentKmsPolicies = ($currentKmsPolicyObject.Policy) | ConvertFrom-Json
 	
-	$kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json}  )}
+	$kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
 	if($kmsRequiredPoliciesThatNotExistInCurrentPolicy -ne $null)
 	{
 		$currentKmsPolicies.Statement += $kmsRequiredPoliciesThatNotExistInCurrentPolicy
@@ -346,7 +346,7 @@ if($currentSqsPolicy -ne $null)
 	$currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
 	$currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
 	
-	$sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json}  )}
+	$sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
 	if($sqsRequiredPoliciesThatNotExistInCurrentPolicy -ne $null)
 	{
 		$currentSqsPolicies.Statement += $sqsRequiredPoliciesThatNotExistInCurrentPolicy
@@ -433,9 +433,9 @@ Write-Output `n'Enabling GuardDuty'
 	}
 	else
 	{
-		$detectorId = ($newGuarduty | ConvertFrom-Json).DetectorId
+		$script:detectorId = ($newGuarduty | ConvertFrom-Json).DetectorId
 	}
-	$currentDestinations = aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1
+	$script:currentDestinations = aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1
  })
  
 $currentDestinationsObject = $currentDestinations | ConvertFrom-Json
