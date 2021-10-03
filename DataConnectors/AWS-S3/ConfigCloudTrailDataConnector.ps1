@@ -345,7 +345,7 @@ if($kmsCofirmation -eq 'y')
 		$currentKmsPolicyObject = $currentKmsPolicy | ConvertFrom-Json 	
 		$currentKmsPolicies = ($currentKmsPolicyObject.Policy) | ConvertFrom-Json
 		
-		$kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json}  )}
+		$kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
 		if($kmsRequiredPoliciesThatNotExistInCurrentPolicy -ne $null)
 		{
 			$currentKmsPolicies.Statement += $kmsRequiredPoliciesThatNotExistInCurrentPolicy
@@ -373,7 +373,7 @@ if($currentSqsPolicy -ne $null)
 	$currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
 	$currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
 	
-	$sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json}  )}
+	$sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
 	if($sqsRequiredPoliciesThatNotExistInCurrentPolicy -ne $null)
 	{
 		$currentSqsPolicies.Statement += $sqsRequiredPoliciesThatNotExistInCurrentPolicy
@@ -413,7 +413,7 @@ if($isBucketPolicyExist)
 	$currentBucketPolicyObject = $currentBucketPolicy | ConvertFrom-Json 	
 	$currentBucketPolicies = ($currentBucketPolicyObject.Policy) | ConvertFrom-Json 
 	 
-    $sqsRequiredPolicyThatNotExistInCurrentPolicy = $s3RequiredPolicyObject.Statement | Where-Object { ($_ | ConvertTo-Json) -notin ($currentBucketPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json}  )}
+    $sqsRequiredPolicyThatNotExistInCurrentPolicy = $s3RequiredPolicyObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentBucketPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
 	if($sqsRequiredPolicyThatNotExistInCurrentPolicy -ne $null)
 	{
 		$currentBucketPolicies.Statement += $sqsRequiredPolicyThatNotExistInCurrentPolicy
