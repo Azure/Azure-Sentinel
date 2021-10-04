@@ -17,65 +17,64 @@ ParserName: vimProcessTerminateMicrosoftSysmon
 ParserQuery: | 
             // this is the parser for sysmon from Event table
             let ParsedProcessEvent_Event=(){
-            // Create the raw table from the raw XML file structure
-            Event 
-            | where Source == "Microsoft-Windows-Sysmon" and EventID==5
-            | parse EventData with * '<Data Name="RuleName">'RuleName'</Data>'
+                Event 
+                | where Source == "Microsoft-Windows-Sysmon" and EventID==5
+                | parse EventData with * '<Data Name="RuleName">'RuleName'</Data>'
                         '<Data Name="UtcTime">'UtcTime'</Data>'
                         '<Data Name="ProcessGuid">{'ProcessGuid'}</Data>'
                         '<Data Name="ProcessId">'ProcessId'</Data>'
-                        '<Data Name="Image">'Image'</Data>' *
-            | extend 
-                    EventType = "ProcessTerminated",
-                    EventStartTime = todatetime(TimeGenerated),
-                    EventEndTime = todatetime(TimeGenerated),
-                    EventCount = int(1),
-                    EventVendor = "Microsoft",
-                    EventSchemaVersion = "0.1.0",
-                    EventOriginalType=tostring(EventID),
-                    EventProduct = "Sysmon",
-                    EventResult = 'Success',
-                    DvcOs = "Windows",
-                    ActorUsernameType = "Windows"
-            | project-rename
-                    DvcHostname = Computer,
-                    ActorUsername = UserName,
-                    TargetProcessName = Image,
-                    TargetProcessId = ProcessId,
-                    TargetProcessGuid = ProcessGuid
-                //***** Aliases ******
-            | extend
-                    User = ActorUsername,
-                    Process = TargetProcessName,
-                    Dvc = DvcHostname
-            };
-            // this is the parser for sysmon from WindowsEvent table
-            let ParsedProcessEvent_WindowsEvent=(){
-            WindowsEvent 
-            | where Provider == "Microsoft-Windows-Sysmon" and EventID==5
-            | extend 
-                    EventType = "ProcessTerminated",
-                    EventStartTime = todatetime(TimeGenerated),
-                    EventEndTime = todatetime(TimeGenerated),
-                    EventCount = int(1),
-                    EventVendor = "Microsoft",
-                    EventSchemaVersion = "0.1.0",
-                    EventOriginalType=tostring(EventID),
-                    EventProduct = "Sysmon",
-                    EventResult = 'Success',
-                    DvcOs = "Windows",
-                    ActorUsernameType = "Windows",
-                    ActorUsername = tostring(EventData.UserName),
-                    TargetProcessName = tostring(EventData.Image),
-                    TargetProcessId = tostring(EventData.ProcessId),
-                    TargetProcessGuid = tostring(EventData.ProcessGuid)
-            | project-rename
-                    DvcHostname = Computer
-            //***** Aliases ******
-            | extend
-                    User = ActorUsername,
-                    Process = TargetProcessName,
-                    Dvc = DvcHostname
-            };
-            union isfuzzy=true ParsedProcessEvent_Event,
-                              ParsedProcessEvent_WindowsEvent
+                        '<Data Name="Image">'Image'</Data>' new_ver_data
+                | parse new_ver_data with '<Data Name="User">'ActorUsername '</Data>' *
+                | extend 
+                        EventType = "ProcessTerminated",
+                        EventStartTime = todatetime(TimeGenerated),
+                        EventEndTime = todatetime(TimeGenerated),
+                        EventCount = int(1),
+                        EventVendor = "Microsoft",
+                        EventSchemaVersion = "0.1.0",
+                        EventOriginalType=tostring(EventID),
+                        EventProduct = "Sysmon",
+                        EventResult = 'Success',
+                        DvcOs = "Windows"
+                | project-rename
+                        DvcHostname = Computer,
+                        TargetProcessName = Image,
+                        TargetProcessId = ProcessId
+                | extend
+                        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                        TargetProcessGuid = ProcessGuid,
+                        //***** Aliases ******
+                        User = ActorUsername,
+                        Process = TargetProcessName,
+                        Dvc = DvcHostname
+                | project-away EventData, ParameterXml
+                };
+                let ParsedProcessEvent_WindowsEvent=(){
+                WindowsEvent 
+                | where Provider == "Microsoft-Windows-Sysmon" and EventID==5
+                | extend 
+                        EventType = "ProcessTerminated",
+                        EventStartTime = todatetime(TimeGenerated),
+                        EventEndTime = todatetime(TimeGenerated),
+                        EventCount = int(1),
+                        EventVendor = "Microsoft",
+                        EventSchemaVersion = "0.1.0",
+                        EventOriginalType=tostring(EventID),
+                        EventProduct = "Sysmon",
+                        EventResult = 'Success',
+                        DvcOs = "Windows",
+                        ActorUsernameType = "Windows",
+                        ActorUsername = tostring(EventData.User),
+                        TargetProcessName = tostring(EventData.Image),
+                        TargetProcessId = tostring(EventData.ProcessId),
+                        TargetProcessGuid = tostring(EventData.ProcessGuid)
+                | project-rename
+                        DvcHostname = Computer
+                | extend
+                        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                        //***** Aliases ******
+                        User = ActorUsername,
+                        Process = TargetProcessName,
+                        Dvc = DvcHostname
+                };union isfuzzy=true ParsedProcessEvent_Event,
+                                        ParsedProcessEvent_WindowsEvent   

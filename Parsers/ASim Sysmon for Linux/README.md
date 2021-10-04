@@ -15,7 +15,7 @@ When deploying the parsers, you make sure that telemetry from Sysmon for Linux i
 The template deploys the following:
 
 - ASIM Sysmon for Linux File Activity parsers - vimFileEventLinuxSysmonFileCreated, vimFileEventLinuxSysmonFileDeleted
-- ASIM Sysmon for Linux Process Events parser - vimProcessCreateLinuxSysmon
+- ASIM Sysmon for Linux Process Events parser - vimProcessCreateLinuxSysmon, vimProcessTerminateLinuxSysmon
 - ASIM Sysmon for Linux Network Sessions parser - vimNetworkSessionLinuxSysmon
 
 <br>

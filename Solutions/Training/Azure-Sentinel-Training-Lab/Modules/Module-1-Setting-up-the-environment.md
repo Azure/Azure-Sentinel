@@ -5,48 +5,73 @@
 
 ## Objectives
 
-This module guides you through the deployment of the Azure Sentinel environment that will be used in all subsequent modules.
+This module guides you through the deployment of the Azure Sentinel Training Lab solution that will be used in all subsequent modules.
 
 #### Prerequisites
 
-To get started with Azure Sentinel, you must have a Microsoft Azure subscription. If you do not have a subscription, you can sign up for a free account.
+To get started with Azure Sentinel, you must have a Microsoft Azure subscription. If you do not have a subscription, you can sign up for a free account [here](https://azure.microsoft.com/en/free).
 
 Permissions to create a resource group in your Azure subscription. 
 
-### Exercise 1: Deploy Azure Sentinel Training Lab ARM template
+### Exercise 1: The Azure Sentinel workspace
 
-1. Click on the button below. Make sure that you open it in a new tab so you keep these instructions open.
+In this exercise we will show you how to create a brand new Azure Sentinel workspace. If you already have a pre-existing one that you would like to use, you can skip to [Exercise 2](Module-1-Setting-up-the-environment.md#exercise-2-deploy-azure-sentinel-training-lab-arm-template).
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTraining%2FAzure-Sentinel-Training-Lab%2FArtifacts%2Fazuredeploy.json)
+1. Navigate to the [Azure Portal](http://portal.azure.com) and log in with your account.
 
-2. Fill out the defferent fields:
-    - **Subscription**: choose the Azure subscription where you would like to deploy the Azure Sentinel lab
+2. In the top search bar, type *azure sentinel* and click on **Azure Sentinel**.
+
+![deployment](../Images/deployment1.png)
+
+3. In the Azure Sentinel screen, click **Create** at the top left.
+
+4. You can choose to add Azure Sentinel to an existing Log Analytics workspace or build a new one. We will create a new one, so click on **Create a new workspace**.
+
+![deployment](../Images/deployment2.png)
+
+5. In the Create Log Analytics workspace page, fill out the form as follows:
+
+    - **Subscription**: choose the Azure subscription where you would like to deploy the Azure Sentinel workspace
     - **Resource Group**: select an existing resource group or create a new resource group (recommended) that will host the lab resources
     - **Region**: from the drop down, select the Azure region where the lab will be located
     - **Workspace Name**: provide a name for the Azure Sentinel workspace. Please note that the workspace name should include 4-63 letters, digits or '-'. The '-' shouldn't be the first or the last symbol
 
-![setup1](../Images/setup_1.png)
+![deployment](../Images/deployment3.png)
+
+Click **Review + create** and then **Create** after the validation completes. The creation takes a few seconds.
+
+7.  You will be redirected back to the *Add Azure Sentinel to a workspace*. Type the name of your new workspace in the search box, select your workspace and click **Add** at the bottom.
+
+![deployment](../Images/deployment4.png)
+
+7. Your Azure Sentinel workspace is now ready to use!
 
 
-3. Click **Review + create** and then **Create** in the next screen. The deployment will start and should take around **15 minutes** to complete. You should see this screen when it finishes.
+### Exercise 2: Deploy the Azure Sentinel Training Lab Solution
 
-![setup3](../Images/setup_3.png)
+In this exercise you will deploy the Trainig Lab solution into your existing workspace. This will ingest pre-recorded data (~20 MBs) and create several other artifacts that will be used during the exercises.
+
+1. In the Azure Portal, go to the top search bar and type *Azure Sentinel Training*. Select the **Azure Sentinel Training Lab Solution (Preview)** marketplace item on the right.
+
+![deployment](../Images/deployment5.png)
+
+2. Read the solution description and click **Create** at the top.
+
+![deployment](../Images/deployment6.png)
+
+3. In the Basics tab, select the Subscription, Resource Group and Workspace that you created in Exercise 1, or the details for your existing workspace. Optionally, review the different tabs (Workbooks, Analytics, Hunting Queries, Watchlists, Playbooks) in the solution. When ready, click on **Review + create**.
+
+![deployment](../Images/deployment7.png)
 
 
-4. Once finished, go to the search bar at the top and type "sentinel", then click on Azure Sentinel .
+4. Once validation is ok, click on **Create**. The deployment process takes **about 15 minutes**, this is because we want to make sure that all the ingested data is ready for you to use once finished.
 
-![setup4](../Images/setup_4.png)
+5. Once the deployment finishes, you can go back to Azure Sentinel and select your workspace. In the home page you should see some ingested data and several recent incidents. Don't worry if you don't see 3 incidents like in the screenshot below, they might take a few minutes to be raised.
+
+![deployment](../Images/deployment8.png)
 
 
-5. Choose the workspace name that you selected in step #2. 
-
-![setup5](../Images/setup_5.png)
-
-6. Congratulations! You have now deployed your Azure Sentinel lab 😊. Your screen should like this:
-
-![setup6](../Images/setup_6.png)
-
-### Exercise 2: Configure Azure Sentinel Playbook
+### Exercise 3: Configure Azure Sentinel Playbook
 
 In this exercise, we will configure a Playbook that will be later used in the lab. This will allow the playbook to access Sentinel.
 
