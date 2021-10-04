@@ -8,6 +8,7 @@
 import datetime
 import logging
 import asyncio
+import os
 
 import azure.durable_functions as df
 
@@ -15,9 +16,9 @@ from .soar_connector_async import AbnormalSoarConnectorAsync
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 
 
-API_TOKEN ="****"
-SENTINEL_WORKSPACE_ID="****"
-SENTINEL_SHARED_KEY="****"
+API_TOKEN = os.environ['ABNORMAL_SECURITY_REST_API_TOKEN']
+SENTINEL_WORKSPACE_ID = os.environ['SENTINEL_WORKSPACE_ID']
+SENTINEL_SHARED_KEY = os.environ['SENTINEL_SHARED_KEY']
 LOG_ANALYTICS_URI = 'https://' + SENTINEL_WORKSPACE_ID + '.ods.opinsights.azure.com'
 
 def orchestrator_function(context: df.DurableOrchestrationContext):

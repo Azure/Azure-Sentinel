@@ -11,7 +11,7 @@ import azure.functions as func
 import azure.durable_functions as df
 
 async def main(mytimer: func.TimerRequest, starter: str):
-    logging.info("in starting")
+    logging.info("Executing SentinelTimerTrigger function")
     client = df.DurableOrchestrationClient(starter)
 
     instance_id = await client.start_new("SentinelFunctionsOrchestrator")
