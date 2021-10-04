@@ -5,7 +5,7 @@ This solution includes (1) Workbook and (10) Analytics rules and provides a guid
 # Getting Started
 1)  [Onboard Azure Defender for IoT](https://docs.microsoft.com/azure/defender-for-iot/device-builders/quickstart-onboard-iot-hub)
 2)  [Onboard Azure Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard) 
-3)  [Enable Azure Defender for IoT Connector to Azure Sentinel](https://docs.microsoft.com/en-us/azure/defender-for-iot/organizations/how-to-configure-with-sentinel)
+3)  [Enable Azure Defender for IoT Connector to Azure Sentinel](https://docs.microsoft.com/azure/defender-for-iot/organizations/how-to-configure-with-sentinel)
 4)  View the Workbook: Navigate to Azure Sentinel > Workbooks > My Workbooks > SOC for IT/OT > View 
 5)  View the Analyics Rules: Navigate to Azure Sentinel > Analytics > Search "IOT"
 
