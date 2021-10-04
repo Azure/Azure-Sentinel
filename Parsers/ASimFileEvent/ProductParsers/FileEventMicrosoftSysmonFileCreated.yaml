@@ -1,7 +1,7 @@
 Parser:
   Title: Sysmon Event 11 - Create File
-  Version: '0.2'
-  LastUpdated: Aug 30, 2021
+  Version: '0.3'
+  LastUpdated: Sep 19, 2021
 Product:
   Name: Windows Sysmon
 Normalization:
@@ -21,14 +21,14 @@ ParserQuery: |
           | where Source == "Microsoft-Windows-Sysmon"
           | where EventID == 11
           | parse EventData with '<DataItem type="System.XmlData" time="'Time:datetime
-                  '" sourceHealthServiceId="'sourceHealthServiceId
-                  '"><EventData xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><Data Name="RuleName">'RuleName:string
-                  '</Data><Data Name="UtcTime">'UtcTime:datetime'</Data><Data Name="ProcessGuid">{'ProcessGuid:string
-                  '}</Data><Data Name="ProcessId">'ProcessId:string
-                  '</Data><Data Name="Image">'Image:string /// Image is the full path 
-                  '</Data><Data Name="TargetFilename">'TargetFilename:string //// Full Path
-                  '</Data><Data Name="CreationUtcTime">'CreationUtcTime:datetime  
-                  '</Data></EventData></DataItem>'
+            '" sourceHealthServiceId="'sourceHealthServiceId
+            '"><EventData xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><Data Name="RuleName">'RuleName:string
+            '</Data><Data Name="UtcTime">'UtcTime:datetime'</Data><Data Name="ProcessGuid">{'ProcessGuid:string
+            '}</Data><Data Name="ProcessId">'ProcessId:string
+            '</Data><Data Name="Image">'Image:string /// Image is the full path 
+            '</Data><Data Name="TargetFilename">'TargetFilename:string //// Full Path
+            '</Data><Data Name="CreationUtcTime">'CreationUtcTime:datetime*
+          | parse EventData with *'<Data Name="User">'ActorUsername'</Data>'*  // parsing will work only for newer versions of sysmon -> for older will remain empty field
           | extend
               EventType='FileCreated'
               , EventProduct='Sysmon'
@@ -50,12 +50,16 @@ ParserQuery: |
               , TargetFilePath=TargetFilename
               ,TargetFileName=TargetFileName_wo_Path
           | extend
-                  Process = ActingProcessName
+                 ActorUserType = iff(isnotempty(ActorUsername),'Windows', '')
+                 // aliases
+                  ,Process = ActingProcessName
                   , Dvc = DvcHostname
                   , FilePath = TargetFilePath
+                  , User = ActorUsername
+          | project-away EventData, sourceHealthServiceId, ParameterXml
                   };
       // this is the parser for sysmon from WindowsEvent table
-      let Sysmon11_windowsEvent=(){
+       let Sysmon11_windowsEvent=(){
         WindowsEvent 
         | where Provider == "Microsoft-Windows-Sysmon"
         | where EventID == 11
@@ -74,14 +78,19 @@ ParserQuery: |
                 TargetFilePath=tostring(EventData.TargetFilename),
                 ActingProcessName = tostring(EventData.Image),
                 ActingProcessId = toint(EventData.ProcessId),
-                ActingProcessGuid = tostring(EventData.ProcessGuid)
+                ActingProcessGuid = tostring(EventData.ProcessGuid),
+                ActorUsername = tostring(EventData.User) // this field is relevant for newer versions of Sysmon
         | project-rename
                 DvcHostname = Computer,
                 EventOriginalType=EventID
         | extend 
+                ActorUserType = iff(isnotempty(ActorUsername),'Windows', ''),
+                // aliases
                 Process = ActingProcessName,
                 Dvc = DvcHostname,
-                FilePath = TargetFilePath
+                FilePath = TargetFilePath,
+                User = ActorUsername
+        | project-away EventData
         };
       union isfuzzy=true
               Sysmon11_Event,
