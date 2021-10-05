@@ -691,13 +691,25 @@ def check_portal_auto_sync():
     return True
 
 
+
+def is_agent_version_new(installed_version_major, installed_version_minor, installed_version_patch):
+    VERSION_MAJOR = 1
+    VERSION_MINOR = 13
+    VERSION_PATCH = 40
+    if (installed_version_major > VERSION_MAJOR or
+            (installed_version_major == VERSION_MAJOR and installed_version_minor > VERSION_MINOR) or
+            (
+                    installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
+
+        return True
+    else:
+        return False
+
+
 def omi_vulnerability_patch_validation():
     """
     Return: True is OMI Vulnerability patch is installed. Otherwise false.
     """
-    VERSION_MAJOR = 1
-    VERSION_MINOR = 13
-    VERSION_PATCH = 40
     print_notice("Validating that the OMI vulnerability patch is installed.")
     try:
         OMI_version = subprocess.Popen(["dpkg", "-l"], stdout=subprocess.PIPE)
@@ -715,17 +727,13 @@ def omi_vulnerability_patch_validation():
             print_error("Error: Could not validate omsagent version.")
             return False
         agent_subversion_list = agent_version.split('.')
-        installed_version_major = int(agent_subversion_list[0])
-        installed_version_minor = int(agent_subversion_list[1])
-        installed_version_patch = int(agent_subversion_list[2])
-        if (installed_version_major > VERSION_MAJOR or
-            (installed_version_major == VERSION_MAJOR and installed_version_minor > VERSION_MINOR) or
-            (installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
+        installed_version_major, installed_version_minor, installed_version_patch = int(agent_subversion_list[0]), int(agent_subversion_list[1]), int(agent_subversion_list[2])
+        if is_agent_version_new(installed_version_major, installed_version_minor, installed_version_patch):
             print_ok("Protected from OMI vulnerability, patch is installed.")
             return True
-        else:
-            print_error("The patch installation failed and the OMI vulnerability still exists. Please re-install the agent completely. For further information please review - " + OMI_patch_docs_path)
-            return False
+        print_error(
+            "The patch installation failed and the OMI vulnerability still exists. Please re-install the agent completely. For further information please review - " + OMI_patch_docs_path)
+        return False
 
 
 def print_full_disk_warning():
