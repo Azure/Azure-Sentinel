@@ -693,7 +693,7 @@ def check_portal_auto_sync():
 
 def is_agent_version_with_patch(installed_version_major, installed_version_minor, installed_version_patch):
     """
-    Return: True if the agent version is newer/the same as the one containing the OMI patch.
+    Return: True if the agent version is newer/the same as the one containing the OMI patch. Otherwise  False
     """
     VERSION_MAJOR = 1
     VERSION_MINOR = 13
