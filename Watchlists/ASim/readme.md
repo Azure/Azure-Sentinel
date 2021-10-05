@@ -10,4 +10,4 @@ For more information, see:
 <br>
  
 
-[![Deploy Source Types Watchlist](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fdev%2FNormalization%2FWL%2Finfoblox%2FWatchlists%2FASim%2FASimSourceType.json)
+[![Deploy Source Types Watchlist](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Fnorm%2Fwl1%2FWatchlists%2FASim%2FASimSourceType.json)
