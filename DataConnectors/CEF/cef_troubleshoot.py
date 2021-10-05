@@ -720,8 +720,7 @@ def is_agent_version_new(installed_version_major, installed_version_minor, insta
                     installed_version_major == VERSION_MAJOR and installed_version_minor == VERSION_MINOR and installed_version_patch >= VERSION_PATCH)):
 
         return True
-    else:
-        return False
+    return False
 
 
 def omi_vulnerability_patch_validation():
