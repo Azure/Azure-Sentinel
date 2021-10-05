@@ -4,7 +4,7 @@ This template deploys all [ASIM](https://aka.ms/AzSentinelNormalization) parsers
 
 The Azure Sentinel Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
-For more information, ses [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+For more information, see [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
 
 <br>
 
