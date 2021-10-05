@@ -710,7 +710,10 @@ def check_portal_auto_sync():
     return True
 
 
-def is_agent_version_new(installed_version_major, installed_version_minor, installed_version_patch):
+def is_agent_version_with_patch(installed_version_major, installed_version_minor, installed_version_patch):
+    """
+    Return: True if the given version is newer/the same as the agent version containing the OMI patch. otherwise False.
+    """
     VERSION_MAJOR = 1
     VERSION_MINOR = 13
     VERSION_PATCH = 40
@@ -746,7 +749,7 @@ def omi_vulnerability_patch_validation():
         agent_subversion_list = agent_version.split('.')
         installed_version_major, installed_version_minor, installed_version_patch = int(agent_subversion_list[0]), int(
             agent_subversion_list[1]), int(agent_subversion_list[2])
-        if is_agent_version_new(installed_version_major, installed_version_minor, installed_version_patch):
+        if is_agent_version_with_patch(installed_version_major, installed_version_minor, installed_version_patch):
             print_ok("Protected from OMI vulnerability, patch is installed.")
             return True
         print_error(
