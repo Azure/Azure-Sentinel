@@ -21,10 +21,14 @@ query: |
   let timeframe = 1d;
   let scorethreshold = 3;
   let baselinethreshold = 5;
+  // To avoid any False Positives, filtering using AppId is recommended. For example the AppId 509e4652-da8d-478d-a730-e9d4a1996ca4 has been added in the query as it corresponds 
+  // to Azure Security Graph performing VaultGet operations for indexing and syncing all tracked resources across Azure.
+  let Allowedappid = dynamic(["509e4652-da8d-478d-a730-e9d4a1996ca4"]);
   let OperationList = dynamic(
   ["SecretGet", "KeyGet", "VaultGet"]);
   let TimeSeriesData = AzureDiagnostics
   | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))
+  | where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')
   | extend ResultType = columnifexists("ResultType", "None"), CallerIPAddress = columnifexists("CallerIPAddress", "None")
   | where ResultType !~ "None" and isnotempty(ResultType)
   | where CallerIPAddress !~ "None" and isnotempty(CallerIPAddress)
@@ -47,6 +51,7 @@ query: |
   | join (
   AzureDiagnostics
   | where TimeGenerated > ago(timeframe)
+  | where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
   | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
   | extend ResultType = columnifexists("ResultType", "NoResultType")
@@ -73,4 +78,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.1
+kind: scheduled

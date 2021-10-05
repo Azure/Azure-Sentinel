@@ -1,6 +1,6 @@
-# Azure Defender for IoT ASIM NetworkSessions Normalization Parser
+# Microsoft Defender for IoT - Endpoint ASIM NetworkSessions Normalization Parser
 
-This template deploys the ASIM NetworkSessions schema parser for Azure Defender for IoT. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM NetworkSessions schema parser for Microsoft Defender for IoT - Endpoint. The parser is a part of the Azure Sentinel Information Model.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
@@ -12,4 +12,4 @@ For more information, see:
 <br>
  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSessions%2FARM%2FNetworkSessionMicrosoftMD4IoT%2FNetworkSessionMicrosoftMD4IoT.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSessions%2FARM%2FvimNetworkSessionMicrosoftMD4IoT%2FvimNetworkSessionMicrosoftMD4IoT.json)

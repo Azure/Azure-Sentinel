@@ -52,6 +52,7 @@ On the Scope selection select your relevant subscription.
 
 ![azactivity7](../Images/azactivity7.png)
 
+8. It is normal if you don't immediately see the connector showing as connected and in green. Also, each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Azure Sentinel workspace.
 
 ### Exercise 2: Enable Azure Defender data connector
 
