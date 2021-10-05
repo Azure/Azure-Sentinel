@@ -64,7 +64,6 @@ file_read_permissions_octal_representation = 4
 mock_message_max = 5
 portal_auto_sync_disable_file = "omshelper_disable"
 
-
 def print_error(input_str):
     print("\033[1;31;40m" + input_str + "\033[0m")
 
@@ -131,8 +130,7 @@ def check_red_hat_firewall_issue():
                 print_warning(
                     "You can add exception for the agent port[" + agent_port + "] by using the following commands:")
                 print_warning("Add exception:")
-                print_notice(
-                    "sudo firewall-cmd --direct --permanent --add-rule ipv4 filter INPUT 0 -p tcp --dport " + agent_port + "  -j ACCEPT")
+                print_notice("sudo firewall-cmd --direct --permanent --add-rule ipv4 filter INPUT 0 -p tcp --dport " + agent_port + "  -j ACCEPT")
                 print_warning("Reload the firewall:")
                 print_notice("sudo firewall-cmd --reload")
                 print_warning("Validate the exception was added in the configuration:")
@@ -196,7 +194,7 @@ def security_enhanced_linux_enabled():
         print_notice("please install \'policycoreutils\' package and run the troubleshoot script again")
     else:
         if o == 'Enforcing\n':
-            return True
+                return True
         return False
 
 
@@ -209,8 +207,7 @@ def security_enhanced_linux():
         print_notice("To set SELinux to Permissive mode use elevated privileges to perform the following:")
         print_notice("Run the following command to temporarily change SELinux to permissive mode: \"setenforce 0\"")
         print_notice("Please restart the syslog daemon running on your machine")
-        print_notice(
-            "In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
+        print_notice("In order to make changes permanent please visit: " + red_hat_security_enhanced_permanent_documentation)
         print_notice("For more information on SELinux: " + red_hat_rsyslog_security_enhanced_linux_documentation)
     else:
         pass
@@ -244,8 +241,7 @@ def rsyslog_get_cef_log_counter():
             print("Located " + str(output) + " CEF messages")
             return int(output)
     print_error("Error: could not find CEF\\ASA logs.")
-    print_notice(
-        "Notice: execute \"sudo tac /var/log/syslog or /var/log/messages | grep -E \"CEF|ASA\" -m 10\" manually.")
+    print_notice("Notice: execute \"sudo tac /var/log/syslog or /var/log/messages | grep -E \"CEF|ASA\" -m 10\" manually.")
     return 0
 
 
@@ -295,8 +291,7 @@ def incoming_logs_validations(incoming_port, ok_message, mock_message=False):
     line = str(tcp_dump.stdout.readline())
     # Handle command not found
     if "command not found" in line:
-        print_error(
-            "Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
+        print_error("Notice that \'tcpdump\' is not installed in your linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'.")
         return False
     poll_obj = select.poll()
     poll_obj.register(tcp_dump.stdout, select.POLLIN)
@@ -417,25 +412,24 @@ def check_oms_agent_status():
     else:
         return True
 
-
 def check_omsagent_cisco_asa_configuration(workspace_id):
-    '''
-    Checking if the OMS agent is able to parse Cisco ASA:
-    :return: True if the configuration is updated, false otherwise
-    '''
-    grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')",
-                             oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
-    o, e = grep.communicate()
-    if not o:
-        print_warning("Warning: Current content of the omsagent security configuration doesn't support"
-                      " Cisco ASA parsing.\nTo enable Cisco ASA firewall events parsing run the following: \n"
-                      "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
-                      "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
-                      " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"\n")
-        return False
-    else:
-        print_ok("omsagent security configuration supports Cisco ASA parsing \n")
-        return True
+        '''
+        Checking if the OMS agent is able to parse Cisco ASA:
+        :return: True if the configuration is updated, false otherwise
+        '''
+        grep = subprocess.Popen(["grep", "-i", "return ident if ident.include?('%ASA')",
+                                 oms_agent_plugin_securiy_config], stdout=subprocess.PIPE)
+        o, e = grep.communicate()
+        if not o:
+            print_warning("Warning: Current content of the omsagent security configuration doesn't support"
+                          " Cisco ASA parsing.\nTo enable Cisco ASA firewall events parsing run the following: \n"
+                          "\"sed -i \"s|return \'%ASA\' if ident.include?(\'%ASA\')"
+                          "|return ident if ident.include?(\'%ASA\')|g\" " + oms_agent_plugin_securiy_config +
+                          " && sudo /opt/microsoft/omsagent/bin/service_control restart " + workspace_id + "\"\n")
+            return False
+        else:
+            print_ok("omsagent security configuration supports Cisco ASA parsing \n")
+            return True
 
 
 def check_syslog_computer_field_mapping(workspace_id):
@@ -457,7 +451,6 @@ def check_syslog_computer_field_mapping(workspace_id):
         print_ok("OMS Agent syslog field mapping is correct \n")
         return True
 
-
 def file_contains_string(file_tokens, file_path):
     print_notice(file_path)
     content = open(file_path).read()
@@ -477,9 +470,7 @@ def check_file_read_permissions(file_path, workspace_id):
     if int(other_permissions) < file_read_permissions_octal_representation:
         # prompt the user to change the file permissions to default file permissions in consts
         print_error("Wrong permissions for the file: {} \nTo fix this please run the following command:"
-                    " \"chmod o+r {} && sudo /opt/microsoft/omsagent/bin/service_control restart {}\"".format(file_path,
-                                                                                                              file_path,
-                                                                                                              workspace_id))
+                    " \"chmod o+r {} && sudo /opt/microsoft/omsagent/bin/service_control restart {}\"".format(file_path, file_path, workspace_id))
         return False
     print_ok("File permissions valid")
 
@@ -642,12 +633,10 @@ def handle_syslog_ng(workspace_id):
             print("Validating CEF into syslog-ng daemon")
             time.sleep(1)
             incoming_logs_validations(daemon_port,
-                                      "Received CEF message in daemon incoming port.[" + daemon_port + "]",
-                                      mock_message=False)
+                                      "Received CEF message in daemon incoming port.[" + daemon_port + "]", mock_message=False)
             time.sleep(1)
             incoming_logs_validations(agent_port,
-                                      "Received CEF message in agent incoming port.[" + agent_port + "]",
-                                      mock_message=False)
+                                      "Received CEF message in agent incoming port.[" + agent_port + "]", mock_message=False)
         else:
             print_error("Error: syslog-ng daemon configuration was found invalid.")
             print_notice("Notice: please make sure:")
@@ -662,15 +651,12 @@ def handle_rsyslog(workspace_id):
         daemon_config_valid = validate_daemon_configuration_content("rsyslog.d",
                                                                     rsyslog_security_config_omsagent_conf_content_tokens)
         if not daemon_config_valid:
-            print_error(
-                "Error: found an outdated rsyslog daemon configuration file: " + rsyslog_daemon_forwarding_configuration_path)
+            print_error("Error: found an outdated rsyslog daemon configuration file: " + rsyslog_daemon_forwarding_configuration_path)
             print_notice("The updated file should contain the following configuration: \'if $rawmsg contains \"CEF:\""
                          " or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port + "\'")
-            print_notice(
-                "Notice: Please run the following command to update the configuration and restart the rsyslog daemon:")
-            print_notice(
-                "\"echo \'if $rawmsg contains \"CEF:\" or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port +
-                "\' > /etc/rsyslog.d/security-config-omsagent.conf && service rsyslog restart\"")
+            print_notice("Notice: Please run the following command to update the configuration and restart the rsyslog daemon:")
+            print_notice("\"echo \'if $rawmsg contains \"CEF:\" or $rawmsg contains \"ASA-\" then @@127.0.0.1:" + agent_port +
+                         "\' > /etc/rsyslog.d/security-config-omsagent.conf && service rsyslog restart\"")
         else:
             print_ok("rsyslog daemon configuration was found valid.")
         print("Trying to restart syslog daemon")
@@ -683,15 +669,13 @@ def handle_rsyslog(workspace_id):
         print("Validating CEF\\ASA into rsyslog daemon - port " + daemon_port)
         time.sleep(1)
         incoming_logs_validations(daemon_port,
-                                  "Received CEF\\ASA message in daemon incoming port.[" + daemon_port + "]",
-                                  mock_message=False)
+                                  "Received CEF\\ASA message in daemon incoming port.[" + daemon_port + "]", mock_message=False)
         time.sleep(1)
         rsyslog_cef_logs_received_in_correct_format()
         # after validating logs are arriving validation that the daemon will accept them
         if check_rsyslog_configuration():
             incoming_logs_validations(agent_port,
-                                      "Received CEF message in agent incoming port.[" + agent_port + "]",
-                                      mock_message=False)
+                                      "Received CEF message in agent incoming port.[" + agent_port + "]", mock_message=False)
             time.sleep(1)
 
 
@@ -699,21 +683,15 @@ def check_portal_auto_sync():
     if check_file_in_directory(portal_auto_sync_disable_file, oms_agent_omsconfig_directory):
         print_ok("No auto sync with the portal")
         return False
-    print_warning(
-        "\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
-        "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
-        "the auto sync with the portal. Otherwise all changes will be overwritten. ")
-    print_warning(
-        "To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
-    print_warning(
-        "For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
+    print_warning("\nYour machine is auto synced with the portal. In case you are using the same machine to forward both plain Syslog and CEF messages, "
+                  "please make sure to manually change the Syslog configuration file to avoid duplicated data and disable "
+                  "the auto sync with the portal. Otherwise all changes will be overwritten. ")
+    print_warning("To disable the auto sync with the portal please run: \"sudo su omsagent -c 'python /opt/microsoft/omsconfig/Scripts/OMS_MetaConfigHelper.py --disable'\"")
+    print_warning("For more on how to avoid duplicated syslog and CEF logs please visit: " + log_forwarder_deployment_documentation)
     return True
 
 
 def is_agent_version_with_patch(installed_version_major, installed_version_minor, installed_version_patch):
-    """
-    Return: True if the given version is newer/the same as the agent version containing the OMI patch. otherwise False.
-    """
     VERSION_MAJOR = 1
     VERSION_MINOR = 13
     VERSION_PATCH = 40
@@ -800,11 +778,8 @@ def main():
         handle_syslog_ng(workspace_id)
     print("Simulating mock data which you can find in your workspace")
     # we always simulate to the daemon port
-    if not incoming_logs_validations(agent_port,
-                                     "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].",
-                                     mock_message=True):
-        print_error(
-            "Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
+    if not incoming_logs_validations(agent_port, "Mock messages sent and received in daemon incoming port [" + daemon_port + "] and to the omsagent port [" + agent_port + "].", mock_message=True):
+        print_error("Please make sure that traffic to the syslog daemon on port " + daemon_port + " and to the OMS agent on port " + agent_port + " are enabled on the internal firewall of the machine")
     check_portal_auto_sync()
     omi_vulnerability_patch_validation()
     print_full_disk_warning()
