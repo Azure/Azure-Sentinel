@@ -43,7 +43,7 @@ namespace SampleDataIngestTool
                     {
                         // Prompt user to choose to repush data
                         Console.WriteLine("{0} has been posted. Would you like to post it again?", fileName);
-                        var res = Console.ReadLine();
+                        var res = "y";
                         if(res.ToLower() == "y" || res.ToLower() == "yes")
                         {
                             PushDataToLog(file);
