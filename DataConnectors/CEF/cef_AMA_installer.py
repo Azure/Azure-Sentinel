@@ -26,9 +26,6 @@
 #   Rsyslog: v8
 import subprocess
 import time
-import sys
-import os
-import re
 
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
