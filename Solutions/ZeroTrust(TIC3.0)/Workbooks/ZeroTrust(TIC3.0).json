@@ -5,7 +5,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [],
         "parameters": [
           {
             "id": "a4b4e975-fa7c-46a3-b669-850aacc88134",
@@ -32,7 +31,7 @@
             "isHiddenWhenLocked": true,
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources",
-            "id": "a4b4e975-fa7c-46a3-b669-850aacc88134"
+            "id": "314d02bf-4691-43fa-af59-d67073c8b8fa"
           },
           {
             "id": "e6ded9a1-a83c-4762-938d-5bf8ff3d3d38",
@@ -117,7 +116,7 @@
         ],
         "style": "pills",
         "queryType": 0,
-        "resourceType": "microsoft.resourcegraph/resources"
+        "resourceType": "microsoft.operationalinsights/workspaces"
       },
       "name": "Parameter Selectors"
     },
@@ -707,7 +706,7 @@
               "title": "Recommendations by Control Family",
               "noDataMessage": "No Current Zero Trust(TIC3.0) Recommendations in this Area. Confirm the CMMC Level 3 Assessment is Enabled in Azure Security Center: Regulatory Compliance Blade.",
               "timeContext": {
-                "durationMs": 0
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -755,7 +754,8 @@
                       "palette": "coldHot"
                     }
                   }
-                ]
+                ],
+                "filter": true
               }
             },
             "customWidth": "50",
@@ -774,7 +774,7 @@
               "title": "Recommendations over Time",
               "noDataMessage": "No Current Zero Trust(TIC3.0) Recommendations in this Area. Confirm the CMMC Level 3 Assessment is Enabled in Azure Security Center: Regulatory Compliance Blade.",
               "timeContext": {
-                "durationMs": 0
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -1085,11 +1085,15 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ZeroTrustTIC3Mapping = externaldata(RecommendationDisplayName:string,Capability:string,Family:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ZeroTrustTIC3Mapping.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\r\n  SecurityRecommendation\r\n    | join kind=rightouter ZeroTrustTIC3Mapping on RecommendationDisplayName\r\n| where RecommendationName <> \"\"\r\n| where RecommendationState <> \"Healthy\"\r\n| where Family in ({ControlFamily})\r\n| project AssessedResourceId, Family, Capability, RecommendationDisplayName, RecommendationLink, RecommendationSeverity, RecommendationState, DiscoveredTimeUTC\r\n| sort by DiscoveredTimeUTC desc\r\n| limit 250\r\n",
+              "query": "let ZeroTrustTIC3Mapping = externaldata(RecommendationDisplayName:string,Capability:string,Family:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ZeroTrustTIC3Mapping.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\r\n  SecurityRecommendation\r\n    | join kind=rightouter ZeroTrustTIC3Mapping on RecommendationDisplayName\r\n| where RecommendationName <> \"\"\r\n| where RecommendationState <> \"Healthy\"\r\n| where RecommendationState <> \"NotApplicable\"\r\n| where RecommendationState <> \"Removed\"\r\n| where Family in ({ControlFamily})\r\n| extend Recommendation = strcat(\"https://\",RecommendationLink)\r\n| project AssessedResourceId, Family, Capability, RecommendationDisplayName, Recommendation, RecommendationSeverity,  RecommendationState, DiscoveredTimeUTC\r\n| sort by DiscoveredTimeUTC desc\r\n| limit 250",
               "size": 0,
               "showAnalytics": true,
-              "title": "Recommendation Details",
+              "title": "Zero Trust (TIC3.0) Recommendation Details",
               "noDataMessage": "No Current Zero Trust(TIC3.0) Recommendations in this Area. Confirm the CMMC Level 3 Assessment is Enabled in Azure Security Center: Regulatory Compliance Blade.",
+              "timeContext": {
+                "durationMs": 0
+              },
+              "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1099,20 +1103,6 @@
               "gridSettings": {
                 "formatters": [
                   {
-                    "columnMatch": "ResourceType",
-                    "formatter": 16,
-                    "formatOptions": {
-                      "showIcon": true
-                    }
-                  },
-                  {
-                    "columnMatch": "count_",
-                    "formatter": 4,
-                    "formatOptions": {
-                      "palette": "redBright"
-                    }
-                  },
-                  {
                     "columnMatch": "RecommendationDisplayName",
                     "formatter": 18,
                     "formatOptions": {
@@ -1121,93 +1111,61 @@
                         {
                           "operator": "Default",
                           "thresholdValue": null,
-                          "representation": "warning",
+                          "representation": "2",
                           "text": "{0}{1}"
                         }
                       ]
                     }
-                  },
-                  {
-                    "columnMatch": "Severity",
-                    "formatter": 18,
-                    "formatOptions": {
-                      "thresholdsOptions": "colors",
-                      "thresholdsGrid": [
-                        {
-                          "operator": "==",
-                          "thresholdValue": "High",
-                          "representation": "redBright",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "==",
-                          "thresholdValue": "Medium",
-                          "representation": "orange",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "==",
-                          "thresholdValue": "Low",
-                          "representation": "yellow",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "Default",
-                          "thresholdValue": null,
-                          "representation": "blue",
-                          "text": "{0}{1}"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "columnMatch": "State",
-                    "formatter": 1
-                  },
-                  {
-                    "columnMatch": "ControlID",
-                    "formatter": 1
                   },
                   {
                     "columnMatch": "Recommendation",
                     "formatter": 7,
                     "formatOptions": {
                       "linkTarget": "Url",
-                      "linkLabel": "Go to Recommendation >"
+                      "linkLabel": "Go To Recommendation >"
                     }
                   },
                   {
-                    "columnMatch": "statusChangeDate",
-                    "formatter": 6
-                  },
-                  {
-                    "columnMatch": "firstEvaluationDate",
-                    "formatter": 6
+                    "columnMatch": "RecommendationSeverity",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Informational",
+                          "representation": "Sev3",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "High",
+                          "representation": "Sev0",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Medium",
+                          "representation": "Sev1",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Low",
+                          "representation": "Sev2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "Sev3",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
                   }
                 ],
                 "filter": true
-              },
-              "sortBy": [],
-              "tileSettings": {
-                "showBorder": false,
-                "titleContent": {
-                  "columnMatch": "RecommendationName",
-                  "formatter": 1
-                },
-                "leftContent": {
-                  "columnMatch": "count_",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "auto"
-                  },
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
-                  }
-                }
               }
             },
             "name": "query - 6"
@@ -5963,7 +5921,7 @@
               "title": "Security Alerts: Phishing",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -6233,7 +6191,7 @@
               "title": "Spam Email Actions",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -6370,7 +6328,7 @@
               "title": "Review Security Alerts for DMARC, SPF, DKIM Validations",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -6530,7 +6488,7 @@
               "title": "Email Data Loss Prevention",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -6631,7 +6589,7 @@
               "title": "Inbound DMARC Failures",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -6791,7 +6749,7 @@
               "title": "Outbound DMARC Failures",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -6951,7 +6909,7 @@
               "title": "Workload Encryption Recommendations",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -7119,7 +7077,7 @@
               "title": "SafeLinks Email Protections",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -7286,7 +7244,7 @@
               "title": "Email URL Protections",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -11381,7 +11339,7 @@
               "title": "User Actions",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -11467,7 +11425,7 @@
               "title": "User Sign-Ins by Geolocation",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -11608,7 +11566,7 @@
               "title": "Data at Rest Recommenations",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -11708,7 +11666,7 @@
               "title": "Data in Transit Recommenations",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -11808,7 +11766,7 @@
               "title": "DLP Actions over Time",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -11873,7 +11831,7 @@
               "title": "Data Access and Use Telemetry",
               "noDataMessage": "An Empty Panel Provides Opportunity To Explore This Control Further and Implement Solutions                                                                                                                                               •    Confirm Licensing, Availability, and Health of Respective Offerings                                                                                                                                                •    Confirm Log Source is Onboarded to Azure Sentinel Workspace                                                                                                                                                     •    Adjust the Time Paramenter for a Larger Data-Set                                                                                                                                                                          •    Panels Can Display 'No Data' if All Recommendations are Fully Implemented, See Azure Security Center Recommendations                                                                                                                                   •    Third Party Tooling: Adjust Respective Panel KQL Query for Third Pary Tooling Requirements",
               "timeContext": {
-                "durationMs": 7776000000
+                "durationMs": 2592000000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
