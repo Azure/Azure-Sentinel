@@ -1085,7 +1085,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 criteria = $DependencyCriteria;
             };
             categories      = [PSCustomObject]@{
-                domains = $contentToImport.Metadata.categories.Split(",");
+                domains = $contentToImport.Metadata.categories_domains.Split(",");
             }
         }
     }
