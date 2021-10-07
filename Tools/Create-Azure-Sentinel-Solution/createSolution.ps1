@@ -62,25 +62,27 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
     $baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
 
+    $DependencyCriteria = @();
+
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
         if ($objectProperties.Value -is [System.Array]) {
             foreach ($file in $objectProperties.Value) {
                 $finalPath = $basePath + $file
-                $rawData = $null 
+                $rawData = $null
                 try {
                     Write-Host "Downloading $file"
                     $rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
                 }
                 catch {
-                    Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red 
+                    Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
                     break;
                 }
 
                 try {
                     $json = ConvertFrom-Json $rawData -ErrorAction Stop; # Determine whether content is JSON or YAML
                     $validJson = $true;
-                } 
+                }
                 catch {
                     $validJson = $false;
                 }
@@ -90,6 +92,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     $objectKeyLowercase = $objectProperties.Name.ToLower()
                     if ($objectKeyLowercase -eq "workbooks") {
                         Write-Host "Generating Workbook using $file"
+
+                        $fileName = Split-Path $file -leafbase;
+
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+
+                        $DependencyCriteria += [PSCustomObject]@{
+                            kind = "Workbook";
+                            contentId = "[variables('_$fileName')]"
+                        };
+
                         if ($workbookCounter -eq 1) {
                             # Add workbook source variables
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
@@ -133,33 +146,33 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $data = $rawData -replace "[^ -~\t]", ""
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
-                            # Remove empty braces  
+                            # Remove empty braces
                             $serializedData = $(removePropertiesRecursively $serializedData) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
                         catch {
-                            Write-Host "Failed to serialize $file" -ForegroundColor Red 
+                            Write-Host "Failed to serialize $file" -ForegroundColor Red
                             break;
                         }
                         $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
-                        $workbookUiParameter = [PSCustomObject] @{ 
-                            name     = "workbook$workbookCounter"; 
-                            type     = "Microsoft.Common.Section"; 
-                            label    = $solutionName; 
+                        $workbookUiParameter = [PSCustomObject] @{
+                            name     = "workbook$workbookCounter";
+                            type     = "Microsoft.Common.Section";
+                            label    = $solutionName;
                             elements = @(
-                                [PSCustomObject] @{ 
-                                    name    = "workbook$workbookCounter-text"; 
-                                    type    = "Microsoft.Common.TextBlock"; 
+                                [PSCustomObject] @{
+                                    name    = "workbook$workbookCounter-text";
+                                    type    = "Microsoft.Common.TextBlock";
                                     options = [PSCustomObject] @{ text = $workbookDescriptionText; }
-                                }, 
-                                [PSCustomObject] @{ 
-                                    name         = "workbook$workbookCounter-name"; 
-                                    type         = "Microsoft.Common.TextBox"; 
-                                    label        = "Display Name"; 
-                                    defaultValue = $solutionName; 
-                                    toolTip      = "Display name for the workbook."; 
-                                    constraints  = [PSCustomObject] @{ 
-                                        required          = $true; 
-                                        regex             = "[a-z0-9A-Z]{1,256}$"; 
+                                },
+                                [PSCustomObject] @{
+                                    name         = "workbook$workbookCounter-name";
+                                    type         = "Microsoft.Common.TextBox";
+                                    label        = "Display Name";
+                                    defaultValue = $solutionName;
+                                    toolTip      = "Display name for the workbook.";
+                                    constraints  = [PSCustomObject] @{
+                                        required          = $true;
+                                        regex             = "[a-z0-9A-Z]{1,256}$";
                                         validationMessage = "Please enter a workbook name"
                                     }
                                 }
@@ -170,7 +183,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
                         $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $contentToImport.Name; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
-                    
+
                         # Create Workbook Resource Object
                         $newWorkbook = [PSCustomObject]@{
                             type       = "Microsoft.Insights/workbooks";
@@ -178,11 +191,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
                             apiVersion = "2020-02-12";
-                            properties = [PSCustomObject] @{ 
-                                displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]"; 
+                            properties = [PSCustomObject] @{
+                                displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
-                                version        = "1.0"; 
-                                sourceId       = "[variables('_workbook-source')]"; 
+                                version        = "1.0";
+                                sourceId       = "[variables('_workbook-source')]";
                                 category       = "sentinel"
                             }
                         }
@@ -190,7 +203,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.resources += $newWorkbook
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
-                        
+
                         $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUiParameter
                         $baseCreateUiDefinition.parameters.outputs | Add-Member -NotePropertyName "workbook$workbookCounter-name" -NotePropertyValue "[steps('workbooks').workbook$workbookCounter.workbook$workbookCounter-name]"
 
@@ -200,6 +213,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         Write-Host "Generating Playbook using $file"
                         $playbookData = $json
                         $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
+
+                        $fileName = Split-path -Parent $file | Split-Path -leaf
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+
+                        $DependencyCriteria += [PSCustomObject]@{
+                            kind = "Playbook";
+                            contentId = "[variables('_$fileName')]"
+                        };
+
                         if ($playbookCounter -eq 1) {
                             # If a playbook exists, add CreateUIDefinition step before playbook elements while handling first playbook.
                             $playbookStep = [PSCustomObject] @{
@@ -284,7 +307,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         type         = "string";
                                         minLength    = 1;
                                         metadata     = [PSCustomObject] @{ description = "Username to connect to $solutionName API" }
-                                    })  
+                                    })
                             }
                             elseif ($param.Name.ToLower().contains("password")) {
                                 $playbookPasswordObject = [PSCustomObject] @{
@@ -305,15 +328,15 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             else {
                                 function PascalSplit ($pascalStr) {
                                     foreach ($piece in $pascalStr) {
-                                        if ($piece -is [array]) { 
+                                        if ($piece -is [array]) {
                                             foreach ($subPiece in $piece) { PascalSplit $subPiece }
                                         }
                                         else {
                                             ($piece.ToString() -creplace '[A-Z]', ' $&').Trim().Split($null)
-                                        }  
+                                        }
                                     }
                                 }
-                                
+
                                 $playbookParamObject = $(
                                     if ($playbookData.parameters.$paramName.allowedValues) {
                                         [PSCustomObject] @{
@@ -382,11 +405,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             foreach ($prop in $resourceObj.PsObject.Properties) {
                                 $key = $prop.Name
                                 if ($prop.Value -is [System.String]) {
-                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter) 
+                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                     if ($resourceObj.$key.StartsWith("[") -and $resourceObj.$key[$resourceObj.$key.Length - 1] -eq "]") {
                                         $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                     }
-                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replaceLocationValue.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter) 
+                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replaceLocationValue.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                     if ($resourceObj.$key.IndexOf($azureManagementUrl)) {
                                         $resourceObj.$key = $resourceObj.$key.Replace($azureManagementUrl, "@{variables('azureManagementUrl')}")
                                         $azureManagementUrlExists = $true
@@ -435,7 +458,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         foreach ($playbookResource in $playbookData.resources) {
                             if ($playbookResource.type -eq "Microsoft.Web/connections") {
                                 if ($playbookResource.properties -and $playbookResource.properties.api -and $playbookResource.properties.api.id) {
-                                    $connectionVar = $playbookResource.properties.api.id 
+                                    $connectionVar = $playbookResource.properties.api.id
                                     $connectionVar = $connectionVar.Replace("resourceGroup().location", "parameters('workspace-location')")
                                     $variableReferenceString = "[variables"
                                     $varName = ""
@@ -476,7 +499,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $connectorData = ConvertFrom-Json $rawData
                         }
                         catch {
-                            Write-Host "Failed to deserialize $file" -ForegroundColor Red 
+                            Write-Host "Failed to deserialize $file" -ForegroundColor Red
                             break;
                         }
                         $connectorNameParamObj = [PSCustomObject] @{
@@ -486,7 +509,15 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.parameters | Add-Member -NotePropertyName "connector$connectorCounter-name" -NotePropertyValue $connectorNameParamObj
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "connector$connectorCounter-source" -NotePropertyValue "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector$connectorCounter-name'))]"
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_connector$connectorCounter-source" -NotePropertyValue "[variables('connector$connectorCounter-source')]"
-                        
+
+                        $connectorId = $connectorData.id + 'Connector';
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName $connectorId -NotePropertyValue $connectorId
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$connectorId" -NotePropertyValue "[variables('$connectorId')]"
+
+                        $DependencyCriteria += [PSCustomObject]@{
+                            kind = "DataConnector";
+                            contentId = "[variables('_$connectorId')]"
+                        };
                         function handleEmptyInstructionProperties ($inputObj) {
                             $outputObj = $inputObj |
                             Get-Member -MemberType *Property |
@@ -624,6 +655,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     }
                     elseif ($objectKeyLowercase -eq "watchlists") {
                         $watchlistData = $json.resources[0]
+
+                        $watchlistName = watchlistData.properties.displayName;
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName $watchlistName -NotePropertyValue $watchlistName
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$watchlistName" -NotePropertyValue "[variables('$watchlistName')]"
+
+                        $DependencyCriteria += [PSCustomObject]@{
+                            kind = "Watchlist";
+                            contentId = "[variables('_$watchlistName')]"
+                        };
+
                         #Handle CreateUiDefinition Base Step
                         if ($watchlistCounter -eq 1) {
                             $baseWatchlistStep = [PSCustomObject]@{
@@ -673,12 +714,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $watchlistIdParameterName = "watchlist$watchlistCounter-id"
                         $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $watchlistIdParameterName -Value $watchlistIdParameter
-                        
+
                         # Replace watchlist resource id
                         $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$watchlistCounter-id'))]"
-                        
+
                         # Handle MainTemplate Resource
-                        $baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template                        
+                        $baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template
 
                         # Update Watchlist Counter
                         $watchlistCounter += 1
@@ -690,17 +731,27 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if ($objectKeyLowercase -eq "hunting queries") {
                             Write-Host "Generating Hunting Query using $file"
                             $content = ''
-                            foreach ($line in $rawData) { 
-                                $content = $content + "`n" + $line 
+                            foreach ($line in $rawData) {
+                                $content = $content + "`n" + $line
                             }
                             try {
                                 $yaml = ConvertFrom-YAML $content
                             }
                             catch {
-                                Write-Host "Failed to deserialize $file" -ForegroundColor Red 
+                                Write-Host "Failed to deserialize $file" -ForegroundColor Red
                                 break;
                             }
-                            
+
+                            $fileName = Split-Path $file -leafbase;
+
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind = "HuntingQuery";
+                                contentId = "[variables('_$fileName')]"
+                            };
+
                             function queryResourceExists () {
                                 foreach ($resource in $baseMainTemplate.resources) {
                                     if ($resource.type -eq "Microsoft.OperationalInsights/workspaces") {
@@ -803,11 +854,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $huntingQueryElement.elements += $huntingQueryElementDescription
                             }
                             $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $huntingQueryElement
-    
+
                             # Update HuntingQuery Counter
                             $huntingQueryCounter += 1
                         }
-                        
+
                         else {
                             # If yaml and not hunting query, process as Alert Rule
                             Write-Host "Generating Alert Rule using $file"
@@ -842,14 +893,24 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule = [PSCustomObject] @{ description = ""; displayName = ""; enabled = $false; query = ""; queryFrequency = ""; queryPeriod = ""; severity = ""; suppressionDuration = ""; suppressionEnabled = $false; triggerOperator = ""; triggerThreshold = 0; }
                             $alertRuleParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the scheduled alert rule" }; }
                             $content = ''
-                            foreach ($line in $rawData) { 
-                                $content = $content + "`n" + $line 
+
+                            $fileName = Split-Path $file -leafbase;
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind = "AnalyticsRule";
+                                contentId = "[variables('_$fileName')]"
+                            };
+
+                            foreach ($line in $rawData) {
+                                $content = $content + "`n" + $line
                             }
                             try {
                                 $yaml = ConvertFrom-YAML $content # Convert YAML to PSObject
                             }
                             catch {
-                                Write-Host "Failed to deserialize $file" -ForegroundColor Red 
+                                Write-Host "Failed to deserialize $file" -ForegroundColor Red
                                 break;
                             }
                             # Copy all directly transposable properties
@@ -861,7 +922,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $alertRule.severity = "Medium"
                             }
 
-                            # Content Modifications 
+                            # Content Modifications
                             $triggerOperators = [PSCustomObject] @{ gt = "GreaterThan" ; lt = "LessThan" ; eq = "Equal" ; ne = "NotEqual" }
                             $alertRule.triggerOperator = $triggerOperators.$($yaml.triggerOperator)
                             if ($yaml.tactics -and ($yaml.tactics.Count -gt 0) ) {
@@ -870,16 +931,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                             }
-                            $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any. 
+                            $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
                             if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')){
                                 # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.
                                 # This block is for backwards compatibility as YAML doesn't require having strings quotes by single (or double) quotes
-                                $alertRule.description = $alertRule.description.substring(1, $alertRule.description.length-2) 
+                                $alertRule.description = $alertRule.description.substring(1, $alertRule.description.length-2)
                             }
-                            
+
                             # Check whether Day or Hour/Minut format need be used
                             function checkISO8601Format($field) {
-                                if ($field.IndexOf("D") -ne -1) {   
+                                if ($field.IndexOf("D") -ne -1) {
                                     return "P$field"
                                 }
                                 else {
@@ -919,13 +980,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add parser dependency variable once to ensure validation passes.
                             $baseMainTemplate.variables | Add-Member -MemberType NoteProperty -Name "workspace-dependency" -Value "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]"
                         }
-                        
+
+                        $fileName = Split-Path $file -leafbase;
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+
+                        $DependencyCriteria += [PSCustomObject]@{
+                            kind = "Parser";
+                            contentId = "[variables('_$fileName')]"
+                        };
+
                         $content = ''
                         $rawData = $rawData.Split("`n")
                         foreach ($line in $rawData) {
                             # Remove comment lines before condensing query
                             if (!$line.StartsWith("//")) {
-                                $content = $content + "`n" + $line 
+                                $content = $content + "`n" + $line
                             }
                         }
 
@@ -947,7 +1017,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 name       = "[parameters('workspace')]";
                                 location   = "[parameters('workspace-location')]";
                                 resources  = @(
-                                    
+
                                 )
                             }
                             $baseMainTemplate.resources += $baseParserResource
@@ -974,10 +1044,52 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $parserCounter += 1
                     }
                 }
-                        
             }
         }
     }
+
+    # Create Metadata Resource Object
+    $source = $contentToImport.Metadata.psobject.properties["publisherId"].value + "." + $contentToImport.Metadata.psobject.properties["planId"].value;
+    $support = $contentToImport.Metadata.psobject.properties["support"].Value;
+
+    $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $source;
+    $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
+    $Author = $contentToImport.Author.Split(" - ");
+
+    $newMetadata = [PSCustomObject]@{
+        type = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+        name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
+        apiVersion = "2021-03-01-preview";
+        properties = [PSCustomObject] @{
+            contentId      = "[variables('_sourceId')]";
+            version        = $contentToImport.Version;
+            kind           = "Solution";
+            parentId       = "[variables('_sourceId')]";
+            source=[PSCustomObject]@{
+                kind     = "Solution";
+                name     = "$solutionName";
+                sourceId = "[variables('_sourceId')]";
+            };
+            author         = [PSCustomObject]@{
+                name  = $Author[0];
+                email = $Author[1];
+            };
+            support        = [PSCustomObject]@{
+                name  = $support.psobject.properties["name"].value;
+                email = $support.psobject.properties["email"].value;
+                tier  = $support.psobject.properties["tier"].value;
+                link  = $support.psobject.properties["link"].value;
+            };
+            dependencies    = [PSCustomObject]@{
+                operator = "AND";
+                criteria = $DependencyCriteria;
+            };
+            categories      = [PSCustomObject]@{
+                domains = $contentToImport.Metadata.categories.Split(",");
+            }
+        }
+    }
+    $baseMainTemplate.resources += $newMetadata;
 
     # Update CreateUiDefinition Description with Content Counts
     function updateDescriptionCount($counter, $emplaceString, $replaceString, $countStringCondition) {
@@ -1048,7 +1160,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         $baseMainTemplate | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $mainTemplateOutputPath -Encoding utf8
     }
     catch {
-        Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red 
+        Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
         break;
     }
     try {
@@ -1062,17 +1174,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         $baseCreateUiDefinition | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8
     }
     catch {
-        Write-Host "Failed to write output file $createUiDefinitionOutputPath" -ForegroundColor Red 
+        Write-Host "Failed to write output file $createUiDefinitionOutputPath" -ForegroundColor Red
         break;
     }
     $zipPackageName = "$(if($contentToImport.Version){$contentToImport.Version}else{"newSolutionPackage"}).zip"
     Compress-Archive -Path "$solutionFolder/*" -DestinationPath "$solutionFolder/$zipPackageName" -Force
-    
+
     #downloading and running arm-ttk on generated solution
     $armTtkFolder = "$PSScriptRoot/arm-ttk"
     if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"  
+    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
 }
