@@ -1,7 +1,7 @@
 # DNSDB_Historical_Address
 author: Henry Stern, Farsight Security, Inc.
 
-This playbook uses the Farsight DNSDB connector to automatically enrich IP Addresses found in the Sentinel incidents. This use case describes the desire to identify all Addresses used as DNS A records for a given Host based on a time window from a starting and stopping point in time. 
+This playbook uses the Farsight DNSDB connector to automatically enrich Domain's found in the Sentinel incidents. This use case describes the desire to identify all Addresses used as DNS A records for a given Host based on a time window from a starting and stopping point in time. 
 Learn more about the integration via the https://docs.microsoft.com/connectors/farsightdnsdb/ or visit https://www.farsightsecurity.com/about-farsight-security/contacts/ to request a trial key.
 
 ## Screenshots
