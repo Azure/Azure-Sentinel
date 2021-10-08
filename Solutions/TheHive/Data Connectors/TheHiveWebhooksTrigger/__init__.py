@@ -38,7 +38,7 @@ def post_data_to_sentinel(body):
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+    uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     headers = {
         'content-type': content_type,
         'Authorization': signature,
