@@ -1,24 +1,23 @@
-id: b81ed294-28cf-48c3-bac8-ac60dcef293b
-name: (Preview) Insider Risk - Sensitive Data Access Outside Organziational Geolocations
+id: 45ec52c2-99e1-4de1-9adc-bae0f79d4e23
+name: Insider Risk - Sign In Risk Followed By Sensitive Data Access
 description: |
-  'This alert joins Azure Information Protection Logs (InformationProtectionLogs_CL) with Azure Active Directory Sign in Logs (SigninLogs) to provide a correlation of sensitive data access by geolocation. Results include User Principal Name, Label Name, Activity, City, State, Country/Region, and Time Generated. Recommended configuration is to include (or exclude) Sign in geolocations (City, State, Country and/or Region) for trusted organizational locations. There is an option for configuration of correlations against Azure Sentinel watchlists. Accessing sensitive data from a new or unauthorized geolocation warrants further review. For more information see [Sign-in logs in Azure Active Directory: Location Filtering](https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins)’
-severity: High
+  'This alert joins Azure Active Directory Sign In Risk (SigninLogs) with Azure Information Protection (InformationProtectionLogs_CL) to correlate a risky user sign in (high or medium) with access to sensitive data classified by data loss prevention capabilities. There are optional configurations for correlations against geolocations and Azure Sentinel watchlists. For more information, see [Use Azure Sentinel watchlists](https://docs.microsoft.com/azure/sentinel/watchlists)'
 requiredDataConnectors:
   - connectorId: AzureInformationProtection
     dataTypes:
-      - InformationProtectionLogs_CL 
+      - InformationProtectionLogs_CL  
   - connectorId: AzureActiveDirectory
     dataTypes:
-      - SigninLogs 
-queryFrequency: 6h
-queryPeriod: 6h
-triggerOperator: gt
-triggerThreshold: 0
+      - SigninLogs  
 tactics:
   - Exfiltration
 relevantTechniques:
   - T1567
 query: |
+  let RiskySignIns = SigninLogs
+  | where RiskState == "atRisk"
+  | where RiskLevelDuringSignIn == "high" or RiskLevelDuringSignIn == "medium"
+  | extend RiskTypes = strcat(RiskEventTypes_V2);
   InformationProtectionLogs_CL
   | extend UserPrincipalName = UserId_s
   | where LabelName_s <> ""
@@ -31,12 +30,14 @@ query: |
   // | where Country_Region <> "US" // Configure Location Details within Organizational Requirements
   // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
   | summarize count() by UserPrincipalName, LabelName_s, Activity_s, City, State, Country_Region, TimeGenerated
+  | join kind=inner (RiskySignIns) on UserPrincipalName
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | project UserPrincipalName, RiskTypes, City, State, Country_Region, LabelName_s, Activity_s, count_, TimeGenerated
   | sort by count_ desc
-  | limit 25
+  | limit 100
   | extend AccountCustomEntity = UserPrincipalName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: AadUserId
         columnName: AccountCustomEntity
-version: 1.0.0
