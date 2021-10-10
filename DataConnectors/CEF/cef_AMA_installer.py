@@ -82,10 +82,12 @@ def print_command_response(input_str):
 
 
 def handle_error(e, error_response_str):
+    """
+    Gets an error response and prints out an error message using the print_error function
+    """
     error_output = e.decode(encoding='UTF-8')
     print_error(error_response_str)
     print_error(error_output)
-    return False
 
 
 def process_check(process_name):
@@ -102,21 +104,6 @@ def process_check(process_name):
     tokens.remove('')
     return len(tokens)
 
-
-def check_file_in_directory(file_name, path):
-    '''
-    Check if the given file is found in the current directory.
-    :param path:
-    :param file_name:
-    :return: return True if it is found elsewhere False
-    '''
-    current_dir = subprocess.Popen(["ls", "-ltrh", path], stdout=subprocess.PIPE)
-    grep = subprocess.Popen(["grep", "-i", file_name], stdin=current_dir.stdout, stdout=subprocess.PIPE)
-    o, e = grep.communicate()
-    output = o.decode(encoding='UTF-8')
-    if e is None and file_name in output:
-        return True
-    return False
 
 
 def set_file_read_permissions(file_path):
@@ -151,6 +138,9 @@ def append_content_to_file(line, file_path, overide=False):
 
 
 def is_rsyslog_new_configuration():
+    """
+    Checks if Rsyslog is running the new or old config format
+    """
     with open(rsyslog_conf_path, "rt") as fin:
         for line in fin:
             if "module(load=" in line:
@@ -160,6 +150,9 @@ def is_rsyslog_new_configuration():
 
 
 def set_rsyslog_new_configuration():
+    """
+    Sets the Rsyslog configuration to listen on port 514 for incoming requests- For new config format
+    """
     with open(rsyslog_conf_path, "rt") as fin:
         with open("tmp.txt", "wt") as fout:
             for line in fin:
@@ -187,6 +180,9 @@ def set_rsyslog_new_configuration():
 
 
 def set_rsyslog_old_configuration():
+    """
+    Sets the Rsyslog configuration to listen on port 514 for incoming requests- For old config format
+    """
     add_udp = False
     add_tcp = False
     # Do the configuration lines exist
@@ -211,7 +207,7 @@ def set_rsyslog_old_configuration():
 
 def restart_rsyslog():
     '''
-    Restart the Rsyslog daemon
+    Restart the Rsyslog daemon for configuration changes to apply
     '''
     print("Restarting rsyslog daemon.")
     command_tokens = ["sudo", "service", "rsyslog", "restart"]
@@ -228,14 +224,14 @@ def restart_rsyslog():
 
 def restart_syslog_ng():
     '''
-    Restart the syslog-ng daemon
+    Restart the syslog-ng daemon for configuration changes to apply
     '''
     print("Restarting syslog-ng daemon.")
     command_tokens = ["sudo", "service", "syslog-ng", "restart"]
     print_notice(" ".join(command_tokens))
-    restart_rsyslog_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
+    restart_syslog_ng_command = subprocess.Popen(command_tokens, stdout=subprocess.PIPE)
     time.sleep(3)
-    o, e = restart_rsyslog_command.communicate()
+    o, e = restart_syslog_ng_command.communicate()
     if e is not None:
         handle_error(e, error_response_str="Could not restart syslog-ng daemon")
         return False
@@ -243,32 +239,10 @@ def restart_syslog_ng():
     return True
 
 
-def get_rsyslog_daemon_configuration_content(omsagent_incoming_port):
-    '''Rsyslog accept every message containing CEF or ASA(for Cisco ASA'''
-    rsyslog_daemon_configuration_content = "if $rawmsg contains \"CEF:\" or $rawmsg contains \"ASA-\"" \
-                                           " then @@127.0.0.1:" + omsagent_incoming_port
-    print("Rsyslog daemon configuration content:")
-    content = rsyslog_daemon_configuration_content
-    print_command_response(content)
-    return content
-
-
-def get_syslog_ng_damon_configuration_content(omsagent_incoming_port):
-    # we can sepcify the part searched with MESSAGE or MSGHDR (for the header) "filter f_oms_filter {match(\"CEF\" value(\"MESSAGE\"));};\n"
-    oms_filter = "filter f_oms_filter {match(\"CEF\|ASA\" ) ;};"
-    oms_destination = "destination oms_destination {tcp(\"127.0.0.1\" port(" + omsagent_incoming_port + "));};\n"
-    log = "log {source(s_src);filter(f_oms_filter);destination(oms_destination);};\n"
-    content = oms_filter + oms_destination + log
-    print("Syslog-ng configuration for forwarding CEF messages to omsagent content is:")
-    print_command_response(content)
-    return content
-
-
 def set_rsyslog_configuration():
     '''
     Set the configuration for rsyslog
     we support from version 7 and above
-    :return:
     '''
     if is_rsyslog_new_configuration():
         set_rsyslog_new_configuration()
@@ -294,9 +268,8 @@ def is_syslog_ng():
 
 def set_syslog_ng_configuration():
     '''
-    syslog ng have a default configuration which enables the incoming ports and define
-    the source pipe to the daemon this will verify it is configured correctly
-    :return:
+    syslog ng has a default configuration, which enables the incoming ports and defines that
+    the source pipe to the daemon will verify it is configured correctly.
     '''
     comment_line = False
     snet_found = False
