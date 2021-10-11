@@ -1046,50 +1046,75 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 }
             }
         }
-    }
+        elseif ($objectProperties.Name.ToLower() -eq "metadata") {
+            $finalPath = $basePath + $objectProperties.Value
+            $rawData = $null
+            try {
+                Write-Host "Downloading $file"
+                $rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
+            }
+            catch {
+                Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
+                break;
+            }
 
-    # Create Metadata Resource Object
-    $source = $contentToImport.Metadata.psobject.properties["publisherId"].value + "." + $contentToImport.Metadata.psobject.properties["planId"].value;
-    $support = $contentToImport.Metadata.psobject.properties["support"].Value;
+            try {
+                $json = ConvertFrom-Json $rawData -ErrorAction Stop; # Determine whether content is JSON or YAML
+                $validJson = $true;
+            }
+            catch {
+                $validJson = $false;
+            }
 
-    $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $source;
-    $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
-    $Author = $contentToImport.Author.Split(" - ");
+            if($validJson) {
+                # Create Metadata Resource Object
+                $source = $json.publisherId + "." + $json.planId;
+                $support = $json.support;
 
-    $newMetadata = [PSCustomObject]@{
-        type = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-        name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
-        apiVersion = "2021-03-01-preview";
-        properties = [PSCustomObject] @{
-            contentId      = "[variables('_sourceId')]";
-            version        = $contentToImport.Version;
-            kind           = "Solution";
-            parentId       = "[variables('_sourceId')]";
-            source=[PSCustomObject]@{
-                kind     = "Solution";
-                name     = "$solutionName";
-                sourceId = "[variables('_sourceId')]";
-            };
-            author         = [PSCustomObject]@{
-                name  = $Author[0];
-                email = $Author[1];
-            };
-            support        = [PSCustomObject]@{
-                name  = $support.psobject.properties["name"].value;
-                email = $support.psobject.properties["email"].value;
-                tier  = $support.psobject.properties["tier"].value;
-                link  = $support.psobject.properties["link"].value;
-            };
-            dependencies    = [PSCustomObject]@{
-                operator = "AND";
-                criteria = $DependencyCriteria;
-            };
-            categories      = [PSCustomObject]@{
-                domains = $contentToImport.Metadata.categories_domains.Split(",");
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $source;
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
+                $Author = $contentToImport.Author.Split(" - ");
+
+                $newMetadata = [PSCustomObject]@{
+                    type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
+                    apiVersion = "2021-03-01-preview";
+                    properties = [PSCustomObject] @{
+                        contentId    = "[variables('_sourceId')]";
+                        version      = $contentToImport.Version;
+                        kind         = "Solution";
+                        parentId     = "[variables('_sourceId')]";
+                        source       = [PSCustomObject]@{
+                            kind     = "Solution";
+                            name     = "$solutionName";
+                            sourceId = "[variables('_sourceId')]";
+                        };
+                        author       = [PSCustomObject]@{
+                            name  = $Author[0];
+                            email = $Author[1];
+                        };
+                        support      = [PSCustomObject]@{
+                            name  = $support.psobject.properties["name"].value;
+                            email = $support.psobject.properties["email"].value;
+                            tier  = $support.psobject.properties["tier"].value;
+                            link  = $support.psobject.properties["link"].value;
+                        };
+                        dependencies = [PSCustomObject]@{
+                            operator = "AND";
+                            criteria = $DependencyCriteria;
+                        };
+                        categories   = [PSCustomObject]@{
+                            domains = $json.categories_domains.Split(",");
+                        }
+                    }
+                }
+                $baseMainTemplate.resources += $newMetadata;
+            }
+            else {
+                Write-Host "Failed to load Metadata file $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
             }
         }
     }
-    $baseMainTemplate.resources += $newMetadata;
 
     # Update CreateUiDefinition Description with Content Counts
     function updateDescriptionCount($counter, $emplaceString, $replaceString, $countStringCondition) {
