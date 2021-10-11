@@ -41,7 +41,7 @@ The access and password must be granted explicitly to you by Microsoft, is perso
 
 - SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
 
-- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/AzureSentinel4SAP/tree/main/CR.
+- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
 
 Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
 - SAP Basis versions 7.5 and higher:  install NPLK900144
