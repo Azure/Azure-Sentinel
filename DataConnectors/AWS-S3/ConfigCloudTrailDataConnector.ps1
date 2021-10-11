@@ -459,7 +459,7 @@ Retry-Action( {
 				}
 			}
 			else {
-				Write-Output `n'CloudTrail setup is not complete. You must manually update the CloudTrail destination bucket.'
+				Write-Output `n'CloudTrail setup was not completed. You must manually update the CloudTrail destination bucket.'
 			}
 		}
  })

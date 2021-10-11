@@ -402,7 +402,7 @@ Retry-Action( {
 			Write-Output `n'A detector already exists for the current account.'
 			Write-Output 'List of existing detectors:'
 			aws guardduty list-detectors
-			$script:detectorId = Read-Host 'Please enter Detector Id'
+			$script:detectorId = Read-Host 'Please enter detector Id'
 		}
 		else {
 			$script:detectorId = ($newGuardDuty | ConvertFrom-Json).DetectorId
@@ -418,13 +418,13 @@ if ($null -eq $currentS3Destinations) {
 else {
 	$destinationDescriptionObject = aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json
 	$destinationArn = $destinationDescriptionObject.DestinationProperties.DestinationArn
-	Write-Output `n"GuardDuty is already config for bucket arn '${destinationArn}'"
+	Write-Output `n"GuardDuty is already configured for bucket ARN '${destinationArn}'"
 	$guardDutyBucketConfirmation = Read-Host 'Are you sure that you want to override the bucket destination? [y/n]'
 	if ($guardDutyBucketConfirmation -eq 'y') {
 		aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName, KmsKeyArn=$kmsArn | Out-Null
 	}
 	else {
-		Write-Output `n'GuardDuty setup is not completed. Please update manually GuardDuty destination bucket'
+		Write-Output `n'GuardDuty setup was not completed. You must manually update the GuardDuty destination bucket'
 	}
 } 
  
