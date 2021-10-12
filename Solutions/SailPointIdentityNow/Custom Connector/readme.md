@@ -24,18 +24,18 @@ The SailPoint IdentityNow custom connector supports **OAuth 2.0 Authentication**
 Use the following steps to generate **Client Id** & **Client Secret** from your IdentityNow tenant (you would need an admin access to perform the following steps).
 
 1. Login into you IdentityNow tenant. Navigate to **Admin** > **Global** > **API Management**. Once here, click on **+New** button at the top right corner of the page to create a new client.
-![1](./Images/1.png)<br>
+<br><p align="center">![1](./Images/1.png)</p><br>
 
 2. Add a description that can be used to later identify the client. Check the following:
 **Client Credentials, Refresh Token & Authorization Code**
-![2](./Images/2.png)<br>
+<br><p align="center">![2](./Images/2.png)</p><br>
 
 3. You can choose how long the **Refresh Token** can last & add a **Redirect URL**.
 Example for **Redirect URL** : https://logic-apis-eastus.consent.azure-apim.net/redirect which is available on the **Security** page of the custom connector configuratino on the Azure portal.
-![3](./Images/3.png)<br>
+<br><p align="center">![3](./Images/3.png)</p><br>
 
 4. Once you have completed the above steps click **Create**. This will generate the **Client Id** & **Client Secret** required for the connector to fetch the OAuth Token. Please note once you close the dialog box, the **Client Secret** cannot be retrived. You will have to create a new client.
-![4](./Images/4.png)<br>
+<br><p align="center">![4](./Images/4.png)</p><br>
 
 
 <a name="deployment"></a>
