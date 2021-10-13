@@ -27,11 +27,11 @@ This template deploys the following parsers:
 
 * Source specific parsers:
   * **Microsoft 365 Defender for Endpoints** - vimProcessEventsMicrosoft365D
-  * **Sysmon for Windows** - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
-  * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
+  * **Sysmon for Windows** (Events 1 and 5) - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
+  * **Sysmon for Linux** - vimProcessCreateLinuxSysmon, vimProcessTerminateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
   * **Windows Events** collecting using the Azure Monitor Agent - vimProcessCreateMicrosoftWindowsEvents, vimProcessCreationMicrosoftWindowsEvents. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
-  * **Azude Defender for IoT (AD4IoT)** - vimProcessEventAD4IoT  
+  * **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimProcessEventMD4IoT  
 
 ## Analytics rules
 

@@ -1,7 +1,7 @@
 # Module 4 - Incident Managment
 
 #### 🎓 Level: 300 (Intermediate)
-#### ⌛ Estimated time to complete this lab: 30 minutes
+#### ⌛ Estimated time to complete this lab: 60 minutes
 
 This module guides you through the SOC Analyst experience using Azure Sentinel's incident management capabilities.
 
@@ -11,21 +11,21 @@ This module assumes that you have completed [Module 1](Module-1-Setting-up-the-e
 
 ### Exercise 1: Review Azure Sentinel incident tools and capabilities
 
-As a SOC analyst the entry point to consume Security incidents(tickets) in Sentinel is the Incident page.
+As a SOC analyst, the entry point to consume Security incidents (tickets) in Sentinel is the Incident page.
 
-1. In the left navigation menu press on the incident and open the incident page. This page will show by default all the open incident in the last 24hr.
+1. In the left navigation menu click on *Incidents* to open the incidents page. This page will show by default all the open incidents in the last 24hr.
 
 2. When we want to change the time window, present only incident from specific severity or to see also closed incident, we can use the filters bar:
 
 ![Select Microsoft incident creation rule](../Images/m5-incident-filter.gif?raw=true)
 
-3. On the incident page select the "Model Evasion in Critical ML model" incident. In the right pane you can see the incident preview with the high level information about the incident. 
+3. On the incident page select the *Sign-ins from IPs that attempt sign-ins to disabled accounts* incident. In the right pane you can see the incident preview with the high level information about the incident. 
 
-4. As you are the SME SOC analyst that deal and investigate fraud tickets, you need to take ownership on this incident. On the right page change the unassigned to "Assign to me" and also change the status from New to active.
+4. As you are the SME SOC analyst that deal and investigate tickets, you need to take ownership on this incident. On the right pane, change the unassigned to *Assign to me* and also change the status from *New* to *Active*.
  
 ![Select Microsoft incident creation rule](../Images/m5-assigen_ticket.gif?raw=true)
 
-5. Another way to consume incidents and also get high level view on the general SOC health is through the Security Operations Efficiency Workbook(we will have separated module on workbook)
+5. Another way to consume incidents and also get high level view on the general SOC health is through the *Security efficiency workbook*.
 
 We have 2 options to open the workbook:
 
@@ -42,10 +42,15 @@ We have 2 options to open the workbook:
 ### Exercise 2: Handling Incident **"Sign-ins from IPs that attempt sign-ins to disabled accounts"**
 
 1. Open Azure Sentiel incident page.
+
 2. Locate the incident **"Sign-ins from IPs that attempt sign-ins to disabled accounts"**
+
 3. Press on the incident and look on the right pane for the incident preview, please notice that in this pane we are surfacing the incident entities that belong to this incident.
+
 4. Take ownership on the incident and change its status to **Active**
+
 5. Navigate to incident full details by pressing **View full details** and execute playbook to bring Geo IP data (user will notice tags being added).
+
 6. Navigate to the **Alerts** tab and press the number of **Events**. This action will redirect you to Raw logs that will present the alert evidence to support the investigation 
 
 ![Select Microsoft incident creation rule](../Images/m5-select_events.gif?raw=true)
@@ -109,6 +114,96 @@ We have 2 options to open the workbook:
 
 ![Select Microsoft incident creation rule](../Images/M5-close-incident.gif?raw=true)
 M5-close-incident
+
+
+### Exercise 3: Handling **"Solorigate Network Beacon"** incident
+
+1. If not already there, navigate to *Incidents* view in Azure Sentinel
+
+2. From the list of active incidents, select "Solorigate Network Beacon" incident. If you can't find it, use the search bar or adjust the time filter at the top. Don't worry if you see more than one.
+
+![incident1](../Images/incident1.png)
+
+3. Assign the incident to yourself and click *Apply*.
+
+![incident2](../Images/incident2.png)
+
+4. Read the description of the incident. As you can see, one of the domain IOCs related to Solorigate attack has been found. In this case, domain **avsvmcloud.com** is involved. 
+
+5. Optionally, you can click on *View full details* to drill down to inspect the raw events that triggered this alert. For that, click on *Link to LA* as shown in the screenshot:
+
+![incident2](../Images/incident-details.png)
+
+6. As you can see, the events were originated in Cisco Umbrella DNS, and the analytic rule uses *Azure Sentinel Information Model* (ASIM) to normalize these events from any DNS source. Read more about [ASIM](https://docs.microsoft.com/azure/sentinel/normalization) and the [DNS schema](https://docs.microsoft.com/azure/sentinel/dns-normalization-schema).
+
+![incident2](../Images/raw-events.png)
+
+### Exercise 4: Hunting for more evidence
+
+1. As a next step, you would like to identify the hosts that might have been compromised. As part of your research, you find the following [guidance from Microsoft](https://techcommunity.microsoft.com/t5/azure-sentinel/solarwinds-post-compromise-hunting-with-azure-sentinel/ba-p/1995095). In this article, you can find a query that will do a SolarWinds inventory check query. We will use this query to find any other affected hosts.
+
+2. Switch to *Hunting* in the Azure Sentinel menu.
+
+![incident3](../Images/incident3.png)
+
+3. In the search box, type "solorigate". Select *Solorigate Inventory check* query and click on *Run Query*.
+
+![incident4](../Images/incident4.png)
+
+4. You should see a total of three results. Click on *View Results*
+
+![incident5](../Images/incident5.png)
+
+5. As you can see, besides **ClienPC**, there's two additional computers where the malicious DLL and named pipe has been found. Bookmark all three records, selecting them and then click on on *Add bookmark*.
+
+![incident6](../Images/incident6.png)
+
+6. In the window that appears click on *Create* to create the bookmarks. As you can see entity mapping to already done for you.
+
+![incident7](../Images/incident7.png)
+
+7. Wait until the operation finishes and close the log search using the ✖ at the top right corner. This will land you in the Bookmarks tab inside Hunting menu, where you should see your two new bookmarks created. Select both of them and click on *Incident actions* at the top and then *Add to existing incident*.
+
+![incident8](../Images/incident8.png)
+
+8. From the list, pick the Solorigate incident that is assigned to you, and click *Add*.
+
+![incident9](../Images/incident9.png)
+
+9. At this point you can ask the Operations team to isolate the hosts affected by this incident.
+
+### Exercise 5: Add IOC to Threat Intelligence
+Now, we will add the IP address related to the incident to our list of IOCs, so we can capture any new occurrences of this IOC in our logs.
+
+1. Go back to *Incidents* view.
+
+2. Select the Solorigate incident and copy the IP address entity involved. Notice that you have now more computer entities available (the ones coming from the bookmarks).
+
+![incident10](../Images/incident10.png)
+
+3. Go to the *Threat Intelligence* menu in Azure Sentinel and click *Add new* at the top.
+
+![incident11](../Images/incident11.png)
+
+4. Enter the following details in the *New indicator* dialog, with *Valid from* being today's date and *Valid until* being two months after. Then click *Apply*.
+
+![incident12](../Images/incident12.png)
+
+### Exercise 6: Handover incident
+We will now prepare the incident for handover to forensics team.
+
+1. Go to *Incidents* and select the Solorigate incident assigned to you. Click on *View full details*.
+
+2. Move to the *Comments* tab.
+
+![incident13](../Images/incident13.png)
+
+3. Enter information about all the steps performed. As an example:
+
+![incident14](../Images/incident14.png)
+
+4. At this point you would hand over the incident to forensics team.
+
 
 
 **Congratulations, you have completed Module 4!**. You can now continue to **[Module 5 - Hunting](./Module-5-Hunting.md)**

@@ -21,18 +21,18 @@ To deploy all parsers to your workspace using ARM templates use the button below
 
 This template deploys the following parsers:
 
- * Source agnostic parsers:
-   * imAuthentication - Authentication events from all normalized authentication providers
-   * vimAuthenticationEmpty - Empty ASim Authentication table
+- Source agnostic parsers:
+  - imAuthentication - Authentication events from all normalized authentication providers
+  - vimAuthenticationEmpty - Empty ASim Authentication table
 
- * Source specific parsers: 
-   * **AAD** signins:
-     * Interactive Users - vimAuthenticationSigninLogs
-     * Managed Identities - vimAuthenticationAADManagedIdentitySignInLogs
-     * Non-Interactive Users - vimAuthenticationAADNonInteractiveUserSignInLogs
-     * Service Principals - vimAuthenticationAADServicePrincipalSignInLogs
-   * **AWS** - vimAuthenticationAWSCloudTrail
-   * **Okta** - vimAuthenticationOktaSSO
-   * **Windows Security Events** collecting using the Log Analytics Agent or Azure Monitor Agent - vimAuthenticationWindowsSecurityEvent
-   * **Windows Events** collecting using the Azure Monitor Agent - vimAuthenticationMicrosoftWindowsEvent. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
-   * **Azure Defneder for IoT**, reporting Linux authentication events - vimAuthenticationAD4IoT
+- Source specific parsers:
+  - **AAD** signins:
+    - Interactive Users - vimAuthenticationSigninLogs
+    - Managed Identities - vimAuthenticationAADManagedIdentitySignInLogs
+    - Non-Interactive Users - vimAuthenticationAADNonInteractiveUserSignInLogs
+    - Service Principals - vimAuthenticationAADServicePrincipalSignInLogs
+  - **AWS** - vimAuthenticationAWSCloudTrail
+  - **Okta** - vimAuthenticationOktaSSO
+  - **Windows Security Events** collecting using the Log Analytics Agent or Azure Monitor Agent - vimAuthenticationWindowsSecurityEvent
+  - **Windows Events** collecting using the Azure Monitor Agent - vimAuthenticationMicrosoftWindowsEvent. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
+  - **Microsoft Defender for IoT - Endpoint**, reporting Linux authentication events - vimAuthenticationMD4IoT

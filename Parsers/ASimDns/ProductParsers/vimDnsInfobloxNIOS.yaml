@@ -31,7 +31,7 @@ ParserParams:
   - Name: responsecodename
     Type: string
     Default: '*'
-  - Name: dnsresponsename
+  - Name: response_has_ipv4
     Type: string
     Default: '*'
   - Name: response_has_any_prefix
@@ -45,7 +45,7 @@ ParserQuery: |
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string="*"
     , domain_has_any:dynamic=dynamic([]) 
-    , responsecodename:string="*", dnsresponsename:string="*"
+    , responsecodename:string="*", response_has_ipv4:string="*"
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string="lookup"
     ){
     let RawData = Syslog 
@@ -54,13 +54,14 @@ ParserQuery: |
     // This filtering is not accurate. Further filtering down the line
         | where
         // Return empty list if response IPs are passed
-          (dnsresponsename=='*')
-          and (array_length(response_has_any_prefix) ==0) 
+          (eventtype=='lookup')
           and (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime) 
           and (srcipaddr=="*" or  has_ipv4( SyslogMessage ,srcipaddr))
           and (array_length(domain_has_any) ==0 or SyslogMessage has_any (domain_has_any))
           and (responsecodename=="*" or SyslogMessage has responsecodename)
+          and (array_length(response_has_any_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, response_has_any_prefix))
+          and (response_has_any_prefix=='*' or has_ipv4(SyslogMessage,response_has_any_prefix))
     // *****************************************************************
     | where ProcessName == "named" and SyslogMessage has "client"
       | where Computer in ("datasource") and Facility == "local6"
@@ -105,9 +106,13 @@ ParserQuery: |
         DnsQueryTypeName = iff (EventSubType=="response",tostring(dnsclient[7]),tostring(dnsclient[5])),
         DnsFlags =iff (EventSubType=="response", tostring(dnsclient[9]),tostring(dnsclient[6])),
         // 
-        EventMessage = iff (EventSubType=="response",tostring(dnsclient[-2]),""),
+        DnsResponseName = iff (EventSubType=="response",tostring(dnsclient[-2]),""),
         DstIpAddr=iff(EventSubType=="response","",dnsclient[-1])
-   | project-rename
+    // Post filtering step 2
+    | where 
+        (array_length(domain_has_any) ==0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix)) and
+        (response_has_ipv4 == '*' or has_ipv4(DnsResponseName,response_has_ipv4))
+    | project-rename
        // * Added in version 0.1.1
          DvcHostname=Computer
          , DvcIpAddr=HostIP
@@ -124,4 +129,4 @@ ParserQuery: |
       , QueryClassName=DnsQueryClassName
       , Flags=DnsFlags
     };
-    Infoblox(starttime, endtime, srcipaddr, domain_has_any, responsecodename, dnsresponsename, response_has_any_prefix, eventtype)
+    Infoblox(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
