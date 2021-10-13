@@ -1,31 +1,33 @@
-function Set-ArnRole{
-    Write-Output `n`n'Arn Role Defenition'
-    Retry-Action({
-        $script:roleName = Read-Host 'Please insert Role Name. If you have already configured an Assume Role for Azure Sentinel in the past, please type the name'
+function New-ArnRole
+{
+    Write-Output `n`n'Arn Role Definition'
+    New-RetryAction({
+        $script:roleName = Read-Host 'Please enter Role Name. If you have already configured an Assume Role for Azure Sentinel in the past, please type the name'
         aws iam get-role --role-name $roleName 2>&1| Out-Null
         $isRuleNotExist = $lastexitcode -ne 0
-        if($isRuleNotExist)
+        if ($isRuleNotExist)
         {
-            $workspaceId = Read-Host 'Please insert Workspae Id (External Id)'
+            
+            $workspaceId = Read-Host 'Please enter Workspae Id (External Id)'
             $rolePolicy = Get-RoleArnPolicy
             $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy 2>&1
-            if($lastexitcode -eq 0)
+            if ($lastexitcode -eq 0)
             {
-                Write-Host  "${roleName} Role was successful created"
+                Write-Host  "${roleName} Role created successfully"
             }
         }
     })
 }
 
-function Set-S3Bucket{
+function New-S3Bucket{
     Write-Output `n`n'S3 Bucket Definition.'
-    Retry-Action({
-        $script:bucketName = Read-Host 'Please insert S3 Bucket Name'
+    New-RetryAction({
+        $script:bucketName = Read-Host 'Please enter S3 bucket name'
         $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
-        $isBucketNotExist = $headBucketOutput -ne $null
-        if($isBucketNotExist)
+        $isBucketNotExist = $null -ne $headBucketOutput
+        if ($isBucketNotExist)
         {
-            $bucketRegion = Read-Host 'Please insert Bucket Region'
+            $bucketRegion = Read-Host 'Please enter bucket region'
             if($bucketRegion -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
             {
                 $tempForOutput = aws s3api create-bucket --bucket $bucketName 2>&1
@@ -35,37 +37,42 @@ function Set-S3Bucket{
                 $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$bucketRegion 2>&1
             }
             
-            if($lastexitcode -eq 0)
+            if ($lastexitcode -eq 0)
             {
-                Write-Host  "${bucketName} Bucket was successful created"
+                Write-Host  "${bucketName} Bucket created successfully"
             }
         }
     })
     $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
 }
 
-function Set-SQSQueue{
+function New-SQSQueue
+{
     Write-Output `n'Creating SQS queue'
-    Retry-Action({
-        $script:sqsName = Read-Host 'Please insert Sqs Name'
+    New-RetryAction({
+        $script:sqsName = Read-Host 'Please enter Sqs Name'
         $tempForOutput = aws sqs create-queue --queue-name $sqsName 2>&1
     })
 }
 
-function Enable-S3EventNotification{
-    Param([Parameter(Mandatory=$true)][string]$DefaultEvenNotificationPrefix)
+function Enable-S3EventNotification 
+{
+    param(
+        [Parameter(Mandatory=$true)][string]$DefaultEvenNotificationPrefix
+        )
     Write-Output `n'Enabling S3 Event Notifications (for *.gz file)'
-    Retry-Action({
-        $eventNotificationName = Read-Host 'Please insert the Event Notifications Name'
+    
+    New-RetryAction({
+        $eventNotificationName = Read-Host 'Please enter the Event Notifications Name'
         $eventNotificationPrefix = $DefaultEvenNotificationPrefix
-        $prefixOverrideConfirm = Read-Host "The Default prefix is '${eventNotificationPrefix}'. `nDo you want to override the event notification prefix? [y/n](n by default)"
-        if($prefixOverrideConfirm -eq 'y')
+        $prefixOverrideConfirm = Read-Host "The default prefix is '${eventNotificationPrefix}'. `nDo you want to override the event notification prefix? [y/n](n by default)"
+        if ($prefixOverrideConfirm -eq 'y')
         {
-            $eventNotificationPrefix = Read-Host 'Please insert the Event Notifications Prefix'
+            $eventNotificationPrefix = Read-Host 'Please enter the event notifications prefix'
         }
         $newEventConfig = Get-SqsEventNotificationConfig
         $existingEventConfig = aws s3api get-bucket-notification-configuration --bucket $bucketName
-        if($existingEventConfig -ne $null)
+        if ($null -ne $existingEventConfig)
         {
             $newEventConfigObject = $newEventConfig | ConvertFrom-Json
             $existingEventConfigObject = $existingEventConfig | ConvertFrom-Json 
@@ -81,20 +88,20 @@ function Enable-S3EventNotification{
     })
 }
 
-function Set-KMS{
+function New-KMS {
     Write-Output `n`n'Kms Definition.'
-    Retry-Action({
-        $script:kmaAliasName = Read-Host 'Please insert KMS alias Name'
+    New-RetryAction({
+        $script:kmaAliasName = Read-Host 'Please enter KMS alias Name'
         $script:kmsKeyDescription = aws kms describe-key --key-id alias/$kmaAliasName 2>&1
         $isKmsNotExist = $lastexitcode -ne 0
-        if($isKmsNotExist)
+        if ($isKmsNotExist)
         {
             $script:kmsKeyDescription = aws kms create-key
             $kmsKeyId = ($script:kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
             $tempForOutput = aws kms create-alias --alias-name alias/$kmaAliasName --target-key-id $kmsKeyId 2>&1
-            if($lastexitcode -eq 0)
+            if ($lastexitcode -eq 0)
             {
-                Write-Host  "${kmaAliasName} Kms was successful created"
+                Write-Host  "${kmaAliasName} Kms created successfully"
             }
         }
     })
