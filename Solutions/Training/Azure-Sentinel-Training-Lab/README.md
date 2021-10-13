@@ -15,7 +15,7 @@ To deploy Azure Sentinel Trainig Lab, **you must have a Microsoft Azure subscrip
 
 ## Last release notes
 
-* Version 0.2 - Azure Sentinel Training Lab **Beta** 
+* Version 1.0 - Azure Sentinel Training Lab 
 
 ## Getting started
 
@@ -24,8 +24,9 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 ## Modules
 
 [**Module 1 – Setting up the environment**](./Modules/Module-1-Setting-up-the-environment.md)
-- [Deploy Azure Sentinel Training Lab ARM template](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-deploy-azure-sentinel-training-lab-arm-template)
-- [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-configure-azure-sentinel-playbook)
+- [The Azure Sentinel workspace](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-the-azure-sentinel-workspace)
+- [Deploy the Azure Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-azure-sentinel-training-lab-solution)
+- [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-3-configure-azure-sentinel-playbook)
  
 [**Module 2 – Data Connectors**](./Modules/Module-2-Data-Connectors.md)
 - [Enable Azure Activity data connector](./Modules/Module-2-Data-Connectors.md#exercise-1-enable-azure-activity-data-connector)
