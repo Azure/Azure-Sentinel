@@ -1066,47 +1066,97 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 $validJson = $false;
             }
 
-            if($validJson) {
+            if($validJson -and $json) {
                 # Create Metadata Resource Object
-                $source = $json.publisherId + "." + $json.planId;
-                $support = $json.support;
+                if($json.publisherId  -and $json.planId)
+                {
+                    $sourceId = $json.publisherId + "." + $json.planId;
+                }
+                if($json.support)
+                {
+                    $support = $json.support;
+                }
+                if($json.categories)
+                {
+                    $categories = $json.categories;
+                }
 
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $source;
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
+                if($sourceId)
+                {
+                    $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $sourceId;
+                    $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
+                }
+
                 $Author = $contentToImport.Author.Split(" - ");
 
                 $newMetadata = [PSCustomObject]@{
                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
                     apiVersion = "2021-03-01-preview";
                     properties = [PSCustomObject] @{
-                        contentId    = "[variables('_sourceId')]";
                         version      = $contentToImport.Version;
                         kind         = "Solution";
-                        parentId     = "[variables('_sourceId')]";
-                        source       = [PSCustomObject]@{
-                            kind     = "Solution";
-                            name     = "$solutionName";
-                            sourceId = "[variables('_sourceId')]";
-                        };
-                        author       = [PSCustomObject]@{
-                            name  = $Author[0];
-                            email = $Author[1];
-                        };
-                        support      = [PSCustomObject]@{
-                            name  = $support.psobject.properties["name"].value;
-                            email = $support.psobject.properties["email"].value;
-                            tier  = $support.psobject.properties["tier"].value;
-                            link  = $support.psobject.properties["link"].value;
-                        };
-                        dependencies = [PSCustomObject]@{
-                            operator = "AND";
-                            criteria = $DependencyCriteria;
-                        };
-                        categories   = [PSCustomObject]@{
-                            domains = $json.categories_domains.Split(",");
-                        }
-                    }
+                    };
+                };
+
+                $source = [PSCustomObject]@{
+                    kind = "Solution";
+                    name = "$solutionName";
+                };
+                $authorDetails = [PSCustomObject]@{
+                    name  = $Author[0];
+                    email = $Author[1];
+                };
+                if($sourceId){
+                    $newMetadata | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
+                    $newMetadata.Properties | Add-Member -Name 'contentId' -Type NoteProperty -Value "[variables('_sourceId')]";
+                    $newMetadata.Properties | Add-Member -Name 'parentId' -Type NoteProperty -Value "[variables('_sourceId')]";
+
+                    $source | Add-Member -Name 'sourceId' -Type NoteProperty -value "[variables('_sourceId')]";
+                    $newMetadata.Properties | Add-Member -Name 'source' -Type NoteProperty -value $source;
+                }
+
+                $newMetadata.Properties | Add-Member -Name 'author' -Type NoteProperty -value $authorDetails
+
+                $supportDetails = New-Object psobject;
+
+                if($support -and $support.psobject.properties["name"] -and $support.psobject.properties["name"].value) {
+                    $supportDetails | Add-Member -Name 'name' -Type NoteProperty -value $support.psobject.properties["name"].value;
+                }
+
+                if($support -and $support.psobject.properties["email"] -and $support.psobject.properties["email"].value) {
+                    $supportDetails | Add-Member -Name 'email' -Type NoteProperty -value $support.psobject.properties["email"].value;
+                }
+
+                if($support -and $support.psobject.properties["tier"] -and $support.psobject.properties["tier"].value) {
+                    $supportDetails | Add-Member -Name 'tier' -Type NoteProperty -value $support.psobject.properties["tier"].value;
+                }
+
+                if($support -and $support.psobject.properties["link"] -and $support.psobject.properties["link"].value) {
+                    $supportDetails | Add-Member -Name 'link' -Type NoteProperty -value $support.psobject.properties["link"].value;
+                }
+
+                if($support.psobject.properties["name"] -or $support.psobject.properties["email"] -or $support.psobject.properties["tier"] -or $support.psobject.properties["link"])
+                {
+                    $newMetadata.Properties | Add-Member -Name 'support' -Type NoteProperty -value $supportDetails;
+                }
+
+                $dependencies = [PSCustomObject]@{
+                    operator = "AND";
+                    criteria = $DependencyCriteria;
+                };
+
+                $newMetadata | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+                $categoriesDetails= New-Object psobject;
+                if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].value -ne "")
+                {
+                    $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].value.Split(",");
+                    $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
+                }
+
+                if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].value -ne "")
+                {
+                    $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value.Split(",");
+                    $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
                 $baseMainTemplate.resources += $newMetadata;
             }
