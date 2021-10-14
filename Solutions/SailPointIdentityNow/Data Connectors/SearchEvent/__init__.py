@@ -10,6 +10,7 @@ import json
 import hashlib
 import hmac
 import base64
+import re
 from azure.cosmosdb.table.tableservice import TableService
 
 
@@ -20,12 +21,19 @@ client_secret = os.environ["CLIENT_SECRET"]
 access_key = os.environ["AZURE_STORAGE_ACCESS_KEY"]
 connection_string = os.environ["AzureWebJobsStorage"]
 storage_account_name = os.environ["AZURE_STORAGE_ACCOUNT_NAME"]
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
+# Get the customer ID to your Log Analytics workspace Id.
+customer_id = os.environ["CUSTOMER_ID"]
+
+# For the shared key, use either the primary or the secondary Connected Sources client authentication key. 
+shared_key = os.environ["SHARED_KEY"]
 
 # Function to determine if the current timestamp should be used instead of the value stored in the checkpoint file.
 # Will return 'true' if the checkpoint time is 1 or more days in the past.
 def use_current(now, old) -> bool:
     ret = False
+
     current_time = datetime.datetime.strptime(now, '%Y-%m-%dT%H:%M:%S.%fZ')
     old_time = datetime.datetime.strptime(old, '%Y-%m-%dT%H:%M:%S.%fZ')
         
@@ -50,14 +58,23 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 
 
 # Function to build and send a request to the API.
-def post_data(customer_id, shared_key, body, log_type) -> None:
+def post_data(customer_id, shared_key, body, log_type, logAnalyticsUri) -> None:
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+
+    if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+        logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+    pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+    match = re.match(pattern,str(logAnalyticsUri))
+    if(not match):
+        raise Exception("Invalid Log Analytics Uri.")
+    
+    uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     headers = {
         'content-type': content_type,
         'Authorization': signature,
@@ -66,7 +83,7 @@ def post_data(customer_id, shared_key, body, log_type) -> None:
     }
     response = requests.post(uri, data=body, headers=headers)
     if (response.status_code < 200 or response.status_code >= 300):
-        logging.error("Unable to Write... " + format(response.status_code)) 
+        logging.error("Unable to Write... " + format(response.status_code))
 
 
 # Executor
@@ -113,7 +130,7 @@ def main(mytimer: func.TimerRequest) -> None:
             oauth_response.raise_for_status()
             access_token = oauth_response.json()["access_token"]
             headers = {
-                'Content-Type' : 'application/json', 
+                'Content-Type' : 'application/json',
                 'Authorization' : "Bearer " + access_token
             }
         except (HTTPError, KeyError, ValueError):
@@ -149,7 +166,7 @@ def main(mytimer: func.TimerRequest) -> None:
         searchpayload = {
             "queryType": "SAILPOINT",
             "query": {
-                "query": f"created:>{query_checkpoint_time} AND created:<{query_search_delay_time}" 
+                "query": f"created:>{query_checkpoint_time} AND created:<{query_search_delay_time}"
             },
             "queryResultFilter": {},
             "sort": ["created"],
@@ -158,7 +175,7 @@ def main(mytimer: func.TimerRequest) -> None:
         audit_url = f'https://{tenant_id}.api.identitynow.com/v3/search/events'
 
         # Initiate request 
-        audit_events_response = requests.request("POST", url=audit_url, params=queryparams, json=searchpayload, headers=headers)  
+        audit_events_response = requests.request("POST", url=audit_url, params=queryparams, json=searchpayload, headers=headers)
 
         # API Gateway saturated / rate limit encountered.  Delay and try again. Delay will either be dictated by IdentityNow server response or 5000 seconds
         if audit_events_response.status_code == 429:
@@ -167,12 +184,12 @@ def main(mytimer: func.TimerRequest) -> None:
             retryAfter = audit_events_response.headers['Retry-After']
             if retryAfter is not None:
                 retryDelay = int(retryAfter)
-                
-            logging.warning(f'429 - Rate Limit Exceeded, retrying in: {retryDelay}')
-            time.sleep(retryDelay) 
 
-        elif audit_events_response.ok:    
-            
+            logging.warning(f'429 - Rate Limit Exceeded, retrying in: {retryDelay}')
+            time.sleep(retryDelay)
+
+        elif audit_events_response.ok:
+
             # Check response headers to get toal number of search results - if this value is 0 there is nothing to parse, if it is less than the limit value then we are caught up to most recent, and can exit the query loop
             x_total_count = int(audit_events_response.headers['X-Total-Count'])
             if x_total_count > 0:
@@ -197,19 +214,13 @@ def main(mytimer: func.TimerRequest) -> None:
             # Forced Exit
             return 0
 
-    # Get the customer ID to your Log Analytics workspace Id.
-    customer_id = os.environ["CUSTOMER_ID"]
-
-    # For the shared key, use either the primary or the secondary Connected Sources client authentication key. 
-    shared_key = os.environ["SHARED_KEY"]
-
     # Iterate the audit events array and create events for each one.
     if len(audit_events) > 0:
         for audit_event in audit_events:
             data_json = json.dumps(audit_event)
             table_name = "SailPointIDN_Events"
             try:
-                post_data(customer_id, shared_key, data_json, table_name)
+                post_data(customer_id, shared_key, data_json, table_name, logAnalyticsUri)
             except Exception as error:
                 logging.error("Unable to send data to Azure Log...")
                 logging.error(error)
@@ -227,4 +238,3 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Table successfully updated...")
     else:
         logging.info("No Events were returned...")
-

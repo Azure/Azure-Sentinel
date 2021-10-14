@@ -53,3 +53,7 @@ Custom connector should be deployed in the Resource Group where all the resource
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSailPointIdentityNow%2FCustom%20Connector%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
+
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSailPointIdentityNow%2FCustom%20Connector%2Fazuredeploy.json" target="_blank"> 
+    <img src="https://aka.ms/deploytoazuregovbutton"/> 
+</a>
