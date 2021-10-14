@@ -1,0 +1,32 @@
+#cloud-config
+package_upgrade: true
+packages:
+  - default-jre
+runcmd:
+  - while ( ! (find /var/log/azure/Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux/extension.log | xargs grep \"Enable,success,0,Enable succeeded\")); do sleep 5; done
+  - wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
+  - sudo apt-get update
+  - sudo apt-get install -y apt-transport-https
+  - echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-7.x.list
+  - sudo apt-get update
+  - sudo apt-get install -y default-jre
+  - sudo echo \"root         soft    nofile         65536\" >> /etc/security/limits.conf
+  - sudo echo \"root         hard    nofile         65536\" >> /etc/security/limits.conf
+  - sudo echo \"*         soft    nofile         65536\" >> /etc/security/limits.conf
+  - sudo echo \"*         hard    nofile         65536\" >> /etc/security/limits.conf
+  - sudo apt-get install -y logstash
+  - sudo /usr/share/logstash/bin/logstash-plugin install microsoft-logstash-output-azure-loganalytics
+  - sudo /usr/share/logstash/bin/logstash-plugin update
+  - wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/NetFlow/logstash.conf -O /etc/logstash/conf.d/logstash.conf
+  - sudo sed -i 's/<workspaceid>/<workspaceid>/g' input.txt
+  - sudo sed -i 's/<workspacekey>/<workspacekey>/g' input.txt
+  - sudo systemctl start logstash.service
+  - sudo systemctl enable logstash.service
+  - sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py <workspaceid> <workspacekey>
+  - curl -L -O https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-7.15.0-amd64.deb
+  - sudo dpkg -i filebeat-7.15.0-amd64.deb
+  - sudo wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/NetFlow/filebeat.yml -O /etc/filebeat/filebeat.yml
+  - sudo filebeat modules enable netflow
+  - sudo wget -q https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/NetFlow/netflow.yml -O /etc/filebeat/modules.d/netflow.yml
+  - sudo systemctl start filebeat.service
+  - sudo systemctl enable filebeat.service
