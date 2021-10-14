@@ -3,6 +3,9 @@ name: Known ZINC Comebacker and Klackring malware hashes
 description: |
   'ZINC attacks against security researcher campaign malware hashes.'
 severity: High
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
@@ -58,14 +61,12 @@ query: |
   | extend DNSName = Name
   | where isnotempty(DNSName)
   | where DNSName has_any (DomainNames)
-  | extend DataType = "DnsEvents", IPAddress = ClientIP
+  | extend Type = "DnsEvents", IPAddress = ClientIP
   | project Type, TimeGenerated, Computer, IPAddress, DNSName
   ),
-  (imDns
-  | where isnotempty(DnsQuery)
-  | where DnsQuery has_any (DomainNames)
+  (imDns(domain_has_any=DomainNames)
   | extend DNSName = DnsQuery
-  | extend DataType = "imDns", IPAddress = SrcIpAddr, Computer=Dvc
+  | extend Type = "imDns", IPAddress = SrcIpAddr, Computer=Dvc
   | project Type, TimeGenerated, Computer, IPAddress, DNSName
   ),
   (VMConnection
@@ -90,6 +91,11 @@ query: |
   (DeviceFileEvents
   | where SHA256 in~ (SHA256Hash)
   | extend Account = RequestAccountName, Computer = DeviceName, IPAddress = RequestSourceIP, CommandLine = InitiatingProcessCommandLine, FileHash = SHA256
+  | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
+  ),
+  (imFileEvent
+  | where TargetFileSHA256 in~ (SHA256Hash)
+  | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
   ),
   (DeviceNetworkEvents
@@ -145,4 +151,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.2.0
+version: 1.3.0
+kind: scheduled

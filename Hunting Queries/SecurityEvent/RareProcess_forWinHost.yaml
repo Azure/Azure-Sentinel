@@ -15,23 +15,25 @@ tactics:
   - Collection
 
 query: |
-  let v_StartTime = ago(1d);
-  let v_EndTime = ago(1m);
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 30d;
   let basic=materialize(
     SecurityEvent
-      | where TimeGenerated >= ago(30d)
+      | where TimeGenerated between(lookback..endtime)
       | where EventID == 4688
       | summarize FullCount = count()
-                  , Count= countif(TimeGenerated between (v_StartTime .. v_EndTime))
+                  , Count= countif(TimeGenerated between (starttime .. endtime))
                   , min_TimeGenerated=min(TimeGenerated)
-                  , max_TimeGenerated=max(TimeGenerated) 
+                  , max_TimeGenerated=max(TimeGenerated)
                         by Computer, NewProcessName
       | where Count > 0 and Count < 100);
   let basic_avg = basic
       | summarize Avg = avg(FullCount) by  NewProcessName;
   basic | project-away FullCount
-    | join kind=inner 
-  basic_avg 
+    | join kind=inner
+  basic_avg
     on NewProcessName | project-away NewProcessName1
-    | where Count < 14 or (Count <= Avg*0.01 and Count < 100) 
+    | where Count < 14 or (Count <= Avg*0.01 and Count < 100)
     | extend HostCustomEntity=Computer

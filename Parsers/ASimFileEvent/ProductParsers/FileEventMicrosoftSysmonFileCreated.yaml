@@ -1,0 +1,97 @@
+Parser:
+  Title: Sysmon Event 11 - Create File
+  Version: '0.3'
+  LastUpdated: Sep 19, 2021
+Product:
+  Name: Windows Sysmon
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: ASIM Sysmon File Creation Event Parser (event number 11) from "Event" and "WindowsEvent" tables.
+ParserName: vimFileEventMicrosoftSysmonCreated
+ParserQuery: |
+   // this is the parser for sysmon from Event table
+      let Sysmon11_Event=(){
+          Event
+          | where Source == "Microsoft-Windows-Sysmon"
+          | where EventID == 11
+          | parse EventData with '<DataItem type="System.XmlData" time="'Time:datetime
+            '" sourceHealthServiceId="'sourceHealthServiceId
+            '"><EventData xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><Data Name="RuleName">'RuleName:string
+            '</Data><Data Name="UtcTime">'UtcTime:datetime'</Data><Data Name="ProcessGuid">{'ProcessGuid:string
+            '}</Data><Data Name="ProcessId">'ProcessId:string
+            '</Data><Data Name="Image">'Image:string /// Image is the full path 
+            '</Data><Data Name="TargetFilename">'TargetFilename:string //// Full Path
+            '</Data><Data Name="CreationUtcTime">'CreationUtcTime:datetime*
+          | parse EventData with *'<Data Name="User">'ActorUsername'</Data>'*  // parsing will work only for newer versions of sysmon -> for older will remain empty field
+          | extend
+              EventType='FileCreated'
+              , EventProduct='Sysmon'
+              , EventSchemaVersion = '0.1.0'
+              , EventResult='Success'
+              , EventCount=int(1)
+              , EventStartTime = TimeGenerated
+              , EventOriginalType=tostring(EventID)
+              , EventEndTime = TimeGenerated
+              , DvcOs='Windows'
+              , TargetFileName_wo_Path=tostring(split(TargetFilename,'\\')[-1])
+          | project-rename
+              DvcHostname = Computer
+              , ActingProcessName = Image
+              , ActingProcessId = ProcessId
+              , ActingProcessGuid = ProcessGuid
+              , TargetFileCreationTime=CreationUtcTime
+              , EventMessage=RenderedDescription
+              , TargetFilePath=TargetFilename
+              ,TargetFileName=TargetFileName_wo_Path
+          | extend
+                 ActorUserType = iff(isnotempty(ActorUsername),'Windows', '')
+                 // aliases
+                  ,Process = ActingProcessName
+                  , Dvc = DvcHostname
+                  , FilePath = TargetFilePath
+                  , User = ActorUsername
+          | project-away EventData, sourceHealthServiceId, ParameterXml
+                  };
+      // this is the parser for sysmon from WindowsEvent table
+       let Sysmon11_windowsEvent=(){
+        WindowsEvent 
+        | where Provider == "Microsoft-Windows-Sysmon"
+        | where EventID == 11
+        | extend 
+                EventType = 'FileCreated',
+                EventProduct = 'Sysmon',
+                EventSchemaVersion = '0.1.0',
+                EventResult='Success',
+                EventCount=int(1),
+                EventStartTime = TimeGenerated,
+                EventEndTime = TimeGenerated,
+                EventMessage=tostring(EventData.RenderedDescription),
+                EventOriginalType=tostring(EventID),
+                DvcOs='Windows',
+                TargetFileName = tostring(split(EventData.TargetFilename,'\\')[-1]),
+                TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
+                TargetFilePath=tostring(EventData.TargetFilename),
+                ActingProcessName = tostring(EventData.Image),
+                ActingProcessId = tostring(EventData.ProcessId),
+                ActingProcessGuid = tostring(EventData.ProcessGuid),
+                ActorUsername = tostring(EventData.User) // this field is relevant for newer versions of Sysmon
+        | project-rename
+                DvcHostname = Computer
+        | extend 
+                ActorUserType = iff(isnotempty(ActorUsername),'Windows', ''),
+                // aliases
+                Process = ActingProcessName,
+                Dvc = DvcHostname,
+                FilePath = TargetFilePath,
+                User = ActorUsername
+        | project-away EventData
+        };
+      union isfuzzy=true
+              Sysmon11_Event,
+              Sysmon11_windowsEvent
