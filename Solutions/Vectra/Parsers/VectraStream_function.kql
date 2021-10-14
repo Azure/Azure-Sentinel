@@ -1,8 +1,8 @@
 // Title:           Vectra AI Stream Parser
 // Author:          Fabien Guillot
-// Version:         1.0
-// Last Updated:    06/04/2021
-// Comment:         Inital Release
+// Version:         1.1
+// Last Updated:    10/13/2021
+// Comment:         Normalized ASIM
 //
 // Usage Instruction : 
 // Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias as VectraStream
@@ -38,8 +38,8 @@ VectraStream_CL
     service_s = column_ifexists('service_s', ''),
     proto_d = column_ifexists('proto_d', ''),
     protoName_s = column_ifexists('protoName_s', ''),
-    orig_ip_bytes_s = column_ifexists('orig_ip_bytes_s', ''),
-    resp_ip_bytes_s = column_ifexists('resp_ip_bytes_s', ''),
+    orig_ip_bytes_d = column_ifexists('orig_ip_bytes_d', ''),
+    resp_ip_bytes_d = column_ifexists('resp_ip_bytes_d', ''),
     orig_pkts_d = column_ifexists('orig_pkts_d', ''),
     resp_pkts_d = column_ifexists('resp_pkts_d', ''),
     session_start_time_d = column_ifexists('session_start_time_d', ''),
@@ -258,8 +258,8 @@ VectraStream_CL
     service = service_s,
     proto = proto_d,
     protoName = protoName_s,
-    orig_ip_bytes = orig_ip_bytes_s,
-    resp_ip_bytes = resp_ip_bytes_s,
+    orig_ip_bytes = orig_ip_bytes_d,
+    resp_ip_bytes = resp_ip_bytes_d,
     orig_pkts = orig_pkts_d,
     resp_pkts = resp_pkts_d,
     session_start_time = session_start_time_d,
@@ -289,6 +289,7 @@ VectraStream_CL
     operation = operation_s,
 	//dhcp
     mac = mac_s,
+    trans_id = trans_id_d,
     assigned_ip = assigned_ip_s,
     lease_time = lease_time_d,
     dhcp_server_ip = dhcp_server_ip_s,
@@ -355,7 +356,7 @@ VectraStream_CL
     query_scope = query_scope_s,
     result = result_s,
     matched_dn = matched_dn_s,
-    duration_s = duration_s,
+    duration = duration_s,
     attributes = attributes_s,
     bind_error_count = bind_error_count_d,
     encrypted_sasl_payload_count = encrypted_sasl_payload_count_d,
@@ -452,4 +453,46 @@ VectraStream_CL
     san_ip = san_ip_s,
     san_other_fields = san_other_fields_b,
     basic_constraints = basic_constraints_b
-
+// normalization network session
+| extend 
+    DstIpAddr = column_ifexists('id_resp_h', ''),
+    DstPortNumber = column_ifexists('id_resp_p', ''),
+    DstHostname = column_ifexists('resp_hostname', ''),
+    DstDomain = column_ifexists('resp_domain', ''),
+    SrcIpAddr = column_ifexists('id_orig_h', ''),
+    SrcPortNumber = column_ifexists('id_orig_p', ''),
+    SrcHostname = column_ifexists('orig_hostname', ''),
+    SrcDomain = column_ifexists('domain', ''),
+    SrcUserId = column_ifexists('username', column_ifexists('client', '')),
+    NetworkApplicationProtocol = column_ifexists('service', ''),
+    NetworkDirection = iif(local_orig==true and local_resp == false, 'Outbound', iff(local_orig==false and local_resp == true, 'Inbound', 'local')),
+    NetworkDuration = column_ifexists('duration', ''),
+    DstBytes = column_ifexists('orig_ip_bytes', ''),
+    SrcBytes = column_ifexists('resp_ip_bytes', ''),
+    DstPackets = column_ifexists('resp_pkts', ''), 
+    SrcPackets = column_ifexists('orig_pkts', ''), 
+    NetworkSessionId = column_ifexists('community_id', ''),
+    //http
+    Url = strcat('http://',host,uri),
+    UrlOriginal = column_ifexists('uri', ''),
+    HttpRequestMethod = column_ifexists('method', ''),
+    HttpStatusCode = column_ifexists('status_code', ''),
+    HttpContentType = column_ifexists('resp_mime_types', ''),
+    HttpReferrer = column_ifexists('referrer', ''), 
+    HttpUserAgent = column_ifexists('user_agent', ''), 
+    HttpRequestXff = column_ifexists('proxied', ''),
+    FileContentType = column_ifexists('orig_mime_types', ''),
+    //DNS
+    DnsQuery = column_ifexists('query', ''),
+    DnsQueryType = column_ifexists('qtype', ''),
+    DnsQueryTypeName = column_ifexists('qtype_name', ''),
+    DnsResponseName = column_ifexists('answers', ''),
+    DnsResponseCodeName = column_ifexists('rcode_name', ''),
+    DnsResponseCode = column_ifexists('rcode', ''),
+    NetworkProtocol = column_ifexists('proto', ''),
+    DnsQueryClass = column_ifexists('qclass', ''),
+    DnsQueryClassName = column_ifexists('qclass_name', ''),
+    DnsFlagsAuthoritative = column_ifexists('AA', ''),
+    DnsFlagsRecursionAvailable = column_ifexists('RA', ''),
+    DnsFlagsRecursionDesired = column_ifexists('RD', ''),
+    DnsFlagsTruncated = column_ifexists('TC', '')
