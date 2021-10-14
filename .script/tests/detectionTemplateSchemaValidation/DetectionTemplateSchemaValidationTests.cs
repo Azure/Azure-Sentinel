@@ -32,11 +32,9 @@ namespace Kqlvalidations.Tests
                 }
             }
 
-            var jObj = JObject.Parse(ConvertYamlToJson(yaml));
-
+            var templateObject = JsonConvert.DeserializeObject<AnalyticsTemplateInternalModelBase>(ConvertYamlToJson(yaml));
             var exception = Record.Exception(() =>
             {
-                var templateObject = jObj.ToObject<ScheduledTemplateInternalModel>();
                 var validationContext = new ValidationContext(templateObject);
                 Validator.ValidateObject(templateObject, validationContext, true);
             });

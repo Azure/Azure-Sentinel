@@ -1,15 +1,15 @@
-﻿using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model;
+﻿using DetectionTemplateSchemaValidation.Tests;
+using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.Serialization;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
     [KnownType("DerivedTypes")]
+    [JsonConverter(typeof(AnalyticsTemplateConverter))]
     public abstract class AnalyticsTemplateInternalModelBase
     {
         [JsonProperty("id", Required = Required.Always)]
