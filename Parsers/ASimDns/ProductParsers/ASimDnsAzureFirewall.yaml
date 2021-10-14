@@ -15,9 +15,13 @@ References:
 Description: |
   This is a Query Parser that is used to map Azure Firewall DNS Events to the Azure Sentinel Information Model DNS schema.  
 ParserName: ASimDnsAzureFirewall
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let DNS_query=(){
-    AzureDiagnostics
+  let DNS_query=(disabled:bool=false){
+    AzureDiagnostics | where not(disabled)
     // | where ResourceType == "AZUREFIREWALLS" -- Implicit in the next line
     | where Category == "AzureFirewallDnsProxy"
     | where msg_s startswith "DNS Request:"
@@ -43,8 +47,8 @@ ParserQuery: |
       EventSubType = "response",
       DnsNetworkDuration = toint(DnsNetworkDuration*1000)     
   };
-  let DNS_error=() {
-    AzureDiagnostics
+  let DNS_error=(disabled:bool=false) {
+    AzureDiagnostics | where not(disabled)
     // | where ResourceType == "AZUREFIREWALLS" -- Implicit in the next line
     | where Category == "AzureFirewallDnsProxy"
     | where msg_s startswith " Error:"
@@ -62,8 +66,8 @@ ParserQuery: |
       EventResult = "Failure",
       EventSubType = "request"
   };
-  let DNS = () {
-    union DNS_query, DNS_error
+  let DNS = (disabled:bool=false) {
+    union DNS_query(disabled), DNS_error(disabled)
     | extend
       NetworkProtocol = toupper(NetworkProtocol)
     | project-rename
@@ -91,4 +95,4 @@ ParserQuery: |
         ResponseCodeName = DnsResponseCodeName,
         Flags = DnsFlags
   };
-  DNS
+  DNS(disabled)
