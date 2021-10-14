@@ -12,6 +12,15 @@ namespace DetectionTemplateSchemaValidation.Tests
     {
         public override bool CanRead => true;
         public override bool CanWrite => false;
+        private Dictionary<AlertRuleKind, Type> templateKindToTemplateTypeMap = new Dictionary<AlertRuleKind, Type>();
+
+
+        public AnalyticsTemplateConverter()
+        {
+            
+            templateKindToTemplateTypeMap.Add(AlertRuleKind.Scheduled, typeof(ScheduledTemplateInternalModel));
+            templateKindToTemplateTypeMap.Add(AlertRuleKind.NRT, typeof(NrtTemplateInternalModel));
+        }
 
         public override bool CanConvert(Type objectType)
         {
@@ -31,21 +40,14 @@ namespace DetectionTemplateSchemaValidation.Tests
             }
 
 
-            if (kind == AlertRuleKind.Scheduled)
+            if (templateKindToTemplateTypeMap.ContainsKey(kind))
             {
-                //Do not replace the creation of a new instace and the popualation with jo.ToObject<ScheduledTemplateInternalModel>() - it created an inifinte loop and stackOverflow error. Read more here: http://chrisoldwood.blogspot.com/2017/06/stack-overflow-with-custom-jsonconverter.html
-                var scheduledTemplate = new ScheduledTemplateInternalModel();
-                serializer.Populate(jo.CreateReader(), scheduledTemplate);
-                return scheduledTemplate;
+                Type templateType;
+                templateKindToTemplateTypeMap.TryGetValue(kind, out templateType);
+                var templateInstance = Activator.CreateInstance(templateType);
+                serializer.Populate(jo.CreateReader(), templateInstance);
+                return templateInstance;
             }
-            if (kind == AlertRuleKind.NRT)
-            {
-                //Do not replace the creation of a new instace and the popualation with jo.ToObject<NrtTemplateInternalModel>() - it created an inifinte loop and stackOverflow error. Read more here: http://chrisoldwood.blogspot.com/2017/06/stack-overflow-with-custom-jsonconverter.html
-                var nrtTemplate = new NrtTemplateInternalModel();
-                serializer.Populate(jo.CreateReader(), nrtTemplate);
-                return nrtTemplate;
-            }
-
             return null;
         }
 
