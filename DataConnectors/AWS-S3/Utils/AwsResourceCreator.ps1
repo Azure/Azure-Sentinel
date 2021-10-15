@@ -19,7 +19,8 @@ function New-ArnRole
     })
 }
 
-function New-S3Bucket{
+function New-S3Bucket
+{
     Write-Output `n`n'S3 Bucket Definition.'
     New-RetryAction({
         $script:bucketName = Read-Host 'Please enter S3 bucket name'
@@ -88,7 +89,8 @@ function Enable-S3EventNotification
     })
 }
 
-function New-KMS {
+function New-KMS
+{
     Write-Output `n`n'Kms Definition.'
     New-RetryAction({
         $script:kmaAliasName = Read-Host 'Please enter KMS alias Name'
