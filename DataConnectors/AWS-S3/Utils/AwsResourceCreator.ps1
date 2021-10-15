@@ -1,14 +1,14 @@
 function New-ArnRole
 {
-    Write-Output `n`n'Arn Role Definition'
+    Write-Output `n`n'Arn role definition'
     Set-RetryAction({
-        $script:roleName = Read-Host 'Please enter Role Name. If you have already configured an Assume Role for Azure Sentinel in the past, please type the name'
+        $script:roleName = Read-Host 'Please enter Role name. If you have already configured an Assume Role for Azure Sentinel in the past, please type the name'
         aws iam get-role --role-name $roleName 2>&1| Out-Null
         $isRuleNotExist = $lastexitcode -ne 0
         if ($isRuleNotExist)
         {
             
-            $workspaceId = Read-Host 'Please enter Workspae Id (External Id)'
+            $workspaceId = Read-Host 'Please enter Workspace Id (External Id)'
             $rolePolicy = Get-RoleArnPolicy
             $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy 2>&1
             if ($lastexitcode -eq 0)
@@ -21,7 +21,7 @@ function New-ArnRole
 
 function New-S3Bucket
 {
-    Write-Output `n`n'S3 Bucket Definition.'
+    Write-Output `n`n'S3 bucket definition.'
     Set-RetryAction({
         $script:bucketName = Read-Host 'Please enter S3 bucket name'
         $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
@@ -61,10 +61,10 @@ function Enable-S3EventNotification
     param(
         [Parameter(Mandatory=$true)][string]$DefaultEvenNotificationPrefix
         )
-    Write-Output `n'Enabling S3 Event Notifications (for *.gz file)'
+    Write-Output `n'Enabling S3 event notifications (for *.gz file)'
     
     Set-RetryAction({
-        $eventNotificationName = Read-Host 'Please enter the Event Notifications Name'
+        $eventNotificationName = Read-Host 'Please enter the event notifications name'
         $eventNotificationPrefix = $DefaultEvenNotificationPrefix
         $prefixOverrideConfirm = Read-Host "The default prefix is '${eventNotificationPrefix}'. `nDo you want to override the event notification prefix? [y/n](n by default)"
         if ($prefixOverrideConfirm -eq 'y')
@@ -93,7 +93,7 @@ function New-KMS
 {
     Write-Output `n`n'Kms Definition.'
     Set-RetryAction({
-        $script:kmaAliasName = Read-Host 'Please enter KMS alias Name'
+        $script:kmaAliasName = Read-Host 'Please enter KMS alias name'
         $script:kmsKeyDescription = aws kms describe-key --key-id alias/$kmaAliasName 2>&1
         $isKmsNotExist = $lastexitcode -ne 0
         if ($isKmsNotExist)

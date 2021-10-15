@@ -75,7 +75,7 @@ function Update-KmsPolicy
          [Parameter(Mandatory=$true)][string]$RequiredPolicy,
          [Parameter(Mandatory=$false)][string]$CustomMessage
     )
-    Write-Output `n"Updating the KMS policy to allow Sentinel read the date."
+    Write-Output `n"Updating the KMS policy to allow Sentinel read the data."
     Write-Output "Changes Role: Kms Encrypt, Decrypt, ReEncrypt*, GenerateDataKey* and DescribeKey  permissions to '${roleName}' rule"
     if ($CustomMessage -ne $null)
     {
