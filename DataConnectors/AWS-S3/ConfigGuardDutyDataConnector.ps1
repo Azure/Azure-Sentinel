@@ -108,7 +108,7 @@ function Get-KmsPolicyForGuardDutyAndRole
 function Enable-GuardDuty
 {
     Write-Output `n'Enabling GuardDuty'
-    New-RetryAction({
+    Set-RetryAction({
         $newGuarduty = aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1
         $isGuardutyEnabled = $lastexitcode -ne 0
         if ($isGuardutyEnabled)

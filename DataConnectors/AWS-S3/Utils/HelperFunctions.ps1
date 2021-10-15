@@ -14,7 +14,7 @@ function Write-TheRequiredDataForTheConnectorDefinition
     Write-Output "Sqs Url: ${sqsUrl}"
 }
 
-function New-RetryAction
+function Set-RetryAction
 {
 	param(
         [Parameter(Mandatory=$true)][Action]$action

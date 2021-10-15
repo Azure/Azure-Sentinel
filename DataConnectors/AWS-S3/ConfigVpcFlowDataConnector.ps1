@@ -11,7 +11,7 @@ Write-Output `n"Listing your account's available VPCs"
 aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
 
 Write-Output `n'Enabling Flow Logs(default format)'
-New-RetryAction({
+Set-RetryAction({
 	$vpcResourceIds = Read-Host 'Please enter Vpc Resource Id[s] (space separated)'
 	$vpcTrafficType = Read-Host 'Please enter Traffic Type (ALL, ACCEPT, REJECT - default ALL)'
 	if ($vpcTrafficType -ne "ALL" -And $vpcTrafficType -ne "ACCEPT" -And $vpcTrafficType -ne "REJECT") {$vpcTrafficType = "ALL"}

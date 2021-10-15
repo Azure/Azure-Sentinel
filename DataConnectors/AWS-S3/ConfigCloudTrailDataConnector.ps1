@@ -207,7 +207,7 @@ $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).Que
 $sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
 
 
-$kmsConfirmation = Read-Host `n`n'Do you want to enable KMS for cloudTrail? [y/n](n by default)'
+$kmsConfirmation = Read-Host `n`n'Do you want to enable KMS for CloudTrail? [y/n](n by default)'
 if ($kmsConfirmation -eq 'y')
 {
 	DefineKMS
@@ -230,7 +230,7 @@ $eventNotificationPrefix = Get-EventNotificationPrefix
 Enable-S3EventNotification -DefaultEvenNotificationPrefix $eventNotificationPrefix
 
 Write-Output `n`n'CloudTrail Definition'
- New-RetryAction({
+ Set-RetryAction({
 	$script:cloudTrailName = Read-Host 'Please enter CloudTrail name'
 	aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null
 	$isCloudTrailNotExist = $lastexitcode -ne 0
