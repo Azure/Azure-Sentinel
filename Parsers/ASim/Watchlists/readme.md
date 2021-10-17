@@ -15,6 +15,6 @@ For more information, see:
  
 | Watchlist | Deploy |
 |--------------|--------|
-| Source Types | [![Deploy Source Types Watchlist](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FWatchlists%2FASim%2FASimSourceType.json) |
-| Parser Exclusion | [![Deploy Source Types Watchlist](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FWatchlists%2FASim%2FASimDisabledParsers.json) |
+| Source Types | [![Deploy Source Types Watchlist](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASim%2FWatchlists%2FASimSourceType.json) |
+| Parser Exclusion | [![Deploy Source Types Watchlist](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASim%2FWatchlists%2FASimDisabledParsers.json) |
 
