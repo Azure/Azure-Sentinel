@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
-    public class QueryBasedTemplateInternalModel : AnalyticsTemplateInternalModelBase
+    public abstract class QueryBasedTemplateInternalModel : AnalyticsTemplateInternalModelBase
     {
         [JsonProperty("severity", Required = Required.Always)]
         public Severity Severity { get; set; }

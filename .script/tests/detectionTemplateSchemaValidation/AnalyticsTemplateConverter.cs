@@ -17,9 +17,13 @@ namespace DetectionTemplateSchemaValidation.Tests
 
         public AnalyticsTemplateConverter()
         {
-            
-            templateKindToTemplateTypeMap.Add(AlertRuleKind.Scheduled, typeof(ScheduledTemplateInternalModel));
-            templateKindToTemplateTypeMap.Add(AlertRuleKind.NRT, typeof(NrtTemplateInternalModel));
+            var types = typeof(AnalyticsTemplateInternalModelBase).Assembly.GetTypes().Where(t => !t.IsAbstract && typeof(AnalyticsTemplateInternalModelBase).IsAssignableFrom(t)).ToList(); 
+           foreach(var templateType in types)
+            {
+                var templateInstance = Activator.CreateInstance(templateType);
+                var templateKind = ((AnalyticsTemplateInternalModelBase)templateInstance).Kind;
+                templateKindToTemplateTypeMap.Add(templateKind, templateType);
+            }
         }
 
         public override bool CanConvert(Type objectType)
