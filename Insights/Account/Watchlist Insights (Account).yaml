@@ -1,29 +1,179 @@
 --- 
 BaseQuery: |-
-    let UserPrincipalName = strcat('{{Account_Name}}','@', '{{Account_UPNSuffix}}');
-    let terminatedEmployeesSchemaDatatable = datatable(['User Identifier']:string, ['User AAD Object Id']:guid , ['User On-Prem Sid']:string, ['User Principal Name']:string,  ['UserState']:string,    ['Notification date']:string  ,  ['Termination date']:string  , ['Tags']:string) [];
-    let terminatedEmployees = union isfuzzy=true terminatedEmployeesSchemaDatatable, _GetWatchlist('TerminatedEmployees');
-    let GetTerminatedWatchlist = terminatedEmployees 
-    | where (['User AAD Object Id'] != '' and ['User AAD Object Id'] == '{{Account_AadUserId}}') or
-     (['User Principal Name'] != '' and ['User Principal Name'] == UserPrincipalName) or
-      (['User On-Prem Sid'] != '' and ['User On-Prem Sid'] == '{{Account_Sid}}') or
-       (['User Identifier'] != '' and ['User Identifier'] == '{{Account_AadUserId}}') 
-    | extend ['Watchlist Insight'] = iff(now() > todatetime(['Termination date']),
-        Text = 'User is terminated', iff (now() > todatetime(['Notification date']),
-         Text='User has been noticied on termination', 'User has not been noticied on termination')) 
-    | extend  ['Additional Data'] = strcat('Notification Data:', ' ', ['Notification date'], ' ','Termination date:',' ',['Termination date']) 
-    | project ['Watchlist Insight'],['Additional Data'], Tags;
-    let vipUsersSchemaDatatable = datatable(['User Identifier']:string, ['User AAD Object Id']:guid, ['User On-Prem Sid']:string, ['User Principal Name']:string, ['Tags']:string) [];
-    let vipUsers = union isfuzzy=true  vipUsersSchemaDatatable, _GetWatchlist('VIPUsers');
-    let GetVIPWatchlist =  vipUsers | where (['User AAD Object Id'] != '' and ['User AAD Object Id'] == '{{Account_AadUserId}}') or  (['User Principal Name'] != '' and ['User Principal Name'] == UserPrincipalName) or  (['User On-Prem Sid'] != '' and ['User On-Prem Sid'] == '{{Account_Sid}}') or  (['User Identifier'] != '' and ['User Identifier'] == '{{Account_AadUserId}}') | extend ['Watchlist Insight'] = 'User is tagged as VIP'| extend ['Additional Data'] = strcat('Last Update Time: ',LastUpdatedTimeUTC)| project ['Watchlist Insight'],['Additional Data'],Tags;
-    let serviceAccountsSchemaDatatable = datatable(['Service Identifier']:guid , ['Service AAD Object Id']:string, ['Service On-Prem Sid']:string, ['Service Principal Name']:string, ['Owner User Identifier']:guid, ['Owner User AAD Object Id']:string, ['Owner User On-Prem Sid']:string, ['Owner User Principal Name']:string, ['Tags']:string)[];
-    let serviceAccounts = union isfuzzy=true serviceAccountsSchemaDatatable, _GetWatchlist('ServiceAccounts');
-    let GetOwnedServiceAccountWatchlist =  serviceAccounts | where (['Owner User AAD Object Id'] != '' and ['Owner User AAD Object Id'] == '{{Account_AadUserId}}') or (['Owner User Principal Name'] != '' and ['Owner User Principal Name'] == UserPrincipalName) or (['Owner User On-Prem Sid'] != '' and ['Owner User On-Prem Sid'] == '{{Account_Sid}}') or (['Owner User Identifier'] != '' and ['Owner User Identifier'] == '{{Account_AadUserId}}') | extend ServicAccount = pack('Service Identifier', ['Service Identifier'],'Service On-Prem Sid',['Service On-Prem Sid'],'Service AAD Object Id',['Service AAD Object Id'],'Service UPN', ['Service Principal Name'], 'Tags', Tags) | summarize ServicAccounts = make_list(ServicAccount) by tostring(['Owner User AAD Object Id']), ['Owner User Principal Name'], ['Owner User On-Prem Sid'], tostring(['Owner User Identifier'])| mv-expand kind=array ServicAccounts| extend ['Watchlist Insight'] = 'User is an owner of a serivce account'| extend ['Additional Data'] = case( isnotempty(ServicAccounts.['Service UPN']), strcat('Service UPN: ', ServicAccounts.['Service UPN']),'')| extend ['Additional Data'] = case( isnotempty(ServicAccounts.['Service AAD Object Id']), strcat(['Additional Data'],', ','Service AAD Object Id: ', ServicAccounts.['Service AAD Object Id']),['Additional Data'])| extend ['Additional Data'] = case( isnotempty(ServicAccounts.['Service On-Prem Sid']), strcat(['Additional Data'],', ','Service On-Prem Sid: ', ServicAccounts.['Service On-Prem Sid']),['Additional Data'])| extend ['Additional Data'] = case( isnotempty(ServicAccounts.['Service Identifier']),strcat(['Additional Data'],', ','Service Identifier: ', ServicAccounts.['Service Identifier']),['Additional Data'])| project ['Watchlist Insight'],['Additional Data'],['Tags']=tostring(ServicAccounts.Tags);
-    let GetServiceAccountWatchlist = serviceAccounts | where (['Service AAD Object Id'] != '' and ['Service AAD Object Id'] == '{{Account_AadUserId}}') or (['Service Principal Name'] != '' and ['Service Principal Name'] == UserPrincipalName) or (['Service On-Prem Sid'] != '' and ['Service On-Prem Sid'] == '{{Account_Sid}}') or (['Service Identifier'] != '' and ['Service Identifier'] == '{{Account_AadUserId}}')| extend owner = pack('Owner User Id', ['Owner User Identifier'],'Owner User On-Prem Sid',['Owner User On-Prem Sid'],'Owner User AAD Object Id',['Owner User AAD Object Id'],'Owner UPN', ['Owner User Principal Name'], 'Tags', Tags) | summarize Owners = make_list(owner) by ['Service AAD Object Id'], ['Service Principal Name'], ['Service On-Prem Sid'], tostring(['Service Identifier'])| mv-expand kind=array Owners| extend ['Watchlist Insight'] = 'This account is a service account'| extend  ['Additional Data'] = case( isnotempty(Owners.['Owner UPN']), strcat('Owner UPN: ', Owners.['Owner UPN']),'')| extend  ['Additional Data'] = case( isnotempty(Owners.['Owner User AAD Object Id']), strcat(['Additional Data'],', ','Owner User AAD Object Id: ', Owners.['Owner User AAD Object Id']),['Additional Data'])| extend  ['Additional Data'] = case( isnotempty(Owners.['Owner User On-Prem Sid']), strcat(['Additional Data'],', ','Owner User On-Prem Sid: ', Owners.['Owner User On-Prem Sid']),['Additional Data'])| extend  ['Additional Data'] = case( isnotempty(Owners.['Owner User Id']),strcat(['Additional Data'],', ','Owner User Id: ', Owners.['Owner User Id']),['Additional Data'])| project ['Watchlist Insight'],['Additional Data'],['Tags']=tostring(Owners.Tags);
-    let relatedAccountsSchemaDatatable = datatable(['User Identifier']:string, ['User AAD Object Id']:string, ['User On-Prem Sid']:string, ['User Principal Name']:string, ['Employee Id']:string, ['Email']:string,    ['Associated Privileged Account ID']:string, ['Associated Privileged Account']:string, ['Tags']:string) [];
-    let relatedAccounts = union isfuzzy=true relatedAccountsSchemaDatatable, _GetWatchlist('IdentityCorrelation');
-    let GetRelatedAccounts = relatedAccounts | where (['User AAD Object Id'] != '' and ['User AAD Object Id'] == '{{Account_AadUserId}}') or  (['User Principal Name'] != '' and ['User Principal Name'] == UserPrincipalName) or  (['User On-Prem Sid'] != '' and ['User On-Prem Sid'] == '{{Account_Sid}}') or  (['User Identifier'] != '' and ['User Identifier'] == '{{Account_AadUserId}}') | summarize RelatedAccounts = make_bag(pack('Email',Email,'Employee Id',['Employee Id'],'Tags',Tags,'Associated Privileged Account',['Associated Privileged Account'],'Associated Privileged Account ID',['Associated Privileged Account ID'])) by ['User Principal Name'],['User On-Prem Sid'],['User AAD Object Id'],['User Identifier']| extend Tags = RelatedAccounts.Tags| extend ['Watchlist Insight'] = 'Related Account Identifier' | mv-expand kind=array   RelatedAccounts | where RelatedAccounts[1] != ''| where RelatedAccounts[0] != 'Tags'| extend ['Additional Data']= strcat(RelatedAccounts[0],': ',RelatedAccounts[1]) | where ['Additional Data'] != '' | project ['Watchlist Insight'],['Additional Data'],tostring(Tags);
-    let GetAccountOwner = relatedAccounts | where (['Associated Privileged Account ID'] != '' and ['Associated Privileged Account ID'] == '{{Account_AadUserId}}') or  (['Associated Privileged Account'] != '' and ['Associated Privileged Account'] == UserPrincipalName)| summarize RelatedAccounts = make_bag(pack('User Principal Name',['User Principal Name'],'User On-Prem Sid',['User On-Prem Sid'],'User AAD Object Id',['User AAD Object Id'],'User Identifier',['User Identifier'],'Email',Email,'Employee Id',['Employee Id'],'Tags',Tags)) by ['User Principal Name'],['User On-Prem Sid'],['User AAD Object Id'],['User Identifier'] | extend Tags = RelatedAccounts.Tags| extend ['Watchlist Insight'] = 'Owner Account Identifier' | mv-expand kind=array   RelatedAccounts | where RelatedAccounts[1] != ''| where RelatedAccounts[0] != 'Tags'| extend ['Additional Data']= strcat(RelatedAccounts[0],': ',RelatedAccounts[1]) | where ['Additional Data'] != '' | project ['Watchlist Insight'],['Additional Data'],tostring(Tags);
+    let  defaultValue = "defaultValue";
+    let UserPrincipalName = tolower(strcat('{{Account_Name}}', '@', '{{Account_UPNSuffix}}'));
+    let GetTerminatedWatchlist = 
+        _GetWatchlist('TerminatedEmployees')
+        | extend UserAadObjectId = column_ifexists('User AAD Object Id', defaultValue)
+        | extend UserPrincipalNameColumn = tolower(column_ifexists('User Principal Name', defaultValue))
+        | extend UserOnPremSid = column_ifexists('User On-Prem Sid', defaultValue)
+        | extend UserIdentifier = column_ifexists('User Identifier', defaultValue)
+        | where
+            (UserAadObjectId != '' and UserAadObjectId == '{{Account_AadUserId}}') or
+            (UserPrincipalNameColumn != '' and UserPrincipalNameColumn == UserPrincipalName) or
+            (UserOnPremSid != '' and UserOnPremSid == '{{Account_Sid}}') or
+            (UserIdentifier != '' and UserIdentifier == '{{Account_AadUserId}}')
+        | extend ['Watchlist Insight'] = iff(now() > todatetime(column_ifexists('Termination date', now())),
+            Text = 'User is terminated', iff (now() > todatetime(column_ifexists('Notification date', now())),
+            Text='User has been noticed on termination', 'User has not been noticed on termination'))
+        | extend  ['Additional Data'] = strcat('Notification Data:', ' ', column_ifexists('Notification date', defaultValue),
+                                        ' ', 'Termination date:', ' ', column_ifexists('Termination date', 1)) 
+        | project ['Watchlist Insight'], ['Additional Data'], column_ifexists('Tags', defaultValue);
+    let GetVIPWatchlist =  _GetWatchlist('VIPUsers')
+        | extend UserAadObjectId = column_ifexists('User AAD Object Id', defaultValue)
+        | extend UserPrincipalNameColumn = tolower(column_ifexists('User Principal Name', defaultValue))
+        | extend UserOnPremSid = column_ifexists('User On-Prem Sid', defaultValue)
+        | extend UserIdentifier = column_ifexists('User Identifier', defaultValue)
+        | where 
+            (UserAadObjectId != '' and UserAadObjectId == '{{Account_AadUserId}}') or
+            (UserPrincipalNameColumn != '' and UserPrincipalNameColumn == UserPrincipalName) or
+            (UserOnPremSid != '' and UserOnPremSid == '{{Account_Sid}}') or
+            (UserIdentifier != '' and UserIdentifier == '{{Account_AadUserId}}')
+        | extend ['Watchlist Insight'] = 'User is tagged as VIP'
+        | extend ['Additional Data'] = strcat('Last Update Time: ', LastUpdatedTimeUTC)
+        | project ['Watchlist Insight'], ['Additional Data'], column_ifexists('Tags', defaultValue);
+    let serviceAccounts = _GetWatchlist('ServiceAccounts');
+    let GetOwnedServiceAccountWatchlist =  serviceAccounts
+        | extend OwnerUserAADObjectId = column_ifexists('Owner User AAD Object Id', defaultValue)
+        | extend OwnerUserPrincipalName = tolower(column_ifexists('Owner User Principal Name', defaultValue))
+        | extend OwnerUserOnPremSid = column_ifexists('Owner User On-Prem Sid', defaultValue)
+        | extend OwnerUserIdentifier = column_ifexists('Owner User Identifier', defaultValue)
+        | extend ServiceIdentifier = column_ifexists('Service Identifier', defaultValue)
+        | extend ServiceOnPremSid = column_ifexists('Service On-Prem Sid', defaultValue)
+        | extend ServiceAADObjectId = column_ifexists('Service AAD Object Id', defaultValue)
+        | extend ServicePrincipalName = column_ifexists( 'Service Principal Name', defaultValue)
+        | extend Tags = column_ifexists('Tags', defaultValue)
+        | where
+            (OwnerUserAADObjectId != '' and OwnerUserAADObjectId == '{{Account_AadUserId}}') or
+            (OwnerUserPrincipalName  != '' and OwnerUserPrincipalName  == UserPrincipalName) or
+            (OwnerUserOnPremSid != '' and OwnerUserOnPremSid == '{{Account_Sid}}') or
+            (OwnerUserIdentifier  != '' and OwnerUserIdentifier  == '{{Account_AadUserId}}') 
+        | extend ServicAccount = pack('Service Identifier', ServiceIdentifier,
+                                      'Service On-Prem Sid', ServiceOnPremSid,
+                                      'Service AAD Object Id', ServiceAADObjectId,
+                                      'Service UPN', ServicePrincipalName,
+                                      'Tags', Tags) 
+        | summarize ServicAccounts = make_list(ServicAccount)
+            by
+            tostring(OwnerUserAADObjectId),
+            OwnerUserPrincipalName,
+            OwnerUserOnPremSid,
+            tostring(OwnerUserIdentifier)
+        | mv-expand kind=array ServicAccounts
+        | extend IsServiceAccountExist = column_ifexists('ServicAccounts', defaultValue)
+        | extend IsServiceAccountExist = IsServiceAccountExist != defaultValue
+        | extend ServiceUPN = iff(IsServiceAccountExist, ServicAccounts.['Service UPN'], defaultValue)     
+        | extend ServiceAADObjectId = iff(IsServiceAccountExist, ServicAccounts.['Service AAD Object Id'], defaultValue)     
+        | extend ServiceOnPremSid = iff(IsServiceAccountExist, ServicAccounts.['Service On-Prem Sid'], defaultValue)     
+        | extend ServiceIdentifier = iff(IsServiceAccountExist, ServicAccounts.['Service Identifier'], defaultValue)     
+        | extend Tags = iff(IsServiceAccountExist, ServicAccounts.['Tags'], defaultValue)     
+        | extend ['Watchlist Insight'] = 'User is an owner of a serivce account'
+        | extend ['Additional Data'] = case(isnotempty(ServiceUPN), strcat('Service UPN: ', ServiceUPN, ''), '')
+        | extend ['Additional Data'] = case(isnotempty(ServiceAADObjectId), strcat(['Additional Data'], ', ', 'Service AAD Object Id: ', ServiceAADObjectId), ['Additional Data'])
+        | extend ['Additional Data'] = case(isnotempty(ServiceOnPremSid), strcat(['Additional Data'], ', ', 'Service On-Prem Sid: ', ServiceOnPremSid), ['Additional Data'])
+        | extend ['Additional Data'] = case(isnotempty(ServiceIdentifier), strcat(['Additional Data'], ', ', 'Service Identifier: ', ServiceIdentifier), ['Additional Data'])
+        | project ['Watchlist Insight'], ['Additional Data'], Tags=tostring(Tags);
+    let GetServiceAccountWatchlist = serviceAccounts
+        | extend ServiceAADObjectId = column_ifexists('Service AAD Object Id', defaultValue)
+        | extend ServicePrincipalName = column_ifexists('Service Principal Name', defaultValue)
+        | extend ServiceOnPremSid = column_ifexists('Service On-Prem Sid', defaultValue)
+        | extend ServiceIdentifier = column_ifexists('Service Identifier', defaultValue)
+        | extend Tags = column_ifexists('Tags', defaultValue)
+        | extend OwnerUserIdentifier =  column_ifexists('Owner User Id', defaultValue)
+        | extend OwnerUserOnPremSid =  column_ifexists('Owner User On-Prem Sid', defaultValue)
+        | extend OwnerUserAADObjectId =  column_ifexists('Owner User AAD Object Id', defaultValue)
+        | extend OwnerUserPrincipalName = tolower(column_ifexists('Owner User Principal Name', defaultValue))
+        | where
+            (ServiceAADObjectId != '' and ServiceAADObjectId == '{{Account_AadUserId}}') or
+            (ServicePrincipalName != '' and ServicePrincipalName =~ UserPrincipalName) or 
+            (ServiceOnPremSid != '' and ServiceOnPremSid == '{{Account_Sid}}') or
+            (ServiceIdentifier != '' and ServiceIdentifier == '{{Account_AadUserId}}')
+        | extend owner = pack('Owner User Id', OwnerUserIdentifier,
+                              'Owner User On-Prem Sid', OwnerUserOnPremSid,
+                              'Owner User AAD Object Id', OwnerUserAADObjectId, 
+                              'Owner UPN', OwnerUserPrincipalName,
+                              'Tags', Tags) 
+        | summarize Owners = make_list(owner)
+            by
+            ServiceAADObjectId,
+            ServicePrincipalName,
+            ServiceOnPremSid,
+            tostring(ServiceIdentifier)
+        | mv-expand kind=array Owners
+        | extend IsOwnerExist = column_ifexists('Owners', defaultValue)
+        | extend IsOwnerExist = IsOwnerExist == defaultValue
+        | extend OwnerUPN = iff(IsOwnerExist, Owners.['Owner UPN'], defaultValue)
+        | extend OwnerUserAADObjectId = iff(IsOwnerExist, Owners.['Owner User AAD Object Id'], defaultValue)
+        | extend OwnerUserOnPremSid = iff(IsOwnerExist, Owners.['Owner User On-Prem Sid'], defaultValue)
+        | extend OwnerUserId = iff(IsOwnerExist,Owners.['Owner User Id'], defaultValue)
+        | extend  ['Watchlist Insight'] = 'This account is a service account'
+        | extend  ['Additional Data'] = case(isnotempty(OwnerUPN), strcat('Owner UPN: ', OwnerUPN), '')
+        | extend  ['Additional Data'] = case(isnotempty(OwnerUserAADObjectId), strcat(['Additional Data'], ', ', 'Owner User AAD Object Id: ', OwnerUserAADObjectId), ['Additional Data'])
+        | extend  ['Additional Data'] = case(isnotempty(OwnerUserOnPremSid), strcat(['Additional Data'], ', ', 'Owner User On-Prem Sid: ', OwnerUserOnPremSid), ['Additional Data'])
+        | extend  ['Additional Data'] = case(isnotempty(OwnerUserId), strcat(['Additional Data'], ', ', 'Owner User Id: ', OwnerUserId), ['Additional Data'])
+        | project ['Watchlist Insight'], ['Additional Data'], ['Tags']=tostring(Owners.Tags);
+    let relatedAccounts = _GetWatchlist('IdentityCorrelation');
+    let GetRelatedAccounts = relatedAccounts
+        | extend UserAADObjectId = column_ifexists('User AAD Object Id', defaultValue)
+        | extend UserPrincipalNameColumn = tolower(column_ifexists('User Principal Name', defaultValue))
+        | extend UserOnPremSid = column_ifexists('User On-Prem Sid', defaultValue)
+        | extend UserIdentifier = column_ifexists('User Identifier', defaultValue)
+        | extend Email =  column_ifexists('Email', defaultValue)
+        | extend EmployeeId =  column_ifexists('Employee Id', defaultValue)
+        | extend Tags =  column_ifexists('Tags', defaultValue)
+        | extend AssociatedPrivilegedAccount = column_ifexists('Associated Privileged Account', defaultValue)
+        | extend AssociatedPrivilegedAccountID = column_ifexists('Associated Privileged Account ID', defaultValue)
+        | where
+            (UserAADObjectId != '' and UserAADObjectId == '{{Account_AadUserId}}') or
+            (UserPrincipalNameColumn != '' and UserPrincipalNameColumn == UserPrincipalName) or
+            (UserOnPremSid != '' and UserOnPremSid == '{{Account_Sid}}') or
+            (UserIdentifier != '' and UserIdentifier == '{{Account_AadUserId}}') 
+        | summarize RelatedAccounts = make_bag(pack('Email', Email,
+                                                    'Employee Id', EmployeeId,
+                                                    'Tags', Tags,
+                                                    'Associated Privileged Account', AssociatedPrivilegedAccount,
+                                                    'Associated Privileged Account ID', AssociatedPrivilegedAccountID))
+                by UserPrincipalNameColumn, UserOnPremSid, UserAADObjectId, tostring(UserIdentifier) // TODO: ask why we need this tostring()
+        | extend Tags = RelatedAccounts.Tags
+        | extend ['Watchlist Insight'] = 'Related Account Identifier' 
+        | mv-expand kind=array RelatedAccounts 
+        | where RelatedAccounts[1] != ''
+        | where RelatedAccounts[0] != 'Tags'
+        | extend ['Additional Data']= strcat(RelatedAccounts[0], ': ', RelatedAccounts[1]) 
+        | where ['Additional Data'] != '' 
+        | project ['Watchlist Insight'], ['Additional Data'], tostring(Tags);
+    let GetAccountOwner = relatedAccounts 
+    | extend AssociatedPrivilegedAccountID = column_ifexists('Associated Privileged Account ID', defaultValue)
+    | extend AssociatedPrivilegedAccount = column_ifexists('Associated Privileged Account', defaultValue)
+    | extend UserPrincipalNameColumn = tolower(column_ifexists('User Principal Name', defaultValue))
+    | extend UserOnPremSid = column_ifexists('User On-Prem Sid', defaultValue)
+    | extend UserAADObjectId = column_ifexists('User AAD Object Id', defaultValue)
+    | extend UserIdentifier = column_ifexists('User Identifier', defaultValue)
+    | extend EmployeeId =  column_ifexists('Employee Id', defaultValue)
+    | extend Email =  column_ifexists('Email', defaultValue)
+    | extend Tags = column_ifexists('Tags', defaultValue)
+    | where
+            (AssociatedPrivilegedAccountID != '' and AssociatedPrivilegedAccountID == '{{Account_AadUserId}}') or
+            (AssociatedPrivilegedAccount != '' and AssociatedPrivilegedAccount  == UserPrincipalName)
+        | summarize RelatedAccounts =
+            make_bag(pack(
+            'User Principal Name', UserPrincipalNameColumn,
+            'User On-Prem Sid', UserOnPremSid,
+            'User AAD Object Id', UserAADObjectId,
+            'User Identifier', UserIdentifier,
+            'Email', Email,
+            'Employee Id', EmployeeId,
+            'Tags', Tags))
+            by UserPrincipalNameColumn, UserOnPremSid, UserAADObjectId,
+            tostring(UserIdentifier) // TODO: ask why we need this tostring()
+        | extend Tags = RelatedAccounts.Tags
+        | extend ['Watchlist Insight'] = 'Owner Account Identifier' 
+        | mv-expand kind=array RelatedAccounts 
+        | where RelatedAccounts[1] != ''
+        | where RelatedAccounts[0] != 'Tags'
+        | extend ['Additional Data']= strcat(RelatedAccounts[0], ': ', RelatedAccounts[1]) 
+        | where ['Additional Data'] != '' 
+        | project ['Watchlist Insight'], ['Additional Data'], tostring(Tags);
     GetAccountOwner | union GetOwnedServiceAccountWatchlist, GetVIPWatchlist, GetTerminatedWatchlist, GetServiceAccountWatchlist, GetRelatedAccounts
 DataTypes: 
   - 
