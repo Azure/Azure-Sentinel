@@ -102,6 +102,76 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
 }  
 ```
 
+### Create Solution Metadata File
+
+Create a  file and place it in the base path of solution `C:\One\Azure-Sentinel\Tools\Create-Sentinel-Solution\input`.
+
+#### **Metadata File Format:**
+
+```json
+/**
+ * Solution Automation Metadata File Json
+ * -----------------------------------------------------
+ * The purpose of this json is to provide detail on the various fields the metadata solution can have.
+ * Name: Solution Name - Ex. "Symantec Endpoint Protection"
+ * Author: Author Name+Email of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
+ * Logo: Link to the Logo used in createUiDefinition.json
+ * Description: Solution Description used in createUiDefinition.json. Can include markdown.
+ * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
+ * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
+ * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
+ * Version: Version to be used during package creation
+ */
+{
+  "Name": "{SolutionName}",
+  "Author": "{AuthorName - Email}",
+  "Logo": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
+  "Description": "{Solution Description}",
+  "WorkbookDescription": ["{Description of workbook}"],
+  "Workbooks": [],
+  "Analytic Rules": [],
+  "Playbooks": [],
+  "Parsers": [],
+  "Hunting Queries": [],
+  "Data Connectors": [],
+  "Watchlists": [],
+  "BasePath": "{Path to Solution Content}",
+  "Version": "1.0.0"
+}
+
+```
+
+#### **Example of Input File: Solution_McAfeePO.json**
+
+```json
+{
+  "Name": "McAfeePO",
+  "Author": "Eli Forbes - v-eliforbes@microsoft.com",
+  "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/Workbooks/Images/Logo/mcafee_logo.svg\" width=\"75px\" height=\"75px\">",
+  "Description": "The [McAfee ePO](https://www.mcafee.com/enterprise/en-in/products/epolicy-orchestrator.html) is a centralized policy management and enforcement for your endpoints and enterprise security products. McAfee ePO monitors and manages your network, detecting threats and protecting endpoints against these threats.",
+  "WorkbookDescription": "Gain insights into McAfeePO logs.",
+  "Workbooks": [
+    "Workbooks/McAfeeePOOverview.json"
+  ],
+  "Analytic Rules": [
+    "Analytic Rules/McAfeeEPOAgentHandlerDown.yaml",
+    "Analytic Rules/McAfeeEPOAlertError.yaml"
+  ],
+  "Parsers": [
+    "Parsers/McAfeeEPOEvent.txt "
+  ],
+  "Hunting Queries": [
+    "Hunting Queries/McAfeeEPOAgentErrors.yaml"
+  ],
+  "Data Connectors": [
+    "Data Connectors/Connector_McAfee_ePO.json"
+  ],
+  "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/",
+  "Version": "1.0.0"
+}  
+```
+
 ### Generate Solution Package
 
 To generate the solution package from the given input file, run the `createSolution.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution`.
