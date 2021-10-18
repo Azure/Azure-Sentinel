@@ -1116,7 +1116,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     email = $Author[1];
                 };
                 if($sourceId){
-                    $newMetadata.properties | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
+                    $newMetadata | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
                     $newMetadata.Properties | Add-Member -Name 'contentId' -Type NoteProperty -Value "[variables('_sourceId')]";
                     $newMetadata.Properties | Add-Member -Name 'parentId' -Type NoteProperty -Value "[variables('_sourceId')]";
 
