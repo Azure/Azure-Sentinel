@@ -1146,16 +1146,31 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 };
 
                 $newMetadata | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
-                $categoriesDetails= New-Object psobject;
-                if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].value -ne "")
+
+                if($json.firstPublishDate -and $json.firstPublishDate -ne "")
                 {
-                    $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].value.Split(",");
+                    $newMetadata.Properties | Add-Member -Name 'firstPublishDate' -Type NoteProperty -value $json.firstPublishDate;
+                }
+
+                if($json.lastPublishDate -and $json.lastPublishDate -ne "")
+                {
+                    $newMetadata.Properties | Add-Member -Name 'lastPublishDate' -Type NoteProperty -value $json.lastPublishDate;
+                }
+
+                if($json.providers -and $json.providers -ne "")
+                {
+                    $newMetadata.Properties | Add-Member -Name 'providers' -Type NoteProperty -value $json.providers;
+                }
+                $categoriesDetails= New-Object psobject;
+                if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].Value.Length -gt 0)
+                {
+                    $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].Value;
                     $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
 
-                if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].value -ne "")
+                if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].Value.Length -gt 0)
                 {
-                    $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value.Split(",");
+                    $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value;
                     $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
                 $baseMainTemplate.resources += $newMetadata;
