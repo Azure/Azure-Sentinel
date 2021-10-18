@@ -100,7 +100,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Workbook";
-                            contentId = "[variables('_$fileName')]"
+                            contentId = "[variables('_$fileName')]";
+                            version = $contentToImport.Version;
                         };
 
                         if ($workbookCounter -eq 1) {
@@ -220,7 +221,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Playbook";
-                            contentId = "[variables('_$fileName')]"
+                            contentId = "[variables('_$fileName')]";
+                            version = $contentToImport.Version;
                         };
 
                         if ($playbookCounter -eq 1) {
@@ -516,7 +518,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "DataConnector";
-                            contentId = "[variables('_$connectorId')]"
+                            contentId = "[variables('_$connectorId')]";
+                            version = $contentToImport.Version;
                         };
                         function handleEmptyInstructionProperties ($inputObj) {
                             $outputObj = $inputObj |
@@ -662,7 +665,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Watchlist";
-                            contentId = "[variables('_$watchlistName')]"
+                            contentId = "[variables('_$watchlistName')]";
+                            version = $contentToImport.Version;
                         };
 
                         #Handle CreateUiDefinition Base Step
@@ -749,7 +753,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind = "HuntingQuery";
-                                contentId = "[variables('_$fileName')]"
+                                contentId = "[variables('_$fileName')]";
+                                version = $contentToImport.Version;
                             };
 
                             function queryResourceExists () {
@@ -900,7 +905,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind = "AnalyticsRule";
-                                contentId = "[variables('_$fileName')]"
+                                contentId = "[variables('_$fileName')]";
+                                version = $contentToImport.Version;
                             };
 
                             foreach ($line in $rawData) {
@@ -987,7 +993,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Parser";
-                            contentId = "[variables('_$fileName')]"
+                            contentId = "[variables('_$fileName')]";
+                            version = $contentToImport.Version;
                         };
 
                         $content = ''
