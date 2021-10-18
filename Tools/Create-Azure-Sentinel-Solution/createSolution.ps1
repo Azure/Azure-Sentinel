@@ -95,7 +95,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $fileName = Split-Path $file -leafbase;
                         $fileName = $file + "_workbook";
-
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -902,7 +901,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $fileName = Split-Path $file -leafbase;
                             $fileName += "_AnalyticalRules";
-
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -992,7 +990,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $fileName = Split-Path $file -leafbase;
                         $fileName = $fileName + "_Parser";
-
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
