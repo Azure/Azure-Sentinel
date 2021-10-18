@@ -94,7 +94,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         Write-Host "Generating Workbook using $file"
 
                         $fileName = Split-Path $file -leafbase;
-                        $fileName = $file + "_workbook";
+                        $fileName = $fileName + "_workbook";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
