@@ -127,20 +127,20 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
  */
 {
     "publisherId": {Publisher ID},
-	"planId": {Solution Plan Id},
-	"firstPublishDate": {Solution First Published Date},
-	"lastPublishDate": {Solution recent Published Date},
-	"providers": {Solution provider list},
-	"categories": {
-		"domains" : {Solution category domain list},
-		"verticals": {Solution category vertical list},
-	},
-	"support": {
-	  "name": {Publisher ID},
-	  "email": {Email for Solution Support},
-	  "tier": {Support Tier},
-	  "link": {Link of Support contacts for Solution},
-	}
+    "planId": {Solution Plan Id},
+    "firstPublishDate": {Solution First Published Date},
+    "lastPublishDate": {Solution recent Published Date},
+    "providers": {Solution provider list},
+    "categories": {
+	"domains" : {Solution category domain list},
+	"verticals": {Solution category vertical list},
+     },
+     "support": {
+	"name": {Publisher ID},
+	"email": {Email for Solution Support},
+	"tier": {Support Tier},
+	"link": {Link of Support contacts for Solution},
+    }
 }
 
 ```
