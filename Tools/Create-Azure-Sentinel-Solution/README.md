@@ -126,7 +126,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
  * - NOTE: Few other fields required for metadata like Version, Author etc. details are used from input file 
  */
 {
-    "publisherId": {Publisher ID},
+    "publisherId": {Id of Publisher},
     "planId": {Solution Plan Id},
     "firstPublishDate": {Solution First Published Date},
     "lastPublishDate": {Solution recent Published Date},
