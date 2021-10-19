@@ -52,6 +52,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation
+ * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
  */
 {
   "Name": "{SolutionName}",
@@ -67,7 +68,8 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Data Connectors": [],
   "Watchlists": [],
   "BasePath": "{Path to Solution Content}",
-  "Version": "1.0.0"
+  "Version": "1.0.0",
+  "Metadata": "{Name of Solution Metadata file}",
 }
 
 ```
@@ -98,13 +100,14 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
     "Data Connectors/Connector_McAfee_ePO.json"
   ],
   "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/",
-  "Version": "1.0.0"
+  "Version": "1.0.0",
+  "Metadata": "SolutionMetadata.json"
 }  
 ```
 
 ### Create Solution Metadata File
 
-Create a  file and place it in the base path of solution `C:\One\Azure-Sentinel\Tools\Create-Sentinel-Solution\input`.
+Create a  file and place it in the base path of solution `https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/`.
 
 #### **Metadata File Format:**
 
@@ -113,62 +116,54 @@ Create a  file and place it in the base path of solution `C:\One\Azure-Sentinel\
  * Solution Automation Metadata File Json
  * -----------------------------------------------------
  * The purpose of this json is to provide detail on the various fields the metadata solution can have.
- * Name: Solution Name - Ex. "Symantec Endpoint Protection"
- * Author: Author Name+Email of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
- * Logo: Link to the Logo used in createUiDefinition.json
- * Description: Solution Description used in createUiDefinition.json. Can include markdown.
- * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
- * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
- * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
- * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
- * Version: Version to be used during package creation
+ * publisherId: An identifier that's used by Partner Center to uniquely identify the publisher associated with a commercial marketplace account.- Ex. "azuresentinel", "CheckPoint", "semperis"
+ * planId: Id of the Plan for the Offer of Solution - Ex. "azure-sentinel-solution-ciscoaci", "azure-sentinel-solution-semperis-dsp"
+ * firstPublishDate: Solution firest published date
+ * lastPublishDate: Latest published date of Solution
+ * providers: Provider of the solution - Ex. Cisco, Checkpoint
+ * categories: Domains and verticals arrays of the solution - Ex. Domains - "Security – Network", "Application"
+ * support: Name, Email, Tier and Link for the soluton support details.
+ * - NOTE: Few other fields required for metadata like Version, Author etc. details are used from input file 
  */
 {
-  "Name": "{SolutionName}",
-  "Author": "{AuthorName - Email}",
-  "Logo": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
-  "Description": "{Solution Description}",
-  "WorkbookDescription": ["{Description of workbook}"],
-  "Workbooks": [],
-  "Analytic Rules": [],
-  "Playbooks": [],
-  "Parsers": [],
-  "Hunting Queries": [],
-  "Data Connectors": [],
-  "Watchlists": [],
-  "BasePath": "{Path to Solution Content}",
-  "Version": "1.0.0"
+    "publisherId": {Publisher ID},
+	"planId": {Solution Plan Id},
+	"firstPublishDate": {Solution First Published Date},
+	"lastPublishDate": {Solution recent Published Date},
+	"providers": {Solution provider list},
+	"categories": {
+		"domains" : {Solution category domain list},
+		"verticals": {Solution category vertical list},
+	},
+	"support": {
+	  "name": {Publisher ID},
+	  "email": {Email for Solution Support},
+	  "tier": {Support Tier},
+	  "link": {Link of Support contacts for Solution},
+	}
 }
 
 ```
 
-#### **Example of Input File: Solution_McAfeePO.json**
+#### **Example of Input File: SolutionMetadata.json**
 
 ```json
 {
-  "Name": "McAfeePO",
-  "Author": "Eli Forbes - v-eliforbes@microsoft.com",
-  "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/Workbooks/Images/Logo/mcafee_logo.svg\" width=\"75px\" height=\"75px\">",
-  "Description": "The [McAfee ePO](https://www.mcafee.com/enterprise/en-in/products/epolicy-orchestrator.html) is a centralized policy management and enforcement for your endpoints and enterprise security products. McAfee ePO monitors and manages your network, detecting threats and protecting endpoints against these threats.",
-  "WorkbookDescription": "Gain insights into McAfeePO logs.",
-  "Workbooks": [
-    "Workbooks/McAfeeePOOverview.json"
-  ],
-  "Analytic Rules": [
-    "Analytic Rules/McAfeeEPOAgentHandlerDown.yaml",
-    "Analytic Rules/McAfeeEPOAlertError.yaml"
-  ],
-  "Parsers": [
-    "Parsers/McAfeeEPOEvent.txt "
-  ],
-  "Hunting Queries": [
-    "Hunting Queries/McAfeeEPOAgentErrors.yaml"
-  ],
-  "Data Connectors": [
-    "Data Connectors/Connector_McAfee_ePO.json"
-  ],
-  "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/",
-  "Version": "1.0.0"
+	"publisherId": "azuresentinel",
+	"planId": "azure-sentinel-solution-mcafeeepo",
+	"firstPublishDate": "2021-03-26",
+	"lastPublishDate": "2021-08-09",
+	"providers": ["Cisco"],
+	"categories": {
+		"domains" : ["Security - Network"],
+		"verticals": []
+	},
+	"support": {
+	  "name": "Microsoft Corporation",
+	  "email": "support@microsoft.com",
+	  "tier": "Microsoft",
+	  "link": "https://support.microsoft.com"
+	}
 }  
 ```
 
