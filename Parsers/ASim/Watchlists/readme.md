@@ -1,12 +1,12 @@
-# ASIM Source Types Watchlist
+# ASIM Watchlists
 
-This template deploys ASIM Source Types Watchlist. The watchlist is a part of the Microsoft Sentinel Information Model.
+Use this page to ASIM Watchlists.
 
 The Advanced Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Advanced Sentinel workspace.
 
 Included watchlists:
-* __Source Type:__ Use this watchlist to configure machines that 
-* __Parser Exclusion:__ Use this watchlist to disable built in parsers
+* __Source Type:__ Use this watchlist to configure source machines identifying a source type. This watchlist is currenlty used by the Infoblox ASIM parser.
+* __Parser Exclusion:__ Use this watchlist to exclude built-in source specific parsers from source agnostic parsers, without editing parsers.
   
 For more information, see:
 
