@@ -29,6 +29,14 @@ customer_id = os.environ["CUSTOMER_ID"]
 # For the shared key, use either the primary or the secondary Connected Sources client authentication key. 
 shared_key = os.environ["SHARED_KEY"]
 
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Invalid Log Analytics Uri.")
+
 # Function to determine if the current timestamp should be used instead of the value stored in the checkpoint file.
 # Will return 'true' if the checkpoint time is 1 or more days in the past.
 def use_current(now, old) -> bool:
@@ -65,14 +73,6 @@ def post_data(customer_id, shared_key, body, log_type, logAnalyticsUri) -> None:
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-
-    if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
-        logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
-
-    pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
-    match = re.match(pattern,str(logAnalyticsUri))
-    if(not match):
-        raise Exception("Invalid Log Analytics Uri.")
     
     uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     headers = {
