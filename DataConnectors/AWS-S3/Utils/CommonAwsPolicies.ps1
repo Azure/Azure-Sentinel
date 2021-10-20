@@ -62,7 +62,7 @@ function Get-SQSPoliciesForS3AndRule
 }
 
 function Get-SqsEventNotificationConfig
-{
+{ 
    $sqsEventConfig = "
    {
 	   'QueueConfigurations': [

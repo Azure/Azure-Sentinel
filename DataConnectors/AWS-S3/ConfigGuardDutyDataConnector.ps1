@@ -116,7 +116,7 @@ function Enable-GuardDuty
             Write-Output `n'A detector already exists for the current account.'
             Write-Output 'List of existing detectors:'
             aws guardduty list-detectors
-            $script:detectorId = Read-Host 'Please enter Detector Id'
+            $script:detectorId = Read-Host 'Please enter detector Id'
         }
         else
         {
@@ -153,13 +153,17 @@ function Set-GuardDutyPublishDestinationBucket
 }
 
 # ***********       Main Flow       ***********
+Write-Output `n'This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable '
+Write-Output "GuardDuty Logs, S3 bucket, SQS Queue, and S3 notifications."
 
+# Connect using the AWS CLI
 Get-AwsConfig
 
 New-ArnRole
 $roleArnObject = aws iam get-role --role-name $roleName
 $roleArn = ($roleArnObject | ConvertFrom-Json ).Role.Arn
 
+# Create S3 bucket for storing logs
 New-S3Bucket
 $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
 
@@ -171,14 +175,13 @@ New-SQSQueue
 $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl
 $sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
 
-
 $customMessage = "Changes GuardDuty: Kms GenerateDataKey to GuardDuty"
 $kmsRequiredPolicies = Get-KmsPolicyForGuardDutyAndRole
 Update-KmsPolicy -RequiredPolicy $kmsRequiredPolicies -CustomMessage $customMessage
 
 Update-SQSPolicy
 
-$customMessage = "Changes: S3 Get GuardDuty notifications"
+$customMessage = "Changes S3: Get GuardDuty notifications"
 $s3RequiredPolicy = Get-S3PolicyForRoleAndGuardDuty
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
@@ -187,4 +190,5 @@ Enable-S3EventNotification -DefaultEvenNotificationPrefix "AWSLogs/${callerAccou
 Enable-GuardDuty
 Set-GuardDutyPublishDestinationBucket
  
-Write-TheRequiredDataForTheConnectorDefinition
+# Output information needed to configure Sentinel data connector
+Write-RequiredConnectorDefinitionInfo

@@ -46,7 +46,7 @@ function Update-S3Policy
         
     $currentBucketPolicy = aws s3api get-bucket-policy --bucket $bucketName 2>&1
     $isBucketPolicyExist = $lastexitcode -eq 0
-    if($isBucketPolicyExist)
+    if ($isBucketPolicyExist)
     {	
         $s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
         $currentBucketPolicyObject = $currentBucketPolicy | ConvertFrom-Json 	

@@ -1,13 +1,15 @@
 function Get-AwsConfig
 {
-    Write-Output `n`n'Setting up your AWS environment'
-    Write-Output `n'This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable'
-    write-Output "${LogsName} Logs, S3 bucket, SQS Queue, and S3 notifications."
-    Write-Output `n`n'Please enter AWS configuration:'
+    <#
+    .SYNOPSIS
+        This function executes "aws configure" to ensure it is connected for subsequent commands.
+    #>
+    Write-Output `n`n'Setting up your AWS CLI environment...'
+    Write-Output `n`n'Please ensure that the AWS CLI is connected:'
     aws configure
 }
 
-function Write-TheRequiredDataForTheConnectorDefinition
+function Write-RequiredConnectorDefinitionInfo
 {
     Write-Output `n`n'Use the values below to configure the Amazon Web Service S3 data connector in the Azure Sentinel portal.'
     Write-Output "Role arn: ${roleArn}"

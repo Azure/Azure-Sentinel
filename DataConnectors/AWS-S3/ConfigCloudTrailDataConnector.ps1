@@ -129,7 +129,7 @@ function Get-S3PolicyForRoleAndCloudTrail
 	return $s3PolicyForRoleAndCloudTrail.Replace("'",'"')
 }
 
-function BuildCloudTrailS3Policy
+function New-CloudTrailS3Policy
 {
 	$s3RequiredPolicy = Get-S3PolicyForRoleAndCloudTrail
 	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
@@ -192,6 +192,10 @@ function Set-OrganizationTrailConfig
 
 # ***********       Main Flow       ***********
 
+Write-Output `n'This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable'
+write-Output "CloudTrail Logs, S3 bucket, SQS Queue, and S3 notifications."
+
+# Connect using the AWS CLI
 Get-AwsConfig
 
 New-ArnRole
@@ -206,11 +210,10 @@ New-SQSQueue
 $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl
 $sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
 
-
 $kmsConfirmation = Read-Host `n`n'Do you want to enable KMS for CloudTrail? [y/n](n by default)'
 if ($kmsConfirmation -eq 'y')
 {
-	DefineKMS
+	New-KMS
 	$kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn 
 	$kmsKeyId = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
 	
@@ -221,16 +224,17 @@ if ($kmsConfirmation -eq 'y')
 
 Update-SQSPolicy
 
-$organizationCloudTrailConfirmation = Read-Host `n'Do you want to enable the Trail and CloudTrail S3 Policy for all accounts in your organization? [y/n](y by default)'
-$s3RequiredPolicy = BuildCloudTrailS3Policy
-$customMessage = "Changes: S3 Get CloudTrail notifications"
+$organizationCloudTrailConfirmation = Read-Host `n'Do you want to enable the Trail and CloudTrail S3 Policy for ALL accounts in your organization? [y/n] (default y)'
+$s3RequiredPolicy = New-CloudTrailS3Policy
+$customMessage = "Changes S3: Get CloudTrail notifications"
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
 $eventNotificationPrefix = Get-EventNotificationPrefix
 Enable-S3EventNotification -DefaultEvenNotificationPrefix $eventNotificationPrefix
 
-Write-Output `n`n'CloudTrail Definition'
+Write-Output `n`n'CloudTrail definition'
  Set-RetryAction({
+	 
 	$script:cloudTrailName = Read-Host 'Please enter CloudTrail name'
 	aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null
 	$isCloudTrailNotExist = $lastexitcode -ne 0
@@ -276,7 +280,8 @@ Set-CloudTrailDataEventConfig
 Set-MultiRegionTrailConfig
 Set-OrganizationTrailConfig
 
+# Enable CloudTrail logging
 aws cloudtrail start-logging  --name $cloudTrailName
 
-Write-TheRequiredDataForTheConnectorDefinition
-
+# Output information needed to configure Sentinel data connector
+Write-RequiredConnectorDefinitionInfo
