@@ -1,0 +1,63 @@
+id: 93e9bd4c-2b98-4849-b22f-ab2f5faf1a00
+name: Suspicious Sign-in to Privileged Account
+description: |
+  'This query will help detect any Sign-in's from non-compliant/unknown device or from device registered without MFA(Multi-factor Authentication) to privileged account using pre-built watchlist to identify the accounts.
+  Azure Sentinel provides the ability to create pre-built watchlist templates, that can be customized for your environment and used during investigations.
+  Reference: https://techcommunity.microsoft.com/t5/azure-sentinel/what-s-new-watchlists-templates-are-now-in-public-preview/ba-p/2614340'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let priv_users = ('_GetWatchlist("VIPUsers")') ;
+  (union isfuzzy=true
+  (SigninLogs //when a device is registered/joined without MFA 
+  | where AuthenticationRequirement == "multiFactorAuthentication"
+  | where ResourceDisplayName == "Device Registration Service" 
+  | where ConditionalAccessStatus == "success"
+  | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
+  | where AccountName in (priv_users)
+  | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress), 
+  (
+  (SigninLogs //Sign-ins by non-compliant devices
+  | where DeviceDetail.isCompliant == false
+  | where ConditionalAccessStatus == "success"
+    | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
+    | where AccountName in (priv_users)
+    | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
+  ),
+  (SigninLogs //Sign-ins by unknown devices
+  | where isempty(DeviceDetail.deviceId)
+  | where AuthenticationRequirement == "singleFactorAuthentication"
+  | where ResultType == "0"
+  | where NetworkLocationDetails == "[]"
+  | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
+  | where AccountName in (priv_users)
+  | project-rename  ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
+  )
+  | project AccountCustomEntity = AccountName, AppId, Category, IPCustomEntity = ClientIP, CorrelationId, ResourceCustomEntity = ResourceId, Identity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceCustomEntity
+version: 1.0.0
+kind: scheduled
+
