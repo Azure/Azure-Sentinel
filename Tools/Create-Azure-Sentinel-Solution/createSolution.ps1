@@ -94,13 +94,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         Write-Host "Generating Workbook using $file"
 
                         $fileName = Split-Path $file -leafbase;
-
+                        $fileName = $fileName + "_workbook";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Workbook";
-                            contentId = "[variables('_$fileName')]"
+                            contentId = "[variables('_$fileName')]";
+                            version = $contentToImport.Version;
                         };
 
                         if ($workbookCounter -eq 1) {
@@ -220,7 +221,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Playbook";
-                            contentId = "[variables('_$fileName')]"
+                            contentId = "[variables('_$fileName')]";
+                            version = $contentToImport.Version;
                         };
 
                         if ($playbookCounter -eq 1) {
@@ -516,7 +518,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "DataConnector";
-                            contentId = "[variables('_$connectorId')]"
+                            contentId = "[variables('_$connectorId')]";
+                            version = $contentToImport.Version;
                         };
                         function handleEmptyInstructionProperties ($inputObj) {
                             $outputObj = $inputObj |
@@ -662,7 +665,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Watchlist";
-                            contentId = "[variables('_$watchlistName')]"
+                            contentId = "[variables('_$watchlistName')]";
+                            version = $contentToImport.Version;
                         };
 
                         #Handle CreateUiDefinition Base Step
@@ -743,13 +747,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             $fileName = Split-Path $file -leafbase;
-
+                            $fileName += "_HuntingQueries";
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind = "HuntingQuery";
-                                contentId = "[variables('_$fileName')]"
+                                contentId = "[variables('_$fileName')]";
+                                version = $contentToImport.Version;
                             };
 
                             function queryResourceExists () {
@@ -895,12 +900,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $content = ''
 
                             $fileName = Split-Path $file -leafbase;
+                            $fileName += "_AnalyticalRules";
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind = "AnalyticsRule";
-                                contentId = "[variables('_$fileName')]"
+                                contentId = "[variables('_$fileName')]";
+                                version = $contentToImport.Version;
                             };
 
                             foreach ($line in $rawData) {
@@ -982,12 +989,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         $fileName = Split-Path $file -leafbase;
+                        $fileName = $fileName + "_Parser";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind = "Parser";
-                            contentId = "[variables('_$fileName')]"
+                            contentId = "[variables('_$fileName')]";
+                            version = $contentToImport.Version;
                         };
 
                         $content = ''
@@ -1145,18 +1154,33 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     criteria = $DependencyCriteria;
                 };
 
-                $newMetadata | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
-                $categoriesDetails= New-Object psobject;
-                if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].value -ne "")
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+
+                if($json.firstPublishDate -and $json.firstPublishDate -ne "")
                 {
-                    $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].value.Split(",");
-                    $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
+                    $newMetadata.Properties | Add-Member -Name 'firstPublishDate' -Type NoteProperty -value $json.firstPublishDate;
                 }
 
-                if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].value -ne "")
+                if($json.lastPublishDate -and $json.lastPublishDate -ne "")
                 {
-                    $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value.Split(",");
-                    $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
+                    $newMetadata.Properties | Add-Member -Name 'lastPublishDate' -Type NoteProperty -value $json.lastPublishDate;
+                }
+
+                if($json.providers -and $json.providers -ne "")
+                {
+                    $newMetadata.Properties | Add-Member -Name 'providers' -Type NoteProperty -value $json.providers;
+                }
+                $categoriesDetails= New-Object psobject;
+                if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].Value.Length -gt 0)
+                {
+                    $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].Value;
+                    $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
+                }
+
+                if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].Value.Length -gt 0)
+                {
+                    $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value;
+                    $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
                 $baseMainTemplate.resources += $newMetadata;
             }

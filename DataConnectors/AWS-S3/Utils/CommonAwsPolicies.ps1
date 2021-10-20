@@ -1,4 +1,5 @@
-function Get-RoleArnPolicy{
+function Get-RoleArnPolicy
+{
    $arnRolePolicy = "{
             'Version': '2012-10-17',
             'Statement': [
@@ -19,7 +20,8 @@ function Get-RoleArnPolicy{
 	return $arnRolePolicy.Replace("'",'\"')
 }
 
-function Get-SQSPoliciesForS3AndRule {
+function Get-SQSPoliciesForS3AndRule
+{
 	$sqsPolicyForS3 = "
     {
 	  'Version': '2008-10-17',
@@ -59,7 +61,8 @@ function Get-SQSPoliciesForS3AndRule {
 	return $sqsPolicyForS3.Replace("'",'"')
 }
 
-function Get-SqsEventNotificationConfig {
+function Get-SqsEventNotificationConfig
+{
    $sqsEventConfig = "
    {
 	   'QueueConfigurations': [
@@ -88,7 +91,8 @@ function Get-SqsEventNotificationConfig {
 	return $sqsEventConfig.Replace("'",'"')
 }
 
-function Get-S3PolicyForRole{
+function Get-S3PolicyForRole
+{
 	 $s3PolicyForArn = "{
 	 'Statement': [{
             'Sid': 'Allow Arn read access S3 bucket',
