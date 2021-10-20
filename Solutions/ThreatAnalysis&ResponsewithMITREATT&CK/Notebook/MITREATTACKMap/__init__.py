@@ -75,7 +75,7 @@ def parse_yaml(parent_dir, child_dir):
 
 
 def get_fusion_alerts():
-    alerts_url = "https://docs.microsoft.com/en-us/azure/sentinel/fusion"
+    alerts_url = "https://docs.microsoft.com/azure/sentinel/fusion"
 
     session = HTMLSession()
 
@@ -206,7 +206,7 @@ def get_fusion_alerts():
     result = fusion_df.append(df2, ignore_index=True)
     result["DetectionType"] = "Fusion"
     result["DetectionService"] = "Azure Sentinel"
-    result["DetectionURL"] = "https://docs.microsoft.com/en-us/azure/sentinel/fusion"
+    result["DetectionURL"] = "https://docs.microsoft.com/azure/sentinel/fusion"
 
     # Exploding columns to flatten the table
     columns_to_expand = [
@@ -473,7 +473,7 @@ platform_mapping = {
 
 def get_azure_defender_alerts():
     alerts_url = (
-        "https://docs.microsoft.com/en-us/azure/security-center/alerts-reference"
+        "https://docs.microsoft.com/azure/security-center/alerts-reference"
     )
     list_of_df = pd.read_html(alerts_url)
     providers = [
@@ -545,7 +545,7 @@ def get_azure_defender_alerts():
 
 
 def get_azure_ipc_alerts():
-    alerts_url = "https://docs.microsoft.com/en-us/azure/active-directory/identity-protection/concept-identity-protection-risks"
+    alerts_url = "https://docs.microsoft.com/azure/active-directory/identity-protection/concept-identity-protection-risks"
     list_of_df = pd.read_html(alerts_url)
 
     # Merge All dataframes
@@ -569,7 +569,7 @@ def get_azure_ipc_alerts():
 
 
 def get_azure_defender_identity_alerts():
-    alerts_url = "https://docs.microsoft.com/en-us/azure-advanced-threat-protection/suspicious-activity-guide?tabs=external"
+    alerts_url = "https://docs.microsoft.com/azure-advanced-threat-protection/suspicious-activity-guide?tabs=external"
 
     list_of_df = pd.read_html(alerts_url)
     atp_df = list_of_df[0].reset_index().dropna().drop("index", axis=1)
@@ -593,7 +593,7 @@ def get_azure_defender_identity_alerts():
 
 def get_mcas_alerts():
     alerts_url = (
-        "https://docs.microsoft.com/en-us/cloud-app-security/investigate-anomaly-alerts"
+        "https://docs.microsoft.com/cloud-app-security/investigate-anomaly-alerts"
     )
 
     session = HTMLSession()
