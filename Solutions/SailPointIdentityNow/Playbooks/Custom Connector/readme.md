@@ -50,10 +50,10 @@ Custom connector should be deployed in the Resource Group where all the resource
     * IdentityNow Connector Name: Please enter the custom connector (ex : SailPoint IdentityNow Connector)
     * IdentityNow Service Url: SailPoint IdentityNow Base URL (ex : https://{tenant-id}.api.identitynow.com). Just the tenant-id.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSailPointIdentityNow%2FCustom%20Connector%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSailPointIdentityNow%2FPlaybooks%2FCustom%20Connector%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSailPointIdentityNow%2FCustom%20Connector%2Fazuredeploy.json" target="_blank"> 
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSailPointIdentityNow%2FPlaybooks%2FCustom%20Connector%2Fazuredeploy.json" target="_blank"> 
     <img src="https://aka.ms/deploytoazuregovbutton"/> 
 </a>
