@@ -14,6 +14,10 @@ References:
   Link: https:/aka.ms/AzSentinelNormalization
 Description: ASIM Sysmon DNS Parser (event number 22) from "Event" and "WindowsEvent" tables.
 ParserName: ASimDnsMicrosoftSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: | 
     let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
         // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-
@@ -40,7 +44,7 @@ ParserQuery: |
       , 9023,'BADCOOKIE'
       , 1460, 'TIMEOUT'
       ];
-    let ParsedDnsEvent_Event =() {
+    let ParsedDnsEvent_Event =(disabled:bool=false) {
         Event 
         | where Source == "Microsoft-Windows-Sysmon" and EventID==22
         | parse EventData with 
@@ -55,7 +59,7 @@ ParserQuery: |
         | parse EventData with * '<Data Name="User">'SrcUsername:string '</Data>' *
         | project-away EventData, ParameterXml, RenderedDescription
     };
-    let ParsedDnsEvent_WindowsEvent =() {
+    let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
         WindowsEvent
         | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
         | extend 
@@ -70,7 +74,7 @@ ParserQuery: |
             SrcUsername = tostring(EventData.User)
         | project-away EventData
     };
-    union isfuzzy=true ParsedDnsEvent_Event, ParsedDnsEvent_WindowsEvent
+    union isfuzzy=true ParsedDnsEvent_Event(disabled), ParsedDnsEvent_WindowsEvent(disabled)
       | lookup RCodeTable on DnsResponseCode
       | project-rename 
           DvcHostname = Computer
@@ -98,4 +102,4 @@ ParserQuery: |
       // -- Backward Computability
       | extend
           Query=DnsQuery,
-          ResponseCodeName=DnsResponseCodeName 
+          ResponseCodeName=DnsResponseCodeName
