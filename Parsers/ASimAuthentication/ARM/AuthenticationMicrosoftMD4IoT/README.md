@@ -1,6 +1,6 @@
-# Azure Defender 4 IoT ASIM Authentication Normalization Parser
+# Microsoft Defender for IoT - Endpoint ASIM Authentication Normalization Parser
 
-This template deploys the ASIM Authentication schema parser for Azure Defender 4 IoT. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM Authentication schema parser for Microsoft Defender for IoT - Endpoint. The parser is a part of the Azure Sentinel Information Model.
 
 The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
 
