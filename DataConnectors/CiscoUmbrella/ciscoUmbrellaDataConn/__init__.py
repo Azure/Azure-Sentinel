@@ -281,6 +281,7 @@ class UmbrellaClient:
                 if len(row) >= 21:
                     event = {
                         'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'Identities': row[1],
                         'Policy Identity': row[1],
                         'Internal IP': row[2],
                         'External IP': row[3],
