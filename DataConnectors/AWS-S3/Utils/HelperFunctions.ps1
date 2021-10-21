@@ -77,10 +77,7 @@ param (
     [ValidateSet("NotNull","Confirm")]
     [Parameter(Mandatory=$false,Position=1)]
     [string]
-    $ValidationType="NotNull",
-    [Parameter(Mandatory=$false)]
-    [string()]
-    $ValidationSet
+    $ValidationType="NotNull"
 )
 
     if ($ValidationType -eq "NotNull")
