@@ -14,6 +14,13 @@ if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue))
     exit
 }
 
+# Setup basic logging to capture
+$TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
+$LogFileName = '{0}_{1}.csv' -f "AWSS3Cfg", $TimeStamp
+Write-Log -Message "Starting ConfigAwsConnector at: $(Get-Date)" -LogFileName $LogFileName -Severity Information -LinePadding 2
+Write-Log -Message "Creating log $LogFileName" -LogFileName $LogFileName -Severity Information -Indent 2
+Write-Log -Message "Starting ConfigAwsConnector at: $(Get-Date)" -LogFileName $LogFileName -Severity Information -LinePadding 1
+
 # Choose which type of log to configure
 do
 {

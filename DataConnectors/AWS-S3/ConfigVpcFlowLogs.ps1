@@ -1,26 +1,37 @@
-Write-Output `n`n'Setting up your AWS environment'
-Write-Output `n'This script enables additional VPC Flow Logs (if you have already set up the required resources Bucket S3, SQS etc.)'
+# Include helper scripts
+. ".\Utils\HelperFunctions.ps1"
+. ".\Utils\AwsResourceCreator.ps1"
+. ".\Utils\CommonAwsPolicies.ps1"
+. ".\Utils\AwsPoliciesUpdate.ps1"
 
-Write-Output `n`n'Setting up your AWS CLI environment...'
-Write-Output `n`n'Please ensure that the AWS CLI is connected:'
-aws configure
+Write-Output `n`n'Setting up your AWS environment'
+Write-Output `n'This script enables additional VPC Flow Logs if you have already set up the required resources Bucket S3, SQS etc.'
+
+Get-AwsConfig
 
 Write-Output `n`n'S3 Bucket definition'
-while ($bucketName -eq "")
-{
-    $bucketName = Read-Host 'S3 Bucket Name'
-}
+
+$bucketName = Read-ValidatedHost 'S3 Bucket Name'
+Write-Output " S3 Bucket mame: $bucketName was entered."
 
 Write-Output `n"Listing your available VPCs"
 aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
 
 Write-Output `n'Enabling Flow Logs (default format), please enter VPC Resource Id[s]'
-$vpcResourceId = Read-Host 'Vpc Resource Id[s] (space separated)'
-$vpcTrafficType = Read-Host 'Traffic Type (ALL,ACCEPT,REJECT - default ALL)'
+$vpcResourceId = Read-ValidatedHost 'Vpc Resource Id[s] (space separated)'
 
-if ($vpcTrafficType -ne "ALL" -And $vpcTrafficType -ne "ACCEPT" -And $vpcTrafficType -ne "REJECT") { $vpcTrafficType = "ALL" }
+do
+{
+    try
+    {
+    [ValidateSet("ALL","ACCEPT","REJECT")]$vpcTrafficType = Read-Host 'Please enter traffic type (ALL, ACCEPT, REJECT)'
+    }
+catch {}
+} until ($?)
 
-$vpcName = Read-Host 'Vpc Name'
+$vpcName = Read-ValidatedHost 'Vpc Name:'
+Write-Output " Vpc Name: $vpcname was entered."
+
 $vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}]"
 
 # creating the VPC Flow logs with specified info
