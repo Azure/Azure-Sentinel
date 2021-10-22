@@ -12,7 +12,7 @@ Get-AwsConfig
 Write-Output `n`n'S3 Bucket definition'
 
 $bucketName = Read-ValidatedHost 'S3 Bucket Name'
-Write-Output " S3 Bucket mame: $bucketName was entered."
+Write-Output "Using S3 Bucket mame: $bucketName"
 
 Write-Output `n"Listing your available VPCs"
 aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
@@ -30,7 +30,7 @@ catch {}
 } until ($?)
 
 $vpcName = Read-ValidatedHost 'Vpc Name:'
-Write-Output " Vpc Name: $vpcname was entered."
+Write-Output " Using Vpc name: $vpcname"
 
 $vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}]"
 

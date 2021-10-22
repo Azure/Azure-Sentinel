@@ -7,10 +7,10 @@ function Update-SQSPolicy
     $sqsRequiredPolicies = Get-S3AndRuleSQSPolicies -RoleArn $roleArn -SqsArn $sqsArn -BucketName $bucketName
     Write-Log -Message "Executing: aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy" -LogFileName $LogFileName -Severity Verbose
     $currentSqsPolicy = aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy
-    Write-Log -Message $currentSqsPolicy -LogFileName $LogFileName -Severity Verbose
 
     if ($null -ne $currentSqsPolicy)
     {
+        Write-Log -Message $currentSqsPolicy -LogFileName $LogFileName -Severity Verbose
         $sqsRequiredPoliciesObject = $sqsRequiredPolicies | ConvertFrom-Json 
         $currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
         $currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
@@ -82,8 +82,8 @@ function Update-KmsPolicy
          [Parameter(Mandatory=$true)][string]$RequiredPolicy,
          [Parameter(Mandatory=$false)][string]$CustomMessage
     )
-    Write-Log -Message "Updating the KMS policy to allow Sentinel read the data." -LogFileName $LogFileName -LinePadding 1
-    Write-Log -Message "Changes Role: Kms Encrypt, Decrypt, ReEncrypt*, GenerateDataKey* and DescribeKey  permissions to '${roleName}' rule" -Indent 2
+    Write-Log -Message "Updating KMS policy to allow Sentinel read the data." -LogFileName $LogFileName -LinePadding 1
+    Write-Log -Message "Changes Role: Kms Encrypt, Decrypt, ReEncrypt*, GenerateDataKey* and DescribeKey  permissions to '${roleName}' rule" -LogFileName $LogFileName -Indent 2
     
     if ($CustomMessage -ne $null)
     {

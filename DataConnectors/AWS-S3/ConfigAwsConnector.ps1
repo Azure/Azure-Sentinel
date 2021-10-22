@@ -1,3 +1,18 @@
+<#
+.SYNOPSIS
+    This script is used to start configuration for all supoorted AWS S3 logs source
+
+.EXAMPLE
+    .\Config-AwsConnector.ps1
+    Executes the script with defaults
+
+#>
+[CmdletBinding()]
+param (
+    [Parameter()]
+    [string]
+    $LogPath=(Get-Location).Path
+)
 # Include helper scripts
 . ".\Utils\HelperFunctions.ps1"
 . ".\Utils\AwsResourceCreator.ps1"
@@ -15,17 +30,19 @@ if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue))
 }
 
 # Setup basic logging to capture
-$TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
-$LogFileName = '{0}_{1}.csv' -f "AWSS3Cfg", $TimeStamp
-Write-Log -Message "Starting ConfigAwsConnector at: $(Get-Date)" -LogFileName $LogFileName -Severity Information -LinePadding 2
-Write-Log -Message "Creating log $LogFileName" -LogFileName $LogFileName -Severity Information -Indent 2
-Write-Log -Message "Starting ConfigAwsConnector at: $(Get-Date)" -LogFileName $LogFileName -Severity Information -LinePadding 1
+$TimeStamp = Get-Date -Format MMddHHmm 
+$LogFileName = '{0}-{1}.csv' -f "AwsS3", $TimeStamp
+$LogFileName = Join-Path $LogPath $LogFileName
 
+Write-Log -Message "Starting ConfigAwsConnector at: $(Get-Date)" -LogFileName $LogFileName -Severity Information -LinePadding 2
+Write-Log -Message "Log created: $LogFileName" -LogFileName $LogFileName -Severity Information -Indent 2
+
+Write-Log -Message "To begin you will choose the AWS logs to configure." -LogFileName $LogFileName -Severity Information -LinePadding 2
 # Choose which type of log to configure
 do
 {
     try{
-        [ValidateSet("VPC","CloudTrail","GuardDuty")]$logsType = Read-Host 'Please enter the log type to configure (VPC, CloudTrail, GuardDuty)'
+        [ValidateSet("VPC","CloudTrail","GuardDuty")]$logsType = Read-ValidatedHost -Prompt "Please enter the AWS log type to configure (VPC, CloudTrail, GuardDuty)"
     }
     catch{}
 } until ($?)

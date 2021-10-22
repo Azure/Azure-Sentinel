@@ -5,18 +5,22 @@ function Get-AwsConfig
         This function executes "aws configure" to ensure it is connected for subsequent commands.
     #>
 
-    Write-Log -Message "Setting up your AWS CLI environment..." -LogFileName $LogFileName -Severity Information
-    Write-Output `n`n'Please ensure that the AWS CLI is connected:'
-    Write-Log -Message "Executing aws configure" -LogFileName $LogFileName -Severity Verbose
+    Write-Log -Message "Setting up your AWS CLI environment..." -LogFileName $LogFileName -Severity Information -LinePadding 1
+    Write-Log -Message "Please ensure that the AWS CLI is connected:" -LogFileName $LogFileName -Severity Information -LinePadding 1
+    Write-Log -Message "Executing: aws configure" -LogFileName $LogFileName -Severity Verbose
 
     aws configure
 }
 
 function Write-RequiredConnectorDefinitionInfo
 {
-    Write-Log -Message "Use the values below to configure the Amazon Web Service S3 data connector in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information
-    Write-Log -Message "Role arn: ${roleArn}" -LogFileName $LogFileName -Severity Information
-    Write-Log -Message "Sqs Url: ${sqsUrl}" -LogFileName $LogFileName -Severity Information
+    <#
+    .SYNOPSIS
+        Write data needed to configure the Azure Sentinel Data Connector for user.
+    #>
+    Write-Log -Message "Use the values below to configure the Amazon Web Service S3 data connector in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 3
+    Write-Log -Message "Role arn: $roleArn" -LogFileName $LogFileName -Severity Information
+    Write-Log -Message "Sqs Url: $sqsUrl" -LogFileName $LogFileName -Severity Information
 }
 
 function Set-RetryAction
@@ -28,8 +32,7 @@ function Set-RetryAction
     param(
         [Parameter(Mandatory=$true,Position=0)][Action]$Action,
         [Parameter(Mandatory=$false)][int]$MaxRetries = 3
-
-        )
+    )
         
     $retryCount = 0
 	
@@ -51,7 +54,7 @@ function Set-RetryAction
 
     if ($lastExitCode -ne 0)
     {
-       Write-Log -Message "We have tried the maximum number of times ($MaxRetries). Please review the errors and try again. " -LogFileName $LogFileName -Severity Error
+       Write-Log -Message "Action was unsuccessful after $MaxRetries attempts. Please review the errors and try again." -LogFileName $LogFileName -Severity Error
        exit
     }
 }
@@ -77,21 +80,24 @@ param (
     [ValidateSet("NotNull","Confirm")]
     [Parameter(Mandatory=$false,Position=1)]
     [string]
-    $ValidationType="NotNull"
+    $ValidationType="NotNull",
+    $MinLength = 1,
+    $MaxLength = 1024
 )
-
+    # Add a blank line before the prompt
+    Write-Host ""
+    $returnString = ""
     if ($ValidationType -eq "NotNull")
     {
-        do
-        {
-            try
-            {
-                [ValidateNotNullOrEmpty]$returnString = Read-Host -Prompt $Prompt
-            } 
-            catch {}
-        } until ($?)
 
+        $returnString = ""
+        while (($returnString -eq "") -or ($returnString.Length -lt $MinLength) -or ($returnString.Length -gt $MaxLength))
+        {
+                $returnString = Read-Host -Prompt $Prompt
+        } 
+             
         return $returnString
+
     }
     elseif ($ValidationType -eq "Confirm")
     {
@@ -140,12 +146,10 @@ function Write-Log
     [CmdletBinding()]
     param(
         [parameter(Mandatory=$true,Position=0)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Message,
+        $Message,
         [parameter(Mandatory=$true,Position=1)]
         [string]$LogFileName,
-         [parameter(Mandatory=$false,Position=2)]
-        [ValidateNotNullOrEmpty()]
+         [parameter(Mandatory=$false)]
         [ValidateSet('Information', 'Warning', 'Error', 'Verbose','LogOnly')]
         [string]$Severity = 'Information',
         [parameter(Mandatory=$false)]
@@ -153,6 +157,9 @@ function Write-Log
         [parameter(Mandatory=$false)]
         [int]$Indent = 0
     )
+
+    # If data is passed in that is not a string, instead of generating an error, just convert it to string.
+    $Message = "$Message"
 
     # Write the appropriate number of empty lines to the screen
     if ($LinePadding -gt 0)
@@ -162,14 +169,14 @@ function Write-Log
             Write-Host ""
         }
     }
-											  
+	
     try 
     {
         [PSCustomObject]@{
             Time     = (Get-Date -f g)
             Message  = $Message
             Severity = $Severity
-        } | Export-Csv -Path "$PSScriptRoot\$LogFileName" -Append -NoTypeInformation -Force
+        } | Export-Csv -Path $LogFileName -Append -NoTypeInformation -Force
     }
     catch 
     {
@@ -179,14 +186,14 @@ function Write-Log
     # Add specified indentation to the message before it is displayed
     if ($Indent -gt 0)
     {
-        for ($i = 0; $i -lt $padding; $i++) {
+        for ($i = 0; $i -lt $Indent; $i++) {
             $Message = " $Message"
         }
     }
 
     # Write the message out to the correct channel											  
     switch ($Severity) {
-        "Information" { Write-Output $Message }
+        "Information" { Write-Host $Message }
         "Warning" { Write-Warning $Message }
         "Error" { Write-Error $Message }
         "Verbose" {Write-Verbose $Message }

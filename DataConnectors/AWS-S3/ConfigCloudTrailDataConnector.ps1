@@ -185,7 +185,7 @@ function Set-CloudTrailDataEventConfig
 }
 function Set-MultiRegionTrailConfig
 {
-	$regionConfirmation = Read-ValidatedHost 'Do you want to define the Trail as multi-region? [y/n]' -ValidationType Confirm
+	$regionConfirmation = Read-ValidatedHost 'Do you want the Trail to be multi-region? [y/n]' -ValidationType Confirm
 	if ($regionConfirmation -eq 'y')
 	{
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --is-multi-region-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
@@ -231,8 +231,6 @@ New-S3Bucket
 Write-Log -Message "Executing: (aws sts get-caller-identity | ConvertFrom-Json).Account" -LogFileName $LogFileName -Severity Verbose
 $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
 Write-Log -Message "$callerAccount" -LogFileName $LogFileName -Severity Verbose
-$organizationId = ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json).Account.Arn.Split('/')[1]
-Write-Log -Message "Executing: ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json).Account.Arn.Split('/')[1]" -LogFileName $LogFileName -Severity Verbose
 
 New-SQSQueue
 
@@ -257,7 +255,23 @@ if ($kmsConfirmation -eq 'y')
 
 Update-SQSPolicy
 
-$organizationCloudTrailConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable the Trail and CloudTrail S3 Policy for ALL accounts in your organization? [y/n]' -ValidationType Confirm
+
+	$organizationCloudTrailConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable the Trail and CloudTrail S3 Policy for ALL accounts in your organization? [y/n]' -ValidationType Confirm
+	if ($organizationCloudTrailConfirmation -eq "y")
+	{
+		# Retreive the organization information
+		Write-Log -Message "Executing: ((aws organizations describe-account --account-id $callerAccount ) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]" -LogFileName $LogFileName -Severity Verbose
+		try
+		{
+			$organizationId = ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]
+		}
+		catch {
+			Write-Log -Message "Unable to access AWS organization information. This could be a permissions or policy issue." -LogFileName $LogFileName -Severity Information -Indent 2 
+			$organizationCloudTrailConfirmation = "n"
+		}
+
+	}
+
 $s3RequiredPolicy = New-CloudTrailS3Policy
 $customMessage = "Changes S3: Get CloudTrail notifications"
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
@@ -270,7 +284,7 @@ Write-Log -Message 'CloudTrail definition' -LogFileName $LogFileName -LinePaddin
 Set-RetryAction({
 	 
 	$script:cloudTrailName = Read-ValidatedHost 'Please enter CloudTrail name'
-	Write-Log -Message "CloudTrail name: $cloudTrailName entered." -LogFileName $LogFileName -Indent 2
+	Write-Log -Message "Using CloudTrail name: $cloudTrailName" -LogFileName $LogFileName -Indent 2
 
 	Write-Log -Message "Executing: aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
 	aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null

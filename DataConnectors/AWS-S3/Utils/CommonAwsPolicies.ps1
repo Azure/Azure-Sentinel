@@ -10,7 +10,8 @@ function Get-RoleArnPolicy
 [CmdletBinding()]
 param (
 	[Parameter(position=0)]
-	[ValidateNotNullOrEmpty][string]
+	[ValidateNotNullOrEmpty()]
+	[string]
 	$WorkspaceId
 )  
    $arnRolePolicy = "{
@@ -48,11 +49,11 @@ function Get-S3AndRuleSQSPolicies
    [OutputType([string])]
    [CmdletBinding()]
    param (
-	   [ValidateNotNullOrEmpty][string]
+	   [ValidateNotNullOrEmpty()][string]
 	   $RoleArn,
-	   [ValidateNotNullOrEmpty][string]
+	   [ValidateNotNullOrEmpty()][string]
 	   $BucketName,
-	   [ValidateNotNullOrEmpty][string]
+	   [ValidateNotNullOrEmpty()][string]
 	   $SqsArn
    )  
 
@@ -111,13 +112,16 @@ function Get-SqsEventNotificationConfig
 [CmdletBinding()]
 param (
 	[Parameter(position=0)]
-	[ValidateNotNullOrEmpty][string]
+	[ValidateNotNullOrEmpty()]
+	[string]
 	$EventNotificationName,
 	[Parameter(position=1)]
-	[ValidateNotNullOrEmpty][string]
+	[ValidateNotNullOrEmpty()]
+	[string]
 	$eventNotificationPrefix,
 	[Parameter(position=2)]
-	[ValidateNotNullOrEmpty][string]
+	[ValidateNotNullOrEmpty()]
+	[string]
 	$SqsArn
 )  
 
@@ -163,10 +167,10 @@ function Get-RoleS3Policy
 [CmdletBinding()]
 param (
 	[Parameter(position=0)]
-	[ValidateNotNullOrEmpty][string]
+	[ValidateNotNullOrEmpty()][string]
 	$roleArn,
 	[Parameter(position=1)]
-	[ValidateNotNullOrEmpty][string]
+	[ValidateNotNullOrEmpty()][string]
 	$BucketName
 )  
 	

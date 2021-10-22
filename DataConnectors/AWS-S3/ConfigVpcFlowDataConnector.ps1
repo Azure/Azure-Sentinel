@@ -16,18 +16,17 @@ Write-Log -Message "Executing: (aws sts get-caller-identity | ConvertFrom-Json).
 $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
 Write-Log -Message $callerAccount -LogFileName $LogFileName -Severity Verbose
 
-Write-Output ""
-Write-Log -Message "Listing your available VPCs" -LogFileName $LogFileName
+Write-Log -Message "Listing your available VPCs" -LogFileName $LogFileName -Severity Information -LinePadding 1
 Write-Log -Message "Executing: aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs" -LogFileName $LogFileName -Severity Verbose
 aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
 
-Write-Output 
-Write-Log 'Enabling Flow Logs (default format)' -LogFileName $LogFileName
+
+Write-Log 'Enabling VPC flow Logs (default format)' -LogFileName $LogFileName -Severity Information -LinePadding 1
 
 Set-RetryAction({
 	
 	$vpcResourceIds = Read-ValidatedHost 'Please enter Vpc Resource Id[s] (space separated)'
-	Write-Log -Message " Vpc Resource Ids entered: $vpcResourceIds" -LogFileName $LogFileName -Indent 2
+	Write-Log -Message "Using Vpc Resource Ids: $vpcResourceIds" -LogFileName $LogFileName -Severity Information -Indent 2
 	
 	do
 	{
@@ -39,7 +38,7 @@ Set-RetryAction({
 	} until ($?)
 
 	$vpcName = Read-ValidatedHost 'Please enter Vpc name'
-	Write-Log "Vpc name entered: $vpcName" -LogFileName $LogFileName -Indent 2
+	Write-Log "Using Vpc name: $vpcName" -LogFileName $LogFileName -Indent 2
 
 	$vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}]"
 	Write-Log -Message "Vpc tag specification: $vpcTagSpecifications" -LogFileName $LogFileName
@@ -54,18 +53,16 @@ New-SQSQueue
 
 Write-Log "Executing: ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl" -LogFileName $LogFileName -Severity Verbose
 $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl
-Write-Log $sqsUrl -LogFileName $LogFileName -Severity Verbose
+Write-Log $sqsUrl.ToString() -LogFileName $LogFileName -Severity Verbose
 
 Write-Log "Executing: ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn" -LogFileName $LogFileName -Severity Verbose
 $sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
-Write-Log $sqsArn -LogFileName $LogFileName -Severity Verbose
+Write-Log $sqsArn.ToString() -LogFileName $LogFileName -Severity Verbose
 
 Update-SQSPolicy
 
-Write-Output ""
-Write-Log -Message "Attaching S3 read policy to Sentinel role." -LogFileName $LogFileName
-Write-Output ""
-Write-Log -Message "Changes Role arn: S3 Get and List permissions to '${roleName}' rule" -LogFileName $LogFileName
+Write-Log -Message "Attaching S3 read policy to Sentinel role." -LogFileName $LogFileName -LinePadding 1
+Write-Log -Message "Changes Role arn: S3 Get and List permissions to '${roleName}' rule" -LogFileName $LogFileName -LinePadding 1
 
 $s3RequiredPolicy = Get-RoleS3Policy -RoleArn $roleArn -BucketName $bucketName
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy
