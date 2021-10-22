@@ -95,6 +95,10 @@ function New-S3Bucket
 
 function New-SQSQueue
 {
+   <#
+   .SYNOPSIS
+        Creates a SQS Queue
+   #>
     Write-Log -Message "Creating SQS queue:" -LogFileName $LogFileName -LinePadding 2
     Set-RetryAction({
 
@@ -108,8 +112,15 @@ function New-SQSQueue
 
 function Enable-S3EventNotification 
 {
+    <#
+   .SYNOPSIS
+        Enables S3 event notifications. User may override the default prefix
+
+    .PARAMETER DefaultEventNotificationPrefix
+        Specifies the default prefix. The user may override this prefix and specify a new one
+   #>
     param(
-        [Parameter(Mandatory=$true)][string]$DefaultEvenNotificationPrefix
+        [Parameter(Mandatory=$true)][string]$DefaultEventNotificationPrefix
         )
         Write-Log -Message "Enabling S3 event notifications (for *.gz file)" -LogFileName $LogFileName -LinePadding 2
     
@@ -121,9 +132,9 @@ function Enable-S3EventNotification
             Write-Log -Message "Using event notification name: $eventNotificationName" -LogFileName $LogFileName -Indent 2
         }
 
-        $eventNotificationPrefix = $DefaultEvenNotificationPrefix
+        $eventNotificationPrefix = $DefaultEventNotificationPrefix
       
-        $prefixOverrideConfirm = Read-ValidatedHost -Prompt "The default prefix is '${eventNotificationPrefix}'. `nDo you want to override the event notification prefix? [y/n]" -ValidationType Confirm
+        $prefixOverrideConfirm = Read-ValidatedHost -Prompt "The default prefix is '$eventNotificationPrefix'. `n  Do you want to override the event notification prefix? [y/n]" -ValidationType Confirm
         if ($prefixOverrideConfirm -eq 'y')
         {
             $eventNotificationPrefix = Read-ValidatedHost 'Please enter the event notifications prefix'
@@ -159,6 +170,10 @@ function Enable-S3EventNotification
 
 function New-KMS
 {
+    <#
+    .SYNOPSIS
+        Creates a new Kms
+    #>
     Write-Log -Message "Kms definition." -LogFileName $LogFileName -LinePadding 2
     Set-RetryAction({
         $script:kmsAliasName = Read-ValidatedHost -Prompt "Please enter the KMS alias name"

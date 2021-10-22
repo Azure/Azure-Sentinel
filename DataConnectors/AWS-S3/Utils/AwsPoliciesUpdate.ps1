@@ -1,8 +1,12 @@
 function Update-SQSPolicy
 {
-    Write-Log -Message "Updating the SQS policy to allow S3 notifications, and arn to read/delete/change visibility of SQS messages and get queue url" -LogFileName $LogFileName -LinePadding 2
+    <#
+    .SYNOPSIS 
+       Update the SQS policy 
+    #>
+    Write-Log -Message "Updating the SQS policy to allow S3 notifications, and ARN to read/delete/change visibility of SQS messages and get queue url" -LogFileName $LogFileName -LinePadding 2
     Write-Log -Message "Changes S3: SQS SendMessage permission to '${bucketName}' s3 bucket" -LogFileName $LogFileName -Indent 2
-    Write-Log -Message "Changes Role arn: SQS ChangeMessageVisibility, DeleteMessage, ReceiveMessage and GetQueueUrl permissions to '${roleName}' rule" -LogFileName $LogFileName -Indent 2
+    Write-Log -Message "Changes Role ARN: SQS ChangeMessageVisibility, DeleteMessage, ReceiveMessage and GetQueueUrl permissions to '${roleName}' rule" -LogFileName $LogFileName -Indent 2
 
     $sqsRequiredPolicies = Get-S3AndRuleSQSPolicies -RoleArn $roleArn -SqsArn $sqsArn -BucketName $bucketName
     Write-Log -Message "Executing: aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy" -LogFileName $LogFileName -Severity Verbose
@@ -27,6 +31,7 @@ function Update-SQSPolicy
     }
     else
     {
+        Write-Log -Message "No results returned from: aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy " -LogFileName $LogFileName -Severity Verbose
         $newSqsPolicyValue = ($sqsRequiredPolicies | ConvertFrom-Json |  ConvertTo-Json -Depth 16  -Compress).Replace('"','\\\"')
         $newSqsPolicyObject = ("{'Policy':'${newSqsPolicyValue}'}").Replace("'",'\"')
         aws sqs set-queue-attributes --queue-url $sqsUrl  --attributes $newSqsPolicyObject | Out-Null
@@ -35,6 +40,17 @@ function Update-SQSPolicy
 
 function Update-S3Policy
 {
+    <#
+    .SYNOPSIS
+        Updates S3 policy to allow Sentinel access to read data.
+    
+    .PARAMETER RequiredPolicy
+        Specifies the policy to customize
+    .PARAMETER CustomMessage
+        Specifies the message to include in customized policy
+    
+    #>
+    
     param
     (
          [Parameter(Mandatory=$true)][string]$RequiredPolicy,
@@ -77,6 +93,16 @@ function Update-S3Policy
 
 function Update-KmsPolicy
 {
+    <#
+    .SYNOPSIS
+        Updates Kms policy to allow Sentinel access to read data.
+    
+    .PARAMETER RequiredPolicy
+        Specifies the policy to customize
+    .PARAMETER CustomMessage
+        Specifies the message to include in customized policy
+    
+    #>
     param
     (
          [Parameter(Mandatory=$true)][string]$RequiredPolicy,

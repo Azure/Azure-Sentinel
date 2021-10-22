@@ -148,6 +148,10 @@ function Get-RoleAndCloudTrailS3Policy
 
 function New-CloudTrailS3Policy
 {
+	<#
+	.SYNOPSIS
+		Returns customized S3 Policy for CloudTrail logs
+	#>
 	$s3RequiredPolicy = Get-RoleAndCloudTrailS3Policy
 	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
 	if ($organizationCloudTrailConfirmation -ne 'n')
@@ -164,7 +168,11 @@ function New-CloudTrailS3Policy
 
 function Get-EventNotificationPrefix
 {
-	if ($organizationCloudTrailConfirmation -ne 'n')
+	<#
+	.SYNOPSIS
+		Returns the default event notification prefix
+	#>
+		if ($organizationCloudTrailConfirmation -ne 'n')
 	{
 		return "AWSLogs/${organizationId}/"
 	}
@@ -176,6 +184,10 @@ function Get-EventNotificationPrefix
 
 function Set-CloudTrailDataEventConfig
 {
+	<#
+	.SYNOPSIS
+		Sets the CloudTrail event configuration
+	#>
 	$DataEventsConfirmation = Read-ValidatedHost `n'Do you want to enable the CloudTrail data events? [y/n]' -ValidationType Confirm
 	if ($DataEventsConfirmation -eq 'y')
 	{
@@ -185,6 +197,10 @@ function Set-CloudTrailDataEventConfig
 }
 function Set-MultiRegionTrailConfig
 {
+	<#
+	.SYNOPSIS
+		Configures multi-region trail capability
+	#>	
 	$regionConfirmation = Read-ValidatedHost 'Do you want the Trail to be multi-region? [y/n]' -ValidationType Confirm
 	if ($regionConfirmation -eq 'y')
 	{
@@ -200,6 +216,10 @@ function Set-MultiRegionTrailConfig
 
 function Set-OrganizationTrailConfig
 {
+	<#
+	.SYNOPSIS
+		Configures trail logging for the entire organization
+	#>	
 	if ($organizationCloudTrailConfirmation -ne 'n')
 	{	
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --is-organization-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
@@ -255,29 +275,28 @@ if ($kmsConfirmation -eq 'y')
 
 Update-SQSPolicy
 
-
-	$organizationCloudTrailConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable the Trail and CloudTrail S3 Policy for ALL accounts in your organization? [y/n]' -ValidationType Confirm
-	if ($organizationCloudTrailConfirmation -eq "y")
+$organizationCloudTrailConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable the Trail and CloudTrail S3 Policy for ALL accounts in your organization? [y/n]' -ValidationType Confirm
+if ($organizationCloudTrailConfirmation -eq "y")
+{
+	# Retreive the organization information
+	Write-Log -Message "Executing: ((aws organizations describe-account --account-id $callerAccount ) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]" -LogFileName $LogFileName -Severity Verbose
+	try
 	{
-		# Retreive the organization information
-		Write-Log -Message "Executing: ((aws organizations describe-account --account-id $callerAccount ) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]" -LogFileName $LogFileName -Severity Verbose
-		try
-		{
-			$organizationId = ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]
-		}
-		catch {
-			Write-Log -Message "Unable to access AWS organization information. This could be a permissions or policy issue." -LogFileName $LogFileName -Severity Information -Indent 2 
-			$organizationCloudTrailConfirmation = "n"
-		}
-
+		$organizationId = ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]
 	}
+	catch {
+		Write-Log -Message "Unable to access AWS organization information. This could be a permissions or policy issue." -LogFileName $LogFileName -Severity Information -Indent 2 
+		$organizationCloudTrailConfirmation = "n"
+	}
+
+}
 
 $s3RequiredPolicy = New-CloudTrailS3Policy
 $customMessage = "Changes S3: Get CloudTrail notifications"
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
 $eventNotificationPrefix = Get-EventNotificationPrefix
-Enable-S3EventNotification -DefaultEvenNotificationPrefix $eventNotificationPrefix
+Enable-S3EventNotification -DefaultEventNotificationPrefix $eventNotificationPrefix
 
 Write-Log -Message 'CloudTrail definition' -LogFileName $LogFileName -LinePadding 2
 

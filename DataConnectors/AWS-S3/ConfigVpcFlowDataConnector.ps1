@@ -67,7 +67,7 @@ Write-Log -Message "Changes Role arn: S3 Get and List permissions to '${roleName
 $s3RequiredPolicy = Get-RoleS3Policy -RoleArn $roleArn -BucketName $bucketName
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy
 
-Enable-S3EventNotification -DefaultEvenNotificationPrefix "AWSLogs/${callerAccount}/vpcflowlogs/"
+Enable-S3EventNotification -DefaultEventNotificationPrefix "AWSLogs/${callerAccount}/vpcflowlogs/"
 
 # Output information needed to configure Sentinel data connector
 Write-RequiredConnectorDefinitionInfo

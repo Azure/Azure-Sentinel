@@ -27,7 +27,13 @@ function Set-RetryAction
 {
 	<#
     .SYNOPSIS
-        Main worker function to try and retry configuration steps 
+        Main worker function to try and retry configuration steps
+        
+    .PARAMETER Action
+        Specifies the action to execute
+    
+    .PARAMETER MaxRetries
+        Specifies the maximum number of times to retry the action. The default is 3.
     #>
     param(
         [Parameter(Mandatory=$true,Position=0)][Action]$Action,
@@ -64,12 +70,16 @@ function Read-ValidatedHost
 {
 <#
 .SYNOPSIS
-    Gets validated user input and ensures that it is not empty. It will continue to prompt until non-empty text is provided
+    Gets validated user input and ensures that it is not empty. It will continue to prompt until valid text is provided.
+    Th 
 .PARAMETER Prompt
     Text that will be displayed to user
 .PARAMETER ValidationType
-    Specify whether to ensure a non-null response of that the response is Yes or No.
-    
+    Specify 'NotNull' to check for a non-null response and 'Confirm' to make sure the response is Y/Yes or N/No.
+.PARAMETER MinLength
+    Specifies the minimum number of characters the input value can be. The default is 1.
+.PARAMETER MaxLength
+    Specifies the maximum number of characters the input value can be. The default is 1024.
 #>
 [OutputType([string])]
 [CmdletBinding()]
@@ -132,14 +142,34 @@ function Write-Log
 {
     <#
     .DESCRIPTION 
-    Write-Log is used to write information to a log file and to the console. This provides basic formatting capabilities.
+        Write-Log is used to write information to a log file and to the console. It provides basic formatting capabilities.
+        
     
     .PARAMETER Severity
         Specifies the severity of the log message. Values can be: Information, Warning, Error, Verbose, or LogOnly. 
     .PARAMETER Padding
-        Specifies the number of empty rows to add before message on screen. This does not apply to the log on disk.
+        Specifies the number of empty rows to add before message in the console. This does not apply to the log on disk.
     .PARAMETER Indent
-        Specified the number of characters to indent the message on screen. This does not apply to the log on disk.
+        Specified the number of characters to indent the message in the console. This does not apply to the log on disk.
+
+    .EXAMPLE
+        Write-Log -Message "Starting script" -LogFileName C:\temp\TestLog1.csv -Severity Information
+        Basic usage to write a message to the log and to the console.
+    .EXAMPLE
+        Write-Log -Message "Starting script" -LogFileName C:\temp\TestLog1.csv -Severity Information -LinePadding 2
+        Write a message to the log and two blank lines before writing it to the console.
+    .EXAMPLE
+        Write-Log -Message "Starting script" -LogFileName C:\temp\TestLog1.csv -Severity Information -Indent 2
+        Write a message to the log and the indenting the provided message two spaces on the console.
+    .EXAMPLE
+        Write-Log -Message "Error $Error[0]" -LogFileName C:\temp\TestLog1.csv -Severity Error -Indent 2
+        Write the last error message to the log and to the error output channel.
+    .EXAMPLE
+        Write-Log -Message "Detailed debugging text that most people do not want to see in the console" -LogFileName C:\temp\TestLog1.csv -Severity Verbose -Indent 2
+        Write the message to the verbose channel and to the log. Users would only see this in the console if they have enabled Verbose messaging.
+        .EXAMPLE
+        Write-Log -Message "Text to only send to the log" -LogFileName C:\temp\TestLog1.csv -Severity Verbose -Indent 2
+        Write the text only to the log and not to the console.    
     #>
 
     [OutputType([System.Void])]
@@ -191,12 +221,13 @@ function Write-Log
         }
     }
 
-    # Write the message out to the correct channel											  
+    # Write the message to the correct output channel											  
     switch ($Severity) {
         "Information" { Write-Host $Message }
         "Warning" { Write-Warning $Message }
         "Error" { Write-Error $Message }
         "Verbose" {Write-Verbose $Message }
+        "LogOnly" {} # No output
     } 
 
 }

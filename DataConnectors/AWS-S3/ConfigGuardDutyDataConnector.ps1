@@ -116,6 +116,10 @@ function Get-GuardDutyAndRoleKmsPolicy
 
 function Enable-GuardDuty
 {
+    <#
+    .SYNOPSIS 
+        Enables GuardDuty based on specified configuration
+    #>
     Write-Log -Message "Enabling GuardDuty" -LogFileName $LogFileName -LinePadding 1
     Set-RetryAction({
         Write-Log -Message "Executing: aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1" -LogFileName $LogFileName -Severity Verbose
@@ -146,6 +150,11 @@ function Enable-GuardDuty
 
 function Set-GuardDutyPublishDestinationBucket
 {
+    <#
+    .SYNOPSIS 
+        Configures GuardDuty to publish logs to destination bucket
+    #>
+
     $currentDestinationsObject = $currentDestinations | ConvertFrom-Json
     $currentS3Destinations = $currentDestinationsObject.Destinations | Where-Object DestinationType -eq S3
     if ($null -eq $currentS3Destinations)
@@ -159,7 +168,7 @@ function Set-GuardDutyPublishDestinationBucket
         $destinationDescriptionObject = aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json
         $destinationArn = $destinationDescriptionObject.DestinationProperties.DestinationArn
 
-        Write-Log -Message "GuardDuty is already configured for bucket arn '${destinationArn}'" -LogFileName $LogFileName -LinePadding 2
+        Write-Log -Message "GuardDuty is already configured for bucket arn '$destinationArn'" -LogFileName $LogFileName -LinePadding 2
         $guardDutyBucketConfirmation = Read-ValidatedHost 'Are you sure that you want to override the existing bucket destination? [y/n]'
         if ($guardDutyBucketConfirmation -eq 'y')
         {
@@ -216,7 +225,7 @@ $customMessage = "Changes S3: Get GuardDuty notifications"
 $s3RequiredPolicy = Get-RoleAndGuardDutyS3Policy
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
-Enable-S3EventNotification -DefaultEvenNotificationPrefix "AWSLogs/${callerAccount}/GuardDuty/"
+Enable-S3EventNotification -DefaultEventNotificationPrefix "AWSLogs/${callerAccount}/GuardDuty/"
 
 Enable-GuardDuty
 Set-GuardDutyPublishDestinationBucket
