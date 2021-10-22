@@ -1,4 +1,4 @@
-# Corelight Zeek ASIM Dns Normalization Parser
+# Corelight Zeek ASIM DNS Normalization Parser
 
 This template deploys the ASIM DNS schema parser for Corelight Zeek. The parser is a part of the Azure Sentinel Information Model.
 
@@ -7,7 +7,7 @@ The Azure Sentinel Information Mode (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Dns normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
+- [Azure Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
 
 <br>
  

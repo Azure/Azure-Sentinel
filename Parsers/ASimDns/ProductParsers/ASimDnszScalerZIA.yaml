@@ -1,0 +1,75 @@
+Parser:
+  Title: zScaler ZIA DNS
+  Version: '0.1'
+  LastUpdated: Oct 19, 2021
+Product:
+  Name: zScaler ZIA DNS
+Normalization:
+  Schema: Dns
+  Version: '0.1.2'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/AzSentinelDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: |
+  This is a Query Parser that is used to map zScaler ZIA DNS events to the Azure Sentinel Information Model DNS schema.  
+ParserName: ASimDnszScalerZIA
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let zScalerDNSevents=(disabled:bool=false){
+    CommonSecurityLog 
+    | where not(disabled)
+    | where DeviceProduct == "NSSDNSlog"
+    | project-rename
+        Dvc=Computer , 
+        SrcIpAddr = SourceIP, 
+        SrcUsername = SourceUserName,
+        DstIpAddr = DestinationIP, 
+        DstPortNumber = DestinationPort, 
+        EventProductVersion = DeviceVersion, 
+        DnsQueryTypeName = DeviceCustomString4, 
+        DnsQuery = DeviceCustomString5, 
+        DnsDuration = DeviceCustomNumber1, 
+        Department = DeviceCustomString1, // Not part of the schema
+        reqaction = DeviceCustomString2, 
+        resaction = DeviceCustomString3 
+    | extend
+        EventCount=int(1), 
+        EventStartTime=TimeGenerated, 
+        EventVendor = "zScaler", 
+        EventProduct = "ZIA DNS", 
+        EventSchemaVersion="0.1.2", 
+        EventEndTime=TimeGenerated, 
+        SrcUsernameType = "Upn",
+        EventSubType = iff(resaction == 'None', 'request', 'response'), 
+        DvcAction = iff(resaction == 'None', reqaction, resaction), 
+        EventResultDetails = iff (DeviceCustomString6 matches regex '^\\d', 'NOERROR', DeviceCustomString6), 
+        EventType = 'Query', 
+        UrlCategory = extract("cat=(.*)", 1, AdditionalExtensions), 
+        DnsRuleName = strcat (FlexString1, " / ", FlexString2)
+      | extend 
+        EventResult = case (
+          EventSubType == 'request', 'NA', 
+          EventResultDetails == 'NOERROR', 'Success',
+          'Failure'),
+        DnsResponseName = iff (EventResultDetails == 'NOERROR', DeviceCustomString6, '')
+    // -- Aliases
+    | extend
+        DnsResponseCodeName = EventResultDetails,
+        Domain = DnsQuery,
+        IpAddr = SrcIpAddr,
+        DvcHostname = Dvc,
+        Duration = DnsDuration,
+        User = SrcUsername
+    // -- Backward Compatibility
+    | extend
+        Query=DnsQuery, 
+        QueryTypeName=DnsQueryTypeName, 
+        ResponseName=DnsResponseName, 
+        ResponseCodeName=DnsResponseCodeName
+    };
+  zScalerDNSevents (disabled)
