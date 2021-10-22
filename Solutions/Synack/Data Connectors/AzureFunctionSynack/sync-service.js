@@ -3,6 +3,7 @@ const azureService = require("./azure-service");
 
 exports.runSync = function runSync() {
 
+    console.log(`trying to fetch vulnerabilities from Synack`)
     synackService.fetchSynackVulns()
         .then((synackVulns) => {
 
@@ -18,7 +19,12 @@ exports.runSync = function runSync() {
                         let incidentStatus = getIncidentStatus(vulnJson['vulnerability_status'])
                         let severity = getSentinelSeverity(vulnJson);
 
-                        let incidentDto = {title: title, severity: severity, description: incidentDescription, status: incidentStatus}
+                        let incidentDto = {
+                            title: title,
+                            severity: severity,
+                            description: incidentDescription,
+                            status: incidentStatus
+                        }
 
                         azureService.createOrUpdateIncident(vulnJson, incidentDto, accessToken)
                             .then((incidentOperationResult) => {
@@ -167,12 +173,14 @@ function getDateFromIso8601UTC(iso8601UTCString) {
 function getSentinelSeverity(vulnJson) {
     let cvssScore = vulnJson['cvss_final']
     let severity = 'Medium'
-    if (cvssScore > 3 && cvssScore <= 7) {
-        severity = 'Medium'
-    } else if (cvssScore <= 3) {
-        severity = 'Low'
-    } else if (cvssScore > 7) {
+    if (cvssScore >= 7) {
         severity = 'High'
+    } else if (cvssScore >= 4) {
+        severity = 'Medium'
+    } else if (cvssScore > 0) {
+        severity = 'Low'
+    } else if (cvssScore === 0){
+        severity = 'Informational'
     }
     return severity
 }
