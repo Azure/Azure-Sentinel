@@ -1,6 +1,11 @@
 <#
 .SYNOPSIS
-    This script is used to start configuration for all supoorted AWS S3 logs source
+    This script is used to start the configuration process for all supported AWS S3 logs sources. 
+
+    Log sources currently supported are: VPC flows, CloudTrail, GuardDuty
+
+.PARAMETER LogPath
+    Specifies the path to save the script log. If not specified, the current path is used.
 
 .EXAMPLE
     .\Config-AwsConnector.ps1
@@ -23,13 +28,13 @@ param (
 if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 
 { 
 
-    Write-Error "The AWS CLI is not available in the path!"
-    Write-Output "Please install the latest AWS CLI from https://aws.amazon.com/cli/"
-    Write-Output "If the CLI is already installed, make sure it is added to the path."
+    Write-Error "The AWS CLI is not available in the path"
+    Write-Output "`nPlease install the latest AWS CLI from https://aws.amazon.com/cli/"
+    Write-Output "If the CLI is already installed, make sure it is added to the path.`n"
     exit
 }
 
-# Setup basic logging to capture
+# Setup basic logging
 $TimeStamp = Get-Date -Format MMddHHmm 
 $LogFileName = '{0}-{1}.csv' -f "AwsS3", $TimeStamp
 $LogFileName = Join-Path $LogPath $LogFileName

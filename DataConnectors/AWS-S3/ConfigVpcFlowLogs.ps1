@@ -11,8 +11,8 @@ Get-AwsConfig
 
 Write-Output `n`n'S3 Bucket definition'
 
-$bucketName = Read-ValidatedHost 'S3 Bucket Name'
-Write-Output "Using S3 Bucket mame: $bucketName"
+$bucketName = Read-ValidatedHost 'S3 bucket name'
+Write-Output "Using S3 Bucket name: $bucketName"
 
 Write-Output `n"Listing your available VPCs"
 aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
