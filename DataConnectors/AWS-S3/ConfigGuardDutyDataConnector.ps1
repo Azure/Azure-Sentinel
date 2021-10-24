@@ -4,6 +4,7 @@ function Get-RoleAndGuardDutyS3Policy
     .SYNOPSIS 
         Creates a S3 Policy for GuardDuty based on specified bucket name, role ARN, and Kms ARN
     #>
+
     $s3PolicyForRoleAndGuardDuty = "{
 	 'Statement': [
 		{
@@ -120,6 +121,7 @@ function Enable-GuardDuty
     .SYNOPSIS 
         Enables GuardDuty based on specified configuration
     #>
+    
     Write-Log -Message "Enabling GuardDuty" -LogFileName $LogFileName -LinePadding 1
     Set-RetryAction({
         Write-Log -Message "Executing: aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1" -LogFileName $LogFileName -Severity Verbose
@@ -184,7 +186,7 @@ function Set-GuardDutyPublishDestinationBucket
 
 # ***********       Main Flow       ***********
 
-
+Write-Log -Message "Starting GuardDuty data connector configuration script" -LogFileName $LogFileName -Severity Verbose
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable GuardDuty Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
 
 # Connect using the AWS CLI

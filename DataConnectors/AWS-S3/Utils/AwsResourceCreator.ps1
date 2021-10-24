@@ -53,7 +53,8 @@ function New-S3Bucket
         {
         
         # Get s3 bucket name from user and clean up based on naming rules see https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
-        $script:bucketName = (Read-ValidatedHost -Prompt "Please enter S3 bucket name" -MaxLength 64 -MinLength 3).ToLower().Replace("_","-").Replace("..",".").TrimEnd("-") 
+        
+        $script:bucketName = (Read-ValidatedHost -Prompt "Please enter S3 bucket name" -MaxLength 64 -MinLength 3)
 
         Write-Log -Message "Using S3 Bucket name: $bucketname" -LogFileName $LogFileName -Indent 2
             

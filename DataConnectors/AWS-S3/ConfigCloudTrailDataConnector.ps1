@@ -233,7 +233,7 @@ function Set-OrganizationTrailConfig
 }
 
 # ***********       Main Flow       ***********
-
+Write-Log -Message "Starting CloudTrail data connector configuration script" -LogFileName $LogFileName -Severity Verbose
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable CloudTrail Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -Severity Information -LinePadding 2
 
 # Connect using the AWS CLI
