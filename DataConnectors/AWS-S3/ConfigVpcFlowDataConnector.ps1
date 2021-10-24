@@ -20,7 +20,6 @@ Write-Log -Message "Listing your available VPCs" -LogFileName $LogFileName -Seve
 Write-Log -Message "Executing: aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs" -LogFileName $LogFileName -Severity Verbose
 aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
 
-
 Write-Log 'Enabling VPC flow Logs (default format)' -LogFileName $LogFileName -Severity Information -LinePadding 1
 
 Set-RetryAction({
@@ -32,9 +31,10 @@ Set-RetryAction({
 	{
     	try
 		{
-		[ValidateSet("ALL","ACCEPT","REJECT")]$vpcTrafficType = Read-Host 'Please enter traffic type (ALL, ACCEPT, REJECT)'
+			[ValidateSet("ALL","ACCEPT","REJECT")]$vpcTrafficType = Read-Host 'Please enter traffic type (ALL, ACCEPT, REJECT)'
 		}
-	catch {}
+		catch {}
+
 	} until ($?)
 
 	$vpcName = Read-ValidatedHost 'Please enter Vpc name'
