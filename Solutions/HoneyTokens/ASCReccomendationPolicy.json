@@ -1,0 +1,110 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/managementGroupDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "ManagementWorkbookLink": {
+      "type": "string",
+      "metadata": {
+        "description": "The link to the honeytokens management workbook"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "name": "KVReviewTag",
+      "apiVersion": "2019-09-01",
+      "properties": {
+        "displayName": "KVReviewTag",
+        "policyType": "Custom",
+        "description": "Add a KVReview tag on all KVs in the scope",
+        "metadata": {
+          "category": "Deception"
+        },
+        "mode": "Indexed",
+        "policyRule": {
+          "if": {
+                "field": "type",
+                "equals": "Microsoft.KeyVault/vaults"
+              },
+          "then": {
+            "effect": "modify",
+            "details": {
+              "roleDefinitionIds": [
+                "/providers/microsoft.authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+              ],
+              "operations": [
+                {
+                  "operation": "add",
+                  "field": "tags[KVReview]",
+                  "value": "ReviewNeeded"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policyDefinitions",
+      "name": "KeyVault HoneyTokens",
+      "apiVersion": "2019-09-01",
+      "properties": {
+        "displayName": "KeyVault HoneyTokens",
+        "policyType": "Custom",
+        "mode": "All",
+        "description": "Install honey-tokens in KeyVault resources",
+        "metadata": {
+          "securityCenter": {
+            "RemediationDescription": "[concat('1.  <a href=\"',parameters('ManagementWorkbookLink'),'\">Click</a> to install honeytokens in Key Vaults<br>2.  Change the value of the KVReview tag on this KeyVault to Reviewed')]",
+            "Severity": "Medium"
+          },
+          "category": "Deception"
+        },
+        "parameters": {},
+        "policyRule": {
+          "if": {
+            "allOf": [
+              {
+                "field": "type",
+                "equals": "Microsoft.KeyVault/vaults"
+              },
+              {
+                "field": "tags[KVReview]",
+                "exists": "true"
+              },
+              {
+                "value": "tags[KVReview]",
+                "notEquals": "ReviewNeeded"
+              }
+            ]
+          },
+          "then": {
+            "effect": "audit"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/policySetDefinitions",
+      "apiVersion": "2019-09-01",
+      "name": "HoneyTokens",
+      "dependsOn": [
+        "[resourceId('Microsoft.Authorization/policyDefinitions', 'KeyVault HoneyTokens')]"
+      ],
+      "properties": {
+        "displayName": "HoneyTokens",
+        "description": "Deploy HoneyTokens into Azure resources",
+        "policyType": "Custom",
+        "metadata": {
+          "category": "Deception"
+        },
+        "policyDefinitions": [
+          {
+            "policyDefinitionId": "[resourceId('Microsoft.Authorization/policyDefinitions', 'KeyVault HoneyTokens')]"
+          }
+        ]
+      }
+    }
+  ]
+}
