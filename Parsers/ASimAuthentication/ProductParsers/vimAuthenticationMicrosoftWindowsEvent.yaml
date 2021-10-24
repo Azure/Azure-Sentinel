@@ -25,6 +25,9 @@ ParserParams:
   - Name: targetusername_has
     Type: string
     Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |  
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
@@ -82,8 +85,8 @@ ParserQuery: |
       '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',
       '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',
       '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];
-      let WinLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*"){ 
-          WindowsEvent
+      let WinLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){ 
+          WindowsEvent | where not(disabled)
           // ************************************************************************* 
           //       <Prefilterring>
           // *************************************************************************
@@ -113,16 +116,12 @@ ParserQuery: |
                       TargetSessionId = tostring(EventData.TargetLogonId),
                       TargetUserId = tostring(EventData.TargetUserSid),
                       TargetUsername = tostring(iff (EventData.TargetDomainName == '-', EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName)))
-                      // ************************************************************************* 
-                      //       <Postfilterring>
-                      // *************************************************************************
-                      | where (targetusername_has=='*' or TargetUsername has targetusername_has),
-                      // ************************************************************************* 
-                      //       <Postfilterring>
-                      // ************************************************************************* 
-                      | extend 
-                      SrcDvcHostname = tostring(EventData.WorkstationName),
-                      EventProduct = "Security Events"
+          // ***************      <Postfilterring>  **********************************
+          | where (targetusername_has=='*' or TargetUsername has targetusername_has)
+          // ***************      <Postfilterring>  ********************************** 
+          | extend 
+            SrcDvcHostname = tostring(EventData.WorkstationName),
+            EventProduct = "Security Events"
           | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
           // -- creating EventMessage matching EventMessage in SecurityEvent table
           | extend EventMessage = case(EventID == 4634, "4634 - An account was logged off.", 
