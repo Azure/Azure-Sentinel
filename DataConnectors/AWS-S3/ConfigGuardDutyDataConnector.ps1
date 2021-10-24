@@ -3,18 +3,37 @@ function Get-RoleAndGuardDutyS3Policy
 	<#
     .SYNOPSIS 
         Creates a S3 Policy for GuardDuty based on specified bucket name, role ARN, and Kms ARN
-    #>
 
+    .PARAMETER RoleArn
+		Specifies the Role ARN
+	.PARAMETER BucketName
+		Specifies the S3 Bucket
+    .PARAMETER KmsArn
+        Specifies the KMS ARN
+    #>
+    [OutputType([string])]
+    [CmdletBinding()]
+    param (
+        [Parameter(position=0)]
+        [ValidateNotNullOrEmpty()][string]
+        $RoleArn,
+        [Parameter(position=1)]
+        [ValidateNotNullOrEmpty()][string]
+        $BucketName,
+        [Parameter(position=2)]
+        [ValidateNotNullOrEmpty()][string]
+        $KmsArn
+    )  
     $s3PolicyForRoleAndGuardDuty = "{
 	 'Statement': [
 		{
             'Sid': 'Allow Arn read access S3 bucket',
             'Effect': 'Allow',
             'Principal': {
-                'AWS': '${roleArn}'
+                'AWS': '$RoleArn'
             },
             'Action': ['s3:Get*','s3:List*'],
-            'Resource': 'arn:aws:s3:::${bucketName}/*'
+            'Resource': 'arn:aws:s3:::$BucketName/*'
         },
 		{
             'Sid': 'Allow GuardDuty to use the getBucketLocation operation',
@@ -23,7 +42,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:GetBucketLocation',
-            'Resource': 'arn:aws:s3:::${bucketName}'
+            'Resource': 'arn:aws:s3:::$BucketName'
         },
         {
             'Sid': 'Allow GuardDuty to upload objects to the bucket',
@@ -32,7 +51,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*'
+            'Resource': 'arn:aws:s3:::$BucketName/*'
         },
         {
             'Sid': 'Deny unencrypted object uploads. This is optional',
@@ -41,7 +60,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': 'arn:aws:s3:::$BucketName/*',
             'Condition': {
                 'StringNotEquals': {
                     's3:x-amz-server-side-encryption': 'aws:kms'
@@ -55,10 +74,10 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': 'arn:aws:s3:::$BucketName/*',
             'Condition': {
                 'StringNotEquals': {
-                    's3:x-amz-server-side-encryption-aws-kms-key-id': '${kmsArn}'
+                    's3:x-amz-server-side-encryption-aws-kms-key-id': '$KmsArn'
                 }
             }
         },
@@ -67,7 +86,7 @@ function Get-RoleAndGuardDutyS3Policy
             'Effect': 'Deny',
             'Principal': '*',
             'Action': 's3:*',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': 'arn:aws:s3:::$BucketName/*',
             'Condition': {
                 'Bool': {
                     'aws:SecureTransport': 'false'
@@ -82,7 +101,16 @@ function Get-GuardDutyAndRoleKmsPolicy
 	<#
     .SYNOPSIS 
         Creates a customized KMS Policy for GuardDuty based on specified role ARN
+    .PARAMETER RoleArn
+		Specifies the Role ARN
     #>
+    [OutputType([string])]
+    [CmdletBinding()]
+    param (
+        [Parameter(position=0)]
+        [ValidateNotNullOrEmpty()][string]
+        $RoleArn
+    )
 
     $kmsPolicy = "{
 		'Statement': [
@@ -99,7 +127,7 @@ function Get-GuardDutyAndRoleKmsPolicy
             'Sid': 'Allow use of the key',
             'Effect': 'Allow',
             'Principal': {
-                'AWS': ['${roleArn}']
+                'AWS': ['$RoleArn']
             },
             'Action': [
                 'kms:Encrypt',
@@ -121,7 +149,7 @@ function Enable-GuardDuty
     .SYNOPSIS 
         Enables GuardDuty based on specified configuration
     #>
-    
+
     Write-Log -Message "Enabling GuardDuty" -LogFileName $LogFileName -LinePadding 1
     Set-RetryAction({
         Write-Log -Message "Executing: aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1" -LogFileName $LogFileName -Severity Verbose
@@ -218,13 +246,13 @@ $sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names 
 Write-Log -Message "sqsUrl: $sqsUrl sqsArn: $sqsArn" -LogFileName $LogFileName -Severity Verbose
 
 $customMessage = "Changes GuardDuty: Kms GenerateDataKey to GuardDuty"
-$kmsRequiredPolicies = Get-GuardDutyAndRoleKmsPolicy
+$kmsRequiredPolicies = Get-GuardDutyAndRoleKmsPolicy -RoleArn $roleArn
 Update-KmsPolicy -RequiredPolicy $kmsRequiredPolicies -CustomMessage $customMessage
 
 Update-SQSPolicy
 
 $customMessage = "Changes S3: Get GuardDuty notifications"
-$s3RequiredPolicy = Get-RoleAndGuardDutyS3Policy
+$s3RequiredPolicy = Get-RoleAndGuardDutyS3Policy -RoleArn $roleArn -BucketName $bucketName -KmsArn $kmsArn
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
 Enable-S3EventNotification -DefaultEventNotificationPrefix "AWSLogs/${callerAccount}/GuardDuty/"
