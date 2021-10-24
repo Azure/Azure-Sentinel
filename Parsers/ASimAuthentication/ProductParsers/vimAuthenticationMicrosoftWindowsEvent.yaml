@@ -1,6 +1,6 @@
 Parser:
   Title: Microsoft Windows Events Logon and Logoff
-  Version: '1.0.0'
+  Version: '1.1.0'
   LastUpdated: Aug 8, 2021
 Product:
   Name: Microsoft Windows Events
@@ -31,7 +31,7 @@ ParserParams:
 ParserQuery: |  
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
-  let LogonTypes=datatable(LogonType:string, EventSubType:string)[
+  let LogonTypes=datatable(LogonType:int, EventSubType:string)[
       2, 'Interactive',
       3, 'Network',
       4, 'Batch',
@@ -103,7 +103,7 @@ ParserQuery: |
                       SrcDvcIpAddr = tostring(EventData.IpAddress),
                       TargetPortNumber = toint(EventData.IpPort),
                       LogonGuid = tostring(EventData.LogonGuid),
-                      LogonType = tostring(EventData.LogonType),
+                      LogonType = toint(EventData.LogonType),
                       ActingProcessCreationTime = EventData.ProcessCreationTime,
                       ActingProcessId = tostring(toint(EventData.ProcessId)),
                       ActingProcessName = tostring(EventData.ProcessName),
@@ -156,4 +156,77 @@ ParserQuery: |
                   , LogonTarget=TargetDvcHostname
                   , Dvc=SrcDvcHostname
               };
-    WinLogon(starttime, endtime, targetusername_has, disabled)
+  let SecEventLogon =(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disable:bool=false){
+    SecurityEvent | where not(disabled)
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime)
+      and (isnull(endtime)     or TimeGenerated <= starttime)
+      and (targetusername_has=='*' or TargetUserName has targetusername_has)
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
+    | where EventID in (LogonEvents) or 
+            EventID in (LogoffEvents)
+    | project-rename 
+         EventMessage = Activity
+       , ActorSessionId=SubjectLogonId
+       , TargetSessionId=TargetLogonId
+       , ActorUserId=SubjectUserSid
+       , TargetUserId =TargetUserSid
+       , TargetUserType=AccountType
+       , SrcDvcHostname = WorkstationName
+       , TargetDvcHostname = Computer
+       , EventOriginalUid = EventOriginId
+       , LogonProtocol=AuthenticationPackageName
+       , SrcDvcIpAddr=IpAddress
+    | extend EventOriginId=EventID | project-away EventID 
+    | extend EventResult = iff(EventOriginId == 4625, 'Failure', 'Success')
+      , EventCount=int(1)
+      , EventSchemaVersion='0.1.0'
+      , EventProduct = "Security Event"
+      , ActorUserIdType='SID'
+      , TargetUserIdType='SID'
+      , EventVendor='Microsoft' 
+      , EventStartTime =TimeGenerated
+      , EventEndTime=TimeGenerated
+      , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')
+      , ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount)
+      , ActorUsernameType= iff(SubjectDomainName == '-','Simple', 'Windows' )
+      , TargetUsername = iff (TargetDomainName == '-', trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
+      , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
+      , SrcDvcOs = 'Windows'
+      , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
+    | lookup LogonStatus on EventStatus
+    | lookup LogonTypes  on LogonType
+    | project-reorder 
+        TimeGenerated
+        , EventProduct
+        , EventMessage
+        , EventResult
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , EventType
+        , EventSubType
+        , ActorSessionId
+        , TargetSessionId
+        , ActorUserId
+        , ActorUsername
+        , TargetUserId
+        , TargetUsername
+        , TargetUserType
+        , SrcDvcOs
+        , TargetDvcHostname
+        , LogonProtocol
+        , ImpersonationLevel
+    /// ** Aliases 
+    | extend
+         User=TargetUsername
+        , LogonTarget=TargetDvcHostname
+        , Dvc=SrcDvcHostname
+    };
+  union isfuzzy=true SecEventLogon(starttime, endtime, targetusername_has, disabled)
+                ,    WinLogon(starttime, endtime, targetusername_has, disabled)
