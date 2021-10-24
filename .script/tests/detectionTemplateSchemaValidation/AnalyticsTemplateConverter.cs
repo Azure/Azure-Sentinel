@@ -52,7 +52,10 @@ namespace DetectionTemplateSchemaValidation.Tests
                 serializer.Populate(jo.CreateReader(), templateInstance);
                 return templateInstance;
             }
-            return null;
+            else
+            {
+                throw new JsonSerializationException($"The provided kind '{kindStr}' in template \"id: {id} name: {name}\" was not recognized as a valid template kind.");
+            }
         }
 
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
