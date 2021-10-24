@@ -19,7 +19,7 @@ function Write-RequiredConnectorDefinitionInfo
         Write data needed to configure the Azure Sentinel Data Connector for user.
     #>
     Write-Log -Message "Use the values below to configure the Amazon Web Service S3 data connector in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 3
-    Write-Log -Message "Role arn: $roleArn" -LogFileName $LogFileName -Severity Information
+    Write-Log -Message "Role arn: $roleArn" -LogFileName $LogFileName -Severity Information -LinePadding 1
     Write-Log -Message "Sqs Url: $sqsUrl" -LogFileName $LogFileName -Severity Information
 }
 
@@ -64,7 +64,6 @@ function Set-RetryAction
        exit
     }
 }
-
 
 function Read-ValidatedHost
 {
