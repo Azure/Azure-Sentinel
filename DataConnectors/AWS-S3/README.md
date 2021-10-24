@@ -45,3 +45,9 @@ When the script(s) complete, you must complete the Azure Sentinel data connector
 ## Troubleshooting
 
 By default, a log is created in the directory where the script is executed.
+
+## Advanced usage
+
+The `ConfigAwsConnector.ps1` script has two parameters:
+- `-LogPath` specifies a custom path to create the script activity log file.
+- `-AwsLogType` specifies the AWS log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty". If this parameter is specified, the user will not be prompted for this information.
