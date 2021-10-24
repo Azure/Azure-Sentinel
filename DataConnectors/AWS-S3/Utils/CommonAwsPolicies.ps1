@@ -118,7 +118,7 @@ param (
 	[Parameter(position=1)]
 	[ValidateNotNullOrEmpty()]
 	[string]
-	$eventNotificationPrefix,
+	$EventNotificationPrefix,
 	[Parameter(position=2)]
 	[ValidateNotNullOrEmpty()]
 	[string]
@@ -168,7 +168,7 @@ function Get-RoleS3Policy
 param (
 	[Parameter(position=0)]
 	[ValidateNotNullOrEmpty()][string]
-	$roleArn,
+	$RoleArn,
 	[Parameter(position=1)]
 	[ValidateNotNullOrEmpty()][string]
 	$BucketName
