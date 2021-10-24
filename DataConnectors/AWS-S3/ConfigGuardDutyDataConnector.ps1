@@ -199,7 +199,7 @@ function Set-GuardDutyPublishDestinationBucket
         $destinationArn = $destinationDescriptionObject.DestinationProperties.DestinationArn
 
         Write-Log -Message "GuardDuty is already configured for bucket arn '$destinationArn'" -LogFileName $LogFileName -LinePadding 2
-        $guardDutyBucketConfirmation = Read-ValidatedHost 'Are you sure that you want to override the existing bucket destination? [y/n]'
+        $guardDutyBucketConfirmation = Read-ValidatedHost -Prompt "Are you sure that you want to override the existing bucket destination? [y/n]"
         if ($guardDutyBucketConfirmation -eq 'y')
         {
             Write-Log -Message "Executing: aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose

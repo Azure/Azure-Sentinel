@@ -100,11 +100,11 @@ param (
     if ($ValidationType -eq "NotNull")
     {
 
-        $returnString = ""
-        while (($returnString -eq "") -or ($returnString.Length -lt $MinLength) -or ($returnString.Length -gt $MaxLength))
+        do
         {
-                $returnString = Read-Host -Prompt $Prompt
-        } 
+            $returnString = Read-Host -Prompt $Prompt
+
+        } while (($returnString -eq "") -or ($returnString.Length -lt $MinLength) -or ($returnString.Length -gt $MaxLength))
              
         return $returnString
 
