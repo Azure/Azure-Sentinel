@@ -222,7 +222,7 @@ function Write-Log
 
     # Write the message to the correct output channel											  
     switch ($Severity) {
-        "Information" { Write-Output $Message }
+        "Information" { Write-Host $Message }
         "Warning" { Write-Warning $Message }
         "Error" { Write-Host $Message -ForegroundColor Red }
         "Verbose" {Write-Verbose $Message }
