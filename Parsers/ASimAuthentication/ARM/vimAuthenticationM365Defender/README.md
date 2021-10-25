@@ -12,4 +12,4 @@ For more information, see:
 <br>
  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FvimAuthenticationM365D%2FvimAuthenticationM365D.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FvimAuthenticationM365Defender%2FvimAuthenticationM365Defender.json)
