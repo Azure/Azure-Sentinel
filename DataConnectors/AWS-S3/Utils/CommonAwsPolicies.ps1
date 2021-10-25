@@ -129,15 +129,15 @@ param (
    {
 	   'QueueConfigurations': [
 			{
-			  'Id':'$eventNotificationName',
-			  'QueueArn': '$sqsArn',
+			  'Id':'$EventNotificationName',
+			  'QueueArn': '$SqsArn',
 			  'Events': ['s3:ObjectCreated:*'],
 			  'Filter': {
 				'Key': {
 				  'FilterRules': [
 					{
 					  'Name': 'prefix',
-					  'Value': '$eventNotificationPrefix'
+					  'Value': '$EventNotificationPrefix'
 					},
 					{
 					  'Name': 'suffix',
