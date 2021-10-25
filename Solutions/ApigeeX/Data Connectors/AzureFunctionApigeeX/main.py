@@ -16,7 +16,7 @@ CREDENTIALS_FILE_CONTENT = os.environ['CREDENTIALS_FILE_CONTENT']
 RESOURCE_NAMES = os.environ['RESOURCE_NAMES']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
-LOG_TYPE = 'GCP_IAM'
+LOG_TYPE = 'ApigeeX'
 
 
 # interval of script execution
