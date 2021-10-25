@@ -54,7 +54,7 @@ namespace DetectionTemplateSchemaValidation.Tests
             }
             else
             {
-                throw new JsonSerializationException($"'{kindStr}' in an invalid template kind");
+                throw new JsonSerializationException($"The provided kind '{kindStr}' in template \"id: {id} name: {name}\" was not recognized as a valid template kind.");
             }
         }
 
