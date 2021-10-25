@@ -1,0 +1,54 @@
+---
+SchemaVersion: '1.0'
+DataTypes:
+- DataType: ABAPChangeDocsLog_CL
+Provider: Sentinel
+Type: KQL
+EntitiesFilter: {}
+BaseQuery: |
+  union isfuzzy=true (datatable(User_s:string, Host_s:string, SystemID_s:string,
+  TableName_s:string)[]), ABAPChangeDocsLog_CL | where User_s == '{{Account_Name}}'
+  | lookup kind=leftouter _GetWatchlist('SAP - Systems') on $left.SystemID_s == $right.SystemID
+RequiredInputFieldsSets:
+- - Account_Name
+Insights:
+  Id: 5c6eff08-cefd-4e6c-8e82-d2e501cba413
+  DisplayName: 'SAP User: The recent 10 changes recorded are:'
+  Description: Recent 10 change docs records of current user.
+  DefaultTimeRange:
+    BeforeRange: 14d
+    AfterRange: 2d
+  ReferenceTimeRange:
+    BeforeRange: 14d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: Host
+      OutputType: String
+      SupportDeepLink: false
+    - Header: SystemID
+      OutputType: String
+      SupportDeepLink: false
+    - Header: SystemRole
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Table Name
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Count
+      OutputType: Number
+      SupportDeepLink: false
+    QueriesDefinitions:
+    - Filter: where 1 == 1
+      Summarize: summarize count() by Host_s, SystemID_s, SystemRole = iff(SystemRole != '', SystemRole, 'Unknown'), TableName_s | top 10 by count_ desc
+      Project: project Host = Host_s, SystemID = SystemID_s, SystemRole = SystemRole, TableName = TableName_s, Count = count_
+  AdditionalQuery:
+    Text: View all user change docs
+    Query: |
+      sort by TimeGenerated | project TimeGenerated = TimeGenerated, Host = Host_s,
+      SystemID = SystemID_s, Client = ClientID_s, SystemRole = iff(SystemRole != '',
+      SystemRole, 'Unknown'), TransactionCode = TransactionCode_s, ObjectClass = ObjectClass_s,
+      ObjectID = ObjectID_s, TypeofChange = case(TypeofChange_Item_s has_any('I','J'),
+      'Insert', TypeofChange_Item_s has_any('D','E'), 'Delete', TypeofChange_Item_s
+      == 'U', 'Change', TypeofChange_Item_s), TableName = TableName_s, FieldName = FieldName_s, 
+      OldValue = ValueOld_s, NewValue = ValueNew_s
