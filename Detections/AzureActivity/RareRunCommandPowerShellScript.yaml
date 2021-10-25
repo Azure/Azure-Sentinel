@@ -1,0 +1,102 @@
+id: 5239248b-abfb-4c6a-8177-b104ade5db56
+name: Azure VM Run Command operations executing a unique powershell script
+description: |
+  'Identifies when Azure Run command is used to execute a powershell script on a VM that is unique.
+  The uniqueness of the powershell script is determined by taking a combined hash of the cmdlets it imports
+  and the filesize of the PowerShell script. Alerts from this detection indicate a unique PowerShell was executed
+  in your environment.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+      - DeviceEvents
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+  - CredentialAccess
+relevantTechniques:
+  - T1570
+  - T1078.004
+query: |
+  let RunCommandData = materialize ( AzureActivity
+  // Isolate run command actions
+  | where OperationNameValue == "Microsoft.Compute/virtualMachines/runCommand/action"
+  // Confirm that the operation impacted a virtual machine
+  | where Authorization has "virtualMachines"
+  // Each runcommand operation consists of three events when successful, StartTimeed, Accepted (or Rejected), Successful (or Failed).
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller
+  // Limit to Run Command executions that Succeeded
+  | where list_ActivityStatusValue has "Succeeded"
+  // Extract data from the Authorization field, allowing us to later extract the Caller (UPN) and CallerIpAddress
+  | extend Authorization_d = parse_json(Authorization)
+  | extend Scope = Authorization_d.scope
+  | extend Scope_s = split(Scope, "/")
+  | extend Subscription = tostring(Scope_s[2])
+  | extend VirtualMachineName = tostring(Scope_s[-1])
+  | project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress
+  | join kind=leftouter (
+      DeviceFileEvents
+      | where InitiatingProcessFileName == "RunCommandExtension.exe"
+      | extend VirtualMachineName = tostring(split(DeviceName, ".")[0])
+      | project VirtualMachineName, PowershellFileCreatedTimestamp=TimeGenerated, FileName, FileSize, InitiatingProcessAccountName, InitiatingProcessAccountDomain, InitiatingProcessFolderPath, InitiatingProcessId
+  ) on VirtualMachineName
+  // We need to filter by time sadly, this is the only way to link events
+  | where PowershellFileCreatedTimestamp between (StartTime .. EndTime)
+  | project StartTime, EndTime, PowershellFileCreatedTimestamp, VirtualMachineName, Caller, CallerIpAddress, FileName, FileSize, InitiatingProcessId, InitiatingProcessAccountDomain, InitiatingProcessFolderPath
+  | join kind=inner(
+      DeviceEvents
+      | extend VirtualMachineName = tostring(split(DeviceName, ".")[0])
+      | where InitiatingProcessCommandLine has "-File"
+      // Extract the script name based on the structure used by the RunCommand extension
+      | extend PowershellFileName = extract(@"\-File\s(script[0-9]{1,9}\.ps1)", 1, InitiatingProcessCommandLine)
+      // Discard results that didn't successfully extract, these are not run command related
+      | where isnotempty(PowershellFileName)
+      | extend PSCommand = tostring(parse_json(AdditionalFields).Command)
+      // The first execution of PowerShell will be the RunCommand script itself, we can discard this as it will break our hash later
+      | where PSCommand != PowershellFileName 
+      // Now we normalise the cmdlets, we're aiming to hash them to find scripts using rare combinations
+      | extend PSCommand = toupper(PSCommand)
+      | order by PSCommand asc
+      | summarize PowershellExecStartTime=min(TimeGenerated), PowershellExecEnd=max(TimeGenerated), make_list(PSCommand) by PowershellFileName, InitiatingProcessCommandLine
+  ) on $left.FileName == $right.PowershellFileName
+  | project StartTime, EndTime, PowershellFileCreatedTimestamp, PowershellExecStartTime, PowershellExecEnd, PowershellFileName, PowershellScriptCommands=list_PSCommand, Caller, CallerIpAddress, InitiatingProcessCommandLine, PowershellFileSize=FileSize, VirtualMachineName
+  | order by StartTime asc 
+  // We generate the hash based on the cmdlets called and the size of the powershell script
+  | extend TempFingerprintString = strcat(PowershellScriptCommands, PowershellFileSize)
+  | extend ScriptFingerprintHash = hash_sha256(tostring(PowershellScriptCommands)));
+  let totals = toscalar (RunCommandData
+  | summarize count());
+  let hashTotals = RunCommandData
+  | summarize HashCount=count() by ScriptFingerprintHash;
+  RunCommandData
+  | join kind=leftouter (
+  hashTotals
+  ) on ScriptFingerprintHash
+  // Calculate prevelance, while we don't need this, it may be useful for responders to know how rare this script is in relation to normal activity
+  | extend Prevelance = toreal(HashCount) / toreal(totals) * 100
+  // Where the hash was only ever seen once.
+  | where HashCount == 1
+  | extend timestamp = StartTime, IPCustomEntity=CallerIpAddress, AccountCustomEntity=Caller, HostCustomEntity=VirtualMachineName
+  | project timestamp, StartTime, EndTime, PowershellFileName, VirtualMachineName, Caller, CallerIpAddress, PowershellScriptCommands, PowershellFileSize, ScriptFingerprintHash, IPCustomEntity, AccountCustomEntity, HostCustomEntity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+kind: scheduled
