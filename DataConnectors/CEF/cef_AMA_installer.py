@@ -2,7 +2,7 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
-# This script is used to install CEF agent on a linux machine an configure the
+# This script is used to install the CEF connector on a linux machine an configure the
 # syslog daemon on the linux machine.
 # Supported OS:
 #   64-bit
@@ -19,7 +19,7 @@
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS and 16.04 LTS
-# For more information please check the OMS-Agent-for-Linux documentation.
+# For more information please check the Azure Monitoring Agent documentation.
 #
 # Daemon versions:
 #   Syslog-ng: 2.1 - 3.22.1
@@ -30,7 +30,7 @@ import time
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
 daemon_default_incoming_port = "514"
-syslog_ng_source_content = "source s_src { udp( port(514)); tcp( port(514));};"
+syslog_ng_source_content = "source s_src { udp( port({port}})); tcp( port({port}}));};".format(port=daemon_default_incoming_port)
 rsyslog_conf_path = "/etc/rsyslog.conf"
 syslog_ng_conf_path = "/etc/syslog-ng/syslog-ng.conf"
 rsyslog_module_udp_content = "# provides UDP syslog reception\nmodule(load=\"imudp\")\ninput(type=\"imudp\" port=\"" + daemon_default_incoming_port + "\")\n"
@@ -71,14 +71,6 @@ def print_notice(input_str):
     :param input_str:
     '''
     print("\033[0;30;47m" + input_str + "\033[0m")
-
-
-def print_command_response(input_str):
-    '''
-    Print given text in green color for Ok text
-    :param input_str:
-    '''
-    print("\033[1;34;40m" + input_str + "\033[0m")
 
 
 def handle_error(e, error_response_str):
@@ -332,6 +324,9 @@ def main():
         print("Located syslog-ng daemon running on the machine")
         set_syslog_ng_configuration()
         restart_syslog_ng()
+    else:
+        print_error(
+            "Could not detect a running syslog daemon on the machine, aborting installation. Please make sure you have a running Syslog daemon and rerun this script.")
     print_full_disk_warning()
     print_ok("Installation completed")
 
