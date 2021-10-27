@@ -11,13 +11,13 @@ This solution includes (1) Workbook, (13) Analytics rules, and (3) Playbooks pro
 6)  View the Playbooks: Navigate to Azure Sentinel> Automation > Playbooks > Search "IOT"
 
 # Playbooks
-1) AutoCloseIncidents
-## Overview 
+## 1) AutoCloseIncidents
+### Overview 
 In some cases, maintenance activities generate alerts in Sentinel which distracts the SOC team from handling the real problems, the playbook allows to input the time period in which the maintenance is expected and the assets IP (Excel file can be found). The playbook requires a watchlist which includes all the IP addresses of the assets on which alerts will handled automatically. This playbook parses explicitly the IOT device entity fields. For more information, see [AD4IoT-AutoCloseIncidents](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AD4IoT-AutoCloseIncidents)
-2) MailbyProductionLine
-## Overview
+## 2) MailbyProductionLine
+### Overview
 The following playbook will send mail to notify specific stake holders.<br>
 One example can be in the case of specific security team per product line or per physical location. The playbook requires a watchlist which maps between the sensors name and the mail addresses of the alerts stockholders. For more information, see [AD4IoT-MailbyProductionLine](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AD4IoT-MailbyProductionLine)
-3) NewAssetServiceNowTicket
-## Overview
+## 3) NewAssetServiceNowTicket
+### Overview
 Normally, the authorized entity to program a PLC is the Engineering Workstation, to program a PLC attackers might create a new Engineering Workstation to create malicious programing. The following playbook will open a ticket in ServiceNow each time a new Engineering Workstation is detected. This playbook parses explicitly the IOT device entity fields. For more information, see [AD4IoT-NewAssetServiceNowTicket](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/AD4IoT-NewAssetServiceNowTicket/readme.md)
