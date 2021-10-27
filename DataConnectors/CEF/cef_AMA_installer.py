@@ -30,7 +30,7 @@ import time
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
 daemon_default_incoming_port = "514"
-syslog_ng_source_content = "source s_src { udp( port({port}})); tcp( port({port}}));};".format(port=daemon_default_incoming_port)
+syslog_ng_source_content = "source s_src { udp( port(%(port)s)); tcp( port(%(port)s));};" % {'port': daemon_default_incoming_port}
 rsyslog_conf_path = "/etc/rsyslog.conf"
 syslog_ng_conf_path = "/etc/syslog-ng/syslog-ng.conf"
 rsyslog_module_udp_content = "# provides UDP syslog reception\nmodule(load=\"imudp\")\ninput(type=\"imudp\" port=\"" + daemon_default_incoming_port + "\")\n"
