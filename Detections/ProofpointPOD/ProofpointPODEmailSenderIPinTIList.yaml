@@ -15,13 +15,15 @@ tactics:
   - Exfiltration
   - InitialAccess
 query: |
-  let ioc_lookBack = 30d;
+  let ioc_lookBack = 14d;
   let timeframe = 1h;
   let TI_IP_List =
-  ThreatIntelligenceIndicator
-  | where TimeGenerated > ago(ioc_lookBack)
-  | where isnotempty(NetworkIP)
-  | summarize make_list(NetworkIP);
+  (ThreatIntelligenceIndicator
+  | where TimeGenerated > ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"")
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | summarize make_set(TI_ipEntity));
   ProofpointPOD 
   | where TimeGenerated > ago(timeframe)
   | where isnotempty(SrcIpAddr)
