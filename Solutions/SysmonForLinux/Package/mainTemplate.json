@@ -1,0 +1,209 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Nikhil Tripathi - v-ntripathi@microsoft.com",
+    "comments": "Solution template for SysmonForLinux"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[parameters('location')]",
+      "metadata": {
+        "description": "Region to deploy solution resources"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Sentinel is setup"
+      }
+    },
+    "connector1-name": {
+      "type": "string",
+      "defaultValue": "240e2f3b-c8c3-462b-b9ee-f0b0add2a6bf"
+    }
+  },
+  "variables": {
+    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
+    "_connector1-source": "[variables('connector1-source')]",
+    "MicrosoftSysmonForLinuxConnector": "MicrosoftSysmonForLinuxConnector",
+    "_MicrosoftSysmonForLinuxConnector": "[variables('MicrosoftSysmonForLinuxConnector')]",
+    "sourceId": "azuresentinel.azure-sentinel-solution-sysmonforlinux",
+    "_sourceId": "[variables('sourceId')]"
+  },
+  "resources": [
+    {
+      "id": "[variables('_connector1-source')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Microsoft Sysmon For Linux",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Sysmon for Linux provides detailed information about process creations, network connections and other system events.\n[Sysmon for linux link: update when available](https://docs.microsoft.com/sysinternals/downloads/sysmon).\n\n[Learn more >](https://aka.ms/sysLogInfo)",
+          "graphQueries": [
+            {
+              "metricName": "Sysmon",
+              "legend": "Syslog",
+              "baseQuery": "Syslog | where ProcessName == 'sysmon'"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Events by ActingProcessName",
+              "query": "vimProcessCreateLinuxSysmon\n            | summarize count() by ActingProcessName\n             | top 10 by count_"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (Sysmon)",
+              "lastDataReceivedQuery": "Syslog | where ProcessName == 'sysmon'\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Syslog | where ProcessName == 'sysmon'\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">This data connector depends on ASIM parsers based on a Kusto Functions to work as expected. [Deploy the parsers](https://aka.ms/AzSentinelSysmonForLinuxARM) \n\n The following functions will be deployed:\n\n - vimFileEventLinuxSysmonFileCreated, vimFileEventLinuxSysmonFileDeleted\n\n - vimProcessCreateLinuxSysmon, vimProcessTerminateLinuxSysmon\n\n - vimNetworkSessionLinuxSysmon \n\n[Read more](https://aka.ms/AzSentinelNormalization)"
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n\n1.  Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n2.  Select **Apply below configuration to my machines** and select the facilities and severities.\n3.  Click **Save**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            }
+          ],
+          "additionalRequirementBanner": "This data connector depends on ASIM parsers based on a Kusto Functions to work as expected [Deploy the parsers](https://aka.ms/AzSentinelSysmonForLinuxARM) which is deployed with the Azure Sentinel Solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "version": "1.0.0",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SysmonForLinux",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "Nikhil Tripathi",
+          "email": "v-ntripathi@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_MicrosoftSysmonForLinuxConnector')]",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-10-27",
+        "providers": [
+          "Cisco"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Automation (SOAR)"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+    }
+  ],
+  "outputs": {}
+}
