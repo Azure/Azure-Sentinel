@@ -23,7 +23,7 @@ SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
 
 # Defines how many files can be processed simultaneously
-MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 100))
+MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
 
 # Defines page size while listing files from blob storage. New page is not processed while old page is processing.
 MAX_PAGE_SIZE = int(os.environ.get('MAX_PAGE_SIZE', 1000))
