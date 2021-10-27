@@ -2,8 +2,8 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
-# This script is used to install the CEF connector on a linux machine an configure the
-# syslog daemon on the linux machine.
+# This script is used to install the CEF connector on a linux machine and configure the
+# Syslog daemon on the linux machine.
 # Supported OS:
 #   64-bit
 #       CentOS 7 and 8
@@ -252,7 +252,7 @@ def is_rsyslog():
 
 def is_syslog_ng():
     '''
-    Returns True if the daemon is 'Syslogng'
+    Returns True if the daemon is 'Syslog-ng'
     '''
     # Meaning ps -ef | grep "daemon name" has returned more then the grep result
     return process_check(syslog_ng_daemon_name) > 0
@@ -300,7 +300,7 @@ def print_full_disk_warning():
     Warn from potential full disk issues that can be caused by the daemon running on the machine.
     The function points the user to the relevant documentation according to his daemon type.
     '''
-    warn_message = "\nWarning: please make sure your logging daemon configuration does not store unnecessary logs. " \
+    warn_message = "\nWarning: please make sure your Syslog daemon configuration does not store unnecessary logs. " \
                    "This may cause a full disk on your machine, which will disrupt the function of the oms agent installed." \
                    " For more information:"
 
@@ -326,7 +326,7 @@ def main():
         restart_syslog_ng()
     else:
         print_error(
-            "Could not detect a running syslog daemon on the machine, aborting installation. Please make sure you have a running Syslog daemon and rerun this script.")
+            "Could not detect a running Syslog daemon on the machine, aborting installation. Please make sure you have a running Syslog daemon and rerun this script.")
     print_full_disk_warning()
     print_ok("Installation completed")
 
