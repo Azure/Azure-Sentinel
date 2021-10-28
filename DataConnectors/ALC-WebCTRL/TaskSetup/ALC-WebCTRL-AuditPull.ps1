@@ -44,7 +44,7 @@ $webCtrlService = (Get-Service -Name $webCtrl -ErrorAction SilentlyContinue)
 If ( $webCtrlService -eq $null )
 {
   $eventMessage = 'Script exiting as WebCtrl Service is not installed.' + $vbCrLf
-  Write-EventLog -logname "AutomatedLogic" -Source "WebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
+  Write-EventLog -logname "Application" -Source "ALCWebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
   exit
 }
 
@@ -56,7 +56,7 @@ $webCtrlSqlService = (Get-Service -Name $webCtrlSql -ErrorAction SilentlyContinu
 if ( $webCtrlSqlService -eq $null )
 {
   $eventMessage = "SQL WebCtrl is not installed on this machine" + $vbCrLf
-  Write-EventLog -logname "AutomatedLogic" -Source "WebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
+  Write-EventLog -logname "Application" -Source "ALCWebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
   exit
 }
 else
@@ -65,7 +65,7 @@ else
   {
     $webCtrlSqlServiceStatus = $webCtrlSqlService.Status.ToString()
     $eventMessage = "The service $webCtrlSqlService is $webCtrlSqlServiceStatus." + $vbCrLf
-    Write-EventLog -logname "AutomatedLogic" -Source "WebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
+    Write-EventLog -logname "Application" -Source "ALCWebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
     $currentLocalDateTime =  Get-Date (Get-Date)
     $lastReadDateTime =  $currentLocalDateTime
 
@@ -98,7 +98,7 @@ else
     } catch {
       $eventMessage = "Error when running sql $query" + $vbCrLf
       $Error.Clear()
-      Write-EventLog -logname "AutomatedLogic" -Source "WebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
+      Write-EventLog -logname "Application" -Source "ALCWebCTRL"  -EventId $executionSummaryEventId -EntryType Information -Message $eventMessage -Category 0
       exit
     }
 
@@ -109,7 +109,7 @@ else
     $queryResultData = $queryResultSet | Select-Object * -ExcludeProperty ItemArray, Table, RowError, RowState, HasErrors
     Foreach ($eachRecord in $queryResultData) {
       $eventMessage = $eachRecord | ConvertTo-Json
-      Write-EventLog -logname "AutomatedLogic" -Source "WebCTRL"  -EventId $auditDataEventId -EntryType Information -Message $eventMessage -Category 0
+      Write-EventLog -logname "Application" -Source "ALCWebCTRL"  -EventId $auditDataEventId -EntryType Information -Message $eventMessage -Category 0
     }
 
 
