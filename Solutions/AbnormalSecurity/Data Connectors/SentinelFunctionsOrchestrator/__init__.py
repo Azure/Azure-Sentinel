@@ -20,9 +20,9 @@ from .sentinel_connector_async import AzureSentinelConnectorAsync
 API_TOKEN = os.environ['ABNORMAL_SECURITY_REST_API_TOKEN']
 SENTINEL_WORKSPACE_ID = os.environ['SENTINEL_WORKSPACE_ID']
 SENTINEL_SHARED_KEY = os.environ['SENTINEL_SHARED_KEY']
-LOG_ANALYTICS_URI = os.environ['logAnalyticsUri']
+LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 if ((LOG_ANALYTICS_URI in (None, '') or str(LOG_ANALYTICS_URI).isspace())):
-    logAnalyticsUri = 'https://' + SENTINEL_WORKSPACE_ID + '.ods.opinsights.azure.com'
+    LOG_ANALYTICS_URI = 'https://' + SENTINEL_WORKSPACE_ID + '.ods.opinsights.azure.com'
 
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
 match = re.match(pattern,str(LOG_ANALYTICS_URI))
