@@ -117,7 +117,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
  * -----------------------------------------------------
  * The purpose of this json is to provide detail on the various fields the metadata solution can have. Refer to the metadata schema and example provided after the definitions for further context.
  * publisherId: An identifier that's used by Partner Center to uniquely identify the publisher associated with a commercial marketplace account.- Ex. "azuresentinel", "CheckPoint", "semperis"
- * planId: Id of the Plan for the Offer of Solution - Ex. "azure-sentinel-solution-ciscoaci", "azure-sentinel-solution-semperis-dsp"
+ * offerId: Id of the Offer of Solution - Ex. "azure-sentinel-solution-ciscoaci", "azure-sentinel-solution-semperis-dsp"
  * firstPublishDate: Solution first published date
  * lastPublishDate: Latest published date of Solution
  * providers: Provider of the solution. Specify one or many providers as a comma separated list as applicable for the solution - Ex. Cisco, Checkpoint, Microsoft
@@ -127,7 +127,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
  */
 {
     "publisherId": {Id of Publisher},
-    "planId": {Solution Plan Id},
+    "offerId": {Solution Offer Id},
     "firstPublishDate": {Solution First Published Date},
     "lastPublishDate": {Solution recent Published Date},
     "providers": {Solution provider list},
@@ -150,7 +150,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 ```json
 {
 	"publisherId": "azuresentinel",
-	"planId": "azure-sentinel-solution-mcafeeepo",
+	"offerId": "azure-sentinel-solution-mcafeeepo",
 	"firstPublishDate": "2021-03-26",
 	"lastPublishDate": "2021-08-09",
 	"providers": ["Cisco"],
