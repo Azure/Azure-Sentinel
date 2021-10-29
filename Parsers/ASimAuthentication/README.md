@@ -52,4 +52,4 @@ Supported parameters:
 |----------|-----------|---------------|
 | starttime|  datetime | datetime(null)|
 |  endtime |  datetime | datetime(null) |
-|  targetusername |  string | '*' |
+|  targetusername_has |  string | '*' |
