@@ -52,18 +52,19 @@ query: |
   | where anomalies > 0 | extend AnomalyHour = TimeGenerated
   | where baseline > baselinethreshold // Filtering low count events per baselinethreshold
   | project Roles, UserPrincipalName, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
-  let AnomalyHours = TimeSeriesAlerts | project TimeGenerated;
+  let AnomalyHours = TimeSeriesAlerts | where TimeGenerated > ago(2d) | project TimeGenerated;
   // Filter the alerts for specified timeframe
   TimeSeriesAlerts
- // | where TimeGenerated > ago(2d)
+  | where TimeGenerated > ago(2d)
   | join kind=inner ( 
   union isfuzzy=true aadSignin, aadNonInt
-  //| where TimeGenerated > ago(2d)
+  | where TimeGenerated > ago(2d)
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
   | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
    | summarize HourlyCount=count(), LatestAnomalyTime = arg_max(timestamp,*) by bin(TimeGenerated,1h), HomeTenantId, OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName
   ) on UserPrincipalName
   | project LatestAnomalyTime, HomeTenantId, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, HourlyCount, baseline, anomalies, score
+  | extend timestamp = LatestAnomalyTime, IPCustomEntity = IPAddress, AccountCustomEntity = UserPrincipalName
 entityMappings:
   - entityType: Account
     fieldMappings:
