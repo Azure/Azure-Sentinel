@@ -1,37 +1,59 @@
 id: 493916d5-a094-4bfa-bdd1-d983a063ea3d
-name: OT Network Scanning (Microsoft Defender for IoT)
+name: Multiple scans in the network  (Defender for IoT)
 description: |
-  'This alert leverages Microsoft Defender for IoT to detect multiple scans on the network indicating new devices, functionality, application misconfiguration, or malicious reconnaissance activity on the network.'
-severity: Medium
+  'This rule leverages Defender for IoT to detect multiple scans on the network indicating new devices, functionality, application misconfiguration, or malicious reconnaissance activity on the network.'
+severity: High
 requiredDataConnectors:
   - connectorId: IoT
     dataTypes:
       - SecurityAlert (ASC for IoT)
-queryFrequency: 6h
-queryPeriod: 6h
+qqueryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Discovery
-relevantTechniques:
-  - T0842
 query: |
   SecurityAlert
   | where ProductName == "Azure Security Center for IoT"
   | where AlertName contains "scan"
   | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
-  | extend IPAddress = tostring(parse_json(tostring(parse_json(Entities)[0].IpAddress)).Address)
-  | extend Protocol = tostring(parse_json(tostring(parse_json(Entities)[0].Protocols))[0])
-  | extend DeviceType = tostring(parse_json(Entities)[0].DeviceName)
-  | extend IoTSecurityAgentId = tostring(parse_json(Entities)[0].IoTSecurityAgentId)
-  | extend Vendor = tostring(parse_json(Entities)[0].Vendor)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDevcieAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
   | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
-  | project AlertName, ResourceId, DeviceId, IPAddress, Protocol, DeviceType, Vendor, IoTSecurityAgentId, Tactics, TimeGenerated, RemediationSteps
-  | extend IPCustomEntity = IPAddress
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDevcieAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDevcieAddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+  RemidationSteps: RemidationSteps
+alertDetailsOverride:
+  alertDisplayNameFormat: {{AlertName}} (Defender for IoT)
+  alertDescriptionFormat: {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
 version: 1.0.0
 kind: Scheduled
