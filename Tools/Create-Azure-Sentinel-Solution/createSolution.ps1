@@ -216,6 +216,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
                         $fileName = Split-path -Parent $file | Split-Path -leaf
+                        $fileName += Split-Path $file -leafbase;
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -1077,9 +1078,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
             if($validJson -and $json) {
                 # Create Metadata Resource Object
-                if($json.publisherId  -and $json.planId)
+                if($json.publisherId  -and $json.offerId)
                 {
-                    $sourceId = $json.publisherId + "." + $json.planId;
+                    $sourceId = $json.publisherId + "." + $json.offerId;
                 }
                 if($json.support)
                 {
