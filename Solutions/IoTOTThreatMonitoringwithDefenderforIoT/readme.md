@@ -39,7 +39,7 @@ This rule leverages Defender for IoT to detect a new device indicating a legitim
 This rule leverages Defender for IoT to detect an unauthorized DHCP configuration indicating a possible unauthorized device configuration.<br>
 ## 13) Unauthorized PLC changes (Microsoft Defender for IoT)
  This rule leverages Defender for IoT to detect unauthorized changes to PLC ladder logic code indicating new functionality in the PLC, improper configuration of an application, or malicious activity on the network.<br>
-## 14) Unauthorized remote access to the network (DMicrosoft Defender for IoT)
+## 14) Unauthorized remote access to the network (Microsoft Defender for IoT)
 This rule leverages Defender for IoT to detect unauthorized remote access to network devices, if another device on the network is compromised, target devices can be accessed remotely, increasing the attack surface.<br>
 
 # Playbooks
