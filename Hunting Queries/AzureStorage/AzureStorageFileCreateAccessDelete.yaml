@@ -1,0 +1,67 @@
+id: 25568c62-414b-4577-acee-5cba9494c232
+name: Azure Storage File Create, Access, Delete
+description: |
+  'This hunting query will identify where a file is uploaded to Azure File or Blob storage
+  and is then accessed once before being deleted. This activity may be indicative of
+  exfiltration activity.'
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1537
+tags:
+  - Ignite2021
+query: |
+
+ let threshold = 5m;
+ //Union the file and blob data
+ let StorageData = 
+ union
+ StorageFileLogs,
+ StorageBlobLogs;
+ //Get file and blob uploads
+ StorageData
+ //File upload operations 
+ | where StatusText =~ "Success" 
+ | where OperationName =~ "PutBlob" or OperationName =~ "PutRange"
+ //Parse the URI to remove the parameters as they change per request 
+ | extend Uri = tostring(split(Uri, "?", 0)[0])
+ //Join with deletions, this will return 0 rows if there was no deletion 
+ | join (
+     StorageData        
+     //File deletion operations     
+     | where OperationName =~ "DeleteBlob" or OperationName =~ "DeleteFile"     
+     | extend Uri = tostring(split(Uri, "?", 0)[0])     
+     | project OperationName, DeletedTime=TimeGenerated, Uri, CallerIpAddress, UserAgentHeader
+     ) on Uri 
+ | project UploadedTime=TimeGenerated, DeletedTime, OperationName, OperationName1, Uri, UploaderAccountName=AccountName, UploaderIP=CallerIpAddress, UploaderUA=UserAgentHeader, DeletionIP=CallerIpAddress1, DeletionUA=UserAgentHeader1, ResponseMd5
+ //Collect file access events where the file was only accessed by a single IP, a single downloader 
+ | join (
+     StorageData 
+     |where Category =~ "StorageRead" 
+     //File download events 
+     | where OperationName =~ "GetBlob" or OperationName =~ "GetFile"
+     //Again, parse the URI to remove the parameters as they change per request 
+     | extend Uri = tostring(split(Uri, "?", 0)[0])
+     //Parse the caller IP as it contains the port 
+     | extend CallerIpAddress = tostring(split(CallerIpAddress, ":", 0)[0])
+     //Summarise the download events by the URI, we are only looking for instances where a single caller IP downloaded the file,
+     //so we can safely use any() on the IP. 
+     | summarize Downloads=count(), DownloadTimeStart=max(TimeGenerated), DownloadTimeEnd=min(TimeGenerated), DownloadIP=any(CallerIpAddress), DownloadUserAgents=make_set(UserAgentHeader), dcount(CallerIpAddress) by Uri 
+     | where dcount_CallerIpAddress == 1
+     ) on Uri 
+ | project UploadedTime, DeletedTime, OperationName, OperationName1, Uri, UploaderAccountName, UploaderIP, UploaderUA, DownloadTimeStart, DownloadTimeEnd, DownloadIP, DownloadUserAgents, DeletionIP, DeletionUA, ResponseMd5
+ | extend timestamp = UploadedTime
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DownloadIP
+  - entityType: NetworkConnection
+    fieldMappings:
+      - identifier: SourceAddress
+        columnName: UploaderIP
+  - entityType: NetworkConnection
+    fieldMappings:
+      - identifier: DestinationAddress
+        columnName: DownloadIP

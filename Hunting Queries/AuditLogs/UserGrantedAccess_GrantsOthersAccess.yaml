@@ -3,9 +3,9 @@ name: User Granted Access and Grants others Access
 description: |
   'Identifies when a new user is granted access and starts granting access to other users.  This can help you identify rogue or malicious user behavior.'
 requiredDataConnectors:
-  - connectorId: AzureActivity
+  - connectorId: AzureActiveDirectory
     dataTypes:
-      - AzureActivity
+      - AuditLogs
 tactics:
   - Persistence
   - PrivilegeEscalation
@@ -13,11 +13,13 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-  let auditLookback = 14d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
   let opName = dynamic(["Add user", "Invite external user"]);
   // Helper function to extract relevant fields from AuditLog events
   let auditLogEvents = view (startTimeSpan:timespan, operation:dynamic)  {
-      AuditLogs | where TimeGenerated >= ago(auditLookback)
+      AuditLogs | where TimeGenerated >= auditLookback
       | where OperationName in~ (operation)
       | extend ModProps = iff(TargetResources.[0].modifiedProperties != "[]", TargetResources.[0].modifiedProperties, todynamic("NoValues"))
       | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
@@ -35,7 +37,7 @@ query: |
       | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
       | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName ) 
       | mvexpand ModProps
-      | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue));
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"','',tostring(ModProps.newValue));
   };
   // Assigning time for First TargetUserName that was added
   let FirstAdd = auditLogEvents(auditLookback, opName)  
@@ -57,3 +59,13 @@ query: |
   | summarize PropertyUpdateSet = make_bag(PropertyUpdate) by FirstAddTimeUtc, FirstInitiatedBy, FirstTargetUserName, SecondAddTimeUtc, SecondInitiatedBy, SecondTargetUserName, 
   IpAddress, FirstTargetResourceName, SecondTargetResourceName, FirstOperationName, SecondOperationName
   | extend timestamp = FirstAddTimeUtc, AccountCustomEntity = FirstInitiatedBy, HostCustomEntity = FirstTargetResourceName, IPCustomEntity = IpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

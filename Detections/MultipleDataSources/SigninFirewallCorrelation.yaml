@@ -12,6 +12,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -23,9 +26,8 @@ relevantTechniques:
 query: |
 
   let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
-  let endtime = 1d;
+  let aadFunc = (tableName:string){
   CommonSecurityLog
-  | where TimeGenerated >= ago(endtime) 
   | where DeviceVendor =~ "Cisco"
   | where DeviceAction =~ "denied"
   | extend SourceIPType = iff(SourceIP matches regex PrivateIPregex,"private" ,"public" )
@@ -35,10 +37,14 @@ query: |
       // Successful signins from IPs blocked by the firewall solution are suspect
       // Include fully successful sign-ins, but also ones that failed only at MFA stage
       // as that supposes the password was sucessfully guessed.
-    SigninLogs
+    table(tableName)
     | where ResultType in ("0", "50074", "50076") 
   ) on $left.SourceIP == $right.IPAddress
   | extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -48,3 +54,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

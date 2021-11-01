@@ -12,7 +12,9 @@ import requests
 import azure.functions as func
 import logging
 import certifi
+import re
 
+from .sentinel_connector import AzureSentinelConnector
 
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
@@ -20,6 +22,15 @@ cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
 time_delay_minutes = 60
 event_types = ["maillog","message"]
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("ProofpointPOD: Invalid Log Analytics Uri.")
 
 def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
@@ -35,6 +46,7 @@ def main(mytimer: func.TimerRequest) -> None:
 class Proofpoint_api:
     def __init__(self):
         self.cluster_id = cluster_id
+        self.logAnalyticsUri = logAnalyticsUri
         self._token = _token
         self.time_delay_minutes = int(time_delay_minutes)
         self.gen_timeframe(time_delay_minutes=self.time_delay_minutes)
@@ -92,41 +104,17 @@ class Proofpoint_api:
                     y = json.loads(row)
                     y.update({'event_type': event_type})
                     obj_array.append(y)
-            body = json.dumps(obj_array)
-            self.post_data(body,len(obj_array),event_type)
 
-    def build_signature(self, date, content_length, method, content_type, resource):
-        x_headers = 'x-ms-date:' + date
-        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-        decoded_key = base64.b64decode(shared_key)
-        encoded_hash = base64.b64encode(
-            hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
-        authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
-        return authorization
-
-    def post_data(self,body,chunk_count,event_type):
-        method = 'POST'
-        content_type = 'application/json'
-        resource = '/api/logs'
-        rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
-        content_length = len(body)
-        signature = self.build_signature(rfc1123date, content_length, method, content_type,
-                                    resource)
-        uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
-        headers = {
-            'content-type': content_type,
-            'Authorization': signature,
-            'Log-Type': 'ProofpointPOD_' + event_type,
-            'x-ms-date': rfc1123date
-        }    
-        response = requests.post(uri, data=body, headers=headers)
-        if (response.status_code >= 200 and response.status_code <= 299):
-            logging.info("Chunk was processed({} events)".format(chunk_count))
-            print("Chunk was processed({} events)".format(chunk_count))
-        else:
-            print("Error during sending events to Azure Sentinel. Response code:{}".format(response.status_code))
-            logging.warn("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+            sentinel = AzureSentinelConnector(
+                log_analytics_uri=logAnalyticsUri,
+                workspace_id=customer_id,
+                shared_key=shared_key,
+                log_type=event_type,
+                queue_size=5000
+            )
+            for event in obj_array:
+                sentinel.send(event)
+            sentinel.flush()
 
     def get_data(self, event_type=None):
         sent_events = 0

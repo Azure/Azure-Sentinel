@@ -13,13 +13,45 @@ import azure.functions as func
 import logging
 import os
 import time
+import re
+from .state_manager import StateManager
 
 customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
 pickle_str = os.environ['GooglePickleString']
 pickle_string = base64.b64decode(pickle_str)
+connection_string = os.environ['AzureWebJobsStorage']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
-activities = ["login", "calendar", "drive", "admin", "mobile", "token", "user_accounts"]
+activities = [
+            "access_transparency", 
+            "admin",
+            "calendar",
+            "chat",
+            "drive",
+            "gcp",
+            "gplus",
+            "groups",
+            "groups_enterprise",
+            "jamboard", 
+            "login", 
+            "meet", 
+            "mobile", 
+            "rules", 
+            "saml", 
+            "token", 
+            "user_accounts", 
+            "context_aware_access", 
+            "chrome", 
+            "data_studio"
+            ]
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
+    raise Exception("Google Workspace Reports: Invalid Log Analytics Uri.")
 
 def get_credentials():
     creds = None
@@ -29,14 +61,20 @@ def get_credentials():
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
-        logging.error('Error - pickle_string is empty. Exit')
-        exit(1)
+        raise Exception("Google Workspace Reports: Pickle_string is empty. Exit.")
     return creds
 
 def generate_date():
     current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
-    past_time = current_time - datetime.timedelta(minutes=10)
-    return (past_time.strftime("%Y-%m-%dT%H:%M:%SZ"), current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    state = StateManager(connection_string=connection_string)
+    past_time = state.get()
+    if past_time is not None:
+        logging.info("The last time point is: {}".format(past_time))
+    else:
+        logging.info("There is no last time point, trying to get events for last hour.")
+        past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 def get_result(activity,start_time, end_time):
     result_activities = []
@@ -75,13 +113,14 @@ def post_data(customer_id, shared_key, body, log_type):
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+    uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
 
     headers = {
         'content-type': content_type,
         'Authorization': signature,
         'Log-Type': log_type,
-        'x-ms-date': rfc1123date
+        'x-ms-date': rfc1123date,
+        'time-generated-field': "id_time"
     }
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
@@ -90,19 +129,24 @@ def post_data(customer_id, shared_key, body, log_type):
         logging.warn("Response code: {}".format(response.status_code))
 
 def expand_data(obj):
+    new_obj = []
     for event in obj:
-        for nested in event["events"]:
+        nested_events_arr = event["events"]
+        for nested in nested_events_arr:
+            head_event_part = event.copy()
+            head_event_part.pop("events")
             if 'name' in nested:
-                event.update({'event_name': nested["name"]})
+                head_event_part.update({'event_name': nested["name"]})
             if 'type' in nested:
-                event.update({'event_type': nested["type"]})
+                head_event_part.update({'event_type': nested["type"]})
             if 'parameters' in nested:
                 for parameter in nested["parameters"]:
                     if 'name' in parameter:
                         for param_name in ["value", "boolValue", "multiValue", "multiMessageValue", "multiIntValue", "messageValue", "intValue"]:
                             if param_name in parameter:
-                                event.update({parameter["name"]: parameter[param_name]})
-    return obj
+                                head_event_part.update({parameter["name"]: parameter[param_name]})
+            new_obj.append(head_event_part)
+    return new_obj
 
 def gen_chunks_to_object(data,chunksize=100):
     chunk = []

@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -17,7 +20,7 @@ triggerThreshold: 0
 tactics:
   - Execution
 relevantTechniques:
-  - T1064
+  - T1059
 query: |
 
   let starttime = 14d;
@@ -31,14 +34,14 @@ query: |
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | where Process in (ExeList)
   | project TimeGenerated, Computer, AccountType, Account, Process
-  | make-series Total=count() on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by Process;
-  let TimeSeriesAlerts = TimeSeriesData
+  | make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Process;
+  let TimeSeriesAlerts = materialize(TimeSeriesData
   | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 1.5, -1, 'linefit')
   | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
   | where anomalies > 0
   | project Process, TimeGenerated, Total, baseline, anomalies, score
-  | where Total > TotalEventsThreshold;
-  let AnomalyHours = TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated;
+  | where Total > TotalEventsThreshold);
+  let AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);
   TimeSeriesAlerts
   | where TimeGenerated > ago(2d)
   | join (
@@ -51,6 +54,7 @@ query: |
   ) on Process, TimeGenerated
   | project AnomalyHour = TimeGenerated, Computer, Account, Process, CommandLine, CommandlineCount, Total, baseline, anomalies, score
   | extend timestamp = AnomalyHour, AccountCustomEntity = Account, HostCustomEntity = Computer
+  
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -60,3 +64,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled

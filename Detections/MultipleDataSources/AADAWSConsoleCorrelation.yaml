@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: AWS
     dataTypes:
       - AWSCloudTrail
@@ -26,17 +29,23 @@ query: |
   //Adjust this threshold to fit your environment
   let signin_threshold = 5; 
   //Make a list of IPs with AAD signin failures above our threshold
+  let aadFunc = (tableName:string){
   let Suspicious_signins = 
-  SigninLogs
-  | where TimeGenerated >= ago(1d)
+  table(tableName)
   | where ResultType !in ("0", "50125", "50140")
-  | where IPAddress != "127.0.0.1"
+  | where IPAddress !in ("127.0.0.1", "::1")
   | summarize count() by IPAddress
   | where count_ >  signin_threshold
-  | summarize make_list(IPAddress);
+  | summarize make_set(IPAddress);
+  Suspicious_signins
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  let Suspicious_signins = 
+  union isfuzzy=true aadSignin, aadNonInt
+  | summarize make_set(set_IPAddress);
   //See if any of those IPs have sucessfully logged into the AWS console
   AWSCloudTrail
-  | where TimeGenerated > ago(1d)
   | where EventName =~ "ConsoleLogin"
   | extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin) 
   | where LoginResult =~ "Success"
@@ -55,3 +64,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

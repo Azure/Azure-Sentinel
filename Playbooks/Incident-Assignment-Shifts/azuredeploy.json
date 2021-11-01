@@ -1,9 +1,23 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
+    "contentVersion": "2.2.0.0",
     "metadata":{
-        "comments": "This playbook will assign Incident owner based on Shifts list in Teams.",
-        "author": "Jeremy Tan"
+        "title": "Incident Assignment Shifts", 
+        "description": "This playbook will assign an Incident to an owner based on the Shifts schedule in Microsoft Teams. When an incident is assigned, the incident owner will be notified via email. Incidents are assigned to users based on the following criteria:<br> *Only users who have started their shifts during the time the Logic App runs will be considered. *Users who still have at least 1 hours left before going off shift (can be configured in playbook) *User with the least incidents assigned on the current Shift will be assigned incident first. <br> Refer to [Automate Incident Assignment with Shifts for Teams](https://techcommunity.microsoft.com/t5/azure-sentinel/automate-incident-assignment-with-shifts-for-teams/ba-p/2297549) for more details.",
+        "prerequisites": ["1. Have [Shifts](https://support.microsoft.com/office/get-started-in-shifts-5f3e30d8-1821-4904-be26-c3cd25a497d6) schedule setup in Microsoft Teams.",
+         "2. Have user account with Owner role in Microsoft Teams",
+	 "3. Have user account or Service Principal or Managed Identity with Azure Sentinel Responder role for HTTP and Azure Sentinel connectors",
+         "4. Have user account or Service Principal with Log Analytics Reader role on Azure Sentinel workspace for Azure Monitor Logs connector",
+         "5. Have An O365 account to be used to send email notification"],
+        "lastUpdateTime": "2021-07-14T00:00:00.000Z", 
+        "entities": [], 
+        "tags": ["Incident management"], 
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Jeremy Tan"
+        }
     },
     "parameters": {
         "PlaybookName": {
@@ -13,25 +27,9 @@
         "EmailAddress": {
             "defaultValue": "Your email address",
             "type": "string"
-        },
-         "WorkspaceName": {
-            "type": "String"
-        },
-        "WorkspaceResourceGroup": {
-            "type": "String"
-        },
-        "SPN_TenantID": {
-            "type": "String"
-        },   
-        "SPN_ClientID": {
-            "type": "String"
-        },       
-        "SPN_Secret": {
-            "type": "String"
-        }
+        }  
     },
     "variables": {
-        "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
         "AzureMonitorLogs": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
         "AzureSentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "office365": "[concat('office365-', parameters('PlaybookName'))]",
@@ -41,21 +39,8 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureADConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                        "displayName": "[parameters('EmailAddress')]",
-                        "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
             "name": "[variables('AzureMonitorLogs')]",
-            "location": "[resourceGroup().location]",
+            "location": "[resourceGroup().location]",             
             "properties": {
                         "displayName": "[parameters('EmailAddress')]",
                         "customParameterValues": {},
@@ -107,14 +92,17 @@
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
-            "location": "eastus",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+            "location": "[resourceGroup().location]",
+		"tags": {
+		"hidden-SentinelTemplateName": "IncidentAssignmentShifts",
+		"hidden-SentinelTemplateVersion": "1.0"
+		},
+            "dependsOn": [                
                 "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogs'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinel'))]",
                 "[resourceId('Microsoft.Web/connections', variables('office365'))]",
                 "[resourceId('Microsoft.Web/connections', variables('Shifts'))]"
-            ],
+            ],            
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -127,7 +115,7 @@
                         }
                     },
                     "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -138,276 +126,400 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation",
+                                "retryPolicy": {
+                                    "type": "none"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "runs": 1,
+                                    "maximumWaitingRuns": 100
+                                }
                             }
                         }
                     },
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "runAfter": {
-                                "Initialize_variable_-_AllowReassignment": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
-                            }
-                        },
-                        "Condition_-_Check_User_Array": {
+                        "Condition_-_Check_Incident_Owner": {
                             "actions": {
-                                "Compose_-_User_Array": {
-                                    "runAfter": {},
-                                    "type": "Compose",
-                                    "inputs": "@variables('User')"
-                                },
-                                "Compose_HTML": {
-                                    "inputs": "<!DOCTYPE html>\n<html>\n<head>    \n<style>\n.header-Informational{background-color: grey;color: white;}.header-Low{background-color: yellow;color: black;}.header-Medium{background-color: orange;color: black;}.header-High{background-color: red;color: white;}\nspan{display: none;}.severity-1{display: inline;text-decoration:none;}\n{display: inline;text-decoration:none;}.cell{float: left;overflow: hidden;text-overflow: ellipsis;white-space: nowrap; max-width: 100%;}\n</style>\n</head>\n<body>\n<table class=\"header-@{body('Parse_Incident_JSON')?['properties']?['severity']}\" style=\"table-layout: auto; width: 100%; padding-left: 10px; padding-right:10px;font-size:20px\" ><tr>\n<td class=\"align-middle\" height=\"50\" align=\"left\" style=\"width: 20%;\">Severity:<b><i>@{body('Parse_Incident_JSON')?['properties']?['severity']}</b></i></td>\n<td class=\"align-middle\" height=\"50\" align=\"left\" style=\"width: 75%;\">Title: <b><i>@{body('Parse_Incident_JSON')?['properties']?['title']}</b></i></td></tr><tr>\n</table>\n<div style=\"margin-top: 20px\">\n\n   The following incident in Azure Sentinel has been assigned to <b>@{body('Get_user')?['displayName']}</b>.\n\n\n   <h1>Incident Details:</h1>\n\n   <b>Incident Number:</b> @{body('Parse_Incident_Body')?['properties']?['CaseNumber']}<br />\n   <b>Title:</b> @{body('Parse_Incident_Body')?['properties']?['Title']}<br />\n   <b>Owner:</b> @{body('Get_user')?['displayName']}<br />\n   <b>Severity:</b> @{body('Parse_Incident_Body')?['properties']?['Severity']}<br />\n   <b>TimeGenerated(UTC):</b> @{body('Parse_Incident_Body')?['properties']?['CreatedTimeUtc']}<br />\n   <b>Status:</b> @{body('Parse_Incident_JSON')?['properties']?['status']}<br />\n   <br />\n   <b>Incident link:</b> <a href=\"https://portal.azure.com/#asset/Microsoft_Azure_Security_Insights/Incident/subscriptions/@{triggerBody()?['WorkspaceSubscriptionId']}/resourceGroups/@{triggerBody()?['WorkspaceResourceGroup']}/providers/Microsoft.OperationalInsights/workspaces/@{variables('WorkspaceName')}/providers/Microsoft.SecurityInsights/Incidents/@{body('Parse_Incident_Body')?['name']}\">View Incident</a><br />\n\n   </body>\n   </html>\n@{body('Parse_Incident_JSON')?['properties']?['tactics']}\n",
-                                    "runAfter": {
-                                        "HTTP_-_Update_Incident": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Compose"
-                                },
-                                "Compose_JSON_Body": {
-                                    "runAfter": {
-                                        "Get_user": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Compose",
-                                    "inputs": {
-                                        "etag": "@{body('Parse_Incident_JSON')?['etag']}",
-                                        "id": "@{body('Parse_Incident_JSON')?['id']}",
-                                        "name": "@{body('Parse_Incident_JSON')?['name']}",
-                                        "properties": {
-                                            "caseNumber": "@body('Parse_Incident_JSON')?['properties']?['caseNumber']",
-                                            "createdTimeUtc": "@{body('Parse_Incident_JSON')?['properties']?['createdTimeUtc']}",
-                                            "description": "@{body('Parse_Incident_JSON')?['properties']?['description']}",
-                                            "endTimeUtc": "@{body('Parse_Incident_JSON')?['properties']?['endTimeUtc']}",
-                                            "firstAlertTimeGenerated": "@{body('Parse_Incident_JSON')?['properties']?['firstAlertTimeGenerated']}",
-                                            "labels": "@body('Parse_Incident_JSON')?['properties']?['labels']",
-                                            "lastAlertTimeGenerated": "@{body('Parse_Incident_JSON')?['properties']?['lastAlertTimeGenerated']}",
-                                            "lastComment": "@{body('Parse_Incident_JSON')?['properties']?['lastComment']}",
-                                            "lastUpdatedTimeUtc": "@{body('Parse_Incident_JSON')?['properties']?['lastUpdatedTimeUtc']}",
-                                            "metrics": {
-                                                "SecurityAlert": "@body('Parse_Incident_JSON')?['properties']?['metrics']?['SecurityAlert']"
+                                "Condition_-_Check_User_Array": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Update_incident": [
+                                                    "Succeeded"
+                                                ]
                                             },
-                                            "owner": {
-                                                "email": "@{body('Get_user')?['userPrincipalName']}",
-                                                "name": "@{body('Get_user')?['displayName']}",
-                                                "objectId": "@{body('Get_user')?['id']}"
-                                            },
-                                            "relatedAlertIds": "@body('Parse_Incident_JSON')?['properties']?['relatedAlertIds']",
-                                            "relatedAlertProductNames": "@body('Parse_Incident_JSON')?['properties']?['relatedAlertProductNames']",
-                                            "severity": "@{body('Parse_Incident_JSON')?['properties']?['severity']}",
-                                            "startTimeUtc": "@{body('Parse_Incident_JSON')?['properties']?['startTimeUtc']}",
-                                            "status": "@{body('Parse_Incident_JSON')?['properties']?['status']}",
-                                            "tactics": "@body('Parse_Incident_JSON')?['properties']?['tactics']",
-                                            "title": "@{body('Parse_Incident_JSON')?['properties']?['title']}",
-                                            "totalComments": "@body('Parse_Incident_JSON')?['properties']?['totalComments']"
-                                        },
-                                        "type": "Microsoft.SecurityInsights/Incidents"
-                                    }
-                                },
-                                "Get_user": {
-                                    "runAfter": {
-                                        "Set_User_ID": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuread']['connectionId']"
-                                            }
-                                        },
-                                        "method": "get",
-                                        "path": "/v1.0/users/@{encodeURIComponent(variables('TempUserID'))}"
-                                    }
-                                },
-                                "HTTP_-_Update_Incident": {
-                                    "runAfter": {
-                                        "Compose_JSON_Body": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "authentication": {
-                                            "audience": "https://management.core.windows.net/",
-                                            "clientId": "[parameters('SPN_ClientID')]",
-                                            "secret": "[parameters('SPN_Secret')]",
-                                            "tenant": "[parameters('SPN_TenantID')]",
-                                            "type": "ActiveDirectoryOAuth"
-                                        },
-                                        "body": "@outputs('Compose_JSON_Body')",
-                                        "headers": {
-                                            "Content-Type": "application/json"
-                                        },
-                                        "method": "PUT",
-                                        "uri": "https://management.azure.com/subscriptions/@{variables('SubscriptionID')}/resourceGroups/@{variables('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('WorkspaceName')}/providers/Microsoft.SecurityInsights/incidents/@{body('Parse_Incident_Body')?['name']}?api-version=2020-01-01"
-                                    }
-                                },
-                                "Parse_query_result": {
-                                    "runAfter": {
-                                        "Run_query_and_list_results_-_Get_user_with_low_assignment_": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@body('Run_query_and_list_results_-_Get_user_with_low_assignment_')?['value']",
-                                        "schema": {
-                                            "items": {
-                                                "properties": {
-                                                    "Count": {
-                                                        "type": "integer"
-                                                    },
-                                                    "User": {
-                                                        "type": "string"
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><span style=\"font-size: 18px\"><strong>Incident assigned to </strong></span><span style=\"color: rgb(85,57,130); font-size: 18px\"><strong></strong></span><span style=\"color: rgb(147,101,184); font-size: 18px\"><strong>@{body('Update_incident')?['properties']?['owner']?['assignedTo']}</strong></span><span style=\"color: rgb(147,101,184); font-size: 18px\"><strong></strong></span><span style=\"color: rgb(147,101,184); font-size: 18px\"><strong> </strong></span><br>\n<span style=\"font-size: 12px; color: rgb(41,105,176)\">Incident assigned to </span><span style=\"font-size: 12px; color: rgb(41,105,176)\"><strong>@{body('Update_incident')?['properties']?['owner']?['assignedTo']}</strong></span><span style=\"font-size: 12px; color: rgb(41,105,176)\"> </span><span style=\"font-size: 12px; color: rgb(41,105,176)\">by '</span><span style=\"font-size: 12px; color: rgb(41,105,176)\"><em>@{workflow().name}</em></span><span style=\"font-size: 12px; color: rgb(41,105,176)\">' Playbook.</span></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                                     }
                                                 },
-                                                "required": [
-                                                    "User",
-                                                    "Count"
-                                                ],
-                                                "type": "object"
-                                            },
-                                            "type": "array"
-                                        }
-                                    }
-                                },
-                                "Run_query_and_list_results_-_Get_user_with_low_assignment_": {
-                                    "runAfter": {
-                                        "Compose_-_User_Array": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": "let ShiftUsers= datatable(User:string)\n@{outputs('Compose_-_User_Array')}\n| distinct User;\nSecurityIncident\n| extend UserID = tostring(parse_json(Owner).objectId)\n| where isnotempty(UserID)\n| distinct IncidentName, UserID\n| summarize count() by UserID\n| join kind=rightouter ShiftUsers on $left.UserID == $right.User\n| project User, Count=iif(isempty(count_),0,count_)\n| top 1 by Count asc\n",
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
                                             }
                                         },
-                                        "method": "post",
-                                        "path": "/queryData",
-                                        "queries": {
-                                            "resourcegroups": "@variables('ResourceGroup')",
-                                            "resourcename": "@variables('WorkspaceName')",
-                                            "resourcetype": "Log Analytics Workspace",
-                                            "subscriptions": "@variables('SubscriptionID')",
-                                            "timerange": "Last 24 hours"
-                                        }
-                                    }
-                                },
-                                "Send_an_email_(V2)": {
-                        "inputs": {
-                            "body": {
-                                "Body": "<p>@{outputs('Compose_HTML')}</p>",
-                                "Subject": "Azure Sentinel Incident Assignment Notification - Incident Number: @{body('Parse_Incident_Body')?['properties']?['CaseNumber']}",
-                                "To": "@body('Get_user')?['userPrincipalName']"
-                            },
-                            "host": {
-                                "connection": { 
-                                    "name": "@parameters('$connections')['office365']['connectionId']"
-                                }
-                            },
-                            "method": "post",
-                            "path": "/v2/Mail"
-                        },
-                        "runAfter": {
-                            "Compose_HTML": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "ApiConnection"
-                    },
-                                "Set_User_ID": {
-                                    "foreach": "@body('Parse_query_result')",
-                                    "actions": {
-                                        "Set_variable": {
+                                        "Compose_HTML_Email": {
+                                            "runAfter": {
+                                                "Add_comment_to_incident_(V3)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "<!DOCTYPE html>\n<html>\n<head>    \n<style>\n.header-Informational{background-color: grey;color: white;}.header-Low{background-color: yellow;color: black;}.header-Medium{background-color: orange;color: black;}.header-High{background-color: red;color: white;}\nspan{display: none;}.severity-1{display: inline;text-decoration:none;}\n{display: inline;text-decoration:none;}.cell{float: left;overflow: hidden;text-overflow: ellipsis;white-space: nowrap; max-width: 100%;}\n</style>\n</head>\n<body>\n<table class=\"header-@{triggerBody()?['object']?['properties']?['severity']}\" style=\"table-layout: auto; width: 100%; padding-left: 10px; padding-right:10px;font-size:20px\" ><tr>\n<td class=\"align-middle\" height=\"50\" align=\"left\" style=\"width: 20%;\">Severity:<b><i>@{triggerBody()?['object']?['properties']?['severity']}</b></i></td>\n<td class=\"align-middle\" height=\"50\" align=\"left\" style=\"width: 75%;\">Title: <b><i>@{triggerBody()?['object']?['properties']?['title']}</b></i></td></tr><tr>\n</table>\n<div style=\"margin-top: 20px\">\n\n  The following incident in Azure Sentinel has been assigned to <b>@{body('Update_incident')?['properties']?['owner']?['assignedTo']}</b>.\n\n\n  <h1>Incident Details:</h1>\n\n  <b>Incident Number:</b> @{triggerBody()?['object']?['properties']?['incidentNumber']}<br />\n  <b>Title:</b> @{triggerBody()?['object']?['properties']?['title']} <br />\n  <b>Owner:</b> @{body('Update_incident')?['properties']?['owner']?['assignedTo']} <br />\n  <b>Severity:</b> @{triggerBody()?['object']?['properties']?['severity']}<br />\n  <b>TimeGenerated(UTC):</b> @{triggerBody()?['object']?['properties']?['createdTimeUtc']} <br />\n  <b>Status:</b> @{triggerBody()?['object']?['properties']?['status']} <br />\n  <br />\n  <b>Incident link:</b> <a href=\"https://portal.azure.com/#asset/Microsoft_Azure_Security_Insights/Incident@{triggerBody()?['object']?['id']}\">View Incident</a><br />\n\n  </body>\n  </html>\n\n"
+                                        },
+                                        "Run_query_and_list_results_-_Get_user_with_low_assignment_": {
                                             "runAfter": {},
-                                            "type": "SetVariable",
+                                            "type": "ApiConnection",
                                             "inputs": {
-                                                "name": "TempUserID",
-                                                "value": "@items('Set_User_ID')['User']"
+                                                "body": "let Shifts = datatable ( User:string, Count:string )\n@{replace(string(variables('User')),'\\','')};\nShifts\n| extend Count = toint(Count)\n| sort by User\n| top 1 by Count asc",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/queryData",
+                                                "queries": {
+                                                    "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                                    "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                                    "resourcetype": "Log Analytics Workspace",
+                                                    "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                                    "timerange": "Last 24 hours"
+                                                }
+                                            }
+                                        },
+                                        "Send_an_email_(V2)": {
+                                            "runAfter": {
+                                                "Compose_HTML_Email": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Body": "<p>@{outputs('Compose_HTML_Email')}</p>",
+                                                    "Subject": "Azure Sentinel Incident Assignment Notification - Incident Number: @{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                                                    "To": "@body('Update_incident')?['properties']?['owner']?['email']"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/Mail"
+                                            }
+                                        },
+                                        "Update_incident": {
+                                            "runAfter": {
+                                                "Run_query_and_list_results_-_Get_user_with_low_assignment_": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "owner": "@{body('Run_query_and_list_results_-_Get_user_with_low_assignment_')['value'][0]['User']}",
+                                                    "ownerAction": "Assign"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
                                             }
                                         }
                                     },
                                     "runAfter": {
-                                        "Parse_query_result": [
+                                        "For_each_Shifts_list": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "Foreach"
-                                }
-                            },
-                            "runAfter": {
-                                "For_each": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "greater": [
-                                            "@length(variables('User'))",
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Condition_-_Check_for_Existing_Assignee": {
-                            "actions": {
-                                "Condition_-_Check_AllowReassignment_Variable": {
-                                    "actions": {
-                                        "Terminate": {
-                                            "runAfter": {},
-                                            "type": "Terminate",
-                                            "inputs": {
-                                                "runStatus": "Succeeded"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {},
                                     "expression": {
                                         "and": [
                                             {
-                                                "equals": [
-                                                    "@variables('AllowReassignment')",
-                                                    false
+                                                "greater": [
+                                                    "@length(variables('User'))",
+                                                    0
                                                 ]
                                             }
                                         ]
                                     },
                                     "type": "If"
+                                },
+                                "For_each_Shifts_list": {
+                                    "foreach": "@body('List_all_shifts')?['value']",
+                                    "actions": {
+                                        "Condition_-_Start_and_End_date": {
+                                            "actions": {
+                                                "Append_to_User_array_variable": {
+                                                    "runAfter": {
+                                                        "Set_variable_-_JsonResult": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "User",
+                                                        "value": "@{items('For_each_Shifts_list')?['userId']}\",\"@{length(variables('JsonResult'))}"
+                                                    }
+                                                },
+                                                "HTTP_-_Get_total_incidents_for_user": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "type": "ManagedServiceIdentity"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://management.azure.com/subscriptions/@{triggerBody()?['workspaceInfo']?['SubscriptionId']}/resourceGroups/@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}/providers/Microsoft.OperationalInsights/workspaces/@{triggerBody()?['workspaceInfo']?['WorkspaceName']}/providers/Microsoft.SecurityInsights/Incidents?api-version=2020-01-01&$filter=(properties/owner/objectId eq '@{items('For_each_Shifts_list')?['userId']}' and properties/createdTimeUtc ge @{items('For_each_Shifts_list')?['sharedShift']?['startDateTime']})&$top=2000"
+                                                    }
+                                                },
+                                                "Parse_JSON_-_HTTP": {
+                                                    "runAfter": {
+                                                        "HTTP_-_Get_total_incidents_for_user": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_-_Get_total_incidents_for_user')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "value": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "etag": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "properties": {
+                                                                                "properties": {
+                                                                                    "additionalData": {
+                                                                                        "properties": {
+                                                                                            "alertProductNames": {
+                                                                                                "items": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "type": "array"
+                                                                                            },
+                                                                                            "alertsCount": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "bookmarksCount": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "commentsCount": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "tactics": {
+                                                                                                "items": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "type": "array"
+                                                                                            }
+                                                                                        },
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "classification": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "createdTimeUtc": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "description": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "firstActivityTimeGenerated": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "firstActivityTimeUtc": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "incidentNumber": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "incidentUrl": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "labels": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "labelName": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "labelType": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [
+                                                                                                "labelName",
+                                                                                                "labelType"
+                                                                                            ],
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "lastActivityTimeGenerated": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "lastActivityTimeUtc": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "lastModifiedTimeUtc": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "owner": {
+                                                                                        "properties": {
+                                                                                            "assignedTo": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "email": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "objectId": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "userPrincipalName": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "relatedAnalyticRuleIds": {
+                                                                                        "items": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "severity": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "status": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "title": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "id",
+                                                                            "name",
+                                                                            "etag",
+                                                                            "type",
+                                                                            "properties"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_variable_-_JsonResult": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_HTTP": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "JsonResult",
+                                                        "value": "@body('Parse_JSON_-_HTTP')?['value']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "lessOrEquals": [
+                                                            "@ticks(formatDateTime(items('For_each_Shifts_list')?['sharedShift']?['startDateTime']))",
+                                                            "@ticks(formatDateTime(utcNow()))"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "greaterOrEquals": [
+                                                            "@ticks(formatDateTime(items('For_each_Shifts_list')?['sharedShift']?['endDateTime']))",
+                                                            "@ticks(formatDateTime(addHours(utcNow(),variables('ExpectedWorkHoursPerIncident'))))"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "List_all_shifts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "List_all_shifts": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['shifts']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v1.0/teams/@{encodeURIComponent('')}/schedule/shifts",
+                                        "queries": {
+                                            "endTime": "@{addDays(utcNow(),1)}",
+                                            "startTime": "@{addDays(utcNow(),-1)}"
+                                        }
+                                    }
                                 }
                             },
                             "runAfter": {
-                                "Parse_Incident_JSON": [
+                                "Initialize_variable_-_JsonResult": [
                                     "Succeeded"
                                 ]
                             },
                             "expression": {
                                 "and": [
                                     {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['owner']?['assignedTo']",
+                                            "@null"
+                                        ]
+                                    },
+                                    {
                                         "not": {
                                             "equals": [
-                                                "@body('Parse_Incident_JSON')?['properties']?['owner']?['objectId']",
-                                                "@null"
+                                                "@triggerBody()?['object']?['properties']?['status']",
+                                                "Closed"
                                             ]
                                         }
                                     }
@@ -415,89 +527,8 @@
                             },
                             "type": "If"
                         },
-                        "For_each": {
-                            "foreach": "@body('Parse_Shifts_List')",
-                            "actions": {
-                                "Condition_-_StartDate_and_EndDate": {
-                                    "actions": {
-                                        "Append_to_array_variable": {
-                                            "runAfter": {},
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "User",
-                                                "value": "@items('For_each')['userId']"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {},
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "lessOrEquals": [
-                                                    "@ticks(formatDateTime(items('For_each')?['sharedShift']?['startDateTime']))",
-                                                    "@ticks(formatDateTime(utcNow()))"
-                                                ]
-                                            },
-                                            {
-                                                "greaterOrEquals": [
-                                                    "@ticks(formatDateTime(items('For_each')?['sharedShift']?['endDateTime']))",
-                                                    "@ticks(formatDateTime(addHours(utcNow(),variables('ExpectedWorkHoursPerIncident'))))"
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                }
-                            },
-                            "runAfter": {
-                                "Parse_Shifts_List": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
-                        "HTTP_-_Get_Incident_JSON": {
-                            "runAfter": {
-                                "Parse_Incident_Body": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "authentication": {
-                                    "audience": "https://management.core.windows.net/",
-                                    "clientId": "[parameters('SPN_ClientID')]",
-                                    "secret": "[parameters('SPN_Secret')]",
-                                    "tenant": "[parameters('SPN_TenantID')]",
-                                    "type": "ActiveDirectoryOAuth"
-                                },
-                                "method": "GET",
-                                "uri": "https://management.azure.com/subscriptions/@{variables('SubscriptionID')}/resourceGroups/@{variables('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('WorkspaceName')}/providers/Microsoft.SecurityInsights/Incidents/@{body('Parse_Incident_Body')?['name']}?api-version=2020-01-01"
-                            }
-                        },
-                        "Initialize_variable_-_AllowReassignment": {
-                            "runAfter": {
-                                "Initialize_variable_-_TempUserID": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "AllowReassignment",
-                                        "type": "boolean",
-                                        "value": false
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_variable_-_ExpectedWorkHoursPerIncident": {
-                            "runAfter": {
-                                "Initialize_variable_-_WorkspaceName": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -509,37 +540,7 @@
                                 ]
                             }
                         },
-                        "Initialize_variable_-_ResourceGroup": {
-                            "runAfter": {
-                                "Initialize_variable_-_SubscriptionID": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ResourceGroup",
-                                        "type": "string",
-                                        "value": "[parameters('WorkspaceResourceGroup')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_-_SubscriptionID": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "SubscriptionID",
-                                        "type": "string",
-                                        "value": "[subscription().subscriptionId]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_-_TempUserID": {
+                        "Initialize_variable_-_JsonResult": {
                             "runAfter": {
                                 "Initialize_variable_-_User": [
                                     "Succeeded"
@@ -549,8 +550,8 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "TempUserID",
-                                        "type": "string"
+                                        "name": "JsonResult",
+                                        "type": "array"
                                     }
                                 ]
                             }
@@ -570,329 +571,6 @@
                                     }
                                 ]
                             }
-                        },
-                        "Initialize_variable_-_WorkspaceName": {
-                            "runAfter": {
-                                "Initialize_variable_-_ResourceGroup": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "WorkspaceName",
-                                        "type": "string",
-                                        "value": "[parameters('WorkspaceName')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "List_all_shifts": {
-                            "runAfter": {
-                                "Condition_-_Check_for_Existing_Assignee": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['shifts']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/v1.0/teams/@{encodeURIComponent('0805b054-13e5-4833-9d25-2c8932175a32')}/schedule/shifts",
-                                "queries": {
-                                    "endTime": "@{addDays(utcNow(),1)}",
-                                    "startTime": "@{addDays(utcNow(),-1)}"
-                                }
-                            }
-                        },
-                        "Parse_Incident_Body": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@body('Alert_-_Get_incident')",
-                                "schema": {
-                                    "properties": {
-                                        "etag": {
-                                            "type": "string"
-                                        },
-                                        "id": {
-                                            "type": "string"
-                                        },
-                                        "kind": {},
-                                        "name": {
-                                            "type": "string"
-                                        },
-                                        "properties": {
-                                            "properties": {
-                                                "AssignedTo": {},
-                                                "CaseNumber": {
-                                                    "type": "integer"
-                                                },
-                                                "CloseReason": {},
-                                                "ClosedReasonText": {},
-                                                "CreatedTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "Description": {
-                                                    "type": "string"
-                                                },
-                                                "EndTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "FirstAlertTimeGenerated": {
-                                                    "type": "string"
-                                                },
-                                                "Labels": {
-                                                    "type": "array"
-                                                },
-                                                "LastAlertTimeGenerated": {
-                                                    "type": "string"
-                                                },
-                                                "LastUpdatedTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "Metrics": {
-                                                    "properties": {
-                                                        "SecurityAlert": {
-                                                            "type": "integer"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "RelatedAlertIds": {
-                                                    "items": {
-                                                        "type": "string"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "Severity": {
-                                                    "type": "string"
-                                                },
-                                                "StartTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "Status": {
-                                                    "type": "string"
-                                                },
-                                                "Title": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "type": "object"
-                                        },
-                                        "tags": {},
-                                        "type": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        },
-                        "Parse_Incident_JSON": {
-                            "runAfter": {
-                                "HTTP_-_Get_Incident_JSON": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@body('HTTP_-_Get_Incident_JSON')",
-                                "schema": {
-                                    "properties": {
-                                        "etag": {
-                                            "type": "string"
-                                        },
-                                        "id": {
-                                            "type": "string"
-                                        },
-                                        "name": {
-                                            "type": "string"
-                                        },
-                                        "properties": {
-                                            "properties": {
-                                                "caseNumber": {
-                                                    "type": "integer"
-                                                },
-                                                "createdTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "description": {
-                                                    "type": "string"
-                                                },
-                                                "endTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "firstAlertTimeGenerated": {
-                                                    "type": "string"
-                                                },
-                                                "labels": {
-                                                    "items": {
-                                                        "type": "string"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "lastAlertTimeGenerated": {
-                                                    "type": "string"
-                                                },
-                                                "lastComment": {
-                                                    "type": "string"
-                                                },
-                                                "lastUpdatedTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "metrics": {
-                                                    "properties": {
-                                                        "SecurityAlert": {
-                                                            "type": "integer"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "owner": {
-                                                    "properties": {
-                                                        "email": {},
-                                                        "name": {},
-                                                        "objectId": {}
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "relatedAlertIds": {
-                                                    "items": {
-                                                        "type": "string"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "relatedAlertProductNames": {
-                                                    "items": {
-                                                        "type": "string"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "severity": {
-                                                    "type": "string"
-                                                },
-                                                "startTimeUtc": {
-                                                    "type": "string"
-                                                },
-                                                "status": {
-                                                    "type": "string"
-                                                },
-                                                "tactics": {
-                                                    "items": {
-                                                        "type": "string"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "title": {
-                                                    "type": "string"
-                                                },
-                                                "totalComments": {
-                                                    "type": "integer"
-                                                }
-                                            },
-                                            "type": "object"
-                                        },
-                                        "type": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        },
-                        "Parse_Shifts_List": {
-                            "runAfter": {
-                                "List_all_shifts": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@body('List_all_shifts')?['value']",
-                                "schema": {
-                                    "items": {
-                                        "properties": {
-                                            "@@odata.etag": {
-                                                "type": "string"
-                                            },
-                                            "createdDateTime": {},
-                                            "draftShift": {},
-                                            "id": {
-                                                "type": "string"
-                                            },
-                                            "lastModifiedBy": {
-                                                "properties": {
-                                                    "application": {},
-                                                    "conversation": {},
-                                                    "device": {},
-                                                    "user": {
-                                                        "properties": {
-                                                            "displayName": {
-                                                                "type": "string"
-                                                            },
-                                                            "id": {
-                                                                "type": "string"
-                                                            }
-                                                        },
-                                                        "type": "object"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            },
-                                            "lastModifiedDateTime": {
-                                                "type": "string"
-                                            },
-                                            "schedulingGroupId": {
-                                                "type": "string"
-                                            },
-                                            "sharedShift": {
-                                                "properties": {
-                                                    "activities": {
-                                                        "type": "array"
-                                                    },
-                                                    "displayName": {},
-                                                    "endDateTime": {
-                                                        "type": "string"
-                                                    },
-                                                    "notes": {},
-                                                    "startDateTime": {
-                                                        "type": "string"
-                                                    },
-                                                    "theme": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            },
-                                            "userId": {
-                                                "type": "string"
-                                            }
-                                        },
-                                        "required": [
-                                            "@@odata.etag",
-                                            "id",
-                                            "createdDateTime",
-                                            "lastModifiedDateTime",
-                                            "schedulingGroupId",
-                                            "userId",
-                                            "draftShift",
-                                            "lastModifiedBy",
-                                            "sharedShift"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "type": "array"
-                                }
-                            }
                         }
                     },
                     "outputs": {}
@@ -900,11 +578,6 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azuread": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
-                                "connectionName": "[variables('AzureADConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
-                            },
                             "azuremonitorlogs": {
                                 "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogs'))]",
                                 "connectionName": "[variables('AzureMonitorLogs')]",

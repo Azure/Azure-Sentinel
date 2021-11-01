@@ -38,7 +38,7 @@ query: |
   (
   VMConnection
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-  | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+  | where isnotempty(DestinationIp) and isnotempty(SourceIp)
   | extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
   | where DestinationIpType == "public" | extend DeviceVendor = "VMConnection"
   | project TimeGenerated, BytesSent, DeviceVendor
@@ -55,19 +55,19 @@ query: |
   )
   );
   //Filter anomolies against TimeSeriesData
-  let TimeSeriesAlerts = TimeSeriesData
+  let TimeSeriesAlerts = materialize(TimeSeriesData
   | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')
   | mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
   | where anomalies > 0 | extend AnomalyHour = TimeGenerated
   | extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)
-  | project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score;
-  let AnomalyHours = TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated;
+  | project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score);
+  let AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);
   //Union of all BaseLogs aggregated per hour
   let BaseLogs = (union isfuzzy=true
   (
   CommonSecurityLog
   | where isnotempty(DestinationIP) and isnotempty(SourceIP)
-  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where TimeGenerated > ago(2d)
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
   | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
   | extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
@@ -83,7 +83,7 @@ query: |
   (
   VMConnection
   | where isnotempty(DestinationIp) and isnotempty(SourceIp)
-  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where TimeGenerated > ago(2d)
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
   | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
   | extend SourceIP = SourceIp, DestinationIP = DestinationIp
@@ -108,8 +108,11 @@ query: |
   | summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP, 100), DestinationIPList = make_set(DestinationIPList, 100) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies
   | project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount
   | extend timestamp =EndTimeUtc, IPCustomEntity = SourceIPMax
+
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

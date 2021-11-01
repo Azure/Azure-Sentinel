@@ -1,0 +1,61 @@
+Parser:
+  Title: ASIM Authentication Parser for Microsoft Defender for IoT - Endpoint 
+  Version: '0.1.0'
+  LastUpdated: Aug 16, 2021
+Product:
+  Name: Microsoft Defender for IoT - Endpoint
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Azure Defender for IoT Authentication Parser
+ParserName: ASimAuthenticationMD4IoT
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+            let Authentication_MD4IoT=(disabled:bool=false)
+              {
+                SecurityIoTRawEvent | where not(disabled)
+                | where RawEventName == "Login" 
+                | extend
+                  EventDetails = todynamic(EventDetails)
+                  //
+                | extend
+                  EventOriginalUid = tostring(EventDetails.OriginalEventId), 
+                  EventProduct = 'Azure Defender for IoT',
+                  EventCount=int(1),
+                  EventVendor = 'Microsoft', 
+                  EventSchemaVersion = '0.1.0', 
+                  EventStartTime = todatetime(EventDetails.TimestampUTC), 
+                  EventEndTime = todatetime(TimeGenerated), 
+                  EventType = iff (EventDetails.Operation == 'Logout', 'Logoff', 'Logon'),  
+                  EventResult = iff (EventDetails.Operation == 'LoginFailed', 'Failure', 'Success')  
+                  //
+                | extend
+                  ActingProcessId = tostring(EventDetails.ProcessId),  
+                  ActingProcessName = tostring(EventDetails.Executable),  // -- Linux input device or service used to authenticate, for example pts/1, tty1, pts/0, ssh:notty 
+                  DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"),  // -- Intermediate fix
+                  TargetUsernameType = "Simple",
+                  TargetUsername = tostring(EventDetails.UserName),
+                  SrcIpAddr = tostring(EventDetails.RemoteAddress) 
+                | project-rename
+                  DvcHostname = DeviceId, 
+                  EventProductVersion = AgentVersion,  // -- Not available in Windows
+                  _ResourceId = AssociatedResourceId, 
+                  _SubscriptionId = AzureSubscriptionId 
+                  //
+                  // -- aliases
+                | extend 
+                  User = TargetUsername, 
+                  Process = ActingProcessName, 
+                  Dvc = DvcHostname,
+                  SrcDvcIpAddr = SrcIpAddr,
+                  IpAddr = SrcIpAddr
+               };
+               Authentication_MD4IoT(disabled)

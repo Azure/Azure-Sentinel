@@ -13,8 +13,11 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -28,7 +31,6 @@ relevantTechniques:
 query: |
 
   //The bigger the window the better the data sample size, as we use IP prevalence, more sample data is better.
-  let timeRange = 30d;
   //The minimum number of countries that the account has been accessed from [default: 2]
   let minimumCountries = 2;
   //The delta (%) between the largest in-use IP and the smallest [default: 90]
@@ -38,12 +40,12 @@ query: |
   //The time to project forward after the last login activity [default: 60min]
   let projectedEndTime = 60min; 
   //Get Teams successful signins globally
+  let aadFunc = (tableName:string){
   let signinData =
-    SigninLogs
-    | where TimeGenerated >= ago(timeRange)
+    table(tableName)
     | where AppDisplayName has "Teams"
     | where ConditionalAccessStatus =~ "success"
-    | extend country = tostring(LocationDetails['countryOrRegion'])
+    | extend country = tostring(todynamic(LocationDetails)['countryOrRegion'])
     | where isnotempty(country) and isnotempty(IPAddress);
   // Collect successful signins to teams
   let loginEvents = 
@@ -95,8 +97,7 @@ query: |
   | project UserPrincipalName, SuspiciousIP, UserIPDelta = delta, SuspiciousLoginCountry = country, SuspiciousCountryPrevalence = prevalence, EventTimes
   //Teams join to collect operations the user account has performed within the given time range
   | join kind=inner( 
-    OfficeActivity 
-    | where TimeGenerated >= ago(timeRange)
+    OfficeActivity
     | where Operation in~ ("TeamsAdminAction", "MemberAdded", "MemberRemoved", "MemberRoleChanged", "AppInstalled", "BotAddedToTeam")
     | project Operation, UserId=tolower(UserId), OperationTime=TimeGenerated
   ) on $left.UserPrincipalName == $right.UserId
@@ -111,6 +112,10 @@ query: |
   | extend activitySummary = pack(tostring(StartTime), pack("Operation",tostring(Operation), "OperationTime", OperationTime))
   | summarize make_bag(activitySummary) by UserPrincipalName, SuspiciousIP, SuspiciousLoginCountry, SuspiciousCountryPrevalence
   | extend IPCustomEntity = SuspiciousIP, AccountCustomEntity = UserPrincipalName
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -120,3 +125,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

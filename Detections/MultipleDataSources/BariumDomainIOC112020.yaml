@@ -4,10 +4,10 @@ description: |
   'Identifies a match across various data feeds for domains IOCs related to the Barium activity group.
    References: https://www.justice.gov/opa/pr/seven-international-cyber-defendants-including-apt41-actors-charged-connection-computer'
 severity: High 
-requiredDataConnectors: 
-  - connectorId: DNS 
-    dataTypes: 
-      - DnsEvents 
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
   - connectorId: AzureMonitor(VMInsights)  
     dataTypes: 
       - VMConnection 
@@ -19,7 +19,13 @@ requiredDataConnectors:
       - CommonSecurityLog 
   - connectorId: MicrosoftThreatProtection
     dataTypes: 
-      - DeviceNetworkEvents 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -28,7 +34,6 @@ tactics:
   - CommandAndControl 
 query:  |  
  
- let timeframe = 1d; 
  let DomainNames = dynamic(["0.ns1.dns-info.gq", "1.ns1.dns-info.gq", "10.ns1.dns-info.gq", "102.ns1.dns-info.gq", 
     "104.ns1.dns-info.gq", "11.ns1.dns-info.gq", "110.ns1.dns-info.gq", "115.ns1.dns-info.gq", "116.ns1.dns-info.gq", 
     "117.ns1.dns-info.gq", "118.ns1.dns-info.gq", "12.ns1.dns-info.gq", "120.ns1.dns-info.gq", "122.ns1.dns-info.gq", 
@@ -95,20 +100,21 @@ query:  |
     "youtube.dns05.com", "z1.zalofilescdn.com", "z2.zalofilescdn.com", "zalofilescdn.com"]); 
  (union isfuzzy=true 
   (CommonSecurityLog  
-  | where TimeGenerated >= ago(timeframe)  
   | parse Message with * '(' DNSName ')' *  
   | where DNSName in~ (DomainNames) 
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP 
   ), 
   (DnsEvents  
-  | where TimeGenerated >= ago(timeframe)  
   | extend DNSName = Name 
   | where isnotempty(DNSName) 
-  | where DNSName  in~ (DomainNames) 
+  | where DNSName  has_any (DomainNames) 
   | extend IPAddress =  ClientIP 
   ), 
+  (imDns (domain_has_any=DomainNames)
+  | extend DNSName = DnsQuery 
+  | extend IPAddress =  SrcIpAddr, Computer = Dvc
+  ), 
   (VMConnection  
-  | where TimeGenerated >= ago(timeframe)  
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' * 
   | where isnotempty(DNSName) 
   | where DNSName  in~ (DomainNames) 
@@ -120,6 +126,23 @@ query:  |
   | where RemoteUrl  in~ (DomainNames)  
   | extend IPAddress = RemoteIP 
   | extend Computer = DeviceName 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where Request_Name has_any (DomainNames)  
+  | extend DNSName = Request_Name
+  | extend IPAddress = ClientIP 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   ) 
   ) 
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress 
@@ -136,3 +159,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.3.0
+kind: Scheduled

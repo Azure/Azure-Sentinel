@@ -1,0 +1,57 @@
+Parser:
+  Title: ASIM Microsoft WindowsEvent Process Termination Events Parser
+  Version: '0.1.0'
+  LastUpdated: Aug 11, 2021
+Product:
+  Name: Windows Event
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc 
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM WindowsEvents Parser
+ParserName: vimProcessTerminateMicrosoftWindowsEvents
+ParserQuery: |    
+        let ProcessEvents=(){
+        WindowsEvent | where EventID == 4689
+            // -- Filter
+            // -- Map
+              | extend
+            // Event
+          EventCount = int(1),
+          EventVendor = "Microsoft",
+          EventProduct = "Security Event",
+          EventSchemaVersion = "0.1.0",
+          EventStartTime = todatetime(TimeGenerated),
+          EventEndTime = todatetime(TimeGenerated),
+          EventType = "ProcessTerminated",
+          EventResult = 'Success',
+          EventOriginalType = tostring(EventID),
+        // EventOriginalUid = EventOriginId, Field will be added later on
+          EventResultDetails = tostring(EventData.Status),
+          EventOriginalResultDetails = tostring(EventData.Status), 
+        // Device
+          DvcId = tostring(EventData.SourceComputerId),
+          DvcHostname = Computer,
+          DvcOs = "Windows",
+        // Users
+          ActorUserId = tostring(EventData.SubjectUserSid),
+          ActorUserIdType = "SID",
+          ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
+          ActorUsernameType = iff(EventData.SubjectDomainName == '-','Simple', 'Windows'),
+          ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
+        // Processes 
+          TargetProcessId = tostring(toint(EventData.ProcessId)),
+          TargetProcessName = tostring(EventData.ProcessName),
+          TargetProcessCommandLine = tostring(EventData.CommandLine),
+          TargetProcessTokenElevation = tostring(EventData.TokenElevationType)
+        // Aliases
+            | extend 
+          User = ActorUsername,
+          Dvc = DvcHostname,
+          Process = TargetProcessName
+           | project-away EventData
+          }; ProcessEvents

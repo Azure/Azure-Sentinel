@@ -1,0 +1,404 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Block Host Nested Remediation - Master Playbook",
+    "description": "This playbook checks if malicious Host is quarantined/contained or not by Security Policy Rule for each of its nested playbooks.",
+    "mainSteps": [
+      "1. Fetches a list of potentially malicious hosts.",
+      "2. Each nested playbook receives the list of hosts and performs respective defined automated actions on it.",
+      "3. Response from individual playbooks are returned to master playbook for incident comment. "
+    ],
+    "prerequisites": [
+      "Atlease one of the below mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group. Capture the name of all deployed playbooks during deployment.",
+      "- CarbonBlack-Remediation-Host is a nested playbook that handles remidiation for Azure Firewall.",
+      "- Crowdstrike-Remediation-Host is a nested playbook that handles remidiation for Forcepoint."
+    ],
+    "lastUpdateTime": "2021-08-09T00:00:00.000Z",
+    "entities": [ "Host" ],
+    "tags": [ "Remediation" ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Accenture"
+    }
+  },
+  "parameters": {
+    "MasterPlaybookName": {
+      "defaultValue": "MasterPlaybook_Host_Remidiation",
+      "type": "String",
+      "metadata": {
+        "description": "Enter name for master playbook without spaces"
+      },
+      "minLength": 3
+    },
+    "CarbonBlackPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for CarbonBlack playbook without spaces"
+      }
+    },
+    "CrowdstrikePlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Crowdstrike without spaces"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentienl-',parameters('MasterPlaybookName'))]",
+    "Defaultplaybookname": "MSDefaultNestedPlaybook",
+    "CarbonBlackID": "[ if(not(empty(parameters('CarbonBlackPlaybookName'))),parameters('CarbonBlackPlaybookName'),variables('Defaultplaybookname'))]",
+    "CrowdstrikeID": "[ if(not(empty(parameters('CrowdstrikePlaybookName'))),parameters('CrowdstrikePlaybookName'),variables('Defaultplaybookname'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-07-01",
+      "location": "[resourceGroup().location]",
+      "name": "[variables('Defaultplaybookname')]",
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "Response": {
+              "runAfter": {},
+              "type": "Response",
+              "kind": "Http",
+              "inputs": {
+                "statusCode": 200
+              }
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "parameters": {}
+      },
+      "type": "Microsoft.Logic/workflows"
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('MasterPlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Logic/workflows', variables('Defaultplaybookname'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "CarbonBlack": {
+              "actions": {
+                "Append_CarbonBlack_status_code": {
+                  "runAfter": {
+                    "CarbonBlack-QuarantineDevice": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('CarbonBlack-QuarantineDevice')['statusCode']"
+                  }
+                },
+                "CarbonBlack-QuarantineDevice": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "Hosts": "@body('Entities_-_Get_Hosts')?['Hosts']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('CarbonBlackID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_CarbonBlack_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_CarbonBlack-QuarantineDevice": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('CarbonBlack-QuarantineDevice')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_CarbonBlack_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('CarbonBlack-QuarantineDevice')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "Condition_to_check_any_one_of_the_playbook_failed_before_closing_the_incident": {
+              "actions": {
+                "Update_incident": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "classification": {
+                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
+                      },
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "status": "Closed"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "put",
+                    "path": "/Incidents"
+                  }
+                }
+              },
+              "runAfter": {
+                "Filter_Success_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "lessOrEquals": [
+                      "@length(body('Filter_Success_Status_Codes'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "Crowdstrike": {
+              "actions": {
+                "Append_Crowdstrike_Host_status_code": {
+                  "runAfter": {
+                    "Crowdstrike_ContainHost": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('Crowdstrike_ContainHost')?['statusCode']"
+                  }
+                },
+                "Crowdstrike_ContainHost": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "Hosts": "@body('Entities_-_Get_Hosts')?['Hosts']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('CrowdstrikeID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_Crowdstrike_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_Crowdstrike_Host": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Crowdstrike_ContainHost')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_Crowdstrike_Host_status_code": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@Outputs('Crowdstrike_ContainHost')?['headers']?['x-ms-workflow-name']",
+                          "MSDefaultNestedPlaybook"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
+            "Entities_-_Get_Hosts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/host"
+              }
+            },
+            "Filter_Success_Status_Codes": {
+              "runAfter": {
+                "CarbonBlack": [
+                  "Succeeded"
+                ],
+                "Crowdstrike": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@variables('StatusCodes')",
+                "where": "@not(equals(item(), 200))"
+              }
+            },
+            "Initialize_variable_Status_Codes": {
+              "runAfter": {
+                "Entities_-_Get_Hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "StatusCodes",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -9,6 +9,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: PaloAltoNetworks
     dataTypes:
      - CommonSecurityLog
@@ -24,23 +27,28 @@ relevantTechniques:
   - T1110
 
 query: |
-  let timeframe = 1d;
   //Set a threshold of failed AAD signins from an IP address within 1 day above which we want to deem those logins suspicious.
   let signin_threshold = 5; 
   //Make a list of IPs with AAD signin failures above our threshold.
+  let aadFunc = (tableName:string){
   let suspicious_signins = 
-      SigninLogs
-      | where TimeGenerated >= ago(timeframe)
+      table(tableName)
       //Looking for logon failure results
       | where ResultType !in ("0", "50125", "50140")
       //Exclude localhost addresses to reduce the chance of FPs
-      | where IPAddress != "127.0.0.1"
+      | where IPAddress !in ("127.0.0.1", "::1")
       | summarize count() by IPAddress
       | where count_ >  signin_threshold
-      | summarize make_list(IPAddress);
+      | summarize make_set(IPAddress);
+      suspicious_signins
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  let suspicious_signins = 
+  union isfuzzy=true aadSignin, aadNonInt
+  | summarize make_set(set_IPAddress);
   //See if any of those IPs have sucessfully logged into PA VPNs during the same timeperiod
   CommonSecurityLog
-      | where TimeGenerated > ago(timeframe)
       //Select only PA VPN sucessful logons
       | where DeviceVendor == "Palo Alto Networks" and DeviceEventClassID == "globalprotect"
       | where Message has "GlobalProtect gateway user authentication succeeded"
@@ -49,9 +57,9 @@ query: |
       | where SourceIP in (suspicious_signins)
       | extend Reason = "Multiple failed AAD logins from SourceIP"
       //Parse out other useful information from Message field
-      | extend User = extract("User name: ([^,]+)", 1, Message) 
-      | extend ClientOS = extract("Client OS version: ([^,\"]+)", 1, Message)
-      | extend Location = extract("Source region: ([^,]{2})",1, Message)
+      | extend User = extract('User name: ([^,]+)', 1, Message) 
+      | extend ClientOS = extract('Client OS version: ([^,\"]+)', 1, Message)
+      | extend Location = extract('Source region: ([^,]{2})',1, Message)
       | project TimeGenerated, Reason, SourceIP, User, ClientOS, Location, Message, DeviceName, ReceiptTime, DeviceVendor, DeviceEventClassID, Computer, FileName
       | extend AccountCustomEntity = User, IPCustomEntity = SourceIP, timestamp = TimeGenerated, HostCustomEntity = DeviceName 
 entityMappings:
@@ -67,3 +75,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

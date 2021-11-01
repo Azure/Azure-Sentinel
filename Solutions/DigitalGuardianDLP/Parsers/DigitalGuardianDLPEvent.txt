@@ -1,0 +1,27 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as DigitalGuardianDLPEvent and specifying Legacy Category.
+// This function maps Digital Guargian DLP events to normalization schema (https://docs.microsoft.com/azure/sentinel/normalization-schema).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. DigitalGuardianDLPEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+Syslog
+| where SyslogMessage contains 'managed_device_id' and SyslogMessage contains 'number_of_incidents'
+| mv-apply ExtractedFields = extract_all(@'\s(?P<key>[a-zA-Z0-9-_]+)=\"?(?P<value>[a-zA-Z0-9-_:/@.,#{}>< ]+)\"?', dynamic(["key","value"]), SyslogMessage) on (
+    project packed = pack(tostring(ExtractedFields[0]), tostring(ExtractedFields[1]))
+    | summarize bag = make_bag(packed)
+)
+| evaluate bag_unpack(bag)
+| extend EventEndTime=todatetime(timestamp)
+| project-away timestamp
+| project-rename DvcAvtion=action_taken
+                , DstUserName=destination
+                , DstIpAddr=destination_ip
+                , DstPortNumber=destination_port
+                , IncidentId=incident_id
+                , IncidentStatus=incident_status
+                , IncidentsUrl=incidents_url
+                , MatchedPolicies=matched_policies_by_severity
+                , EventCount=number_of_incidents
+                , NetworkApplicationProtocol=protocol
+                , SrcUserName=source
+                , SrcIpAddr=source_ip
+                , SrcPortNumber=source_port

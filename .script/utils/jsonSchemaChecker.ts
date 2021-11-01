@@ -1,9 +1,16 @@
-import { SchemaError, Validator } from "jsonschema";
+import { Schema, SchemaError, ValidationError, Validator } from "jsonschema";
 
 export function isValidSchema(json: object, schema: object) {
   var validationResult = new Validator().validate(json, schema);
   if (!validationResult.valid) {
-    let errorMsg = `Invalid Schema. Validation errors: ${validationResult.errors.map((err) => err.message).join(", ")}`;
-    throw new SchemaError(errorMsg, schema);
+    let errorMessage = `Invalid Schema. Validation errors: ${validationResult.errors.map((err) => buildErrorMessage(err)).join(", ")}`;
+    throw new SchemaError(errorMessage, schema);
   }
+}
+
+function buildErrorMessage(err: ValidationError){
+  let errorMessage = err.stack;
+  let description = (<Schema>err.schema).description;
+  errorMessage += description ? `. Description: ${description}` : "";
+  return errorMessage;
 }

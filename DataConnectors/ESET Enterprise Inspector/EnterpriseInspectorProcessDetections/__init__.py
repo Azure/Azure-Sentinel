@@ -17,6 +17,7 @@
 import logging
 import json
 import os
+import re
 
 import azure.functions as func
 
@@ -38,7 +39,17 @@ def main(eeimsg: func.QueueMessage) -> None:
     verify = bool(strtobool(os.environ['verifySsl']))
     workspace_id = os.environ['workspaceId']
     workspace_key = os.environ['workspaceKey']
+    logAnalyticsUri = os.environ.get('logAnalyticsUri')
     log_type = 'ESETEnterpriseInspector'
+
+    if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+        logAnalyticsUri = 'https://' + workspace_id + '.ods.opinsights.azure.com'
+
+    pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+    match = re.match(pattern,str(logAnalyticsUri))
+    
+    if(not match):
+        raise Exception("ESET Enterprise Inspector: Invalid Log Analytics Uri.")
 
     # Connect to ESET Enterprise Inspector server
     ei = EnterpriseInspector(
@@ -58,5 +69,6 @@ def main(eeimsg: func.QueueMessage) -> None:
         customer_id=workspace_id,
         shared_key=workspace_key,
         body=body,
-        log_type=log_type
+        log_type=log_type,
+        logAnalyticsUri = logAnalyticsUri
     )

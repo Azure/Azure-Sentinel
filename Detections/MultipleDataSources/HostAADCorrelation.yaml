@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
@@ -27,13 +30,11 @@ relevantTechniques:
   
 query: |
 
-  let timeframe = 1d;
   //Adjust this threshold to fit environment
   let signin_threshold = 5; 
   //Make a list of IPs with failed Windows host logins above threshold
   let win_fails = 
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe)
   | where EventID == 4625
   | where LogonType in (10, 7, 3)
   | where IpAddress != "-"
@@ -43,7 +44,6 @@ query: |
   //Make a list of IPs with failed *nix host logins above threshold
   let nix_fails = 
   Syslog
-  | where TimeGenerated > ago(timeframe)
   | where Facility contains 'auth' and ProcessName != 'sudo'
   | extend SourceIP = extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))",1,SyslogMessage)
   | where SourceIP != "" and SourceIP != "127.0.0.1"
@@ -51,12 +51,16 @@ query: |
   | where count_ > signin_threshold
   | summarize make_list(SourceIP);
   //See if any of the IPs with failed host logins hve had a sucessful Azure AD login
-  SigninLogs
-  | where TimeGenerated > ago(timeframe)
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where ResultType !in ("0", "50125", "50140")
   | where IPAddress in (win_fails) or IPAddress in (nix_fails)
   | extend Reason=  "Multiple failed host logins from IP address with successful Azure AD login"
-  | extend timstamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend timstamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, Type = Type
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -66,3 +70,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

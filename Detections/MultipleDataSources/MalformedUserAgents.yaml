@@ -11,6 +11,18 @@ requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -25,20 +37,45 @@ relevantTechniques:
   - T1203
 query: |
 
-  let endtime = 1d;
   (union isfuzzy=true
-  (OfficeActivity | where TimeGenerated >= ago(endtime) | where UserAgent != ""),
+  (OfficeActivity | where UserAgent != ""),
   (OfficeActivity
-  | where TimeGenerated >= ago(endtime)
-  | where RecordType in ("AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon")
-  | extend OperationName = Operation, UserAgent = extractjson("$[0].Value", ExtendedProperties, typeof(string))),
+  | where RecordType in ("AzureActiveDirectory", "AzureActiveDirectoryStsLogon")
+  | extend OperationName = Operation
+  | parse ExtendedProperties with * 'User-Agent\\":\\"' UserAgent2 '\\' *
+  | parse ExtendedProperties with * 'UserAgent",      "Value": "' UserAgent1 '"' *
+  | where isnotempty(UserAgent1) or isnotempty(UserAgent2)
+  | extend UserAgent = iff( RecordType == 'AzureActiveDirectoryStsLogon', UserAgent1, UserAgent2)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation
+  ),
   (AzureDiagnostics
-  | where TimeGenerated >= ago(endtime)
   | where ResourceType =~ "APPLICATIONGATEWAYS" 
   | where OperationName =~ "ApplicationGatewayAccess" 
-  | extend ClientIP = columnifexists("clientIP_s", "None"), UserAgent = columnifexists("userAgent_s", "None")))
+  | extend ClientIP = columnifexists("clientIP_s", "None"), UserAgent = columnifexists("userAgent_s", "None")
+  | where UserAgent != '-'
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP,  requestUri_s, httpMethod_s, host_s, requestQuery_s, Type
+  ),
+  (
+  W3CIISLog
+  | where isnotempty(csUserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem
+  ),
+  (
+  AWSCloudTrail
+  | where isnotempty(UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName
+  ),
+  (SigninLogs
+  | where isnotempty(UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed
+  ),
+  (AADNonInteractiveUserSignInLogs 
+  | where isnotempty(UserAgent)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed
+  )
+  )
   // Likely artefact of hardcoding
-  | where UserAgent startswith "User" or UserAgent startswith "\""
+  | where UserAgent startswith "User" or UserAgent startswith '\"'
   // Incorrect casing
   or (UserAgent startswith "Mozilla" and not(UserAgent containscs "Mozilla"))
   // Incorrect casing
@@ -47,9 +84,7 @@ query: |
   or UserAgent matches regex @"MSIE\s?;"
   // Incorrect spacing around MSIE version
   or UserAgent matches regex  @"MSIE(?:\d|.{1,5}?\d\s;)"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationNames = makeset(OperationName), UserAgentCount = dcount(UserAgent), 
-  UserAgentList = makeset(UserAgent), RecordTypes = makeset(RecordType) by UserId, ClientIP
-  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+  | extend timestamp = StartTime, IPCustomEntity = SourceIP, AccountCustomEntity = Account
 
 entityMappings:
   - entityType: Account
@@ -60,3 +95,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

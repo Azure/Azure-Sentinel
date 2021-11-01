@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -23,24 +26,31 @@ query: |
   let NumberOfStds = 3; 
   let MinThreshold = 10.0; 
   let EndRunTime = StartTime - RunTime; 
-  let EndLearningTime = StartTime + LearningPeriod; 
-  let GitHubFailedSSOLogins = (SigninLogs 
+  let EndLearningTime = StartTime + LearningPeriod;
+  let aadFunc = (tableName:string){
+  let GitHubFailedSSOLogins = (table(tableName)  
   | where AppDisplayName == "GitHub.com" 
-  | where ResultType == 50056); 
+  | where ResultType != 0); 
   GitHubFailedSSOLogins 
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
-  | summarize FailedLoginsCountInBinTime = count() by  UserPrincipalName, bin(TimeGenerated, BinTime) 
-  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName, tostring(set_IPAddress)
+  | summarize FailedLoginsCountInBinTime = count() by  UserPrincipalName, bin(TimeGenerated, BinTime), Type
+  | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName, Type
   | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)  
   | join kind=innerunique ( 
     GitHubFailedSSOLogins 
     | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
-    | summarize FailedLoginsCountInRunTime = count() by User = Identity 
+    | summarize FailedLoginsCountInRunTime = count() by User = Identity, UserPrincipalName, bin(TimeGenerated, BinTime), Type
   ) on UserPrincipalName 
   | where FailedLoginsCountInRunTime > LearningThreshold
   | extend AccountCustomEntity = UserPrincipalName , timestamp = TimeGenerated
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

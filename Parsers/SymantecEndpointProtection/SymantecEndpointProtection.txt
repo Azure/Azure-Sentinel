@@ -1,8 +1,8 @@
 // Title:           Broadcom Symantec Endpoint Protection (SEP)
 // Author:          Microsoft
-// Version:         1.0
-// Last Updated:    12/15/2020
-// Comment:         Inital Release
+// Version:         1.2
+// Last Updated:    04/06/2020
+// Comment:         Fixed regex for Agent Security and Behavior Logs
 //  
 // DESCRIPTION:
 // This parser takes raw Symantec Endpoint Protection (SEP) logs from a Syslog stream and parses the logs into a normalized schema.
@@ -31,19 +31,23 @@
 let LogHeader = Syslog
 | where Computer in ("server1", "server2") // server1 and server2 are examples, replace this list with your SEP device names
 | extend ServerName = extract(@"^([\w\-\_]+)?(,|\Site:)",1,SyslogMessage)
+// Administrative Log Header
+| extend AdministrativeLogsParser = extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)?\,Admin\:\s([^,]+)?\,Event\sDescription\:\s([^#]+)?(#|$)",dynamic([1,2,3,4,5,6,7]), SyslogMessage)
+| mv-expand AdministrativeLogsParser
+| extend LogType = iif(isnotempty(AdministrativeLogsParser),"Administrative Logs", "")
 // Agent System Log Header
 | extend AgentSystemLogsParser = extract_all(@'^([^,]+)\,Category:\s([\d]+)\,([^,]+)\,\"?Event\sDescription:\s([^,]+\"?)(\,Event time:\s([^,]+)\,Group Name:\s([^,]+)$?)?',dynamic([1,2,3,4,6,7]), SyslogMessage)
 | mv-expand AgentSystemLogsParser
-| extend LogType = iif(isnotempty(AgentSystemLogsParser),"Agent System Logs","")
+| extend LogType = iif(isempty(LogType) and isnotempty(AgentSystemLogsParser),"Agent System Logs",LogType)
 // Agent Activity Log Header
 | extend AgentActivityLogsParser = extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?",dynamic([1,2,3,4,5,6,7]), SyslogMessage)
 | mv-expand AgentActivityLogsParser
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentActivityLogsParser),"Agent Activity Logs", LogType)
 // Agent Behavior Log Header
-| extend AgentBehaviorLogsParser = extract_all(@"^([^,]+)\,([^,]+)\,([^,]+)\,([^,]+)\,([^,]+)\,Begin:\s([^,]+)\,End Time:\s([^,]+)\,Rule:\s([^,]+)\,(\d+)\,([^,]+)\,([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11]),SyslogMessage)
+| extend AgentBehaviorLogsParser = extract_all(@"^([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,Rule:\s([^,]+)?\,(\d+)?\,([^,]+)?\,([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11]),SyslogMessage)
 | mv-expand AgentBehaviorLogsParser
 | extend AgentBehaviorLogsSubstring = tostring(AgentBehaviorLogsParser[10])
-| extend AgentBehaviorLogsParser2 = extract_all(@"([^,]+)\,([^,]+)\,([^,]+)\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action Type:\s([^,]+)?\,File size \(bytes\):\s(\d+)?\,Device ID:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8]),AgentBehaviorLogsSubstring)
+| extend AgentBehaviorLogsParser2 = extract_all(@"([^,]+)?\,([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Action Type:\s([^,]+)?\,File size \(bytes\):\s(\d+)?\,Device ID:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8]),AgentBehaviorLogsSubstring)
 | mv-expand AgentBehaviorLogsParser2
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentBehaviorLogsParser) and isnotempty(AgentBehaviorLogsParser2),"Agent Behavior Logs",LogType)
 // Agent Traffic Log Header
@@ -57,7 +61,7 @@ let LogHeader = Syslog
 | extend AgentSecurityLogsParser = extract_all(@'^([^,]+)\,(Event Description:\s([^,]+)?|\"Event Description:\s([^"]+)?\")\,Local Host IP:\s([^,]+)?\,Local Host MAC:\s([^,]+)?\,Remote Host Name:\s([^,]+)?\,Remote Host IP:\s([^,]+)?\,Remote Host MAC:\s([^,]+)?\,([^,]+)?\,([^,]+)?\,(Intrusion ID:\s)?([^,]+)?\,Begin:\s([^,]+)?\,End Time:\s([^,]+)?\,([\s\S]+)',dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]),SyslogMessage)
 | mv-expand AgentSecurityLogsParser
 | extend  AgentSecurityLogsSubstring = tostring(AgentSecurityLogsParser[15])
-| extend AgentSecurityLogsParser2 = extract_all(@"Occurrences:\s([^,]+)?\,Application:\s([^,]+)?\,Location:\s([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Local Port:\s([^,]+)?\,Remote Port:\s([^,]+)?\,CIDS Signature ID:\s([^,]+)?\,CIDS Signature string:\s([^,]+)?\,CIDS Signature SubID:\s([^,]+)?\,Intrusion URL:\s([^,]+)?\,Intrusion Payload URL:\s([^,]+)?\,SHA-256:\s([^,]+)?\,MD-5:\s([^,]+)?",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),AgentSecurityLogsSubstring)
+| extend AgentSecurityLogsParser2 = extract_all(@'Occurrences:\s([^,]+)?\,Application:\s([^,]+)?\,Location:\s([^,]+)?\,User Name:\s([^,]+)?\,Domain Name:\s([^,]+)?\,Local Port:\s([^,]+)?\,Remote Port:\s([^,]+)?\,CIDS Signature ID:\s([^,]+)?\,CIDS Signature string:\s([^,]+)?\,CIDS Signature SubID:\s([^,]+)?\,\"?Intrusion URL:\s([^\,]+|[^\"]+)?\"?\,Intrusion Payload URL:\s([^,]+)?\,SHA-256:\s([^,]+)?\,MD-5:\s([^,]+)?',dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]),AgentSecurityLogsSubstring)
 | mv-expand AgentSecurityLogsParser2
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentSecurityLogsParser) and isnotempty(AgentSecurityLogsParser2),"Agent Security Logs",LogType)
 // Agent Packet Log Header
@@ -77,6 +81,14 @@ let LogHeader = Syslog
 | extend AgentRiskLogsParser4 = extract_all(@"^Certificate signer:\s([^,]+)?\,Certificate thumbprint:\s([^,]+)?\,Signing timestamp:\s([^,]+)?\,Certificate serial number:\s([^,]+)?(\,|$)",dynamic([1,2,3,4]),AgentRiskLogsSubstring3)
 | mv-expand AgentRiskLogsParser4
 | extend LogType = iif(isempty(LogType) and isnotempty(AgentRiskLogsParser) and isnotempty(AgentRiskLogsParser2) and isnotempty(AgentRiskLogsParser3),"Agent Risk Logs",LogType);
+// Administrative Log Parser
+let AdministrativeLogs = LogHeader
+| where LogType == "Administrative Logs"
+| extend SiteName = tostring(AdministrativeLogsParser[0]),
+         ServerName = tostring(AdministrativeLogsParser[1]),
+         DomainName = tostring(AdministrativeLogsParser[2]),
+         AdminName = tostring(AdministrativeLogsParser[3]),
+         EventDescription = tostring(AdministrativeLogsParser[4]);
 // Agent System Log Parser
 let AgentSystemLogs = LogHeader
 | where LogType == "Agent System Logs"
@@ -230,10 +242,7 @@ let AgentRiskLogs = LogHeader
          CertificateSerialNumber = tostring(AgentRiskLogsParser4[3]);
 // All Other Logs - Captures all other logs not specifically identified
 let AllOtherLogs = LogHeader
-| where LogType !in ("Agent System Logs","Agent Activity Logs","Agent Behavior Logs", "Agent Traffic Logs","Agent Security Logs", "Agent Packet Logs", "Agent Risk Logs")
-| extend LogType = iif(isempty(LogType),"Other",LogType),
-         SiteName = extract(@"Site Name:\s([^,]\,)",1,SyslogMessage),
-         ServerName = extract(@"Server Name:\s([^,]\,)",1,SyslogMessage),
-         EventDescription = extract(@"Event Description:\s([^,]+)(\,|$)",1,SyslogMessage);
-union AgentActivityLogs, AgentBehaviorLogs, AgentSystemLogs, AgentTrafficLogs, AgentSecurityLogs, AgentPacketLogs, AgentRiskLogs, AllOtherLogs
-| project-away AgentBehaviorLogsParser, AgentBehaviorLogsParser2, AgentTrafficLogsParser, AgentTrafficLogsParser2, AgentTrafficLogsSubstring, AgentActivityLogsParser, AgentBehaviorLogsSubstring, AgentSecurityLogsParser, AgentSecurityLogsSubstring, AgentSecurityLogsParser2, AgentSystemLogsParser, AgentPacketLogsParser, AgentRiskLogsParser, AgentRiskLogsParser2, AgentRiskLogsParser3, AgentRiskLogsParser4, AgentRiskLogsSubstring, AgentRiskLogsSubstring2, AgentRiskLogsSubstring3
+| where LogType !in ("Agent System Logs","Agent Activity Logs","Agent Behavior Logs", "Agent Traffic Logs","Agent Security Logs", "Agent Packet Logs", "Agent Risk Logs", "Administrative Logs")
+| extend LogType = iif(isempty(LogType),"Other", LogType);
+union AdministrativeLogs, AgentActivityLogs, AgentBehaviorLogs, AgentSystemLogs, AgentTrafficLogs, AgentSecurityLogs, AgentPacketLogs, AgentRiskLogs, AllOtherLogs
+| project-away AgentBehaviorLogsParser, AgentBehaviorLogsParser2, AgentTrafficLogsParser, AgentTrafficLogsParser2, AgentTrafficLogsSubstring, AgentActivityLogsParser, AgentBehaviorLogsSubstring, AgentSecurityLogsParser, AgentSecurityLogsSubstring, AgentSecurityLogsParser2, AgentSystemLogsParser, AgentPacketLogsParser, AgentRiskLogsParser, AgentRiskLogsParser2, AgentRiskLogsParser3, AgentRiskLogsParser4, AgentRiskLogsSubstring, AgentRiskLogsSubstring2, AgentRiskLogsSubstring3, AdministrativeLogsParser

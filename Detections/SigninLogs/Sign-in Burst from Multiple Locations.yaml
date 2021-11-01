@@ -7,8 +7,11 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 1d
-queryPeriod: 1d
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -16,16 +19,21 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  let RunTime = 1h;
-  SigninLogs
-  | where TimeGenerated > ago(RunTime)
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where AppDisplayName == "GitHub.com"
   | where ResultType == 0
-  | summarize CountOfLocations = dcount(Location), Locations = make_set(Location), BurstStartTime = min(TimeGenerated), BurstEndTime = max(TimeGenerated) by UserPrincipalName
+  | summarize CountOfLocations = dcount(Location), Locations = make_set(Location), BurstStartTime = min(TimeGenerated), BurstEndTime = max(TimeGenerated) by UserPrincipalName, Type
   | where CountOfLocations > 1
   | extend timestamp = BurstStartTime, AccountCustomEntity = UserPrincipalName
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

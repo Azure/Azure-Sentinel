@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -20,30 +23,38 @@ relevantTechniques:
   - T1078
 query: |
 
-  let timeFrame = 1d;
   let logonDiff = 10m;
-  SigninLogs 
-  | where TimeGenerated >= ago(timeFrame) 
+  let aadFunc = (tableName:string){
+  table(tableName) 
   | where ResultType == "0" 
   | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
-  | project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1])
+  | project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, ".")[0], ".", split(IPAddress, ".")[1]), Type
   | join kind= inner (
-      SigninLogs 
-      | where TimeGenerated >= ago(timeFrame) 
+      table(tableName)
       | where ResultType !in ("0", "50140") 
       | where ResultDescription !~ "Other"  
       | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online")
-      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription
+      | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type
   ) on UserPrincipalName, AppDisplayName 
   | where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock
-  | summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription 
-  | extend timestamp = SuccessLogonTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = SuccessIPAddress
+  | summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type
+  | extend timestamp = SuccessLogonTime
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserPrincipalName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SuccessIPAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: FailedIPAddress
+version: 1.1.0
+kind: Scheduled

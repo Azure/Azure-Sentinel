@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
@@ -26,22 +29,20 @@ relevantTechniques:
   - T1110
 query: |
 
-  let timeframe = 1d;
   //Adjust this threshold to fit the environment
   let signin_threshold = 5;
   //Make a list of all IPs with failed signins to AAD above our threshold
+  let aadFunc = (tableName:string){
   let suspicious_signins =
-  SigninLogs
-  | where TimeGenerated >= ago(timeframe)
+  table(tableName)
   | where ResultType !in ("0", "50125", "50140")
-  | where IPAddress != "127.0.0.1"
+  | where IPAddress !in ('127.0.0.1', '::1')
   | summarize count() by IPAddress
   | where count_ > signin_threshold
-  | summarize make_list(IPAddress);
+  | summarize make_set(IPAddress);
   //See if any of these IPs have sucessfully logged into *nix hosts
   let linux_logons =
   Syslog
-  | where TimeGenerated >= ago(timeframe)
   | where Facility contains "auth" and ProcessName != "sudo"
   | where SyslogMessage has "Accepted"
   | extend SourceIP = extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))",1,SyslogMessage)
@@ -51,7 +52,6 @@ query: |
   //See if any of these IPs have sucessfully logged into Windows hosts
   let win_logons =
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe)
   | where EventID == 4624
   | where LogonType in (10, 7, 3)
   | where IpAddress != "-"
@@ -60,6 +60,10 @@ query: |
   | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, Reason;
   union isfuzzy=true linux_logons,win_logons
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, IPCustomEntity = IpAddress, HostCustomEntity = Computer
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -73,3 +77,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

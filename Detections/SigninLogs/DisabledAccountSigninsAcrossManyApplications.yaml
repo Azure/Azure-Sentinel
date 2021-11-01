@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -20,16 +23,19 @@ relevantTechniques:
   - T1078
 query: |
 
-  let timeframe = 1d;
   let threshold = 3;
-  SigninLogs
-  | where TimeGenerated >= ago(timeframe)
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where ResultType == "50057"
   | where ResultDescription =~ "User account is disabled. The account has been disabled by an administrator."
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count(), applicationCount = dcount(AppDisplayName), 
-  applicationSet = makeset(AppDisplayName) by UserPrincipalName, IPAddress
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), applicationCount = dcount(AppDisplayName), 
+  applicationSet = make_set(AppDisplayName), count() by UserPrincipalName, IPAddress, Type
   | where applicationCount >= threshold
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress 
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -39,3 +45,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

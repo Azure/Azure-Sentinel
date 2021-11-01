@@ -17,6 +17,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -29,23 +32,31 @@ relevantTechniques:
   - T1098
 query: |
 
-  let timeRange = ago(1d);
   let threshold = 1;
-  SigninLogs
-  | where TimeGenerated >= timeRange
+  let aadFunc = (tableName:string){
+  table(tableName)
   | where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ "failure"
-  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser 
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion) 
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend ConditionalAccessPolicies = todynamic(ConditionalAccessPolicies)
   | extend ConditionalAccessPol0Name = tostring(ConditionalAccessPolicies[0].displayName)
   | extend ConditionalAccessPol1Name = tostring(ConditionalAccessPolicies[1].displayName)
   | extend ConditionalAccessPol2Name = tostring(ConditionalAccessPolicies[2].displayName)
   | extend Status = strcat(StatusCode, ": ", ResultDescription) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Status = makelist(Status), StatusDetails = makelist(StatusDetails), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress) , CorrelationIds = makelist(CorrelationId) by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId) 
+  by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, Type
   | where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
   | mvexpand IPAddresses, Status, StatusDetails, CorrelationIds
   | extend Status = strcat(Status, " ", StatusDetails)
-  | summarize IPAddresses = makeset(IPAddresses), Status = makeset(Status), CorrelationIds = makeset(CorrelationIds) by StartTimeUtc, EndTimeUtc, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, IPAddressCount
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
+  | summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds) 
+  by StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, IPAddressCount, Type
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -55,3 +66,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
