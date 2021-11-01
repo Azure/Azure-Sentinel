@@ -1,14 +1,14 @@
 id: 9ff3b13b-287a-4ed0-8f6b-7e7b66cbbcbd
-name: OT Internet Access (Microsoft Defender for IoT)
+name: Internet Access (Microsoft Defender for IoT)
 description: |
-  'This alert leverages Microsoft Defender for IoT to detect an OT device communicating with Internet which is possibly an indication of improper configuration of an application or malicious activity on the network.'
+  'This alert leverages Defender for IoT to detect an OT device communicating with Internet which is possibly an indication of improper configuration of an application or malicious activity on the network.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: IoT
     dataTypes:
       - SecurityAlert (ASC for IoT)
-queryFrequency: 6h
-queryPeriod: 6h
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -20,18 +20,42 @@ query: |
   | where ProductName == "Azure Security Center for IoT"
   | where AlertName contains "Internet"
   | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
-  | extend IPAddress = tostring(parse_json(tostring(parse_json(Entities)[0].IpAddress)).Address)
-  | extend Protocol = tostring(parse_json(tostring(parse_json(Entities)[0].Protocols))[0])
-  | extend DeviceType = tostring(parse_json(Entities)[0].DeviceName)
-  | extend IoTSecurityAgentId = tostring(parse_json(Entities)[0].IoTSecurityAgentId)
-  | extend Vendor = tostring(parse_json(Entities)[0].Vendor)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
   | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
-  | project AlertName, ResourceId, DeviceId, IPAddress, Protocol, DeviceType, Vendor, IoTSecurityAgentId, Tactics, TimeGenerated, RemediationSteps
-  | extend IPCustomEntity = IPAddress
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+  RemidationSteps: RemediationSteps
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
 version: 1.0.0
 kind: Scheduled
