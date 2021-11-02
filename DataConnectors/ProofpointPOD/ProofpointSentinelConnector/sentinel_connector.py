@@ -71,9 +71,10 @@ class AzureSentinelConnector:
         resource = '/api/logs'
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
+        logging.info('Sending {} content length data to log analytics workspace)'.format(content_length))
         signature = self._build_signature(workspace_id, shared_key, rfc1123date, content_length, method, content_type, resource)
         uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
-
+        logging.log('log Analytics URI : {}'.format(uri))
         headers = {
             'content-type': content_type,
             'Authorization': signature,

@@ -41,6 +41,7 @@ def main(mytimer: func.TimerRequest) -> None:
         time.sleep(120)
     api = Proofpoint_api()
     for evt_type in event_types:
+        logging.info('************ Event Type : {}  *****************'.format(evt_type))
         api.get_data(event_type=evt_type)
 
 class Proofpoint_api:
@@ -55,6 +56,7 @@ class Proofpoint_api:
         before_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
+        logging.info('TimeFrame : before time : {} and after time {}'.format(self.before_time,self.after_time))
 
     def set_websocket_conn(self, event_type):
         url = f"wss://logstream.proofpoint.com:443/v1/stream?cid={self.cluster_id}&type={event_type}&sinceTime={self.after_time}&toTime={self.before_time}"
@@ -97,6 +99,8 @@ class Proofpoint_api:
 
     def gen_chunks(self,data,event_type):
         for chunk in self.gen_chunks_to_object(data, chunksize=10000):
+            logging.log("chunk length : {}".format(len(chunk)))
+            logging.log("chunk data : {}".fomat(JSON.dumps(chunk)))
             print(len(chunk))
             obj_array = []
             for row in chunk:
