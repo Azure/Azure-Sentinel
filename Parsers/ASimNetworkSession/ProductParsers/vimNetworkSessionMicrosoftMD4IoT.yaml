@@ -49,6 +49,23 @@ ParserParams:
 ParserQuery: |
   let DirectionNetworkEvents =
     SecurityIoTRawEvent | where not(disabled)
+    // ***************  Prefilterring *****************************************************************
+    |where (isnull(starttime) or TimeGenerated>=starttime) and
+           (isnull(endtime) or TimeGenerated<=endtime) and
+           (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) and
+           (array_length(srcipaddr_has_any_ipv4_prefix)==0 
+              or has_any_ipv4_prefix(RemoteAddress,srcipaddr_has_any_ipv4_prefix)
+              or has_any_ipv4_prefix(LocalAddress ,srcipaddr_has_any_ipv4_prefix)
+            ) and
+           (array_length(dstipaddr_has_any_ipv4_prefix)==0 
+              or has_any_ipv4_prefix(RemoteAddress,dstipaddr_has_any_ipv4_prefix)
+              or has_any_ipv4_prefix(LocalAddress ,dstipaddr_has_any_ipv4_prefix)
+            ) 
+          // no url data
+           // no dst host data: 
+           // no ua data: (isnull(httpuseragent_has_any) or ) and
+           // no action data: (isnull(dvcaction) or ) and
+    // *************** Prefilterring *****************************************************************
     | where RawEventName == "NetworkActivity"
     | parse EventDetails with * ',"LocalPort":' LocalPort:int ',"RemotePort":' RemotePort:int ',' *
     | extend outbound = LocalPort > RemotePort
@@ -76,6 +93,11 @@ ParserQuery: |
   let OutboundNetworkEvents = 
     DirectionNetworkEvents
     | where outbound
+    // ***************  Postfilterring *****************************************************************
+    | where (array_length(dstipaddr_has_any_ipv4_prefix)==0 or RemoteAddress==dstipaddr_has_any_ipv4_prefix) and
+            (array_length(srcipaddr_has_any_ipv4_prefix)==0 or LocalAddress ==srcipaddr_has_any_ipv4_prefix) and
+            (isnull(dstportnumber) or dstportnumber==RemotePort)
+    // ***************  Postfilterring *****************************************************************
     | invoke parser ()
     | project-rename
        SrcBytes = BytesOut,
@@ -96,6 +118,11 @@ ParserQuery: |
   let InboundNetworkEvents = 
     DirectionNetworkEvents
     | where not(outbound)
+    // ***************  Postfilterring *****************************************************************
+    | where (array_length(srcipaddr_has_any_ipv4_prefix)==0 or RemoteAddress==srcipaddr_has_any_ipv4_prefix) and
+            (array_length(dstipaddr_has_any_ipv4_prefix)==0 or LocalAddress ==dstipaddr_has_any_ipv4_prefix) and
+            (isnull(dstportnumber) or dstportnumber==RemotePort)
+    // ***************  Postfilterring *****************************************************************
     | invoke parser ()
     | project-rename
        DstBytes = BytesOut,
