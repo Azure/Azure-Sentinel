@@ -41,6 +41,7 @@ Then run the following from PowerShell and follow the prompts to complete the co
 
 ```powershell
 
+aws configure
 .\ConfigAwsConnector.ps1
 
 ```

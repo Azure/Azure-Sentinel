@@ -23,7 +23,7 @@ function New-ArnRole
             Write-Output "`n`n"
             Write-Log "You must specify the the Azure Sentinel Workspace ID. This is found in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 1
             
-            $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel Workspace ID (External Id)"
+            $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
             Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
 
             $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
@@ -54,21 +54,20 @@ function New-S3Bucket
         
         # Get s3 bucket name from user and clean up based on naming rules see https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
         
-        $script:bucketName = (Read-ValidatedHost -Prompt "Please enter S3 bucket name" -MaxLength 64 -MinLength 3)
+        $script:bucketName = (Read-ValidatedHost -Prompt "Please enter S3 bucket name (between 3 and 63 characters long)" -MaxLength 64 -MinLength 3)
 
         Write-Log -Message "Using S3 Bucket name: $bucketname" -LogFileName $LogFileName -Indent 2
-            
+        
+        $regionConfiguration = aws configure get region
+        Write-Log -Message "current region configuration: $regionConfiguration" -LogFileName $LogFileName -Severity Verbose
+
         Write-Log -Message "Executing: aws s3api head-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
         $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
             
         $isBucketNotExist = $null -ne $headBucketOutput
         if ($isBucketNotExist)
-        {
-
-            $bucketRegion = Read-ValidatedHost -Prompt "Please enter the AWS region in which to create S3 bucket"
-            Write-Log -Message "Using S3 bucket region: $bucketRegion" -LogFileName $LogFileName -Indent 2
-            
-            if ($bucketRegion -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
+        {      
+            if ($regionConfiguration -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
             {
                 Write-Log -Message "Executing: aws s3api create-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
                 $tempForOutput = aws s3api create-bucket --bucket $bucketName 2>&1
@@ -76,14 +75,18 @@ function New-S3Bucket
             }
             else
             {
-                Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$bucketRegion 2>&1" -LogFileName $LogFileName -Severity Verbose
-                $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$bucketRegion 2>&1
+                Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1" -LogFileName $LogFileName -Severity Verbose
+                $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1
                 Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             }
                 
             if ($lastexitcode -eq 0)
             {
                 Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
+            }
+            elseif($error[0] -Match "InvalidBucketName")
+            {
+                 Write-Log -Message "Please see AWS valid name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
             }
         }
     })
@@ -134,7 +137,8 @@ function Enable-S3EventNotification
         }
 
         $eventNotificationPrefix = $DefaultEventNotificationPrefix
-      
+
+        Write-Log -Message "Event notificaion prefix definition, to Limit the notifications to objects with key starting with specified characters." -LogFileName $LogFileName     
         $prefixOverrideConfirm = Read-ValidatedHost -Prompt "The default prefix is '$eventNotificationPrefix'. `n  Do you want to override the event notification prefix? [y/n]" -ValidationType Confirm
         if ($prefixOverrideConfirm -eq 'y')
         {

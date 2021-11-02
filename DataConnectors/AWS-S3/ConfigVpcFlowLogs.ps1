@@ -1,10 +1,11 @@
 # Include helper scripts
 . ".\Utils\HelperFunctions.ps1"
 
+# Validate AWS configuration
+Test-AwsConfiguration
+
 Write-Output `n`n'Setting up your AWS environment'
 Write-Output `n'This script enables additional VPC Flow Logs if you have already set up the required resources Bucket S3, SQS etc.'
-
-Get-AwsConfig
 
 Write-Output `n`n'S3 Bucket definition'
 
@@ -32,4 +33,4 @@ Write-Output " Using Vpc name: $vpcname"
 $vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}]"
 
 # creating the VPC Flow logs with specified info
-aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceId.Split(' ') --traffic-type $vpcTrafficType --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications | Out-Null
+aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceId.Split(' ') --traffic-type $vpcTrafficType.ToUpper() --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications | Out-Null
