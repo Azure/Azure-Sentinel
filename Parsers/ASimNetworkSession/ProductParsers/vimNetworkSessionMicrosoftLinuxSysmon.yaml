@@ -47,12 +47,29 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-   let DirectionNetworkEvents =
-    Syslog | where not(disabled)
-    | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>3</EventID>')
-    | project-away ProcessName, ProcessID
-    | parse SyslogMessage with * '<Data Name="SourceIp">' SrcIpAddr:string '</Data>' *
-    | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))
+    let DirectionNetworkEvents =
+        Syslog | where not(disabled)
+        | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>3</EventID>')
+        | project-away ProcessName, ProcessID
+        | parse SyslogMessage with * '<Data Name="SourceIp">' SrcIpAddr:string '</Data>' *
+        // ***************  Prefilterring *****************************************************************
+        | where (isnull(starttime) or TimeGenerated>=starttime) 
+            and (isnull(endtime) or TimeGenerated<=endtime) 
+            and (array_length(srcipaddr_has_any_ipv4_prefix)==0 
+                  or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_ipv4_prefix)
+                ) 
+            and (array_length(dstipaddr_has_any_ipv4_prefix)==0 
+                  or has_any_ipv4_prefix(SyslogMessage,dstipaddr_has_any_ipv4_prefix)
+                ) 
+            and (array_length(hostname_has_any)==0 
+                  or SyslogMessage has_any(hostname_has_any)) 
+            and (isnull(dstportnumber) or SyslogMessage has (tostring(dstportnumber))) 
+            and (array_length(hostname_has_any)==0 
+                  or SyslogMessage has_any(hostname_has_any) ) 
+        // no ua data: (isnull(httpuseragent_has_any) or ) and
+        // no action data: (isnull(dvcaction) or ) and
+        // *************** Prefilterring *****************************************************************
+        | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))
     ;
     let parser = (T: (SyslogMessage: string)) {
       T 
@@ -86,6 +103,11 @@ ParserQuery: |
       DirectionNetworkEvents
       | where outbound
       | invoke parser ()
+      // Postfilterring
+      | where 
+              (array_length(dstipaddr_has_any_ipv4_prefix)==0 or has_any_ipv4_prefix(DstIpAddr, dstipaddr_has_any_ipv4_prefix))
+          and (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any) )
+          and  (isnull(dstportnumber) or DstPortNumber ==dstportnumber)
       | extend
         SrcUsernameType = 'Simple',
         SrcUsername = User,
