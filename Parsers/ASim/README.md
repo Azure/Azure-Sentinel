@@ -1,10 +1,10 @@
 # Deploy ASIM
+ 
+This template deploys all [ASIM](https://aka.ms/AzSentinelNormalization) parsers. The Advanced SIEM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
-This template deploys all [ASIM](https://aka.ms/AzSentinelNormalization) parsers.The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
-The Azure Sentinel Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
-
-For more information, see [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+For more information, see [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
 
 <br>
 
