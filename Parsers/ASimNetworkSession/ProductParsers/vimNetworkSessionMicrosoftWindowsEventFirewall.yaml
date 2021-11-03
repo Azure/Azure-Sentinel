@@ -94,12 +94,20 @@ ParserQuery: |
   ///////////////////////////////////////////////////////
   // this query extract data fields from EventData column from SecurityEvent table
   ///////////////////////////////////////////////////////
-  let WindowsFirewall_SecurityEvent=(starttime:datetime=datetime(null), endtime:datetime=datetime(null)
-      , srcipaddr_has_any_ipv4_prefix:dynamic=dynamic([]), dstipaddr_has_any_ipv4_prefix:dynamic=dynamic([]), dstportnumber:int=int(null)
-      , url_has_any:dynamic=dynamic([]), httpuseragent_has_any:dynamic=dynamic([])
-      , hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), disabled:bool=false
+  let WindowsFirewall_SecurityEvent=
+    (starttime:datetime=datetime(null)
+    , endtime:datetime=datetime(null)
+    , srcipaddr_has_any_ipv4_prefix:dynamic=dynamic([])
+    , dstipaddr_has_any_ipv4_prefix:dynamic=dynamic([])
+    , dstportnumber:int=int(null)
+    , url_has_any:dynamic=dynamic([])
+    , httpuseragent_has_any:dynamic=dynamic([])
+    , hostname_has_any:dynamic=dynamic([])
+    , dvcaction:dynamic=dynamic([])
+    , disabled:bool=false
       )
-      { // Event IDs between (5151 .. 5159)
+      { 
+      // Event IDs between (5151 .. 5159)
       // will be extracting Event specific fields from 'EventData' field
       let SecurityEvent_5152 = 
           SecurityEvent | where not(disabled)
@@ -111,14 +119,13 @@ ParserQuery: |
             and  (array_length(srcipaddr_has_any_ipv4_prefix)==0 
                   or has_any_ipv4_prefix(EventData ,srcipaddr_has_any_ipv4_prefix)
                 ) 
-            and (array_length(dstipaddr_has_any_ipv4_prefix)==0 
-                  or has_any_ipv4_prefix(EventData,dstipaddr_has_any_ipv4_prefix)
+            and  (array_length(dstipaddr_has_any_ipv4_prefix)==0 
+                  or has_any_ipv4_prefix(EventData ,dstipaddr_has_any_ipv4_prefix)
                 ) 
             and (isnull(dvcaction) or (dvcaction=='Deny') ) 
-              // no url:(array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) and
-              // no ua data: (isnull(httpuseragent_has_any) or ) and
-              // no target: (array_length(hostname_has_any)==0 
-              //   or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any) ) 
+            and (array_length(url_has_any)==0)
+            and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
+            and (array_length(hostname_has_any)==0 )
           // *************** / Prefilterring *****************************************************************
           | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>'
                               '\x0d\x0a  <Data Name="Application">'Application'</Data>'
@@ -145,11 +152,11 @@ ParserQuery: |
                 or (dvcaction=='Allow' and EventID in  (5154,5158))  
                 or (dvcaction=='Deny'  and EventID !in (5154,5158))
                 ) 
-              // no url:(array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) and
-              // no ua data: (isnull(httpuseragent_has_any) or ) and
-              // no destip and (array_length(dstipaddr_has_any_ipv4_prefix)==0   ) 
-              // no dst host or url: (array_length(hostname_has_any)==0  or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any) ) 
-              // no dst port: and  (isnull(dstportnumber) or EventData has tostring(dstportnumber) ) 
+            and (array_length(url_has_any)==0)
+            and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
+            and (array_length(dstipaddr_has_any_ipv4_prefix)==0 ) 
+            and (array_length(hostname_has_any)==0 ) 
+            and  (isnull(dstportnumber) ) 
           // *************** / Prefilterring *****************************************************************
           | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>' 
                               '\x0d\x0a  <Data Name="Application">'Application:string'</Data>'
@@ -170,18 +177,17 @@ ParserQuery: |
             and  (array_length(srcipaddr_has_any_ipv4_prefix)==0 
                   or has_any_ipv4_prefix(EventData ,srcipaddr_has_any_ipv4_prefix)
                 )
-            and (array_length(dstipaddr_has_any_ipv4_prefix)==0 
-                  or has_any_ipv4_prefix(EventData,dstipaddr_has_any_ipv4_prefix)
-                ) 
+            and  (array_length(dstipaddr_has_any_ipv4_prefix)==0 
+                  or has_any_ipv4_prefix(EventData ,dstipaddr_has_any_ipv4_prefix)
+                )
             and  (isnull(dstportnumber) or EventData has tostring(dstportnumber) ) 
             and (isnull(dvcaction) 
                 or (dvcaction=='Allow' and EventID == 5156)  
                 or (dvcaction=='Deny'  and EventID <> 5156)
                 )
-              // no url:(array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) and
-              // no ua data: (isnull(httpuseragent_has_any) or ) and
-              // no dst host or url: (array_length(hostname_has_any)==0  or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any) ) 
-              // no dst port: and  (isnull(dstportnumber) or EventData has tostring(dstportnumber) ) 
+            and (array_length(url_has_any)==0 )
+            and (isnull(httpuseragent_has_any) )
+            and (array_length(hostname_has_any)==0 ) 
           // *************** / Prefilterring *****************************************************************
               | parse EventData with * '<Data Name="ProcessID">'ProcessID:string'</Data>'
                                   '\x0d\x0a  <Data Name="Application">'Application'</Data>'
@@ -233,19 +239,19 @@ ParserQuery: |
       WindowsEvent | where not(disabled)
       | where EventID between (5150 .. 5159)
       // ***************  Prefilterring *****************************************************************
-      | where (isnull(starttime) or TimeGenerated>=starttime) and
-              (isnull(endtime) or TimeGenerated<=endtime) and
-      (isnull(dstportnumber) or EventData has tostring(dstportnumber)) and
-      (array_length(srcipaddr_has_any_ipv4_prefix)==0 
-        or has_any_ipv4_prefix(EventData,srcipaddr_has_any_ipv4_prefix)
-      ) and
-      (array_length(dstipaddr_has_any_ipv4_prefix)==0 
-        or has_any_ipv4_prefix(EventData,dstipaddr_has_any_ipv4_prefix)
-      ) and
-      // no hostname: (array_length(hostname_has_any)==0  or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any) ) 
-      // no ua data: (isnull(httpuseragent_has_any) or ) and
-      // no url  (array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) and
-      // no action data: (isnull(dvcaction) or ) and
+      | where (isnull(starttime) or TimeGenerated>=starttime) 
+              and (isnull(endtime) or TimeGenerated<=endtime) 
+              and (isnull(dstportnumber) or EventData has tostring(dstportnumber)) 
+              and (array_length(srcipaddr_has_any_ipv4_prefix)==0 
+                      or has_any_ipv4_prefix(EventData,srcipaddr_has_any_ipv4_prefix)
+                   ) 
+              and (array_length(dstipaddr_has_any_ipv4_prefix)==0 
+                      or has_any_ipv4_prefix(EventData,dstipaddr_has_any_ipv4_prefix)
+                   ) 
+              and (array_length(hostname_has_any)==0 ) 
+              and (isnull(httpuseragent_has_any) or ) and
+              and (array_length(url_has_any)==0 )
+              and (isnull(dvcaction)  ) 
       // *************** Prefilterring *****************************************************************
             | extend 
                 EventSeverity=tostring(EventData.Severity),
