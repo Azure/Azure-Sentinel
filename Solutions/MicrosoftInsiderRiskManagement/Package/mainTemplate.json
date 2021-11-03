@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "author": "Nikhil Tripathi - v-ntripathi@microsoft.com",
-    "comments": "Solution template for InsiderRiskManagement"
+    "comments": "Solution template for MicrosoftInsiderRiskManagement"
   },
   "parameters": {
     "location": {
@@ -46,7 +46,7 @@
     },
     "workbook1-name": {
       "type": "string",
-      "defaultValue": "InsiderRiskManagement",
+      "defaultValue": "MicrosoftInsiderRiskManagement",
       "minLength": 1,
       "metadata": {
         "description": "Name for the workbook"
@@ -91,6 +91,29 @@
       "metadata": {
         "description": "Unique id for the scheduled alert rule"
       }
+    },
+    "playbook1-PlaybookName": {
+      "defaultValue": "Notify-InsiderRiskTeam",
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Resource name for the logic app playbook.  No spaces are allowed"
+      }
+    },
+    "playbook1-Email": {
+      "defaultValue": "InsiderRiskTeam@example.com",
+      "type": "string",
+      "minLength": 1
+    },
+    "playbook1-TeamschannelId": {
+      "defaultValue": "InsiderRiskTeam",
+      "type": "string",
+      "minLength": 1
+    },
+    "playbook1-TeamsgroupId": {
+      "defaultValue": "InsiderRiskTeam",
+      "type": "string",
+      "minLength": 1
     }
   },
   "variables": {
@@ -108,6 +131,17 @@
     "_InsiderRiskSensitiveDataAccessOutsideOrgGeo_AnalyticalRules": "[variables('InsiderRiskSensitiveDataAccessOutsideOrgGeo_AnalyticalRules')]",
     "InsiderRiskyAccessByApplication_AnalyticalRules": "InsiderRiskyAccessByApplication_AnalyticalRules",
     "_InsiderRiskyAccessByApplication_AnalyticalRules": "[variables('InsiderRiskyAccessByApplication_AnalyticalRules')]",
+    "playbook1-Playbooks": "playbook1-Playbooks",
+    "_playbook1-Playbooks": "[variables('playbook1-Playbooks')]",
+    "playbook1-teamsConnectionName": "[concat('teams-', parameters('playbook1-PlaybookName'))]",
+    "playbook1-azuresentinelConnectionName": "[concat('azuresentinel-', parameters('playbook1-PlaybookName'))]",
+    "playbook1-office365ConnectionName": "[concat('office365-', parameters('playbook1-PlaybookName'))]",
+    "playbook-1-connection-2": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/azuresentinel')]",
+    "_playbook-1-connection-2": "[variables('playbook-1-connection-2')]",
+    "playbook-1-connection-3": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/office365')]",
+    "_playbook-1-connection-3": "[variables('playbook-1-connection-3')]",
+    "playbook-1-connection-4": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/teams')]",
+    "_playbook-1-connection-4": "[variables('playbook-1-connection-4')]",
     "InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries": "InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries",
     "_InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries": "[variables('InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries')]",
     "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
@@ -253,6 +287,168 @@
       }
     },
     {
+      "properties": {
+        "provisioningState": "Succeeded",
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.@{variables('azureManagementUrl')}/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "For_each": {
+              "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+              "actions": {
+                "Post_message_in_a_chat_or_channel": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "messageBody": "<p>Insider Risk Team,<br> <br> An Insider Risk Management Alert was observed per the details below:<br> <br> Severity of Alert: @{items('For_each')?['properties']?['severity']}<br> <br> <u><strong>Azure Sentinel Incident</strong></u><br> TItle: @{triggerBody()?['object']?['properties']?['title']}<br> Status: @{triggerBody()?['object']?['properties']?['status']}<br> Number: @{triggerBody()?['object']?['properties']?['incidentNumber']}<br> Created Time (UTC): @{triggerBody()?['object']?['properties']?['createdTimeUtc']}<br> Incident Link: &nbsp;@{triggerBody()?['object']?['properties']?['incidentUrl']}<br> <br> <u><strong>Alert Details</strong></u><br> Alert Display Name: @{items('For_each')?['properties']?['alertDisplayName']}<br> Alert Type: @{items('For_each')?['properties']?['alertType']}<br> Subscription ID: @{triggerBody()?['workspaceInfo']?['SubscriptionId']}<br> Provider Alert ID: @{items('For_each')?['properties']?['providerAlertId']}<br> Alert Link: @{items('For_each')?['properties']?['alertLink']}</p>",
+                      "recipient": {
+                        "channelId": "[parameters('playbook1-TeamschannelId')]",
+                        "groupId": "[parameters('playbook1-TeamsgroupId')]"
+                      }
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['teams']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                  }
+                },
+                "Send_an_email_(V2)_2": {
+                  "runAfter": {
+                    "Post_message_in_a_chat_or_channel": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "Body": "<p>Insider Risk Team,<br> <br> An Insider Risk Management Alert was observed per the details below:<br> <br> <br> <u><strong>Azure Sentinel Incident</strong></u><br> TItle: @{triggerBody()?['object']?['properties']?['title']}<br> Status: @{triggerBody()?['object']?['properties']?['status']}<br> Number: @{triggerBody()?['object']?['properties']?['incidentNumber']}<br> Incident Severity: @{triggerBody()?['object']?['properties']?['severity']}<br> Created Time (UTC): @{triggerBody()?['object']?['properties']?['createdTimeUtc']}<br> Incident Link: &nbsp;@{triggerBody()?['object']?['properties']?['incidentUrl']}<br> <br> <u><strong>Alert Details</strong></u><br> Alert Display Name: @{items('For_each')?['properties']?['alertDisplayName']}<br> Alert Product Name: @{items('For_each')?['properties']?['productName']}<br> Alert Severity: @{items('For_each')?['properties']?['severity']}<br> Alert Type: @{items('For_each')?['properties']?['alertType']}<br> Subscription ID: @{triggerBody()?['workspaceInfo']?['SubscriptionId']}<br> Provider Alert ID: @{items('For_each')?['properties']?['providerAlertId']}<br> Alert Link: @{items('For_each')?['properties']?['alertLink']}</p>",
+                      "Subject": "Insider Risk Management Alert",
+                      "To": "[parameters('playbook1-Email')]"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/v2/Mail"
+                  }
+                }
+              },
+              "type": "Foreach"
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[variables('playbook1-azuresentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('playbook1-azuresentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "office365": {
+                "connectionName": "[variables('playbook1-office365ConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('playbook1-office365ConnectionName'))]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/office365')]"
+              },
+              "teams": {
+                "connectionName": "[variables('playbook1-teamsConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('playbook1-teamsConnectionName'))]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/teams')]"
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('playbook1-PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-SentinelTemplateName": "Notify-InsiderRiskTeam",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2019-05-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('playbook1-azuresentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('playbook1-office365ConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('playbook1-teamsConnectionName'))]"
+      ]
+    },
+    {
+      "name": "[variables('playbook1-azuresentinelConnectionName')]",
+      "properties": {
+        "parameterValueType": "Alternative",
+        "displayName": "[variables('playbook1-azuresentinelConnectionName')]",
+        "api": {
+          "id": "[variables('_playbook-1-connection-2')]"
+        }
+      },
+      "type": "Microsoft.Web/connections",
+      "kind": "V1",
+      "apiVersion": "2016-06-01",
+      "location": "[parameters('workspace-location')]"
+    },
+    {
+      "name": "[variables('playbook1-office365ConnectionName')]",
+      "properties": {
+        "displayName": "[variables('playbook1-office365ConnectionName')]",
+        "api": {
+          "id": "[variables('_playbook-1-connection-3')]"
+        }
+      },
+      "type": "Microsoft.Web/connections",
+      "kind": "V1",
+      "apiVersion": "2016-06-01",
+      "location": "[parameters('workspace-location')]"
+    },
+    {
+      "name": "[variables('playbook1-teamsConnectionName')]",
+      "properties": {
+        "displayName": "[variables('playbook1-teamsConnectionName')]",
+        "api": {
+          "id": "[variables('_playbook-1-connection-4')]"
+        }
+      },
+      "type": "Microsoft.Web/connections",
+      "kind": "V1",
+      "apiVersion": "2016-06-01",
+      "location": "[parameters('workspace-location')]"
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces",
       "apiVersion": "2020-08-01",
       "name": "[parameters('workspace')]",
@@ -261,7 +457,7 @@
         {
           "type": "savedSearches",
           "apiVersion": "2020-08-01",
-          "name": "InsiderRiskManagement Hunting Query 1",
+          "name": "MicrosoftInsiderRiskManagement Hunting Query 1",
           "dependsOn": [
             "[variables('workspace-dependency')]"
           ],
@@ -286,7 +482,7 @@
         {
           "type": "savedSearches",
           "apiVersion": "2020-08-01",
-          "name": "InsiderRiskManagement Hunting Query 2",
+          "name": "MicrosoftInsiderRiskManagement Hunting Query 2",
           "dependsOn": [
             "[variables('workspace-dependency')]"
           ],
@@ -311,7 +507,7 @@
         {
           "type": "savedSearches",
           "apiVersion": "2020-08-01",
-          "name": "InsiderRiskManagement Hunting Query 3",
+          "name": "MicrosoftInsiderRiskManagement Hunting Query 3",
           "dependsOn": [
             "[variables('workspace-dependency')]"
           ],
@@ -336,7 +532,7 @@
         {
           "type": "savedSearches",
           "apiVersion": "2020-08-01",
-          "name": "InsiderRiskManagement Hunting Query 4",
+          "name": "MicrosoftInsiderRiskManagement Hunting Query 4",
           "dependsOn": [
             "[variables('workspace-dependency')]"
           ],
@@ -361,7 +557,7 @@
         {
           "type": "savedSearches",
           "apiVersion": "2020-08-01",
-          "name": "InsiderRiskManagement Hunting Query 5",
+          "name": "MicrosoftInsiderRiskManagement Hunting Query 5",
           "dependsOn": [
             "[variables('workspace-dependency')]"
           ],
@@ -389,13 +585,13 @@
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "version": "1.0.2",
+        "version": "1.0.3",
         "kind": "Solution",
         "contentId": "[variables('_sourceId')]",
         "parentId": "[variables('_sourceId')]",
         "source": {
           "kind": "Solution",
-          "name": "InsiderRiskManagement",
+          "name": "MicrosoftInsiderRiskManagement",
           "sourceId": "[variables('_sourceId')]"
         },
         "author": {
@@ -414,57 +610,62 @@
             {
               "kind": "Workbook",
               "contentId": "[variables('_InsiderRiskManagement_workbook')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_InsiderRiskHighUserAlertsCorrelation_AnalyticalRules')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_InsiderRiskHighUserIncidentsCorrelation_AnalyticalRules')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_InsiderRiskM365IRMAlertObserved_AnalyticalRules')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_InsiderRiskSensitiveDataAccessOutsideOrgGeo_AnalyticalRules')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_InsiderRiskyAccessByApplication_AnalyticalRules')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_playbook1-Playbooks')]",
+              "version": "1.0.3"
             },
             {
               "kind": "HuntingQuery",
               "contentId": "[variables('_InsiderEntityAnomalyFollowedByIRMAlert_HuntingQueries')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "HuntingQuery",
               "contentId": "[variables('_InsiderISPAnomalyCorrelatedToExfiltrationAlert_HuntingQueries')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "HuntingQuery",
               "contentId": "[variables('_InsiderMultipleEntityAnomalies_HuntingQueries')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "HuntingQuery",
               "contentId": "[variables('_InsiderPossibleSabotage_HuntingQueries')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             },
             {
               "kind": "HuntingQuery",
               "contentId": "[variables('_InsiderSignInRiskFollowedBySensitiveDataAccessyaml_HuntingQueries')]",
-              "version": "1.0.2"
+              "version": "1.0.3"
             }
           ]
         },
