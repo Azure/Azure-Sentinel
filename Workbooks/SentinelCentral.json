@@ -23,6 +23,35 @@
               ],
               "parameters": [
                 {
+                  "id": "01868289-27ef-4b5e-ae83-1715cacde421",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "region",
+                  "label": "Region",
+                  "type": 2,
+                  "description": "Filter by Azure Region (location)",
+                  "isRequired": true,
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "query": "Resources \r\n//| where type =~ \"microsoft.operationalinsights/workspaces\"\r\n| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n| where name has \"SecurityInsights\"\r\n| summarize WorkspaceCount = count(name) by location\r\n| order by location asc\r\n| project value=location, display=strcat(location,'(',WorkspaceCount,')')",
+                  "crossComponentResources": [
+                    "value::selected"
+                  ],
+                  "value": [
+                    "value::all"
+                  ],
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "selectAllValue": "*",
+                    "showDefault": false
+                  },
+                  "defaultValue": "value::all",
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
                   "id": "1ca69445-60fc-4806-b43d-ac7e6aad630a",
                   "version": "KqlParameterItem/1.0",
                   "name": "Subscription",
@@ -30,7 +59,7 @@
                   "multiSelect": true,
                   "quote": "'",
                   "delimiter": ",",
-                  "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId",
+                  "query": "resources\r\n| where '*' in ({region}) or location in ({region})\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| distinct subscriptionId, location\r\n| summarize by value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId\r\n| order by value asc\r\n",
                   "crossComponentResources": [
                     "value::selected"
                   ],
@@ -59,9 +88,6 @@
                   "crossComponentResources": [
                     "{Subscription}"
                   ],
-                  "value": [
-                    ""
-                  ],
                   "typeSettings": {
                     "resourceTypeFilter": {
                       "microsoft.operationalinsights/workspaces": true
@@ -72,7 +98,10 @@
                     "showDefault": false
                   },
                   "queryType": 1,
-                  "resourceType": "microsoft.resourcegraph/resources"
+                  "resourceType": "microsoft.resourcegraph/resources",
+                  "value": [
+                    "value::all"
+                  ]
                 },
                 {
                   "id": "66f59acd-2628-457d-a5cd-176aa453472a",
@@ -81,7 +110,7 @@
                   "type": 4,
                   "isRequired": true,
                   "value": {
-                    "durationMs": 5184000000
+                    "durationMs": 604800000
                   },
                   "typeSettings": {
                     "selectableValues": [
@@ -245,7 +274,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Sentinel Central\r\n### Change Log\r\nUse this report to view Incident and Alert data across many workspaces (works with Azure Lighthouse)\r\n\r\n\r\n|Version|Description|\r\n|---|---|\r\n|v1.2| View Alerts from multiple workspaces (Azure Lighhouse compatiable)|\r\n|v1.3| MSSP release |"
+              "json": "## Sentinel Central\r\n### Change Log\r\nUse this report to view Incident and Alert data across many workspaces (works with Azure Lighthouse)\r\n\r\n\r\n|Version|Description|\r\n|---|---|\r\n|v1.2| View Alerts from multiple workspaces (Azure Lighhouse compatiable)|\r\n|v1.3| MSSP release |\r\n|v1.4| Add Workspace info |\r\n|v1.5| Add Workspace info |\r\n|v2.0| Multi workspace hunting. per Region selection from main drop down. |\r\n"
             },
             "customWidth": "50",
             "conditionalVisibility": {
@@ -258,7 +287,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Sentinel Central\r\n### Help\r\nUse this report to view Incident (and Alert data) across many workspaces, this works with Azure Lighthouse and across any subscription you have access to.\r\nThe Workbook is not intended to replace the Multiple Incidents across Workspace view/feature in the Azure Sentinel UI, it's just a way of seeing the data in a different way.\r\n\r\nWorkspaces not linked to Azure Sentinel will not be shown.\r\n\r\n\r\nData sources: REST api, SentinelIncident and SecurityAlert Tables"
+              "json": "## Sentinel Central Help\r\n#### Data sources: REST api, SentinelIncident and SecurityAlert Tables\r\n\r\n## Incident Overview: \r\nUse this report to view Incident (and Alert data) across many workspaces, this works with Azure Lighthouse and across any subscription you have access to. The Workbook is not intended to replace the Multiple Incidents across Workspace view/feature in the Azure Sentinel UI, it's just a way of seeing the data in a different way.\r\n- Workspaces not linked to Azure Sentinel will not be shown.\r\n\r\n## Hunting\r\nThis option allows you to use your own KQL (which you can write within the page, or copy from an example or existing query). This will run against *any* of the Workspaces you have selected in the parameters (local or via Azure Lighthouse), please remember the more Workspaces and time range selected, the slower the results.\r\n- Use case, this allows you to enter a simple KQL query that doesn’t need the prefix of\tworkspace(\"my workspace name\").my table name \r\n\r\ne.g. workspace(Demo\").Usage | limit 10\r\n\r\nor \r\n\r\n//Example query \r\nSecurityIncident\r\n| summarize High = countif(Severity ==\"High\"), Medium = countif(Severity ==\"Medium\"), MyIncidents=make_set(IncidentNumber ) by WorkspaceId=TenantId\r\n\r\n##### Note:\r\nIn your query it maybe useful to have the workspace ID returned, to do this you get the data from the TenantID column, as this name can be confusing we suggest you re-map it to WorkspaceID.\r\ne.g.\r\n•\tSecurityIncident | summarize count() by WorkspaceId=TenantId\r\n\r\n## Query Packs\r\nIf you are using Query Packs, use this Tab to open one (from any Resource Group), you can then click on a Query Pack and then on an individual query to run it. \r\n\r\n- Use case, storing queries this way enables you to share them and secure them (ARM and RBAC), this methods allows you to stay within the workbook to find and execute your queries.\r\n## Saved Searches\r\nAny Saved Searches from a selected Workspace can be run from this tab. \r\n\r\n- Use Case, you can see (if you have read rights) saved searches in a selected Workspace and click to run them. Much like the Query Pack method above.\r\n\r\n\r\n"
             },
             "customWidth": "50",
             "conditionalVisibility": {
@@ -274,6 +303,48 @@
       "name": "group - parameter and help"
     },
     {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "ad9f9173-35b3-4c1a-84e4-6f6062263c18",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Incident Overview",
+            "subTarget": "incidents",
+            "style": "link"
+          },
+          {
+            "id": "f99135dc-8862-434b-ad1c-38714c1d8992",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Hunting",
+            "subTarget": "hunting",
+            "style": "link"
+          },
+          {
+            "id": "f99e8417-fdad-434d-98a3-9b901c273650",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Query Pack",
+            "subTarget": "querypack",
+            "style": "link"
+          },
+          {
+            "id": "a56b10fb-0e65-4308-9c9e-e6c56ef356c6",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Saved Searches",
+            "subTarget": "saved",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "links - 7"
+    },
+    {
       "type": 12,
       "content": {
         "version": "NotebookGroup/1.0",
@@ -283,7 +354,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize count(IncidentName) by   [\"Workspace\"] = workSpacename\r\n\r\n\r\n\r\n",
+              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize count(IncidentName) by   [\"Workspace\"] = workSpacename\r\n\r\n\r\n\r\n",
               "size": 4,
               "title": "Count of Security Incidents for selected {$rowCount} Workspaces",
               "timeContext": {
@@ -323,9 +394,9 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize High=  countif(Severity==\"High\"),\r\n            Medium=countif(Severity==\"Medium\"),\r\n            Low   =countif(Severity==\"Low\"), \r\n            Informational=countif(Severity==\"Informational\"),\r\n            Total  = count()\r\n            by workSpacename\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to triage Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileMeanTime=percentile(TimeToTriage, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to close Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| extend iD = TenantId\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileCloseTime=percentile(TimeToClosure, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n\r\n\r\n",
+              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize High=  countif(Severity==\"High\"),\r\n            Medium=countif(Severity==\"Medium\"),\r\n            Low   =countif(Severity==\"Low\"), \r\n            Informational=countif(Severity==\"Informational\"),\r\n            Last_record =  datetime_diff(\"second\", now(), max(TimeGenerated)),\r\n            Total  = count()\r\n            by workSpacename\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to triage Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileMeanTime=percentile(TimeToTriage, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to close Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| extend iD = TenantId\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileCloseTime=percentile(TimeToClosure, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n    // Incident Trend by Workspace\r\n    // Get the Workspace Name(s) from a parameter\r\n    | extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n    | mv-expand stringtoSplit\r\n    | where stringtoSplit has TenantId\r\n    | extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n    | make-series IncidentTrend=count() on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1, TimeGenerated\r\n\r\n",
               "size": 1,
-              "title": "Count of Security Incidents for selected Workspaces and Severity",
+              "title": "Security Incident summary for {$rowCount} Workspaces:  QueryTime {$queryTime}",
               "timeContext": {
                 "durationMs": 0
               },
@@ -370,6 +441,17 @@
                     }
                   },
                   {
+                    "columnMatch": "Last_record",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 24,
+                      "options": {
+                        "style": "decimal",
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  },
+                  {
                     "columnMatch": "Total",
                     "formatter": 8,
                     "formatOptions": {
@@ -406,29 +488,27 @@
                     }
                   },
                   {
+                    "columnMatch": "Trend",
+                    "formatter": 10,
+                    "formatOptions": {
+                      "palette": "blueDark"
+                    }
+                  },
+                  {
                     "columnMatch": "iD",
                     "formatter": 5
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_High_1",
+                    "sortOrder": 2
                   }
                 ],
                 "labelSettings": [
                   {
                     "columnId": "workSpacename",
                     "label": "Workspace Name"
-                  },
-                  {
-                    "columnId": "High"
-                  },
-                  {
-                    "columnId": "Medium"
-                  },
-                  {
-                    "columnId": "Low"
-                  },
-                  {
-                    "columnId": "Informational"
-                  },
-                  {
-                    "columnId": "Total"
                   },
                   {
                     "columnId": "50th_PercentileMeanTime",
@@ -440,7 +520,12 @@
                   }
                 ]
               },
-              "sortBy": []
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_High_1",
+                  "sortOrder": 2
+                }
+              ]
             },
             "name": "query - SecIncidents"
           },
@@ -735,11 +820,11 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| where Status == 'Closed'// and Classification !=\"Undetermined\"\r\n| order by LastModifiedTime \r\n| summarize count(), make_set(ClassificationComment) by workSpacename, Classification , ClassificationReason //,ClassificationComment, IncidentUrl, ModifiedBy,Status, Severity, LastModifiedTime,IncidentNumber, Title\r\n| evaluate pivot(Classification, sum(count_))",
+                    "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| where Status == 'Closed'\r\n| order by LastModifiedTime \r\n| summarize count(), make_set(ClassificationComment) by workSpacename, Classification , ClassificationReason \r\n| evaluate pivot(Classification, sum(count_))",
                     "size": 1,
                     "title": "Incident Classification report",
                     "timeContext": {
-                      "durationMs": 5184000000
+                      "durationMs": 604800000
                     },
                     "timeContextFromParameter": "TimeRange",
                     "showExportToExcel": true,
@@ -800,26 +885,8 @@
                       ],
                       "labelSettings": [
                         {
-                          "columnId": "workSpacename"
-                        },
-                        {
-                          "columnId": "ClassificationReason"
-                        },
-                        {
                           "columnId": "set_ClassificationComment",
                           "label": "Reason"
-                        },
-                        {
-                          "columnId": "BenignPositive"
-                        },
-                        {
-                          "columnId": "FalsePositive"
-                        },
-                        {
-                          "columnId": "TruePositive"
-                        },
-                        {
-                          "columnId": "Undetermined"
                         }
                       ]
                     },
@@ -840,7 +907,7 @@
                     "size": 1,
                     "title": "Incident Tactics report",
                     "timeContext": {
-                      "durationMs": 5184000000
+                      "durationMs": 604800000
                     },
                     "timeContextFromParameter": "TimeRange",
                     "showExportToExcel": true,
@@ -873,11 +940,6 @@
                           "itemKey": "workSpacename",
                           "sortOrder": 1
                         }
-                      ],
-                      "labelSettings": [
-                        {
-                          "columnId": "workSpacename"
-                        }
                       ]
                     },
                     "sortBy": [
@@ -885,7 +947,28 @@
                         "itemKey": "workSpacename",
                         "sortOrder": 1
                       }
-                    ]
+                    ],
+                    "tileSettings": {
+                      "showBorder": false,
+                      "titleContent": {
+                        "columnMatch": "workSpacename",
+                        "formatter": 1
+                      },
+                      "leftContent": {
+                        "columnMatch": "[\"Collection\"]",
+                        "formatter": 12,
+                        "formatOptions": {
+                          "palette": "auto"
+                        },
+                        "numberFormat": {
+                          "unit": 17,
+                          "options": {
+                            "maximumSignificantDigits": 3,
+                            "maximumFractionDigits": 2
+                          }
+                        }
+                      }
+                    }
                   },
                   "name": "query - 10 - Tactics"
                 }
@@ -901,7 +984,7 @@
               "size": 1,
               "title": "Count of Security Incidents for selected Workspaces and Severity",
               "timeContext": {
-                "durationMs": 2592000000
+                "durationMs": 604800000
               },
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
@@ -945,9 +1028,6 @@
                   {
                     "columnId": "workSpacename",
                     "label": "Workspace Name"
-                  },
-                  {
-                    "columnId": "Total"
                   }
                 ]
               },
@@ -1187,7 +1267,7 @@
               "size": 1,
               "title": "Count of Tactics for selected Workspaces",
               "timeContext": {
-                "durationMs": 2592000000
+                "durationMs": 604800000
               },
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
@@ -1243,12 +1323,6 @@
                 ],
                 "labelSettings": [
                   {
-                    "columnId": "workSpacename"
-                  },
-                  {
-                    "columnId": "Tactics_"
-                  },
-                  {
                     "columnId": "count_",
                     "label": "count"
                   }
@@ -1266,6 +1340,11 @@
           }
         ]
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "incidents"
+      },
       "name": "group - overview"
     },
     {
@@ -1282,7 +1361,6 @@
         "groupType": "editable",
         "title": "Expand to Show: Incident details",
         "expandable": true,
-        "expanded": true,
         "items": [
           {
             "type": 3,
@@ -1292,7 +1370,7 @@
               "size": 1,
               "title": "{$rowCount} Incidents in Workspaces today",
               "timeContext": {
-                "durationMs": 0
+                "durationMs": 604800000
               },
               "timeContextFromParameter": "TimeRange",
               "exportedParameters": [
@@ -1383,20 +1461,8 @@
                 ],
                 "labelSettings": [
                   {
-                    "columnId": "IncidentNumber"
-                  },
-                  {
-                    "columnId": "Title"
-                  },
-                  {
                     "columnId": "productName_",
                     "label": "Product Name"
-                  },
-                  {
-                    "columnId": "Severity"
-                  },
-                  {
-                    "columnId": "IncidentUrl"
                   }
                 ]
               },
@@ -1489,7 +1555,7 @@
                   "crossComponentResources": [
                     "{Subscription}"
                   ],
-                  "value": "CyberSecuritySOC",
+                  "value": null,
                   "typeSettings": {
                     "additionalResourceOptions": [],
                     "showDefault": false
@@ -1525,7 +1591,7 @@
               "size": 0,
               "title": "Details for {iWorkspace} Workspace, count of: {$rowCount} Incidents during {TimeRange:label}",
               "timeContext": {
-                "durationMs": 0
+                "durationMs": 604800000
               },
               "timeContextFromParameter": "TimeRange",
               "showExportToExcel": true,
@@ -1635,11 +1701,558 @@
           }
         ]
       },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "incidents"
+      },
       "name": "group - Incidents"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Hunting: Hunt across selected workspaces, using any KQL you paste or edit in this field. ",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "fcc2456c-f4b5-4505-a188-aa4ebab3db67",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "queryTxt",
+                  "type": 1,
+                  "description": "Add  workspace identity e.g SecurityIncident | summarize count() by WorkspaceId=TenantId",
+                  "value": "Perf \r\n| summarize count()  by WorkspaceId=TenantId",
+                  "typeSettings": {
+                    "multiLineText": true,
+                    "editorLanguage": "kql"
+                  },
+                  "timeContext": {
+                    "durationMs": 86400000
+                  }
+                }
+              ],
+              "style": "above",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 5"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "{queryTxt}",
+              "size": 0,
+              "title": "Cross workspace Query results, rows: {$rowCount}, QueryTime: {$queryTime}.  Select a row for more details",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "timeContextFromParameter": "TimeRange",
+              "exportFieldName": "WorkspaceId",
+              "exportParameterName": "exportWorkspaceId",
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Workspace",
+                    "formatter": 16,
+                    "formatOptions": {
+                      "showIcon": true
+                    }
+                  }
+                ]
+              },
+              "sortBy": []
+            },
+            "name": "query - crossWorkspaceQuery"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| extend customerWorkspaceID = trim(' ', tostring(properties.customerId))\r\n| project id, customerWorkspaceID, name=tolower(name), subscriptionId, tenantId\r\n|join \r\n(\r\n\tresources\r\n\t// Just show Workspaces that have Sentinel enabled\r\n\t| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n\t| where name has \"SecurityInsights\"\r\n\t| parse name with * '(' s_workspace ')'*\r\n\t| project name=tolower(s_workspace), subscriptionId, location, properties, resourceGroup\r\n) on name\r\n| where customerWorkspaceID in ('{exportWorkspaceId}')\r\n| project name, Open=tolower(id), tenantId, customerWorkspaceID,  subscriptionId, location, properties, resourceGroup\r\n",
+              "size": 4,
+              "title": "{exportWorkspaceId} lookup  - used to identify tenant or workspace Ids from the results above",
+              "exportedParameters": [
+                {
+                  "fieldName": "tenantId",
+                  "parameterName": "exporttenantId",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "subscriptionId",
+                  "parameterName": "exportSubscriptionId",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "resourceGroup",
+                  "parameterName": "exportResourceGroup",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "name",
+                  "parameterName": "exportName",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Open",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "Resource",
+                      "linkLabel": "Workspace context blade",
+                      "linkIsContextBlade": true
+                    }
+                  },
+                  {
+                    "columnMatch": "id",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "WorkbookTemplate",
+                      "linkLabel": "Click to Open [Security operations efficiency] workbook",
+                      "linkIsContextBlade": false
+                    }
+                  },
+                  {
+                    "columnMatch": "note",
+                    "formatter": 0,
+                    "formatOptions": {
+                      "customColumnWidthSetting": "100ch"
+                    }
+                  }
+                ],
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "tenantId",
+                    "sortOrder": 1
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "tenantId",
+                  "sortOrder": 1
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "exportWorkspaceId",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "query - Workspace Details"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "hunting"
+      },
+      "name": "group - hunting"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Query Pack: Use a Query Pack from any Resource Group, then pick a query to run from within the Query Pack",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "9a0c8c17-ac07-4b9a-b3d9-44060087935f",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Subscription",
+                  "type": 6,
+                  "description": "Find Query packs in specific subscriptions ",
+                  "isRequired": true,
+                  "multiSelect": true,
+                  "quote": "'",
+                  "delimiter": ",",
+                  "value": [
+                    "value::all"
+                  ],
+                  "typeSettings": {
+                    "additionalResourceOptions": [
+                      "value::all"
+                    ],
+                    "includeAll": false,
+                    "showDefault": false
+                  },
+                  "timeContext": {
+                    "durationMs": 86400000
+                  }
+                }
+              ],
+              "style": "above",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 2"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "resources\r\n| where type == \"microsoft.operationalinsights/querypacks\"\r\n| project-away type, kind",
+              "size": 0,
+              "exportedParameters": [
+                {
+                  "fieldName": "name",
+                  "parameterName": "exportName",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "resourceGroup",
+                  "parameterName": "resourceGroup",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "subscriptionId",
+                  "parameterName": "subscriptionId",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
+              "crossComponentResources": [
+                "{Subscription}"
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "tenantId",
+                    "formatter": 16,
+                    "formatOptions": {
+                      "showIcon": true
+                    }
+                  },
+                  {
+                    "columnMatch": "location",
+                    "formatter": 17
+                  },
+                  {
+                    "columnMatch": "resourceGroup",
+                    "formatter": 16,
+                    "formatOptions": {
+                      "showIcon": true
+                    }
+                  },
+                  {
+                    "columnMatch": "subscriptionId",
+                    "formatter": 15,
+                    "formatOptions": {
+                      "linkTarget": null,
+                      "showIcon": true
+                    }
+                  }
+                ]
+              },
+              "sortBy": []
+            },
+            "name": "query - 4"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/microsoft.operationalInsights/querypacks/{exportName}/Queries\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2019-09-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"name\"},{\"path\":\"properties.body\",\"columnid\":\"body\"},{\"path\":\"properties.description\",\"columnid\":\"description\"},{\"path\":\"properties.tags\",\"columnid\":\"tags\"},{\"path\":\"systemData.lastModifiedAt\",\"columnid\":\"lastModifiedAt\"},{\"path\":\"systemData.lastModifiedBy\",\"columnid\":\"lastModifiedBy\"},{\"path\":\"systemData.createdBy\",\"columnid\":\"createdBy\"},{\"path\":\"systemData.createdBy\",\"columnid\":\"createdByType\"},{\"path\":\"systemData.createdAt\",\"columnid\":\"createdAt\"}]}}]}",
+              "size": 1,
+              "title": "Select a Query to run from the list: {$rowCount} Queries in Query Pack: {exportName}",
+              "exportedParameters": [
+                {
+                  "fieldName": "body",
+                  "parameterName": "exportQuery"
+                },
+                {
+                  "fieldName": "name",
+                  "parameterName": "exportName",
+                  "parameterType": 1
+                }
+              ],
+              "showExportToExcel": true,
+              "queryType": 12,
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "body",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "CellDetails",
+                      "linkIsContextBlade": true
+                    }
+                  }
+                ],
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "createdByType",
+                    "sortOrder": 2
+                  }
+                ],
+                "labelSettings": [
+                  {
+                    "columnId": "name"
+                  },
+                  {
+                    "columnId": "body",
+                    "label": "Query"
+                  },
+                  {
+                    "columnId": "description"
+                  },
+                  {
+                    "columnId": "tags"
+                  },
+                  {
+                    "columnId": "lastModifiedAt"
+                  },
+                  {
+                    "columnId": "lastModifiedBy"
+                  },
+                  {
+                    "columnId": "createdBy"
+                  },
+                  {
+                    "columnId": "createdByType"
+                  },
+                  {
+                    "columnId": "createdAt"
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "createdByType",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "exportName",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "query -Qp queries"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "{exportQuery}",
+              "size": 0,
+              "title": "Results of the selected Query: {exportName}",
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "exportQuery",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "query - 3"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "querypack"
+      },
+      "name": "group - qp"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "KQL Saved Searches: Select a Workspace to check Saved Searches",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "crossComponentResources": [
+                "{Subscription}"
+              ],
+              "parameters": [
+                {
+                  "id": "54ab7c42-3983-46fd-bb6b-9a1d206eec3a",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Workspace",
+                  "type": 5,
+                  "description": "Lookup saved queries in any Azure Sentinel workspace",
+                  "isRequired": true,
+                  "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| extend customerID = trim(' ', tostring(properties.customerId))\r\n| project id, customerID, name=tolower(name)\r\n|join \r\n(\r\n\tresources\r\n\t// Just show Workspaces that have Sentinel enabled\r\n\t| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n\t| where name has \"SecurityInsights\"\r\n\t| parse name with * '(' s_workspace ')'*\r\n\t| project name=tolower(s_workspace)\r\n) on name\r\n| project tolower(id), customerID, name",
+                  "crossComponentResources": [
+                    "{Subscription}"
+                  ],
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                }
+              ],
+              "style": "above",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources"
+            },
+            "name": "parameters - 3"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"{Workspace}/SavedSearches\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2021-06-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"displayName\"},{\"path\":\"properties.category\",\"columnid\":\"category\"},{\"path\":\"properties.query\",\"columnid\":\"query\"},{\"path\":\"properties.version\",\"columnid\":\"version\"},{\"path\":\"name\",\"columnid\":\"name\"}]}}]}",
+              "size": 1,
+              "title": "Select a Query to run, or Search in all columns, Category, Name & Query",
+              "noDataMessage": "no saved queries found in {Workspace:name}",
+              "exportedParameters": [
+                {
+                  "fieldName": "query",
+                  "parameterName": "query",
+                  "parameterType": 1,
+                  "defaultValue": " "
+                },
+                {
+                  "fieldName": "displayName",
+                  "parameterName": "name",
+                  "parameterType": 1
+                }
+              ],
+              "showExportToExcel": true,
+              "queryType": 12,
+              "gridSettings": {
+                "rowLimit": 1000,
+                "filter": true
+              }
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "Subscription",
+                "comparison": "isNotEqualTo"
+              },
+              {
+                "parameterName": "Workspace",
+                "comparison": "isNotEqualTo"
+              }
+            ],
+            "name": "saved query grid - Copy"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Saved Query - {name}",
+              "items": [
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "f3f7beb8-b287-45fb-8af2-c528ef55b704",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "queryText",
+                        "type": 1,
+                        "typeSettings": {
+                          "multiLineText": true,
+                          "editorLanguage": "kql"
+                        },
+                        "criteriaData": [
+                          {
+                            "condition": "else result = '{query}'",
+                            "criteriaContext": {
+                              "operator": "Default",
+                              "rightValType": "param",
+                              "resultValType": "static",
+                              "resultVal": "{query}"
+                            }
+                          }
+                        ],
+                        "label": "Saved Query Text"
+                      }
+                    ],
+                    "style": "above",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "query text param"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{query}",
+                    "size": 2,
+                    "title": "Query Results",
+                    "timeContext": {
+                      "durationMs": 1209600000
+                    },
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "sortBy": []
+                  },
+                  "name": "query - 3"
+                }
+              ]
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "query",
+                "comparison": "isNotEqualTo"
+              },
+              {
+                "parameterName": "Workspace",
+                "comparison": "isNotEqualTo"
+              }
+            ],
+            "name": "visible if query selected group"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "saved"
+      },
+      "name": "group - kql"
     }
-  ],
-  "fallbackResourceIds": [
-    "Azure Monitor"
   ],
   "fromTemplateId": "sentinel-SentinelCentral",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
