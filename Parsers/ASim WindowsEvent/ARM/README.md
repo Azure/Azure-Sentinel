@@ -1,9 +1,9 @@
 # Microsoft Windows Events ASIM parsers
 
-This template deploys all [Microsoft Windows Event] ASIM parsers. The template is part of the [Azure Sentinel Information Mode (ASIM)](https://aka.ms/AzSentinelNormalization).The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+This template deploys all [Microsoft Windows Event] ASIM parsers. The template is part of the [Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization).The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
 
 <br>
 
