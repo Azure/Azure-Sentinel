@@ -1,4 +1,4 @@
-# NetworkSessions - Azure Sentinel Information Model
+# NetworkSessions - Advanced SIEM Information Model
 
 **Note: this folder contains ASIM V1 Netwrok Session parsers**
 
