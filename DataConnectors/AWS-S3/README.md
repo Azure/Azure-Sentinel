@@ -41,7 +41,7 @@ Then run the following from PowerShell and follow the prompts to complete the co
 
 ```powershell
 
-aws configure
+aws configure (For more information see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html))
 .\ConfigAwsConnector.ps1
 
 ```
