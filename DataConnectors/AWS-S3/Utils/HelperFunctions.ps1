@@ -8,12 +8,13 @@ function Test-AwsConfiguration
     Write-Log -Message "Checking AWS CLI configuration..." -LogFileName $LogFileName -Severity Information -LinePadding 1
 
     # validate aws configuration. in case of invalid region\credentials the following command will trow exception
-     aws ec2 describe-regions | Out-Null
+     aws ec2 describe-regions 2>&1 | Out-Null
 
      if ($lastExitCode -ne 0 )
      {
-         Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
-         Write-Log -Message "Please execute again 'aws configure' and verify that AWS configuration is correct." -LogFileName $LogFileName -Severity Error               
+        Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Please execute again 'aws configure' and verify that AWS configuration is correct." -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "For more information see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html" -LogFileName $LogFileName -Severity Error               
         exit
      }
 }
@@ -39,7 +40,7 @@ function Write-ScriptNotes
 {
     Write-Log -Message "Notes:" -LogFileName $LogFileName -Severity Information -LinePadding 1 -Indent 2 -Color DarkYellow
     Write-Log -Message "* You can find more information about the script in https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AWS-S3/README.md" -LogFileName $LogFileName -Severity Information -Indent 2 -Color DarkYellow
-    Write-Log -Message "* If a resource name(like: S3, Sqs, Kms) already exist, the script will use the available one and not create a new resource" -LogFileName $LogFileName -Severity Information -Indent 2 -Color DarkYellow
+    Write-Log -Message "* If a resource name(like: S3, Sqs, Kms) already exists, the script will use the available one and not create a new resource" -LogFileName $LogFileName -Severity Information -Indent 2 -Color DarkYellow
 }
 
 function Set-RetryAction
