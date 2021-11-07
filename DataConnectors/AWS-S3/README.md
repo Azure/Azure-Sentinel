@@ -26,7 +26,7 @@ You must have PowerShell and the AWS CLI installed before using these scripts.
 
 - PowerShell [Installation instructions](https://docs.microsoft.com/powershell/scripting/install/installing-powershell?view=powershell-7.1)
 - AWS CLI [Installation instructions](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
-- AWS configure. Run from Powershell `aws configure`, For more information see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+  - Run from PowerShell `aws configure`, For more information see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
 
 ## Using the scripts
 
@@ -38,7 +38,7 @@ Make sure that you have PowerShell and the AWS CLI installed.
 > To mark the scripts safe, use the `Unblock-File` cmdlet or  
 > right-click on the script file(s), then click **Properties** and then click **Unblock**.
 
-Then run the following from run and follow the prompts to complete the configuration.
+Then run the following from PowerShell and follow the prompts to complete the configuration.
 
 ```powershell
 

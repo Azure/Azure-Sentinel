@@ -14,7 +14,7 @@ function Test-AwsConfiguration
      {
         Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
         Write-Log -Message "Please execute again 'aws configure' and verify that AWS configuration is correct." -LogFileName $LogFileName -Severity Error
-        Write-Log -Message "For more information see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html" -LogFileName $LogFileName -Severity Error               
+        Write-Log -Message "For more information see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html" -LogFileName $LogFileName -Severity Error               
         exit
      }
 }
