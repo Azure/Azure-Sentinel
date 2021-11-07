@@ -26,7 +26,7 @@ You must have PowerShell and the AWS CLI installed before using these scripts.
 
 - PowerShell [Installation instructions](https://docs.microsoft.com/powershell/scripting/install/installing-powershell?view=powershell-7.1)
 - AWS CLI [Installation instructions](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
-  - Run from PowerShell `aws configure`, for more information see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
+  - Run from PowerShell `aws configure`. For more details please see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
 
 ## Using the scripts
 

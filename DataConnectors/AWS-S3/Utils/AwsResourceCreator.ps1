@@ -28,8 +28,8 @@ function New-ArnRole
 
             $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
             
-            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy 2>&1" -LogFileName $LogFileName -Severity Verbose
-            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy 2>&1
+            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(Get-SentinelTagInJsonFormat) 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags [$(Get-SentinelTagInJsonFormat)] 2>&1
             Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             
             # If the role was retrieved then the role was created successfully
@@ -86,8 +86,11 @@ function New-S3Bucket
             }
             elseif($error[0] -Match "InvalidBucketName")
             {
-                 Write-Log -Message "Please see AWS valid name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
+                 Write-Log -Message "Please see AWS bucket name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
             }
+
+            Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
+            aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
         }
     })
     
@@ -108,9 +111,18 @@ function New-SQSQueue
 
         $script:sqsName = Read-ValidatedHost -Prompt "Please enter Sqs Name"
         Write-Log -Message "Using Sqs name: $sqsName" -LogFileName $LogFileName -Indent 2
-        Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $tempForOutput = aws sqs create-queue --queue-name $sqsName 2>&1
+
+        $sentinelTags =  "{\""$(Get-SentinelTagKey)\"": \""$(Get-SentinelTagValue)\""}"
+        Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $tempForOutput = aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1
         Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+
+        if ($lastexitcode -ne 0 -and $error[0] -Match "QueueAlreadyExists")
+        {
+            Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws sqs create-queue --queue-name $sqsName 2>&1
+            Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+        }
     })
 }
 
@@ -190,10 +202,12 @@ function New-KMS
         $isKmsNotExist = $lastexitcode -ne 0
         if ($isKmsNotExist)
         {
-            Write-Log -Message "Executing: aws kms create-key" -LogFileName $LogFileName -Severity Verbose
-            $script:kmsKeyDescription = aws kms create-key
+            $sentinelTag = "{\""TagKey\"": \""$(Get-SentinelTagKey)\"", \""TagValue\"": \""$(Get-SentinelTagValue)\""}"
+            Write-Log -Message "Executing: aws kms create-key --tags $sentinelTag" -LogFileName $LogFileName -Severity Verbose    
+            $script:kmsKeyDescription = aws kms create-key --tags $sentinelTag          
             Write-Log -Message $kmsKeyDescription -LogFileName $LogFileName -Severity Verbose
             $kmsKeyId = ($script:kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
+
             Write-Log -Message "Executing: ws kms create-alias --alias-name alias/$kmsAliasName --target-key-id $kmsKeyId 2>&1" -LogFileName $LogFileName -Severity Verbose
             $tempForOutput = aws kms create-alias --alias-name alias/$kmsAliasName --target-key-id $kmsKeyId 2>&1
             Write-Log -Message "$tempForOutput" -LogFileName $LogFileName -Severity Verbose

@@ -1,5 +1,6 @@
 # Include helper scripts
 . ".\Utils\HelperFunctions.ps1"
+. ".\Utils\AwsSentinelTag.ps1"
 
 # Validate AWS configuration
 Test-AwsConfiguration
@@ -30,7 +31,7 @@ catch {}
 $vpcName = Read-ValidatedHost 'Vpc Name:'
 Write-Output " Using Vpc name: $vpcname"
 
-$vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}]"
+$vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=$vpcName}, {Key=$(Get-SentinelTagKey),Value=$(Get-SentinelTagValue)}]"
 
 # creating the VPC Flow logs with specified info
 aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceId.Split(' ') --traffic-type $vpcTrafficType.ToUpper() --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications | Out-Null

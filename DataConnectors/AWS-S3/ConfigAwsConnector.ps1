@@ -33,6 +33,7 @@ param (
 . ".\Utils\AwsResourceCreator.ps1"
 . ".\Utils\CommonAwsPolicies.ps1"
 . ".\Utils\AwsPoliciesUpdate.ps1"
+. ".\Utils\AwsSentinelTag.ps1"
 
 # Verify that the AWS CLI is available
 if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 
