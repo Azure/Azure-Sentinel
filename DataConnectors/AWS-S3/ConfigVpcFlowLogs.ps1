@@ -5,6 +5,9 @@
 # Validate AWS configuration
 Test-AwsConfiguration
 
+# Validate AWS configuration
+Test-AwsConfiguration
+
 Write-Output `n`n'Setting up your AWS environment'
 Write-Output `n'This script enables additional VPC Flow Logs if you have already set up the required resources Bucket S3, SQS etc.'
 

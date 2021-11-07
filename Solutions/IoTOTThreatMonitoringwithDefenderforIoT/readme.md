@@ -13,34 +13,34 @@ There has been a long-standing split between ICS/SCADA (OT) and Corporate (IT) c
 The OT Threat Monitoring with Defender for IoT Workbook features OT filtering for Security Alerts, Incidents, and Asset Inventory. The workbook features a dynamic assessment of the MITRE ATT&CK for ICS matrix across your environment to analyze and respond to OT-based threats. This workbook is designed to enable SecOps Analysts, Security Engineers, and MSSPs to gain situational awareness for IT/OT security posture.<br>
 
 # Analytics Rules
-## 1) Denial of Service (Defender for IoT)
-This rule leverages Defender for IoT to detect attacks that would prevent the use or proper operation of a DCS system including Denial of Service events.<br>
-## 2) Excessive Login Attempts (Defender for IoT)
-This rule leverages Defender for IoT to detect excessive login attempts that may indicate improper service configuration, human error, or malicious activity on the network such as a cyber threat attempting to manipulate the SCADA network.<br>
-## 3) Firmware Updates (Defender for IoT)
-This rule leverages Defender for IoT to detect unauthorized firmware updates that may indicate malicious activity on the network such as a cyber threat that attempts to manipulate PLC firmware to compromise PLC function.<br>
-## 4) High Bandwidth in the network (Defender for IoT)
-This rule leverages Defender for IoT to detect an unusually high bandwidth which may be an indication of a new service/process or malicious activity on the network. An example scenario is a cyber threat attempting to manipulate the SCADA network.<br>
-## 5) Illegal Function Codes for ICS traffic (Defender for IoT)
-This rule leverages Defender for IoT to detect Illegal function codes in SCADA equipment indicating improper application configuration or malicious activity such using illegal values within a protocol to exploit a PLC vulnerability.<br>
-## 6) PLC unsecure key state (Defender for IoT)
-This rule leverages Defender for IoT to detect PLC operating mode changes indicating the PLC is potentially insecure. If the PLC is compromised, devices that interact with it may be impacted. This may affect overall system security and safety.<br>
-## 7) Internet Access (Defender for IoT)
-This rule leverages Defender for IoT to detect an OT device communicating with Internet which is possibly an indication of improper configuration of an application or malicious activity on the network.<br>
-## 8) Suspicious malware found in the network (Defender for IoT)
-This rule leverages Defender for IoT to detect IoT/OT malware found on the network indicating possible attempts to compromise production systems.<br>
-## 9) Multiple scans in the network (Defender for IoT)
-his rule leverages Defender for IoT to detect multiple scans on the network indicating new devices, functionality, application misconfiguration, or malicious reconnaissance activity on the network.<br>
-## 10) PLC Stop Command (Defender for IoT)
-This rule leverages Defender for IoT to detect PLC stop commands which could indicate improper configuration or malicious activity on the network such as a threat manipulating PLC programming to affect the function of the network.<br>
-## 11) Unauthorized device in the network (Defender for IoT)
-This rule leverages Defender for IoT to detect a new device indicating a legitimate device recently installed on the network or an indication of malicious activity such as a cyber threat attempting to manipulate the SCADA network.<br>
-## 12) Unauthorized DHCP configuration in the network (Defender for IoT)
-This rule leverages Defender for IoT to detect an unauthorized DHCP configuration indicating a possible unauthorized device configuration.<br>
-## 13) Unauthorized PLC changes (Defender for IoT)
- This rule leverages Defender for IoT to detect unauthorized changes to PLC ladder logic code indicating new functionality in the PLC, improper configuration of an application, or malicious activity on the network.<br>
-## 14) Unauthorized remote access to the network (Defender for IoT)
-This rule leverages Defender for IoT to detect unauthorized remote access to network devices, if another device on the network is compromised, target devices can be accessed remotely, increasing the attack surface.<br>
+## 1) Denial of Service (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect attacks that would prevent the use or proper operation of a DCS system including Denial of Service events.<br>
+## 2) Excessive Login Attempts (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect excessive login attempts that may indicate improper service configuration, human error, or malicious activity on the network such as a cyber threat attempting to manipulate the SCADA network.<br>
+## 3) Firmware Updates (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect unauthorized firmware updates that may indicate malicious activity on the network such as a cyber threat that attempts to manipulate PLC firmware to compromise PLC function.<br>
+## 4) High Bandwidth in the network (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect an unusually high bandwidth which may be an indication of a new service/process or malicious activity on the network. An example scenario is a cyber threat attempting to manipulate the SCADA network.<br>
+## 5) Illegal Function Codes for ICS traffic (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect Illegal function codes in SCADA equipment indicating improper application configuration or malicious activity such using illegal values within a protocol to exploit a PLC vulnerability.<br>
+## 6) PLC unsecure key state (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect PLC operating mode changes indicating the PLC is potentially insecure. If the PLC is compromised, devices that interact with it may be impacted. This may affect overall system security and safety.<br>
+## 7) Internet Access (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect an OT device communicating with Internet which is possibly an indication of improper configuration of an application or malicious activity on the network.<br>
+## 8) Suspicious malware found in the network (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect IoT/OT malware found on the network indicating possible attempts to compromise production systems.<br>
+## 9) Multiple scans in the network (Microsoft Defender for IoT)
+his alert leverages Defender for IoT to detect multiple scans on the network indicating new devices, functionality, application misconfiguration, or malicious reconnaissance activity on the network.<br>
+## 10) PLC Stop Command (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect PLC stop commands which could indicate improper configuration or malicious activity on the network such as a threat manipulating PLC programming to affect the function of the network.<br>
+## 11) Unauthorized device in the network (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect a new device indicating a legitimate device recently installed on the network or an indication of malicious activity such as a cyber threat attempting to manipulate the SCADA network.<br>
+## 12) Unauthorized DHCP configuration in the network (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect an unauthorized DHCP configuration indicating a possible unauthorized device configuration.<br>
+## 13) Unauthorized PLC changes (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect unauthorized changes to PLC ladder logic code indicating new functionality in the PLC, improper configuration of an application, or malicious activity on the network.<br>
+## 14) Unauthorized remote access to the network (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect unauthorized remote access to network devices, if another device on the network is compromised, target devices can be accessed remotely, increasing the attack surface.<br>
 
 # Playbooks
 ## 1) Auto Close Incidents
