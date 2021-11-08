@@ -958,6 +958,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
+                            
+                            # Handle optional fields
+                            foreach($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")){
+                                if($yaml.$yamlField){
+                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
+                                }
+                            }
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
