@@ -7,7 +7,7 @@ The Advanced SIEM Information Model (ASIM) enables you to use and create source-
 For more information, see:
 
 - [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Microsoft Sentinel NetworkSessions normalization schema reference](https://aka.ms/AzSentinelNetworkSessionsDoc)
+- [Microsoft Sentinel NetworkSessions normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
 
 <br>
  

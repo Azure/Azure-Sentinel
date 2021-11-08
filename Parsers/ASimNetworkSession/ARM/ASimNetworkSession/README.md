@@ -1,4 +1,4 @@
-# Source agnostic ASIM Network Sessions Normalization Parser
+# Source agnostic ASIM Network Session Normalization Parser
 
 This template deploys the ASIM NetworkSession schema parser for Source agnostic. The parser is a part of the Advanced SIEM Information Model.
 
