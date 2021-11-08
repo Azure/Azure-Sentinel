@@ -110,6 +110,8 @@ class AzureBlobStorageConnector:
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
+                            logging.debug("Writing line");
+                            logging.debug(line);
                             event = json.loads(line)
                             await sentinel.send(event)
                 s = line
