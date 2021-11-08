@@ -1,4 +1,4 @@
-# M365 Defender ASIM NetworkSessions Normalization Parser
+# Microsoft Defender for Endpoint ASIM Network Session Normalization Parser
 
 This template deploys the ASIM NetworkSessions schema parser for M365 Defender. The parser is a part of the Advanced SIEM Information Model.
 
@@ -12,4 +12,4 @@ For more information, see:
 <br>
  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSessions%2FARM%2FNetworkSessionMicrosoft365Defender%2FNetworkSessionMicrosoft365Defender.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSession%2FARM%2FASimNetworkSessionMicrosoft365Defender%2FASimNetworkSessionMicrosoft365Defender.json)
