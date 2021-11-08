@@ -1,0 +1,137 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as PaloAltoCDLEvent and specifying Legacy Category.
+// This function maps Claroty events to Azure Sentinel Information Model (ASIM) (https://docs.microsoft.com/azure/sentinel/normalization).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. PaloAltoCDLEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+CommonSecurityLog
+| where DeviceVendor =~ 'Palo Alto Networks'
+| extend EventVendor = 'Palo Alto Networks'
+| extend EventProduct = 'Cortex Data Lake'
+| extend EventSchemaVersion = 0.2
+| extend EventCount = 1
+| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1
+                     , DeviceCustomNumber2Label, DeviceCustomNumber2
+                     , DeviceCustomNumber3Label, DeviceCustomNumber3
+                     , DeviceCustomString1Label, DeviceCustomString1
+                     , DeviceCustomString2Label, DeviceCustomString2
+                     , DeviceCustomString3Label, DeviceCustomString3
+                     , DeviceCustomString4Label, DeviceCustomString4
+                     , DeviceCustomString5Label, DeviceCustomString5
+                     , DeviceCustomString6Label, DeviceCustomString6
+                     , DeviceCustomDate1Label, DeviceCustomDate1
+                     , DeviceCustomDate2Label, DeviceCustomDate2
+                     , FlexString1Label, FlexString1
+                     , FlexString2Label, FlexString2
+                     , DeviceCustomFloatingPoint1Label, DeviceCustomFloatingPoint1
+                     , DeviceCustomFloatingPoint2Label, DeviceCustomFloatingPoint2
+                     , DeviceCustomIPv6Address1Label, DeviceCustomIPv6Address1
+                     , DeviceCustomIPv6Address2Label, DeviceCustomIPv6Address2
+                     , DeviceCustomIPv6Address3Label, DeviceCustomIPv6Address3)
+| evaluate bag_unpack(packed)
+| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:@.,?%#(){}><\/"\\ ]+)', dynamic(["key","value"]), AdditionalExtensions) on (
+    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
+    | summarize bag = make_bag(packed1)
+)
+| evaluate bag_unpack(bag)
+| project-rename EventProductVersion=DeviceVersion
+                , DvcId=DeviceExternalID
+                , DvcHostname=DeviceName
+                , DstNatPortNumber=DestinationTranslatedPort
+                , DstHostname=DestinationHostName
+                , SrcNatPortNumber=SourceTranslatedPort
+                , SrcFileName=FileName
+                , SrcFilePath=FilePath
+                , DvcIpAddr=["Device IPv6 Address"]
+                , DstIpAddr=["Destination IPv6 Address"]
+                , SrcIpAddr=["Source IPv6 Address"]
+                , NetworkPackets=PacketsTotal
+                , EventMessage=Message
+                , EventSeverity=LogSeverity
+                , EventResult=Activity
+                , DstPortNumber=DestinationPort
+                , DstUserId=DestinationUserID
+                , EventResourceId=DeviceEventClassID
+                , EventResultDetails=reason
+                , HttpRequestMethod=RequestMethod
+                , Url=RequestURL
+                , HttpContentFormat=RequestContext
+                , SrcZone=FromZone
+                , SrcHostname=SourceHostName
+                , DvcAction=DeviceAction
+                , DstDomain=DestinationNTDomain
+                , SrcPortNumber=SourcePort
+                , DvcInboundInterface=DeviceInboundInterface
+                , DvcOutboundInterface=DeviceOutboundInterface
+                , NetworkProtocol=Protocol
+                , NetworkApplicationProtocol=ApplicationProtocol
+                , SrcDomain=SourceNTDomain
+                , SrcUserId=SourceUserID
+                , DstZone=ToZone
+                , NetworkDuration=SessionDuration
+                , NetworkSessionId=SessionID
+                , DstBytes=ReceivedBytes
+                , SrcBytes=SentBytes
+| extend EventTimeIngested = todatetime(ReceiptTime)
+| extend EventStartTime=todatetime(start)
+| extend EventEndTime=todatetime(end)
+| extend EventType=cat
+| extend SrcNatIpAddr=case(isempty(SourceIP), SourceTranslatedAddress, 
+                            pack_array(SourceTranslatedAddress,SourceIP))
+| extend DstNatIpAddr=case(isempty(DestinationIP), DestinationTranslatedAddress,
+                            pack_array(DestinationTranslatedAddress, DestinationIP))
+| extend SrcUsername=case(isempty(suser0), SourceUserName, 
+                            pack_array(SourceUserName,suser0))
+| extend DstUsername=case(isempty(duser0), DestinationUserName,
+                            pack_array(DestinationUserName,duser0))
+| project-away ReceiptTime
+              , Type
+              , cat
+              , start
+              , end
+              , DeviceVendor
+              , DeviceProduct
+              , duser0
+              , DestinationUserName
+              , suser0
+              , SourceUserName
+              , AdditionalExtensions
+              , DestinationTranslatedAddress
+              , DestinationIP
+              , SourceTranslatedAddress
+              , SourceIP
+              , DeviceCustomNumber1Label
+              , DeviceCustomNumber1
+              , DeviceCustomNumber2Label
+              , DeviceCustomNumber2
+              , DeviceCustomNumber3Label
+              , DeviceCustomNumber3
+              , DeviceCustomString1Label
+              , DeviceCustomString1
+              , DeviceCustomString2Label
+              , DeviceCustomString2
+              , DeviceCustomString3Label
+              , DeviceCustomString3
+              , DeviceCustomString4Label
+              , DeviceCustomString4
+              , DeviceCustomString5Label
+              , DeviceCustomString5
+              , DeviceCustomString6Label
+              , DeviceCustomString6
+              , DeviceCustomDate1Label
+              , DeviceCustomDate1
+              , DeviceCustomDate2Label
+              , DeviceCustomDate2
+              , FlexString1Label
+              , FlexString1
+              , FlexString2Label
+              , FlexString2
+              , DeviceCustomIPv6Address1Label
+              , DeviceCustomIPv6Address1
+              , DeviceCustomIPv6Address2Label
+              , DeviceCustomIPv6Address2
+              , DeviceCustomIPv6Address3Label
+              , DeviceCustomIPv6Address3
+              , DeviceCustomFloatingPoint1Label
+              , DeviceCustomFloatingPoint1
+              , DeviceCustomFloatingPoint2Label
+              , DeviceCustomFloatingPoint2

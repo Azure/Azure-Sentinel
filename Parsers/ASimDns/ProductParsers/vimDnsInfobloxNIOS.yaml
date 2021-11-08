@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AzSentinelNormalization
 Description: |
-  This is a Query Parser that is used to map Infoblox NIOS DNS Events (Syslog) to the Azure Sentinel Information Model DNS schema.
+  This is a Query Parser that is used to map Infoblox NIOS DNS Events (Syslog) to the Advanced SIEM Information Model DNS schema.
 ParserName: vimDnsInfobloxNIOS
 ParserParams:
   - Name: starttime
@@ -40,20 +40,26 @@ ParserParams:
   - Name: eventtype
     Type: string
     Default: 'lookup'
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
+  let Sources_by_SourceType=(sourcetype:string){_GetWatchlist('ASimSourceType') | where SearchKey == tostring(sourcetype) | extend Source=column_ifexists('Source','') | where isnotempty(Source)|summarize make_set(Source)};
   let Infoblox=(
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string="*"
     , domain_has_any:dynamic=dynamic([]) 
     , responsecodename:string="*", response_has_ipv4:string="*"
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string="lookup"
+    , disabled:bool=false
     ){
-    let RawData = Syslog 
+    let RawData = Syslog | where not(disabled)
+    | where ProcessName == "named" and SyslogMessage has "client"
+    | where Computer in (Sources_by_SourceType('InfobloxNIOS'))
     // *****************************************************************
     //  Pre-parsing filterring:
     // This filtering is not accurate. Further filtering down the line
         | where
-        // Return empty list if response IPs are passed
           (eventtype=='lookup')
           and (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime) 
@@ -61,10 +67,8 @@ ParserQuery: |
           and (array_length(domain_has_any) ==0 or SyslogMessage has_any (domain_has_any))
           and (responsecodename=="*" or SyslogMessage has responsecodename)
           and (array_length(response_has_any_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, response_has_any_prefix))
-          and (response_has_any_prefix=='*' or has_ipv4(SyslogMessage,response_has_any_prefix))
+          and (response_has_ipv4=='*' or has_ipv4(SyslogMessage,response_has_ipv4))
     // *****************************************************************
-    | where ProcessName == "named" and SyslogMessage has "client"
-      | where Computer in ("datasource") and Facility == "local6"
       | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
       | extend ResponseTime = todatetime(Parser[0]),
                Log_Type = tostring(Parser[1]),
@@ -129,4 +133,4 @@ ParserQuery: |
       , QueryClassName=DnsQueryClassName
       , Flags=DnsFlags
     };
-    Infoblox(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
+    Infoblox(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)

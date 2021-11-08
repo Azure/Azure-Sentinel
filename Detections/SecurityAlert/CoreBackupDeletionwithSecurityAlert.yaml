@@ -1,0 +1,56 @@
+id: 011c84d8-85f0-4370-b864-24c13455aa94
+name: CoreBackUp Deletion in correlation with other related security alerts
+description: |
+  'This query will help detect attackers attempt to delete backup containers in correlation with other alerts that could have triggered to help possibly reveal more details of attacker activity. 
+  Though such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  SecurityAlert
+  | extend Extprop = parse_json(ExtendedProperties)
+  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
+  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
+  | extend IpAddress = tostring(parse_json(ExtendedProperties).["IpAddress"]) 
+  | project TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties
+  | extend timestamp = TimeGenerated, Account, MachineName = Computer, IpAddress
+  | join kind=inner
+  (
+  CoreAzureBackup
+  | where State =~ "Deleted"
+  | where OperationName =~ "BackupItem"
+  | extend data = split(BackupItemUniqueId, ";")
+  | extend AzureLocation = data[0], VaultId=data[1], MachineName=data[2], DrivesBackedUp=data[3]
+  | project timestamp = TimeGenerated, AzureLocation, VaultId, tostring(MachineName), DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName
+  )
+  on MachineName
+  | project timestamp, AlertName, HostCustomEntity = MachineName, AccountCustomEntity = Account, ResourceCustomEntity = _ResourceId, IPCustomEntity = IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
