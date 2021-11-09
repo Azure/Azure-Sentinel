@@ -25,7 +25,7 @@ AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
 
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
-MAX_PERIOD_MINUTES = 60 * 24 * 7
+MAX_PERIOD_MINUTES = 60 * 1 * 1
 
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
