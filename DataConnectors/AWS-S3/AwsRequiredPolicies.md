@@ -1,7 +1,7 @@
 
 # AWS require polices
-The required policise for AWS S3 connectors. 
-please note to replac the *{place holder}* values in the policies
+The required policies for AWS S3 connectors. 
+please note to replac the *${place holder}* values in the policies
 
 ##  common polices
 These policies are required for all S3 connectors. 
@@ -72,7 +72,8 @@ These policies are required for all S3 connectors.
 ```
 
 ## Guard Duty
-### Kms
+
+### KMS
 ```JSON
 {
   "Statement": [
@@ -105,8 +106,9 @@ These policies are required for all S3 connectors.
   ]
 }
 ```
+
 ### S3
- -	Additional policies to allow Guard Duty send logs to S3, and read the data using KMS
+ -	Additional policies to allow Guard Duty to send logs to S3, and read the data using KMS
 ```JSON
 {
   "Statement": [
@@ -171,14 +173,132 @@ These policies are required for all S3 connectors.
   ]
 }
 ```
-## Tutorial
 
-The following is a Terrifically Simple JSON document:
+## CloudTrail
+
+### KMS (Optional) 
 ```JSON
 {
- "name": "Martin",
- "bornOn": "1957-01-05",
- "bornIn": "http://www.scotland.org#"
+  "Statement": [
+    {
+      "Sid": "Allow CloudTrail to encrypt logs",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "kms:GenerateDataKey*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "Allow use of the key",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "${roleArn}"
+        ]
+      },
+      "Action": [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*"
+    }
+  ]
 }
 ```
 
+### S3 
+Additional S3 policies for CloudTrail. Please choose the relevant S3 policies from this section
+ **Allow cloudTrail to send logs to S3**
+```JSON
+{
+  "Statement": [
+    {
+      "Sid": "AWSCloudTrailAclCheck20150319",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "s3:GetBucketAcl",
+      "Resource": "arn:aws:s3:::${bucketName}"
+    },
+    {
+      "Sid": "AWSCloudTrailWrite20150319",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::${bucketName}/AWSLogs/${callerAccount}/*",
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-acl": "bucket-owner-full-control"
+        }
+      }
+    }
+  ]
+}
+```
+
+ **Allow logs for cross organization**
+```JSON
+{
+  "Statement": [
+    {
+      "Sid": "AWSCloudTrailWrite20150319",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": [
+          "cloudtrail.amazonaws.com"
+        ]
+      },
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::${bucketName}/AWSLogs/${organizationId}/*",
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-acl": "bucket-owner-full-control"
+        }
+      }
+    }
+  ]
+}
+```
+
+ **Allow S3 to use KMS for th logs**
+```JSON
+{
+  "Statement": [
+    {
+      "Sid": "Deny unencrypted object uploads. This is optional",
+      "Effect": "Deny",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::${bucketName}/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "aws:kms"
+        }
+      }
+    },
+    {
+      "Sid": "Deny incorrect encryption header. This is optional",
+      "Effect": "Deny",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::${bucketName}/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption-aws-kms-key-id": "${kmsArn}"
+        }
+      }
+    }
+  ]
+}
+```
