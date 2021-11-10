@@ -24,7 +24,7 @@ AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
 
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
-MAX_PERIOD_MINUTES = 60 * 24 * 7
+MAX_PERIOD_MINUTES = 60 * 24 * 1
 
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
@@ -43,8 +43,7 @@ async def main(mytimer: func.TimerRequest):
     prisma = PrismaCloudConnector(API_URL, USER, PASSWORD)
 
     tasks = [
-        prisma.process_alerts(),
-        prisma.process_audit_logs()
+        prisma.process_alerts()
     ]
     await asyncio.gather(*tasks)
 
