@@ -112,8 +112,12 @@ class AzureBlobStorageConnector:
                         if line:
                             logging.info("Writing line value:");
                             logging.info(line);
-                            event = json.loads(line)
-                            await sentinel.send(event)
+                            try :
+                                event = json.loads(line)
+                                await sentinel.send(event)
+                            except Exception as err:
+                                logging.error("Error while loading json Event {}".format(str(err)))
+                                raise err
                 s = line
             if s:
                 logging.info("Writing s value:");
