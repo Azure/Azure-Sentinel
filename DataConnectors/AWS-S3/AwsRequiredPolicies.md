@@ -268,7 +268,7 @@ Additional S3 policies for CloudTrail. Please choose the relevant S3 policies fr
       }
     }
   ]
-}s
+}
 ```
 
 **Allow S3 to use KMS for the logs**
