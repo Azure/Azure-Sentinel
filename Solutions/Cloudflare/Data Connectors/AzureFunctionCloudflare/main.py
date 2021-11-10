@@ -116,14 +116,19 @@ class AzureBlobStorageConnector:
                                 logging.info(line);
                                 event = json.loads(line)
                             except ValueError as e:
-                                logging.error("Error while loading json Event {}".format(str(e)))
+                                logging.error("Error while loading json Event at line value {}".format(str(e)))
                                 raise e
                             await sentinel.send(event)
                 s = line
             if s:
-                logging.info("Writing s value:");
-                logging.info(s);
-                event = json.loads(s)
+                try :
+                    logging.info("Writing s value:");
+                    logging.info("Printing from blob {}".format(blob['name']));
+                    logging.info(s);
+                    event = json.loads(s)
+                except ValueError as e:
+                     logging.error("Error while loading json Event at s value {}".format(str(e)))
+                     raise e
                 await sentinel.send(event)
             await sentinel.flush()
             await self.delete_blob(blob, container_client)
