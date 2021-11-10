@@ -1,5 +1,5 @@
 
-# AWS require polices
+# AWS required polices
 The required policies for AWS S3 connectors. 
 please note to replac the *${place holder}* values in the policies
 
