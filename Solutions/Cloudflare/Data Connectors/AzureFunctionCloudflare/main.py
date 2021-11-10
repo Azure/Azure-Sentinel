@@ -95,12 +95,12 @@ class AzureBlobStorageConnector:
         return duration > max_duration
 
     async def delete_blob(self, blob, container_client):
-        logging.debug("Deleting blob {}".format(blob['name']))
+        logging.info("Deleting blob {}".format(blob['name']))
         await container_client.delete_blob(blob['name'])
 
     async def process_blob(self, blob, container_client):
         async with self.semaphore:
-            logging.debug("Start processing {}".format(blob['name']))
+            logging.info("Start processing {}".format(blob['name']))
             sentinel = self._create_sentinel_client()
             blob_cor = await container_client.download_blob(blob['name'])
             s = ''
@@ -124,6 +124,6 @@ class AzureBlobStorageConnector:
             await self.delete_blob(blob, container_client)
             self.total_blobs += 1
             self.total_events += sentinel.successfull_sent_events_number
-            logging.debug("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
+            logging.info("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
             if self.total_blobs % 100 == 0:
                 logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))
