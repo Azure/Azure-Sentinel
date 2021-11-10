@@ -111,6 +111,7 @@ class AzureBlobStorageConnector:
                     if n < len(lines) - 1:
                         if line:
                             logging.info("Writing line value:");
+                            logging.info("Printing from blob {}".format(blob['name']));
                             logging.info(line);
                             try :
                                 event = json.loads(line)
