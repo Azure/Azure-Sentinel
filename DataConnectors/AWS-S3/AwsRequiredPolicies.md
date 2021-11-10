@@ -10,7 +10,6 @@ These policies are required for all S3 connectors.
  - Allow S3 sending data to the queue
  - Enable Arn role to read, delete and change messages visibilities in the queue
  - {roleArn} is the assumed role ARN you have created for AWS Sentinel account
- - {roleArn} is the assumed role ARN you have created for AWS Sentinel account 
 ```JSON
 {
   "Version": "2008-10-17",
@@ -70,6 +69,8 @@ These policies are required for all S3 connectors.
   ]
 }
 ```
+
+<br />
 
 ## Guard Duty
 
@@ -174,6 +175,8 @@ These policies are required for all S3 connectors.
 }
 ```
 
+<br />
+
 ## CloudTrail
 
 ### KMS (Optional) 
@@ -212,7 +215,8 @@ These policies are required for all S3 connectors.
 
 ### S3 
 Additional S3 policies for CloudTrail. Please choose the relevant S3 policies from this section
- **Allow cloudTrail to send logs to S3**
+
+**Allow cloudTrail to send logs to S3**
 ```JSON
 {
   "Statement": [
@@ -243,7 +247,7 @@ Additional S3 policies for CloudTrail. Please choose the relevant S3 policies fr
 }
 ```
 
- **Allow logs for cross organization**
+**Allow logs for cross organization**
 ```JSON
 {
   "Statement": [
@@ -264,10 +268,10 @@ Additional S3 policies for CloudTrail. Please choose the relevant S3 policies fr
       }
     }
   ]
-}
+}s
 ```
 
- **Allow S3 to use KMS for th logs**
+**Allow S3 to use KMS for the logs**
 ```JSON
 {
   "Statement": [
