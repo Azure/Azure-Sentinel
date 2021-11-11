@@ -116,6 +116,7 @@ class AzureBlobStorageConnector:
                                 logging.info(line);
                                 event = json.loads(line)
                             except ValueError as e:
+                                logging.info("Blob with Invalid json error in wiring line value: {}".format(blob['name']));
                                 logging.error("Error while loading json Event at line value {}".format(str(e)))
                                 raise e
                             await sentinel.send(event)
@@ -127,6 +128,7 @@ class AzureBlobStorageConnector:
                     logging.info(s);
                     event = json.loads(s)
                 except ValueError as e:
+                     logging.info("Blob with Invalid json error in wiring s value: {}".format(blob['name']));
                      logging.error("Error while loading json Event at s value {}".format(str(e)))
                      raise e
                 await sentinel.send(event)
