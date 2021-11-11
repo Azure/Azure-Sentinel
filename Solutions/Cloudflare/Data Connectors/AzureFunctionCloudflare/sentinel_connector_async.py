@@ -51,7 +51,7 @@ class AzureSentinelConnectorAsync:
         return authorization
 
     async def _post_data(self, session: aiohttp.ClientSession, workspace_id, shared_key, body, log_type):
-        logging.info('Start sending data to sentinel')
+        logging.debug('Start sending data to sentinel')
         events_number = len(body)
         body = json.dumps(body)
         method = 'POST'
@@ -83,7 +83,7 @@ class AzureSentinelConnectorAsync:
                     self.failed_sent_events_number += events_number
                     raise err
             else:
-                logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
+                logging.debug('{} events have been successfully sent to Azure Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
                 break
 

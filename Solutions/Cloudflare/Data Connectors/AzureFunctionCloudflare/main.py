@@ -95,12 +95,12 @@ class AzureBlobStorageConnector:
         return duration > max_duration
 
     async def delete_blob(self, blob, container_client):
-        logging.info("Deleting blob {}".format(blob['name']))
+        logging.debug("Deleting blob {}".format(blob['name']))
         await container_client.delete_blob(blob['name'])
 
     async def process_blob(self, blob, container_client):
         async with self.semaphore:
-            logging.info("Start processing {}".format(blob['name']))
+            logging.debug("Start processing {}".format(blob['name']))
             sentinel = self._create_sentinel_client()
             blob_cor = await container_client.download_blob(blob['name'])
             s = ''
@@ -111,31 +111,29 @@ class AzureBlobStorageConnector:
                     if n < len(lines) - 1:
                         if line:
                             try :
+                                event = json.loads(line)
+                            except ValueError as e:
                                 logging.info("Writing line value:");
                                 logging.info("Printing from blob {}".format(blob['name']));
                                 logging.info(line);
-                                event = json.loads(line)
-                            except ValueError as e:
-                                logging.info("Blob with Invalid json error in wiring line value: {}".format(blob['name']));
                                 logging.error("Error while loading json Event at line value {}".format(str(e)))
                                 raise e
                             await sentinel.send(event)
                 s = line
             if s:
                 try :
+                    event = json.loads(s)
+                except ValueError as e:
                     logging.info("Writing s value:");
                     logging.info("Printing from blob {}".format(blob['name']));
                     logging.info(s);
-                    event = json.loads(s)
-                except ValueError as e:
-                     logging.info("Blob with Invalid json error in wiring s value: {}".format(blob['name']));
-                     logging.error("Error while loading json Event at s value {}".format(str(e)))
-                     raise e
+                    logging.error("Error while loading json Event at s value {}".format(str(e)))
+                    raise e
                 await sentinel.send(event)
             await sentinel.flush()
             await self.delete_blob(blob, container_client)
             self.total_blobs += 1
             self.total_events += sentinel.successfull_sent_events_number
-            logging.info("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
+            logging.debug("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
             if self.total_blobs % 100 == 0:
                 logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))
