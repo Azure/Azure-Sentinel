@@ -20,7 +20,34 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let RCodeTable=datatable(ResponseCode:int,ResponseCodeName:string)[
+  let EventTypeTable=datatable(EventOriginalType:int,EventType:string,EventSubType:string, EventResult:string)[
+    256, 'Query', 'request', 'NA'
+  , 257, 'Query', 'response', 'Success'
+  , 258, 'Query', 'response', 'Based on RCODE'
+  , 259, 'Query', 'response', 'Based on RCODE'
+  , 260, 'Query', 'request', 'NA'
+  , 261, 'Query', 'response', 'NA'
+  , 262, 'Query', 'response', 'Based on RCODE'
+  , 263, 'Update', 'request', 'NA'
+  , 264, 'Update', 'response', 'Based on RCODE'
+  , 265, 'XFR', 'request', 'NA' 
+  , 266, 'XFR', 'request', 'NA'
+  , 267, 'XFR', 'response', 'Based on RCODE'
+  , 268, 'XFR', 'response', 'Based on RCODE'
+  , 269, 'XFR', 'request', 'NA'
+  , 270, 'XFR', 'request', 'NA'
+  , 271, 'XFR', 'response', 'Based on RCODE'
+  , 272, 'XFR', 'response', 'Based on RCODE'
+  , 273, 'XFR', 'request', 'NA'
+  , 274, 'XFR', 'request', 'NA'
+  , 275, 'XFR', 'response', 'Success'
+  , 276, 'XFR', 'response', 'Success'
+  , 277, 'Update', 'request', 'NA'
+  , 278, 'Update', 'response', 'Based on RCODE'
+  , 279, 'Query', 'NA', 'NA'
+  , 280, 'Query', 'NA', 'NA'
+  ];
+  let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
      0, 'NOERROR'
    , 1, "FORMERR"
    , 2,"SERVFAIL"
@@ -44,7 +71,7 @@ ParserQuery: |
    , 23,'BADCOOKIE'];
   let DNSQuery_MS=(disabled:bool=false){
     DnsEvents | where not(disabled)
-  |  where EventId in (257,258)
+  |  where EventId < 500
   | project-rename
          Dvc=Computer ,
          SrcIpAddr = ClientIP,
@@ -53,7 +80,7 @@ ParserQuery: |
          EventReportUrl = ReportReferenceLink,
          DnsResponseName = IPAddresses,
          DnsQuery = Name,
-         ResponseCode = ResultCode
+         DnsResponseCode = ResultCode
   | extend
   // ******************* Mandatory
          EventCount=int(1),
@@ -68,21 +95,22 @@ ParserQuery: |
          EventType = 'lookup',
          DvcHostname = Dvc,
          EventResult = iff(EventId==257 and ResponseCode==0 ,'Success','Failure')
-     | lookup RCodeTable on ResponseCode
-     | extend EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
+    | lookup RCodeTable on DnsResponseCode
+    | lookup EventTypeTable on EventOriginalType
+    | extend EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
                                     , ResponseCode between (3841 .. 4095), 'Reserved for Private Use'
-                                    , 'Unassigned')
-    // **************Aliases
+                                    , 'Unassigned'),
+      EventResult = iff (EventResult == "Based on RCODE", iff(DnsResponseCode == 0, "Success", "Failure"),EventResult)
+  // **************Aliases
     | extend
         ResponseCodeName=EventResultDetails,
         Domain=DnsQuery,
         IpAddr=SrcIpAddr,
-    // Backward Competability
+    // Backward Compatibility
       Query=DnsQuery
       , QueryTypeName=DnsQueryTypeName
       , ResponseName=DnsResponseName
-    // OSSEM 
-      , DnsResponseCode=ResponseCode
-      , DnsResponseCodeName=ResponseCodeName
+      , ResponseCode=DnsResponseCode
+      , ResponseCodeName=DnsResponseCodeName
         };
   DNSQuery_MS(disabled)
