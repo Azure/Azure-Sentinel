@@ -958,12 +958,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
+                            
+                            # Handle optional fields
+                            foreach($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")){
+                                if($yaml.$yamlField){
+                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
+                                }
+                            }
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
-                                apiVersion = "2020-01-01";
+                                apiVersion = "2021-03-01-preview";
                                 kind       = "Scheduled";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
