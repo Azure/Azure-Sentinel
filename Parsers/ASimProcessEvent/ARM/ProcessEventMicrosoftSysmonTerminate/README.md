@@ -1,13 +1,13 @@
 # Microsoft Windows Events Sysmon ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Microsoft Windows Events Sysmon. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM ProcessEvent schema parser for Microsoft Windows Events Sysmon. The parser is a part of the Advanced SIEM Information Model.
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel ProcessEvent normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Microsoft Sentinel ProcessEvent normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
 
 <br>
  
