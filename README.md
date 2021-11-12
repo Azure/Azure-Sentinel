@@ -37,6 +37,7 @@ Brand new or update to a contribution via these methods:
 
 ## Pull Request
 * After you push your changes, you will need to submit the [Pull Request (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests)
+* Details about the Proposed Changes are required, be sure to include a minimal level of detail so a review can clearly understand the reason for the change and what he change is related to in the code.
 * After submission, check the [Pull Request](https://github.com/Azure/Azure-Sentinel/pulls) for comments
 * Make changes as suggested and update your branch or explain why no change is needed. Resolve the comment when done.
 
