@@ -25,7 +25,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 
 [**Module 1 – Setting up the environment**](./Modules/Module-1-Setting-up-the-environment.md)
 - [The Azure Sentinel workspace](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-the-azure-sentinel-workspace)
-- [Deploy the Azure Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-azure-sentinel-training-lab-solution)
+- [Deploy the Azure Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-the-azure-sentinel-training-lab-solution)
 - [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-3-configure-azure-sentinel-playbook)
  
 [**Module 2 – Data Connectors**](./Modules/Module-2-Data-Connectors.md)
