@@ -31,7 +31,8 @@ Brand new or update to a contribution via these methods:
     * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
     * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
     * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
-    * Do your additions/updates in GitHub Desktop 
+    * Do your additions/updates in GitHub Desktop
+    * Be sure to merge master back to your branch before you push. 
     * [Push your changes to GitHub](https://help.github.com/en/github/using-git/pushing-commits-to-a-remote-repository)
 
 ## Pull Request
