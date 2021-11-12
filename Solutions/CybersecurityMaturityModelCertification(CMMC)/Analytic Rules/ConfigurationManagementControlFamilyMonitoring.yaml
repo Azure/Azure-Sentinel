@@ -1,0 +1,50 @@
+id: 2de5308c-aab6-4eaf-8c1c-cf9ad251057e
+name: (Preview) CMMC Configuration Management Control Family Monitoring
+description: |
+  'CMMC Control Assessments have Deviated from Configured Threshold Baselines'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let CMMCPolicyMapping = externaldata(RecommendationDisplayName:string,ControlFamily:string,ControlNumber:string,MaturityLevel:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/CMMCPolicyMapping.csv"] with (format="csv", ignoreFirstRecord=True);
+  SecurityRecommendation
+    | join kind=rightouter CMMCPolicyMapping on RecommendationDisplayName
+    | where ControlFamily == 'Configuration Management'
+    | summarize
+        Assessments = count(),
+        Success = countif(RecommendationState == 'Healthy' or RecommendationState == 'NotApplicable'),
+        Failed = countif(RecommendationState == 'Unhealthy')
+        by ControlFamily, ControlNumber, MaturityLevel, RecommendationName
+    | extend SuccessRatePercentage = (Success * 100 / Assessments)
+    | extend FailedRatePercentage = (Failed * 100 / Assessments)
+    | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+    | project
+        ControlNumber,
+        ControlFamily,
+        MaturityLevel,
+        RecommendationName,
+        Assessments,
+        SuccessRatePercentage,
+        FailedRatePercentage,
+        RemediationLink
+    | where RecommendationName <> ''
+    // | where RecommendationName <> '' //Filter Out or Suppress Recommendations
+    // | where MaturityLevel == 'ML-3' //Filter by Maturity Level 
+    | where FailedRatePercentage > 30 //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within Organizational Needs
+    | sort by FailedRatePercentage desc
+    | limit 250
+    | extend URLCustomEntity = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

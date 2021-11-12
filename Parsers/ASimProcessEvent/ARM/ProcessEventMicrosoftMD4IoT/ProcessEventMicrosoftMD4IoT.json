@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessEventMD4IoT",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Azure Defender for IoT Process Events Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessEventMD4IoT",
+            "query": "let ProcessEvents_MD4IoT=()\n {\n   SecurityIoTRawEvent \n   | where RawEventName == \"Process\" \n   | extend\n     EventDetails = todynamic(EventDetails)\n     //\n   | extend\n     // Event\n     EventOriginalUid = tostring(EventDetails.OriginalEventId), \n     EventCount = toint(EventDetails.HitCount), \n     EventProduct = 'Azure Defender for IoT', \n     EventVendor = 'Microsoft', \n     EventSchemaVersion = '0.1.0', \n     EventStartTime = todatetime(EventDetails.TimestampUTC), \n     EventEndTime = todatetime(TimeGenerated), \n     EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), \n     EventSubType = tostring(EventDetails.EventType),\n     EventResult = 'Success', \n     //\n     // Device\n     DvcHostname = tostring(EventDetails.DeviceId), \n     //\n     // Users\n     //\n     // Process\n     TargetProcessId = tostring(EventDetails.ProcessId), \n     TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), \n     TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline,\" \")[0])\n     //\n   | extend\n     DvcOs = iif (EventDetails.MessageSource == \"Linux\", \"Linux\", \"Windows\") // Intermediate fix\n   | extend\n     TargetUsernameType = iif (DvcOs == \"Windows\", \"Windows\", \"Simple\"), \n     TargetUsername = iff (DvcOs == \"Windows\", tostring(EventDetails.UserName), \"\"), \n     ActingProcessId = iff (DvcOs == \"Windows\", tostring(EventDetails.ParentProcessId), \"\") \n   | project-rename\n     EventProductVersion = AgentVersion, // Not available in Windows\n     _ResourceId = AssociatedResourceId, \n     _SubscriptionId = AzureSubscriptionId \n     //\n     // -- aliases\n   | extend \n     User = TargetUsername, \n     CommandLine = TargetProcessCommandLine, \n     Process = TargetProcessName, \n     Dvc = DvcHostname \n   | project-away \n     DeviceId\n  };\n  ProcessEvents_MD4IoT",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

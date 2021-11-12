@@ -13,12 +13,17 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AzSentinelNormalization
 Description: |
-  This is a Query Parser that is used to map Infoblox NIOS DNS Events (Syslog) to the Azure Sentinel Information Model DNS schema.
+  This is a Query Parser that is used to map Infoblox NIOS DNS Events (Syslog) to the Advanced SIEM Information Model DNS schema.
 ParserName: ASimDnsInfobloxNIOS
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let Infoblox=(){
-    let RawData = Syslog | where ProcessName == "named" and SyslogMessage has "client"
-      | where Computer in ("datasource") and Facility == "local6"
+  let Sources_by_SourceType=(sourcetype:string){_GetWatchlist('ASimSourceType') | where SearchKey == tostring(sourcetype) | extend Source=column_ifexists('Source','') | where isnotempty(Source)| distinct Source };
+  let Infoblox=(disabled:bool=false){
+    let RawData = Syslog | where not(disabled) | where ProcessName == "named" and SyslogMessage has "client"
+      | where Computer in (Sources_by_SourceType('InfobloxNIOS'))
       | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
       | extend ResponseTime = todatetime(Parser[0]),
                Log_Type = tostring(Parser[1]),
@@ -74,4 +79,4 @@ ParserQuery: |
       , QueryClassName=DnsQueryClassName
       , Flags=DnsFlags
     };
-    Infoblox
+    Infoblox(disabled)

@@ -2,6 +2,8 @@
 
 ![logo](./media/Sentinel21Logo.PNG)
 
+**Author: Javier Soriano; Sreedhar Ande; Hesham Saad**
+
 Azure Sentinel All in One is a project that seeks to speed up deployment and initial configuration tasks of an Azure Sentinel environment. This is ideal for Proof of Concept scenarios and connector onboarding when highly privileged users are needed.
 
 There's two versions of Sentinel All-In-One: **Powershell script** and **ARM template**. There's slight differences on what things get automated with each. We try to summarize them here:
