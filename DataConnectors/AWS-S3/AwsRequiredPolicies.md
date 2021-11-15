@@ -261,7 +261,8 @@ Apply the following additional policies if you are ingesting CloudTrail logs.
    | {organizationId} | The account ID for an organization |
    | {kmsArn}         | The ARN of the key you created to encrypt/decrypt log files |
 
-**Allow CloudTrail to send logs to S3 bucket**<br />
+**Allow CloudTrail to send logs to an S3 bucket**
+
 If you apply this policy, you must also apply one of the two policies that follow.
 
 ```JSON
