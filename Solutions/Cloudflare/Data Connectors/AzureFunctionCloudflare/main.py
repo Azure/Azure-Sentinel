@@ -80,9 +80,6 @@ class AzureBlobStorageConnector:
     def _create_container_client(self):
         return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False, max_single_get_size=2*1024*1024, max_chunk_get_size=2*1024*1024)
 
-    def _create_sentinel_client(self):
-        return AzureSentinelConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
-
     async def get_blobs(self):
         container_client = self._create_container_client()
         async with container_client:
@@ -103,7 +100,7 @@ class AzureBlobStorageConnector:
     async def process_blob(self, blob, container_client, session: aiohttp.ClientSession):
         async with self.semaphore:
             logging.info("Start processing {}".format(blob['name']))
-            sentinel = self._create_sentinel_client()
+            sentinel = AzureSentinelConnectorAsync(session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
             blob_cor = await container_client.download_blob(blob['name'])
             s = ''
             async for chunk in blob_cor.chunks():
