@@ -262,7 +262,7 @@ Apply the following additional policies if you are ingesting CloudTrail logs.
    | {kmsArn}         | The ARN of the key you created to encrypt/decrypt log files |
 
 **Allow CloudTrail to send logs to S3 bucket**<br />
- please note that you must add *s3:PutObject* action policy, in addition to this policy.
+If you apply this policy, you must also apply one of the two policies that follow.
 
 ```JSON
 {
