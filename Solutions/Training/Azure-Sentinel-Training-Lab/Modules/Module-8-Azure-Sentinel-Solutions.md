@@ -5,7 +5,7 @@
 
 ## Objectives
 
-In this module you will learn how to use the Azure Sentinel Content Hub to discover and deploy new content. Our official documentation on this topic is available here: [Azure Sentinel Content hub catalog](https://docs.microsoft.com/en-us/azure/sentinel/sentinel-solutions-catalog).
+In this module you will learn how to use the Azure Sentinel Content Hub to discover and deploy new content. Our official documentation on this topic is available here: [Azure Sentinel Content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog).
 
 #### Prerequisites
 
