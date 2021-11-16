@@ -344,7 +344,7 @@ if ($env:GCP -eq "Yes") {
         $body = @{
             "properties" = @{
                 "displayName" = "GCPIPRanges"
-                "provider" = "Goolge"
+                "provider" = "Google"
                 "source" = "https://www.gstatic.com/ipranges/cloud.json"
                 "itemsSearchKey" = "IPRange"
                 "rawContent" = "$rawContent"

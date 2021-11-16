@@ -1,0 +1,522 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.22",
+  "parameters": {
+    "AzureMonitorLogs-ConnectionName": {
+      "type": "string",
+      "defaultValue": "azuremonitorlogs-1"
+    },
+    "AzureMonitorLogs-ConnectionDisplayName": {
+      "type": "string",
+      "defaultValue": "Azure Monitor Logs"
+    },
+    "SMTP-ConnectionName": {
+      "type": "string",
+      "defaultValue": "smtp-1"
+    },
+    "SMTP-ConnectionDisplayName": {
+      "type": "string",
+      "defaultValue": "SMTP-Outbound"
+    },
+    "SMTP-ServerAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "Your O365 SMTP Server Address. Use your MX record e.g. yourdomain-com.mail.protection.outlook.com"
+      },
+      "defaultValue": "<yourdomain-com>.mail.protection.outlook.com"
+    },
+    "SMTP-UserName": {
+      "type": "string",
+      "metadata": {
+        "description": "UserName: For unauthenticated SMTP, leave blank"
+      },
+      "defaultValue": ""
+    },
+    "SMTP-Password": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password:  For unauthenticated SMTP, leave blank"
+      },
+      "defaultValue": ""
+    },
+    "SMTP-FromAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "The <From> address to use with reports"
+      },
+      "defaultValue": "<sender>@<domain>"
+    },
+      "SMTP-Port": {
+        "type": "int",
+        "metadata": {
+          "description": "SMTP Port Number (example: 587).  For unauthenticated SMTP, use 25"
+        },
+        "defaultValue": 25
+      },
+      "SMTP-EnableSSL": {
+        "type": "bool",
+        "metadata": {
+          "description": "Enable SSL? (True/False)"
+        },
+        "defaultValue": false
+      },
+      "Location": {
+        "type": "string",
+        "minLength": 1,
+        "allowedValues": [
+          "eastasia",
+          "southeastasia",
+          "centralus",
+          "eastus",
+          "eastus2",
+          "westus",
+          "northcentralus",
+          "southcentralus",
+          "northeurope",
+          "westeurope",
+          "japanwest",
+          "japaneast",
+          "brazilsouth",
+          "australiaeast",
+          "australiasoutheast",
+          "southindia",
+          "centralindia",
+          "westindia",
+          "canadacentral",
+          "canadaeast",
+          "uksouth",
+          "ukwest",
+          "westcentralus",
+          "westus2",
+          "koreacentral",
+          "koreasouth",
+          "francecentral",
+          "francesouth",
+          "uaecentral",
+          "uaenorth",
+          "southafricanorth",
+          "southafricawest",
+          "switzerlandnorth",
+          "switzerlandwest",
+          "germanynorth",
+          "germanywestcentral",
+          "norwayeast",
+          "brazilsoutheast"
+        ],
+        "defaultValue": "westus2"
+
+      },
+      "LogicAppName": {
+        "type": "string",
+        "minLength": 1,
+        "defaultValue": "CSV_Report_Export"
+      }
+    },
+    "variables": {},
+    "resources": [
+      {
+        "properties": {
+          "state": "Enabled",
+          "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "actions": {
+              "For_each_daily_report": {
+                "type": "Foreach",
+                "foreach": "@body('Get_Daily_Report_List')?['value']",
+                "actions": {
+                  "Create_Daily_CSV_table": {
+                    "type": "Table",
+                    "inputs": {
+                      "from": "@body('Run_daily_report_query_and_list_results')?['value']",
+                      "format": "CSV"
+                    },
+                    "runAfter": {
+                      "Run_daily_report_query_and_list_results": [
+                        "Succeeded"
+                      ]
+                    }
+                  },
+                  "Run_daily_report_query_and_list_results": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": "@items('For_each_daily_report')?['QueryBody']",
+                      "path": "/queryData",
+                      "queries": {
+                        "subscriptions": "[subscription().subscriptionId]",
+                        "resourcegroups": "[resourceGroup().name]",
+                        "resourcetype": "Log Analytics Workspace",
+                        "resourcename": "",
+                        "timerange": "24h"
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "Send_Daily_Emails": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['smtp']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "From": "[parameters('SMTP-FromAddress')]",
+                        "To": "@items('For_each_daily_report')?['Recipients']",
+                        "Subject": "@{items('For_each_daily_report')?['Title']} daily report run completed",
+                        "Body": "<p>The Daily Report Job has completed. &nbsp;Please find the results of the report '@{items('For_each_daily_report')?['Title']}' attached to this email</p>",
+                        "Attachments": [
+                          {
+                            "ContentData": "@{base64(body('Create_Daily_CSV_table'))}",
+                            "ContentType": "text/csv",
+                            "FileName": "@{items('For_each_daily_report')?['Title']}.csv"
+                          }
+                        ]
+                      },
+                      "path": "/SendEmailV3"
+                    },
+                    "runAfter": {
+                      "Create_Daily_CSV_table": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Get_Daily_Report_List": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Get_Daily_Report_List": {
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "body": "_GetWatchlist(\"Reporting\") | where Schedule == \"Daily\"",
+                  "path": "/queryData",
+                  "queries": {
+                    "subscriptions": "[subscription().subscriptionId]",
+                    "resourcegroups": "[resourceGroup().name]",
+                    "resourcetype": "Log Analytics Workspace",
+                    "resourcename": "",
+                    "timerange": "Last 24 hours"
+                  }
+                },
+                "runAfter": {}
+              },
+              "Monthly": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "equals": [
+                        "@dayOfMonth(utcNow())",
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "actions": {
+                  "For_each_monthly_report": {
+                    "type": "Foreach",
+                    "foreach": "@body('Get_Monthly_Report_List')?['value']",
+                    "actions": {
+                      "Create_Monthly_CSV_Reports": {
+                        "type": "Table",
+                        "inputs": {
+                          "from": "@body('Run_monthly_queries_and_list_results')?['value']",
+                          "format": "CSV"
+                        },
+                        "runAfter": {
+                          "Run_monthly_queries_and_list_results": [
+                            "Succeeded"
+                          ]
+                        }
+                      },
+                      "Run_monthly_queries_and_list_results": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": "@items('For_each_monthly_report')?['QueryBody']",
+                          "path": "/queryData",
+                          "queries": {
+                            "subscriptions": "[subscription().subscriptionId]",
+                            "resourcegroups": "[resourceGroup().name]",
+                            "resourcetype": "Log Analytics Workspace",
+                            "resourcename": "",
+                            "timerange": "30d"
+                          }
+                        },
+                        "runAfter": {}
+                      },
+                      "Send_Monthly_Emails": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['smtp']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": {
+                            "From": "[parameters('SMTP-FromAddress')]",
+                            "To": "@items('For_each_monthly_report')?['Recipients']",
+                            "Subject": "'@{items('For_each_monthly_report')?['Title']}' Monthly report completed",
+                            "Body": "<p>The monthly report '@{items('For_each_monthly_report')?['Title']}' has completed and is attached.</p>",
+                            "Attachments": [
+                              {
+                                "ContentData": "@{base64(body('Create_Monthly_CSV_Reports'))}",
+                                "ContentType": "text/csv",
+                                "FileName": "@{items('For_each_monthly_report')?['Title']}.csv"
+                              }
+                            ]
+                          },
+                          "path": "/SendEmailV3"
+                        },
+                        "runAfter": {
+                          "Create_Monthly_CSV_Reports": [
+                            "Succeeded"
+                          ]
+                        }
+                      }
+                    },
+                    "runAfter": {
+                      "Get_Monthly_Report_List": [
+                        "Succeeded"
+                      ]
+                    }
+                  },
+                  "Get_Monthly_Report_List": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": "_GetWatchlist(\"Reporting\") | where Schedule == \"Monthly\"",
+                      "path": "/queryData",
+                      "queries": {
+                        "subscriptions": "[subscription().subscriptionId]",
+                        "resourcegroups": "[resourceGroup().name]",
+                        "resourcetype": "Log Analytics Workspace",
+                        "resourcename": "",
+                        "timerange": "Last 24 hours"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "runAfter": {}
+              },
+              "Weekly": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "equals": [
+                        "@dayOfWeek(utcNow())",
+                        1
+                      ]
+                    }
+                  ]
+                },
+                "actions": {
+                  "For_each_weekly_report": {
+                    "type": "Foreach",
+                    "foreach": "@body('Get_Weekly_Report_List')?['value']",
+                    "actions": {
+                      "Create_CSV_table": {
+                        "type": "Table",
+                        "inputs": {
+                          "from": "@body('Run_weekly_queries_and_list_results')?['value']",
+                          "format": "CSV"
+                        },
+                        "runAfter": {
+                          "Run_weekly_queries_and_list_results": [
+                            "Succeeded"
+                          ]
+                        }
+                      },
+                      "Run_weekly_queries_and_list_results": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": "@items('For_each_weekly_report')?['QueryBody']",
+                          "path": "/queryData",
+                          "queries": {
+                            "subscriptions": "[subscription().subscriptionId]",
+                            "resourcegroups": "[resourceGroup().name]",
+                            "resourcetype": "Log Analytics Workspace",
+                            "resourcename": "",
+                            "timerange": "7d"
+                          }
+                        },
+                        "runAfter": {}
+                      },
+                      "Send_Weekly_Emails": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['smtp']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": {
+                            "From": "[parameters('SMTP-FromAddress')]",
+                            "To": "@items('For_each_weekly_report')?['Recipients']",
+                            "Subject": "'@{items('For_each_weekly_report')?['Title']}' weekly report completed",
+                            "Body": "<p>The weekly report '@{items('For_each_weekly_report')?['Title']}' has completed and is attached.</p>",
+                            "Attachments": [
+                              {
+                                "ContentData": "@{base64(body('Create_CSV_table'))}",
+                                "ContentType": "text/csv",
+                                "FileName": "@{items('For_each_weekly_report')?['Title']}.csv"
+                              }
+                            ]
+                          },
+                          "path": "/SendEmailV3"
+                        },
+                        "runAfter": {
+                          "Create_CSV_table": [
+                            "Succeeded"
+                          ]
+                        }
+                      }
+                    },
+                    "runAfter": {
+                      "Get_Weekly_Report_List": [
+                        "Succeeded"
+                      ]
+                    }
+                  },
+                  "Get_Weekly_Report_List": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": "_GetWatchlist(\"Reporting\") | where Schedule == \"Weekly\"",
+                      "path": "/queryData",
+                      "queries": {
+                        "subscriptions": "[subscription().subscriptionId]",
+                        "resourcegroups": "[resourceGroup().name]",
+                        "resourcetype": "Log Analytics Workspace",
+                        "resourcename": "",
+                        "timerange": "Last 24 hours"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "runAfter": {}
+              }
+            },
+            "parameters": {
+              "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+              }
+            },
+            "triggers": {
+              "Every_Day_Recurrence_Trigger": {
+                "type": "Recurrence",
+                "recurrence": {
+                  "frequency": "Day",
+                  "interval": 1
+                }
+              }
+            },
+            "contentVersion": "1.0.0.0",
+            "outputs": {}
+          },
+          "parameters": {
+            "$connections": {
+              "value": {
+                "azuremonitorlogs": {
+                  "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/', 'azuremonitorlogs')]",
+                  "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureMonitorLogs-ConnectionName'))]",
+                  "connectionName": "[parameters('AzureMonitorLogs-ConnectionName')]"
+                },
+                "smtp": {
+                  "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('Location'), '/managedApis/', 'smtp')]",
+                  "connectionId": "[resourceId('Microsoft.Web/connections', parameters('SMTP-ConnectionName'))]",
+                  "connectionName": "[parameters('SMTP-ConnectionName')]"
+                }
+              }
+            }
+          }
+        },
+        "name": "[parameters('LogicAppName')]",
+        "type": "Microsoft.Logic/workflows",
+        "location": "[parameters('Location')]",
+        "tags": {
+          "App": "Sentinel",
+          "displayName": "LogicApp"
+        },
+        "apiVersion": "2016-06-01",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/connections', parameters('AzureMonitorLogs-ConnectionName'))]",
+          "[resourceId('Microsoft.Web/connections', parameters('SMTP-ConnectionName'))]"
+        ]
+      },
+      {
+        "type": "MICROSOFT.WEB/CONNECTIONS",
+        "apiVersion": "2018-07-01-preview",
+        "name": "[parameters('AzureMonitorLogs-ConnectionName')]",
+        "location": "[parameters('Location')]",
+        "properties": {
+          "api": {
+            "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'azuremonitorlogs')]"
+          },
+          "displayName": "[parameters('AzureMonitorLogs-ConnectionDisplayName')]"
+        }
+      },
+      {
+        "type": "MICROSOFT.WEB/CONNECTIONS",
+        "apiVersion": "2018-07-01-preview",
+        "name": "[parameters('SMTP-ConnectionName')]",
+        "location": "westus2",
+        "properties": {
+          "api": {
+            "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'smtp')]"
+          },
+          "displayName": "[parameters('SMTP-ConnectionDisplayName')]",
+          "parameterValues": {
+            "serverAddress": "[parameters('SMTP-serverAddress')]",
+            "userName": "[parameters('SMTP-userName')]",
+            "password": "[parameters('SMTP-password')]",
+            "port": "[parameters('SMTP-port')]",
+            "enableSSL": "[parameters('SMTP-enableSSL')]"
+          }
+        }
+      }
+    ],
+    "outputs": {}
+  }

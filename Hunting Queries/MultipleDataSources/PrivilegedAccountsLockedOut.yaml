@@ -1,0 +1,35 @@
+id: fc12c925-84ce-4371-bcff-e745cd937da6
+name: Privileged Accounts Locked Out
+description: |
+  'Identifies privileged accounts that have been locked out. Verify these lockout are due to legitimate user activity and not due to threat actors attempting to access the accounts.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  let admins = (IdentityInfo
+  | where AssignedRoles contains "Admin"
+  | summarize by tolower(AccountUPN));
+  SigninLogs
+  | where ResultType == 50053
+  | extend AccountUPN = tolower(UserPrincipalName)
+  | extend AltUPN = tolower(AlternateSignInName)
+  | where AccountUPN in (admins) or AltUPN in (admins)
+  | extend AccountCustomEntity = AccountUPN, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

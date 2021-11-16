@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimFileEventM365D",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Microsoft 365 Defender - File Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimFileEventM365D",
+            "query": "let M365DFileEvents=(){\n  DeviceFileEvents\n  | project-rename\n       SrcIpAddr =RequestSourceIP\n     , DvcId=DeviceId\n     , TargetFileMD5=MD5\n     , TargetFileSHA1 =SHA1\n     , TargetFileSHA256 =SHA256\n     , NetworkApplicationProtocol=RequestProtocol\n    , ActingProcessCommandLine=InitiatingProcessCommandLine\n    , ActingProcessName =InitiatingProcessFolderPath // Unlike FileName ActingProcessName includes full path  // Previously: ActingProcessFileName=initiatingProcessFileName\n   , ActingProcessMD5 =InitiatingProcessMD5\n    , ActingProcessSHA1 =InitiatingProcessSHA1\n    , ActingProcessSHA256 =InitiatingProcessSHA256\n    , ActingProcessParentFileName = InitiatingProcessParentFileName\n    , ActingProcessCreationTime =InitiatingProcessCreationTime\n    , ActingProcessParentCreationTime =InitiatingProcessParentCreationTime\n  | extend\n        EventCount=int(1)\n      , ActingProcessId = tostring(InitiatingProcessId)\n      , EventStartTime= TimeGenerated \n      , EventEndTime= TimeGenerated\n      , EventType=ActionType // [FileCreated, FileDeleted, FileModified, FileRenamed] \n      , EventResult= 'Success'\n      , EventProduct='M365 Defender'\n      , EventVendor='Microsoft'\n      , EventSchemaVersion='0.1.0' \n      // ------------------\n      , ActorUsername=coalesce(InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain,'\\\\', InitiatingProcessAccountName))\n      , ActorUsernameType=iff(isempty(InitiatingProcessAccountUpn),'Windows','Upn')\n      , ActorUserId=coalesce(InitiatingProcessAccountSid, InitiatingProcessAccountObjectId)\n      , ActorUserIdType=iff(isempty(InitiatingProcessAccountSid),'AADId','Sid') \n      , DvcHostname =DeviceName\n      , DvcHostnameType=iff(DeviceName contains '.','Fqdn','Hostname')\n      , TargetFilePath= iff(ActionType=='FileDeleted', strcat(FolderPath, '\\\\', FileName), FolderPath)\n      // ------------------\n     , TargetFilePathType='Windows Local'\n     , SrcFileName=coalesce(PreviousFileName,tostring(split(trim_end(@'/',tostring(split (FileOriginUrl,'?')[0] )),'/')[-1])) \n     , SrcFilePath=iff(isempty(PreviousFileName), trim_end(@'/',tostring(split (FileOriginUrl,'?')[0] )),strcat(PreviousFolderPath,'\\\\',PreviousFileName)) \n    //  ****** Aliases\n   | extend \n      User=ActorUsername\n     , Dvc=DvcHostname\n     , Hash=coalesce(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5)\n     , FilePath=TargetFilePath\n      };M365DFileEvents",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

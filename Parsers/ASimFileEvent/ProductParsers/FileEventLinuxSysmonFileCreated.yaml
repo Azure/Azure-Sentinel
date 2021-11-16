@@ -1,0 +1,61 @@
+Parser:
+  Title: ASIM Sysmon/Linux File Created (Event Id 11) File Event Parser
+  Version: '0.2'
+  LastUpdated: July 27, 2021
+Product:
+  Name: Microsoft Linux Sysmon
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: |
+  This is a Query Parser that is used to map Microsoft Linux Sysmon Event id 11 (Event) to the Advanced SIEM Information Model FileEvent schema.
+ParserName: vimFileEventLinuxSysmonFileCreated
+ParserQuery: |
+  Syslog
+  | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>11</EventID>')
+  | parse SyslogMessage with  *
+    '<EventRecordID>'msgEventRecordID:string'</EventRecordID>'
+    *
+    //'<Computer>'msgComputer:string'</Computer>'
+    '<Security UserId="'msgUserId:string '"/>'
+    * 
+    '<Data Name="ProcessGuid">'msgProcessGuid:string'</Data>'
+    '<Data Name="ProcessId">'msgProcessId:string'</Data>'
+    '<Data Name="Image">'msgImage:string'</Data>'
+    '<Data Name="TargetFilename">'msgTargetFileName:string'</Data>'
+    '<Data Name="CreationUtcTime">'msgCreationUtcTime:datetime'</Data>'*
+  | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>'*
+  | extend
+      EventCount=int(1)
+    , EventStartTime =TimeGenerated 
+    , EventEndTime=TimeGenerated
+    , EventType = 'FileCreated'
+    , EventResult ='Success'
+    , EventOriginalType ='11' 
+    , EventProduct='Sysmon For Linux'
+    , EventProductVersion='v13.22'
+    , EventVendor ='Microsoft'
+    , EventSchemaVersion ='0.1.0'
+    , DvcOs = 'Linux'
+    , TargetFilePathType='Unix'
+    , ActorUserType = iff(isnotempty(ActorUsername),'Simple', '') // make sure user type is okay
+  | project-rename
+      DvcHostname=Computer
+    , EventOriginalUid=msgEventRecordID
+    , ActingProcessName =msgImage
+    , ActingProcessId=msgProcessId
+    , ActingProcessGuid=msgProcessGuid
+    , TargetFilePath =msgTargetFileName
+    , TargetFileCreationTime =msgCreationUtcTime
+    // ------  Alias
+  | extend
+      Process=ActingProcessName
+      , FilePath=TargetFilePath
+      , Dvc = DvcHostname
+      , User = ActorUsername
+  | project-away SyslogMessage

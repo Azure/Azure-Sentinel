@@ -1,0 +1,69 @@
+Parser:
+  Title: Microsoft SharePoint File Operation and OneDrive for business - File Event Parser
+  Version: '0.1'
+  LastUpdated: June 28, 2021
+Product:
+  Name: Microsoft SharePoint
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: |
+  This is a Query Parser that is used to map SharePoint File Operation and OneDrive for business (OfficeActivity) to the Advanced SIEM Information Model FileEvent schema.
+ParserName: vimFileEventMicrosoftSharePoint
+ParserQuery: |
+  let usertypes=datatable(UserType:string, ActorUserType:string)[
+   // Regular, Regular
+   "Admin", "Admin"
+   , "DcAdmin", "Admin"
+   , "System", "System"
+   , "Application", "Application"
+   , "ServicePrincipal", "Service Principal"
+   , "CustomPolicy", "Other"
+   , "SystemPolicy", "Other"
+   , "Reserved", "Other"
+  ];
+  let SharepointFile=(){
+    OfficeActivity
+    | where OfficeWorkload in ('SharePoint', 'OneDrive')
+          and ItemType in ('File', 'Folder', 'DocumentLibrary', 'Page')
+    | lookup usertypes on UserType
+    | extend
+          EventCount=int(1)
+        , EventStartTime= TimeGenerated 
+        , EventEndTime= TimeGenerated
+        , EventType=Operation
+        , EventResult=case(ResultStatus =='Succeeded', 'Success'
+                            , ResultStatus == 'Failed', 'Failure'
+                            , 'Partial')
+        , EventProduct='SharePoint 365'
+        , EventVendor='Microsoft'
+        , EventSchemaVersion='0.1.0' 
+        , ActorUsernameType='upn'
+        , ActorUserIdType='Puid' //(PUID) for events performed by users in SharePoint, OneDrive
+        /// If operation is copied/moved than SourceFile us the "Previous file". (what about FileRenamed?)
+        , TargetFilePath =iff(Operation in ('FileCopied', 'FileMoved')
+                                , DestinationFileName
+                                , strcat(Site_Url, '/', SourceRelativeUrl,'/',SourceFileName)) 
+        ,  TargetFilename=iff(Operation in ('FileCopied', 'FileMoved'), DestinationFileName, SourceFileName) 
+     // , SensitivityLabel:string // ? 
+       , SrcFileName=iff(Operation in ('FileCopied', 'FileMoved'), SourceFileName,'')
+       , SrcFilePath=iff(Operation in ('FileCopied', 'FileMoved'), strcat(Site_Url, '/', SourceRelativeUrl),'')
+     ////  Not in scheam??  , TargetAppName='SharePoint'
+     | project-rename ActorOriginalUserType =UserType
+            , ActorUsername=UserId 
+            , ActorUserId=UserKey
+            , HttpUserAgent=UserAgent
+            , SrcIpAddr =ClientIP
+     // Aliases
+     | extend 
+        User=ActorUsername
+        , FilePath=TargetFilename
+   };
+   SharepointFile

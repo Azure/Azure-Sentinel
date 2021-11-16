@@ -1,0 +1,77 @@
+id: f819c592-c5f9-4d5c-a79f-1e6819863533
+name: Azure AD Health Monitoring Agent Registry Keys Access
+description: |
+  'This detection uses Windows security events to detect suspicious access attempts to the registry key of Azure AD Health monitoring agent.
+  This detection requires an access control entry (ACE) on the system access control list (SACL) of the following securable object HKLM\SOFTWARE\Microsoft\Microsoft Online\Reporting\MonitoringAgent.
+  You can find more information in here https://github.com/OTRF/Set-AuditRule/blob/master/rules/registry/aad_connect_health_monitoring_agent.yml
+  '
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1005
+tags:
+  - SimuLand
+query: |
+  // ADHealth Monitoring Agent Registry Key
+  let aadHealthMonAgentRegKey = "\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Microsoft Online\\Reporting\\MonitoringAgent";
+  // Filter out known processes
+  let aadConnectHealthProcs = dynamic ([
+      'Microsoft.Identity.Health.Adfs.DiagnosticsAgent.exe',
+      'Microsoft.Identity.Health.Adfs.InsightsService.exe',
+      'Microsoft.Identity.Health.Adfs.MonitoringAgent.Startup.exe',
+      'Microsoft.Identity.Health.Adfs.PshSurrogate.exe',
+      'Microsoft.Identity.Health.Common.Clients.ResourceMonitor.exe'
+  ]);
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where EventID == '4656'
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)
+  | extend SubjectUserName = column_ifexists("SubjectUserName", ""),
+      SubjectDomainName = column_ifexists("SubjectDomainName", ""),
+      ObjectName = column_ifexists("ObjectName", ""),
+      ObjectType = column_ifexists("ObjectType", ""),
+      ProcessName = column_ifexists("ProcessName", "")
+  | extend Process = split(ProcessName, '\\', -1)[-1],
+      Account = strcat(SubjectDomainName, "\\", SubjectUserName)
+  | where ObjectType == 'Key'
+  | where ObjectName == aadHealthMonAgentRegKey
+  | where Process !in (aadConnectHealthProcs)
+  ),
+  (
+  SecurityEvent
+  | where EventID == '4663'
+  | extend Process = split(ProcessName, '\\', -1)[-1]
+  | where ObjectType == 'Key'
+  | where ObjectName == aadHealthMonAgentRegKey
+  | where Process !in (aadConnectHealthProcs)
+  )
+  )
+  // You can filter out potential machine accounts
+  //| where AccountType != 'Machine'
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | summarize count() by ProcessName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.0
+kind: Scheduled

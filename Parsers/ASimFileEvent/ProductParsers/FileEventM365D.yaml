@@ -1,0 +1,66 @@
+Parser:
+  Title: Microsoft 365 Defender - File Event Parser
+  Version: '0.1'
+  LastUpdated: June 28, 2021
+Product:
+  Name: 'M365 Defender for EndPoint'
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+- Title: Microsoft 365 Defender DeviceFileEvents
+  Link: https://docs.microsoft.commicrosoft-365/security/defender/advanced-hunting-devicefileevents-table?view=o365-worldwide
+Description: |
+  This is a Query Parser that is used to map Microsoft Defender File Events (DeviceFileEvents) to the Advanced SIEM Information Model FileEvent schema.
+ParserName: vimFileEventM365D
+ParserQuery: |
+  let M365DFileEvents=(){
+    DeviceFileEvents
+    | project-rename
+         SrcIpAddr =RequestSourceIP
+       , DvcId=DeviceId
+       , TargetFileMD5=MD5
+       , TargetFileSHA1 =SHA1
+       , TargetFileSHA256 =SHA256
+       , NetworkApplicationProtocol=RequestProtocol
+      , ActingProcessCommandLine=InitiatingProcessCommandLine
+      , ActingProcessName =InitiatingProcessFolderPath // Unlike FileName ActingProcessName includes full path  // Previously: ActingProcessFileName=initiatingProcessFileName
+     , ActingProcessMD5 =InitiatingProcessMD5
+      , ActingProcessSHA1 =InitiatingProcessSHA1
+      , ActingProcessSHA256 =InitiatingProcessSHA256
+      , ActingProcessParentFileName = InitiatingProcessParentFileName
+      , ActingProcessCreationTime =InitiatingProcessCreationTime
+      , ActingProcessParentCreationTime =InitiatingProcessParentCreationTime
+    | extend
+          EventCount=int(1)
+        , ActingProcessId = tostring(InitiatingProcessId)
+        , EventStartTime= TimeGenerated 
+        , EventEndTime= TimeGenerated
+        , EventType=ActionType // [FileCreated, FileDeleted, FileModified, FileRenamed] 
+        , EventResult= 'Success'
+        , EventProduct='M365 Defender'
+        , EventVendor='Microsoft'
+        , EventSchemaVersion='0.1.0' 
+        // ------------------
+        , ActorUsername=coalesce(InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain,'\\', InitiatingProcessAccountName))
+        , ActorUsernameType=iff(isempty(InitiatingProcessAccountUpn),'Windows','Upn')
+        , ActorUserId=coalesce(InitiatingProcessAccountSid, InitiatingProcessAccountObjectId)
+        , ActorUserIdType=iff(isempty(InitiatingProcessAccountSid),'AADId','Sid') 
+        , DvcHostname =DeviceName
+        , DvcHostnameType=iff(DeviceName contains '.','Fqdn','Hostname')
+        , TargetFilePath= iff(ActionType=='FileDeleted', strcat(FolderPath, '\\', FileName), FolderPath)
+        // ------------------
+       , TargetFilePathType='Windows Local'
+       , SrcFileName=coalesce(PreviousFileName,tostring(split(trim_end(@'/',tostring(split (FileOriginUrl,'?')[0] )),'/')[-1])) 
+       , SrcFilePath=iff(isempty(PreviousFileName), trim_end(@'/',tostring(split (FileOriginUrl,'?')[0] )),strcat(PreviousFolderPath,'\\',PreviousFileName)) 
+      //  ****** Aliases
+     | extend 
+        User=ActorUsername
+       , Dvc=DvcHostname
+       , Hash=coalesce(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5)
+       , FilePath=TargetFilePath
+        };M365DFileEvents

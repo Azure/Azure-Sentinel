@@ -34,7 +34,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 30 Jun 2021
+        LASTEDIT: 14 July 2021
 
     .EXAMPLE
         .\Migrate-LA-to-ADX.ps1 -LogAnalyticsResourceGroup la-resgrp1 -LogAnalyticsWorkspaceName la-workspace-1 `
@@ -69,6 +69,7 @@ param(
 [string]$KustoConnectionString = "$AdxEngineUrl;Fed=True"
 [string]$NuGetIndex = "https://api.nuget.org/v3/index.json"
 [string]$NuGetDownloadUrl = "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+[string]$nugetPackageLocation = "$($env:USERPROFILE)\.nuget\packages"
 
 #endregion StaticValues
 
@@ -109,8 +110,7 @@ function Write-Log {
         } | Export-Csv -Path "$PSScriptRoot\$LogFileName" -Append -NoTypeInformation -Force
     }
     catch {
-        Write-Error "An error occurred in Write-Log() method" -ErrorAction SilentlyContinue
-		
+        Write-Error "An error occurred in Write-Log() method" -ErrorAction SilentlyContinue		
     }    
 }
 
@@ -131,13 +131,11 @@ function Get-RequiredModules {
     try {
         $installedModule = Get-InstalledModule -Name $Module -ErrorAction SilentlyContinue
         if ($null -eq $installedModule) {
-
             Write-Log -Message "The $Module PowerShell module was not found" -LogFileName $LogFileName -Severity Warning
             #check for Admin Privleges
             $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 
             if (-not ($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
-
                 #Not an Admin, install to current user            
                 Write-Log -Message "Can not install the $Module module. You are not running as Administrator" -LogFileName $LogFileName -Severity Warning
                 Write-Log -Message "Installing $Module module to current user Scope" -LogFileName $LogFileName -Severity Warning
@@ -146,7 +144,6 @@ function Get-RequiredModules {
                 Import-Module -Name $Module -Force
             }
             else {
-
                 #Admin, install to all users																		   
                 Write-Log -Message "Installing the $Module module to all users" -LogFileName $LogFileName -Severity Warning
                 Install-Module -Name $Module -Force -ErrorAction continue
@@ -168,21 +165,17 @@ function Split-ArrayBySize {
         [parameter(Mandatory = $true)] $AdxTabsArray,
         [parameter(Mandatory = $true)] $ArraySize
     )    
-    try {     
-        
-        $slicedArraysResult = Split-Array -Item $AdxTabsArray -Size $ArraySize | ForEach-Object { '{0}' -f ($_ -join '","') }
-    
+    try {        
+        $slicedArraysResult = Split-Array -Item $AdxTabsArray -Size $ArraySize | ForEach-Object { '{0}' -f ($_ -join '","') }    
         return $slicedArraysResult
     }
     catch {        
-        
         Write-Error "An error occurred in Split-ArrayBySize() method" -ErrorAction stop
         exit
     }
 }
 
 function Split-Array {
-
     [CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] [String[]]$Item,
@@ -253,9 +246,9 @@ function Invoke-KustoCLI {
         $KustoToolsDir = "$env:USERPROFILE\.nuget\packages\$KustoToolsPackage\"
         $CurrentDir = Get-Location
         Set-Location $ScriptDir
+        
 
-        if (!(Test-Path $KustoToolsDir)) {        
-				 
+        if (!(Test-Path $KustoToolsDir)) {				 
             if (!(Test-Path nuget)) {
                 Write-Log -Message "The NuGet module is not found" -LogFileName $LogFileName -Severity Warning                
                 Write-Log -Message "Downloading NuGet package" -LogFileName $LogFileName -Severity Information
@@ -268,8 +261,7 @@ function Invoke-KustoCLI {
 
         $KustoExe = $KustoToolsDir + @(Get-ChildItem -Recurse -Path $KustoToolsDir -Name kusto.cli.exe)[-1]
         
-        if (!(Test-Path $KustoExe)) {
-		 
+        if (!(Test-Path $KustoExe)) {		 
             Write-Log -Message "Unable to find Kusto client tool $KustoExe. exiting" -LogFileName $LogFileName -Severity Warning
             Write-Warning "Unable to find Kusto client tool $KustoExe. exiting"
             return
@@ -277,9 +269,7 @@ function Invoke-KustoCLI {
         
         Write-Log -Message "Executing queries on Azure Data Explorer (ADX)" -LogFileName $LogFileName -Severity Information
         Invoke-Expression "$kustoExe `"$kustoConnectionString`" -script:$adxCommandsFile"
-        Set-Location $CurrentDir
-
-								
+        Set-Location $CurrentDir								
     }
     catch {
         Write-Log -Message "An error occurred in Invoke-KustoCLI() method" -LogFileName $LogFileName -Severity Error																	  
@@ -294,13 +284,12 @@ function New-AdxRawMappingTables {
     
     .PARAMETER LaTables
     Parameter specifices the Log Analytics tables to create 
-    #> 
-
+    #>
     [CmdletBinding()]
     param (        
-        [parameter(Mandatory = $true)] $LaTables        
+        [parameter(Mandatory = $true)] $LaTables,
+        [parameter(Mandatory = $true)] $LaMappingDecision        
     )
-
 
     if (!(Test-Path "$PSScriptRoot\KustoQueries" -PathType Container)) { 
         New-Item -Path $PSScriptRoot -Name "KustoQueries" -ItemType "directory"
@@ -315,22 +304,22 @@ function New-AdxRawMappingTables {
     }
   
     foreach ($table in $LaTables) {
-
-        if ($decision -eq 0) {
+        if ($LaMappingDecision -eq 0) {
             $TableName = $table.'$table'
-
         }
         else {
             $TableName = $table
         }
+
+        $TableName = $TableName.ToString().Trim()
                 
         if ($TableName -match '_CL$') {                
             Write-Log -Message "Custom log table : $TableName not supported" -LogFileName $LogFileName -Severity Information
         }
-        elseif ($supportedTables.SupportedTables -contains $TableName.ToString().Trim()) {        
+        elseif ($supportedTables.SupportedTables -ccontains $TableName) {        
             Write-Log -Message "Retrieving schema and mappings for $TableName" -LogFileName $LogFileName -Severity Information
             $query = $TableName + ' | getschema | project ColumnName, DataType'        
-            $AdxTablesArray.Add($TableName.Trim())
+            $AdxTablesArray.Add($TableName)
             
             Write-Verbose "Executing: (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results"																														  
             $output = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results
@@ -394,12 +383,10 @@ function New-AdxRawMappingTables {
             }
             Write-Log -Message "Successfully created Raw and Mapping tables for: $TableName in ADX cluster database." -LogFileName $LogFileName -Severity Information
         }
-        else {             
-
-            Write-Log -Message "$($table[0].'$table') table is not supported by data export." -LogFileName $LogFileName -Severity Error
+        else {
+            Write-Log -Message "$TableName table is not supported by data export." -LogFileName $LogFileName -Severity Error
         }
-    }   
-
+    }
 } 
 
 function New-EventHubNamespace {
@@ -415,8 +402,7 @@ function New-EventHubNamespace {
         [parameter(Mandatory = $true)] $ArraysObject        
     )
     try {
-        $EventHubsArray = @()
-        
+        $EventHubsArray = @()        
         foreach ($slicedArray in $ArraysObject) {
             if ($slicedArray.Length -gt 0) {
                 #Create Event Hub NameSpace
@@ -442,18 +428,17 @@ function New-EventHubNamespace {
                         Write-Log -Message "$EventHubNamespaceName created successfully" -LogFileName $LogFileName -Severity Information
                     }                
                 }
-                catch {
-                    
-                    Write-Log -Message "$($_.Exception.Response.StatusCode.value__)" -LogFileName $LogFileName -Severity Error                  
-                    Write-Log -Message "$($_.Exception.Response.StatusDescription)" -LogFileName $LogFileName -Severity Error
+                catch {                    
+                    Write-Log -Message "$($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+                    Write-Log -Message "$($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error
                 }
             }
         } 
         return $EventHubsArray
     }
-    catch {        
-        Write-Log -Message "An error occurred in Create-EventHubNamespace() method" -LogFileName $LogFileName -Severity Error        
-		
+    catch {       
+        Write-Log -Message "An error occurred in Create-EventHubNamespace() method : $($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+        Write-Log -Message "An error occurred in Create-EventHubNamespace() method : $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error         
         exit
     }
 }
@@ -479,7 +464,7 @@ function New-LaDataExportRule {
     Write-Log -Message "Creating Log Analytics data export rules" -LogFileName $LogFileName -Severity Information																											 
 
     try {         
-        $Count = 0     
+        $Count = 0
         
         foreach ($AdxEventHub in $AdxEventHubs) {        
             $EventHubNameSpace = Get-AzEventHubNamespace -ResourceGroupName $LogAnalyticsResourceGroup -NamespaceName $AdxEventHub    
@@ -516,15 +501,12 @@ function New-LaDataExportRule {
                 Write-Verbose "Executing: Invoke-RestMethod -Uri $DataExportAPI -Method 'PUT' -Headers $LaAPIHeaders -Body $DataExportBody"																														   
                 
                 try {        
-                    $CreateDataExportRule = Invoke-RestMethod -Uri $DataExportAPI -Method "PUT" -Headers $LaAPIHeaders -Body $DataExportBody
-                    
+                    $CreateDataExportRule = Invoke-RestMethod -Uri $DataExportAPI -Method "PUT" -Headers $LaAPIHeaders -Body $DataExportBody                    
                     Write-Log -Message $CreateDataExportRule -LogFileName $LogFileName -Severity Information
                 } 
-                catch {    
-                    
-                    Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error                 
-                    Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error
-                
+                catch {                    
+                    Write-Log -Message "$($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+                    Write-Log -Message "$($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error                
                 }   
                 $Count++
             }
@@ -539,22 +521,18 @@ function New-LaDataExportRule {
     }
 }
 
-function New-ADXDataConnectionRules {
-    
+function New-ADXDataConnectionRules {    
     [CmdletBinding()]
     param (        
         [Parameter(Mandatory = $true, Position = 0)] $AdxEventHubs      
     )
     
     try {   
-        Register-AzResourceProvider -ProviderNamespace Microsoft.Kusto
-        
+        Register-AzResourceProvider -ProviderNamespace Microsoft.Kusto        
         Write-Log -Message "Creating Azure Data Explorer data connection" -LogFileName $LogFileName -Severity Information
         $ADXClusterName = $ADXClusterURL.split('.')[0].replace("https://", "").Trim()
-        foreach ($AdxEH in $AdxEventHubs) {
-            
-            Write-Verbose "Executing: Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup -NamespaceName $AdxEH"
-            
+        foreach ($AdxEH in $AdxEventHubs) {            
+            Write-Verbose "Executing: Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup -NamespaceName $AdxEH"            
             try {
                 $EventHubTopics = Get-AzEventHub -ResourceGroup $LogAnalyticsResourceGroup -NamespaceName $AdxEH 
                                                         
@@ -614,13 +592,12 @@ function New-ADXDataConnectionRules {
                 
             } 
             catch {
-                
-                Write-Log -Message "An error occurred in retrieving Event Hub topics from $AdxEH" -LogFileName $LogFileName -Severity Error        
+                Write-Log -Message "An error occurred in retrieving Event Hub topics - $($_.ErrorDetails.Message) $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error                                  
             }
         }
     }
     catch {
-        Write-Log -Message "An error occurred in Create-ADXDataConnectionRules() method" -LogFileName $LogFileName -Severity Error		
+        Write-Log -Message "An error occurred in Create-ADXDataConnectionRules() method - $($_.ErrorDetails.Message) $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error		
         exit
     }
 }
@@ -631,6 +608,7 @@ function New-ADXDataConnectionRules {
 
 Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
+Get-RequiredModules("Az.EventHub")
 
 # Check Powershell version, needs to be 5 or higher
 if ($host.Version.Major -lt 5) {
@@ -683,8 +661,7 @@ $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescri
 
 $LaTablesQuestionDecision = $Host.UI.PromptForChoice($title, $LaTablesQuestion, $LaTablesQuestionChoices, 1)
 
-if ($LaTablesQuestionDecision -eq 0) {
-    
+if ($LaTablesQuestionDecision -eq 0) {    
     Write-Verbose "Executing: Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables" 
     
     try {       
@@ -710,7 +687,7 @@ else {
 }
 
 $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]    
-New-AdxRawMappingTables -LaTables $ResultsAllTables
+New-AdxRawMappingTables -LaTables $ResultsAllTables -LaMappingDecision $LaTablesQuestionDecision
 #endregion
 
 #region EventHubsCreation
@@ -742,7 +719,7 @@ $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.Choice
 
 $DataConnectionQuestionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
 if ($DataConnectionQuestionDecision -eq 0) {
-    Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
+    Start-SleepMessage -Seconds 1200 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
     New-ADXDataConnectionRules -AdxEventHubs $EventHubsForADX
 }
 else {            

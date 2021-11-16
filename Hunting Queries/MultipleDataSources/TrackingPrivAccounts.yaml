@@ -33,11 +33,10 @@ relevantTechniques:
   - T1087
 query: |
 
+
   let LocalSID = "S-1-5-32-5[0-9][0-9]$";
   let GroupSID = "S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$";
-  let timeframe = 8d;
   let p_Accounts = SecurityEvent
-  | where TimeGenerated > ago(timeframe)
   | where EventID in ("4728", "4732", "4756") and AccountType == "User" and MemberName == "-"
   // Exclude Remote Desktop Users group: S-1-5-32-555 and IIS Users group S-1-5-32-568
   | where TargetSid !in ("S-1-5-32-555", "S-1-5-32-568")
@@ -54,7 +53,7 @@ query: |
   // Normalize activity from diverse sources into common schema using a function
   let activity = view (a_StartTime:datetime, a_EndTime:datetime) {
   (union isfuzzy=true
-  (AccountFormat | join kind=inner 
+  (AccountFormat | join kind=inner
   (AWSCloudTrail
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
   | extend ClientIP = "-", AccountName = tolower(UserIdentityUserName), WinSecEventDomain = "-"
@@ -75,7 +74,7 @@ query: |
   (AccountFormat | join kind=inner
   (SecurityEvent
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
-  | where EventID in (4624, 4625) 
+  | where EventID in (4624, 4625)
   | extend ClientIP = "-"
   | extend AccountName = tolower(split(Account,"\\")[1]), Domain = tolower(split(Account,"\\")[0])
   | project-rename EventType = Activity, ServiceOrSystem = Computer, WinSecEventDomain = Domain)
@@ -145,7 +144,7 @@ query: |
   ) on DomainSlashAccount),
   (ra_Today | join kind=inner
   (SigninLogs | where TimeGenerated > LastDay
-  | extend RemoteHost = tolower(tostring(parsejson(DeviceDetail.["displayName"])))
+  | extend RemoteHost = tolower(tostring(parse_json(DeviceDetail.["displayName"])))
   | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser, StatusCode = tostring(Status.errorCode),
   StatusDetails = tostring(Status.additionalDetails), State = tostring(LocationDetails.state)
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), a_RelatedRemoteHostSet = makeset(RemoteHost),
@@ -161,10 +160,10 @@ query: |
   ) on AccountName),
   (ra_Today | join kind=inner
   (SecurityAlert | where TimeGenerated > LastDay
-  | extend ExtProps=parsejson(ExtendedProperties)
+  | extend ExtProps=parse_json(ExtendedProperties)
   | extend AccountName = tostring(ExtProps.["user name"])
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemCount = dcount(AlertType),
-  rel_ServiceOrSystemSet = makeset(AlertType), 
+  rel_ServiceOrSystemSet = makeset(AlertType),
   rel_Count = count() by DomainSlashAccount = tolower(AccountName), rel_EventType = ProductName, Type
   ) on DomainSlashAccount)
   );

@@ -21,24 +21,22 @@ tactics:
   - CommandAndControl
   - Exfiltration
 relevantTechniques:
-  - T1043
+  - T1071
   - T1048
 query: |
 
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  let lookupThreshold = 21;
   let lookbackint = 7;
-  let lookupThreshold = lookbackint*3;
-  let lookbackstring = strcat(tostring(lookbackint),".00:00:00");
-  let lookbacktime = totimespan(lookbackstring)+1d;
-  //startofday is setting to 00:00:00 for the given days ago
-  let starttime = startofday(ago(lookbacktime)); 
-  let endtime = startofday(now(-1d)); 
   let binvalue = 1;
   let bintime = make_timespan(binvalue,0);
   let avgCalc = starttime/1h;
-  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.'; 
-  // Identify all domain lookups after starttime variable and prior to endtime variable
-  let DomainLookups = DnsEvents 
-  | where TimeGenerated >= starttime and TimeGenerated <= endtime 
+  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
+  // Identify all domain lookups before start time and after lookback time
+  let DomainLookups = DnsEvents
+  | where TimeGenerated between(ago(lookback)..starttime)
   | where SubType == "LookupQuery"
   | where isnotempty(IPAddresses)
   | extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
@@ -47,27 +45,27 @@ query: |
   // Common lookups should not include items that occurred more rarely over the lookback period.
   let CommonLookups = DomainLookups
   | where DailyAvgLookupCountOverLookback > lookupThreshold;
-  // Get todays lookups to compare against the lookback period
-  let TodayLookups = DnsEvents 
-  | where TimeGenerated >= endtime
+  // Get current lookups to compare against the lookback period
+  let TodayLookups = DnsEvents
+  | where TimeGenerated between(starttime..endtime)
   | where SubType == "LookupQuery"
   | where isnotempty(IPAddresses)
   | extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
-  | summarize LookupStartTime = min(TimeGenerated), LookupEndTime = max(TimeGenerated), LookupCountToday = count() by ClientIP, Domain, IPAddresses 
+  | summarize LookupStartTime = min(TimeGenerated), LookupEndTime = max(TimeGenerated), LookupCountToday = count() by ClientIP, Domain, IPAddresses
   | project LookupStartTime, LookupEndTime, ClientIP, LookupCountToday, Domain, IPAddresses;
   // Remove Common Lookups from lookback period from Todays lookups
   let UncommonLookupsToday = TodayLookups
-  | join kind=leftanti ( 
+  | join kind=leftanti (
   CommonLookups
   )
   on Domain;
   // Join back the Daily Average Lookup Count to add context to rarity over lookback period
   let RareLookups = UncommonLookupsToday | join kind= innerunique (
-  DomainLookups 
-  ) on Domain 
+  DomainLookups
+  ) on Domain
   | project LookupStartTime, LookupEndTime, ClientIP, Domain, IPAddresses, LookupCountToday, DailyAvgLookupCountOverLookback;
   let DNSIPBreakout = RareLookups
-  | extend DnsIPAddress = iff(IPAddresses has ",", split(IPAddresses, ","), todynamic(IPAddresses)) 
+  | extend DnsIPAddress = iff(IPAddresses has ",", split(IPAddresses, ","), todynamic(IPAddresses))
   | mvexpand DnsIPAddress
   | extend DnsIPAddress = tostring(DnsIPAddress)
   | distinct LookupStartTime, LookupEndTime, ClientIP, Domain, DnsIPAddress, LookupCountToday, DailyAvgLookupCountOverLookback
@@ -75,9 +73,9 @@ query: |
   | extend DnsIPType = iff(DnsIPAddress matches regex PrivateIPregex,"private" ,"public" )
   | where DnsIPType =="public"
   ;
-  let DataMovement = ( union isfuzzy=true 
+  let DataMovement = ( union isfuzzy=true
   (CommonSecurityLog
-  | where TimeGenerated >= endtime
+  | where TimeGenerated between(starttime..endtime)
   | where DeviceVendor =="Palo Alto Networks" and Activity == "TRAFFIC"
   | extend DestinationIPType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
   | where DestinationIPType =="public"
@@ -88,22 +86,22 @@ query: |
   | sort by sum_SentBytes desc
   ),
   (WireData
-  | where TimeGenerated >= endtime
+  | where TimeGenerated between(starttime..endtime)
   | where Direction == "Outbound"
-  | extend RemoteIPType = iff(RemoteIP matches regex PrivateIPregex,"private" ,"public" ) 
-  | where RemoteIPType =="public" 
-  | project DataType = Type, TimeGenerated , SourceIP = LocalIP , SourcePort = LocalPortNumber , DestinationIP = RemoteIP, DestinationPort = RemotePortNumber, ReceivedBytes, SentBytes 
+  | extend RemoteIPType = iff(RemoteIP matches regex PrivateIPregex,"private" ,"public" )
+  | where RemoteIPType =="public"
+  | project DataType = Type, TimeGenerated , SourceIP = LocalIP , SourcePort = LocalPortNumber , DestinationIP = RemoteIP, DestinationPort = RemotePortNumber, ReceivedBytes, SentBytes
   | summarize sum(ReceivedBytes), sum(SentBytes), ConnectionCount = count() by DataType, SourceIP, SourcePort, DestinationIP, DestinationPort
   | extend IPCustomEntity = DestinationIP
   | extend DataType = Type
   | sort by sum_SentBytes desc
   ),
-  (VMConnection 
-  | where TimeGenerated >= endtime
+  (VMConnection
+  | where TimeGenerated between(starttime..endtime)
   | where Direction == "outbound"
   | extend DestinationIPType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
   | where DestinationIPType =="public"
-  | project DataType = Type, TimeGenerated, SourceIP = SourceIp , DestinationIP = DestinationIp, DestinationPort, ReceivedBytes = BytesReceived, SentBytes = BytesSent 
+  | project DataType = Type, TimeGenerated, SourceIP = SourceIp , DestinationIP = DestinationIp, DestinationPort, ReceivedBytes = BytesReceived, SentBytes = BytesSent
   | summarize sum(ReceivedBytes), sum(SentBytes), ConnectionCount = count() by DataType, SourceIP, DestinationIP, DestinationPort
   | sort by sum_SentBytes desc
   | extend IPCustomEntity = DestinationIP
