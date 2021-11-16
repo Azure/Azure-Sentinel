@@ -1,0 +1,106 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_SIGNL4_name": {
+            "defaultValue": "SIGNL4",
+            "type": "String"
+        },
+        "connections_azuresentinel_externalid": {
+            "defaultValue": "/subscriptions/eff9a146-8b13-4f57-a518-48e42ac2a6ff/resourceGroups/AzureSentinal/providers/Microsoft.Web/connections/azuresentinel",
+            "type": "String"
+        },
+        "connections_signl4_1_externalid": {
+            "defaultValue": "/subscriptions/eff9a146-8b13-4f57-a518-48e42ac2a6ff/resourceGroups/AzureSentinal/providers/Microsoft.Web/connections/signl4-1",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_SIGNL4_name')]",
+            "location": "westeurope",
+            "identity": {
+                "principalId": "19d0e254-37d6-48d2-950b-46a0c5fb2e69",
+                "tenantId": "ff2a095d-01ff-4edb-99e6-38b97f49467c",
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "Trigger_Alert": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "flags": 0,
+                                            "severity": 0,
+                                            "text": "@items('For_each')?['properties']?['description']",
+                                            "title": "Azure Sentinel Alert"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['signl4_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/alerts"
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_1": {
+                                "connectionId": "[parameters('connections_azuresentinel_externalid')]",
+                                "connectionName": "azuresentinel",
+                                "id": "/subscriptions/eff9a146-8b13-4f57-a518-48e42ac2a6ff/providers/Microsoft.Web/locations/westeurope/managedApis/azuresentinel"
+                            },
+                            "signl4_1": {
+                                "connectionId": "[parameters('connections_signl4_1_externalid')]",
+                                "connectionName": "signl4-1",
+                                "id": "/subscriptions/eff9a146-8b13-4f57-a518-48e42ac2a6ff/providers/Microsoft.Web/locations/westeurope/managedApis/signl4"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
