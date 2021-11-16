@@ -41,7 +41,7 @@ For e.g. If original package version is 1.0.1 and you make a:
     * Major update, new version can be 2.0.0
     * Minor update like changes applying to a few content in the package, new version can be 1.1.0
     * Very minor revisions scoped to one content, new version can be 1.0.2
-* Since solutions use ARM template, you can customize the solution text as well as tabs if needed for catering to specific scenarios. 
+* Since solutions use ARM template, you can customize the solution text as well as tabs if needed for catering to specific scenarios.  
 
 ## Step 3 – Publish Solution
 Azure Sentinel Solutions publish experience is powered by [Microsoft Partner Center](https://docs.microsoft.com/partner-center/overview). 
