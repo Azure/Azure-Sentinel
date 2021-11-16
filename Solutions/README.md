@@ -19,7 +19,7 @@ Start with the [Get started documentation](https://github.com/Azure/Azure-Sentin
   * Analytic Rules – yaml file templates of analytic rules goes in this folder.
   * Hunting queries – yaml file templates of hunting queries goes in this folder.
   * Playbooks – json playbook and Azure Logic Apps custom connectors can go in this folder. 
-  * Parser – txt file for Ksuto Functions or Parsers can go in this folder.
+  * Parser – txt file for Kusto Functions or Parsers can go in this folder.
 * Logo – SVG format logo can go to the central [Logos](https://github.com/Azure/Azure-Sentinel/tree/master/Logos) folder.
 * Sample data – Check this into the [sample data folder](https://github.com/Azure/Azure-Sentinel/tree/master/Sample%20Data) within the respective folder depending on data connector type. 	
 * Submit a PR with all of your Solution content.
