@@ -13,9 +13,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [
-          "value::all"
-        ],
         "parameters": [
           {
             "id": "9a199167-2dde-49dd-8f01-23e9d1fa8151",
@@ -29,7 +26,8 @@
               "durationMs": 2592000000
             },
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": ""
           },
           {
             "id": "7806fefd-432f-4828-9756-8c0be5c08d07",
@@ -37,13 +35,17 @@
             "name": "InternalSub",
             "type": 1,
             "isRequired": true,
-            "query": "SecurityIncident\r\n| take 1\r\n| parse IncidentUrl with * \"/subscriptions/\" subscriptions \"/\" *\r\n| project subscriptions",
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+            "crossComponentResources": [
+              "value::selected"
+            ],
             "isHiddenWhenLocked": true,
             "timeContext": {
-              "durationMs": 2592000000
+              "durationMs": 0
             },
-            "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
           },
           {
             "id": "55d3ab63-6e1f-4d02-8d9e-2225526689c7",
@@ -51,20 +53,17 @@
             "name": "Subscription",
             "type": 6,
             "isRequired": true,
-            "query": "summarize by subscriptionId\r\n| project subscriptionId, Subscription=strcat(\"/subscriptions/\", subscriptionId)\r\n| extend selected = iff(subscriptionId =~ '{InternalSub}', true, false)\r\n",
-            "crossComponentResources": [
-              "value::all"
-            ],
+            "value": "",
             "typeSettings": {
               "additionalResourceOptions": [],
+              "includeAll": false,
               "showDefault": false
             },
             "timeContext": {
               "durationMs": 0
             },
             "timeContextFromParameter": "TimeRange",
-            "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources"
+            "defaultValue": "value::1"
           },
           {
             "id": "95a45501-31b5-4ea2-bcb3-eb208e0080e2",
@@ -80,8 +79,7 @@
               "value::all"
             ],
             "typeSettings": {
-              "additionalResourceOptions": [],
-              "showDefault": false
+              "additionalResourceOptions": []
             },
             "timeContextFromParameter": "TimeRange",
             "queryType": 1,
@@ -272,7 +270,7 @@
     {
       "type": 1,
       "content": {
-        "json": "The Incident Overview workbook is designed to assist in triaging and investigation by providing in-depth information about the incident, including:\r\n* General information\r\n* Entity data\r\n* Triage time (time between incident creation and first response)\r\n* Mitigation time (time between incident creation and closing)\r\n* Comments\r\n* Remediation information from the Alerts or from a Watchlist - setup readme: https://github.com/Azure/Azure-Sentinel/wiki/SOC-Process-Framework\r\n\r\nCustomize this workbook by saving and editing it. \r\nYou can reach this workbook template from the incidents panel as well. Once you have customized it, the link from the incident panel will open the customized workbook instead of the template.\r\n",
+        "json": "The Incident Overview workbook is designed to assist in triaging and investigation by providing in-depth information about the incident, including:\r\n* General information\r\n* Entity data\r\n* Triage time (time between incident creation and first response)\r\n* Mitigation time (time between incident creation and closing)\r\n* Comments\r\n\r\nCustomize this workbook by saving and editing it. \r\nYou can reach this workbook template from the incidents panel as well. Once you have customized it, the link from the incident panel will open the customized workbook instead of the template.\r\n",
         "style": "info"
       },
       "conditionalVisibility": {
@@ -298,18 +296,39 @@
             "label": "Incident Number",
             "type": 1,
             "isRequired": true,
+            "value": "",
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange"
+          },
+          {
+            "id": "f92a8f2b-ad21-4675-a7fb-45a906a2c00f",
+            "version": "KqlParameterItem/1.0",
+            "name": "show_All",
+            "type": 2,
+            "query": "_GetWatchlist('SocRA')\r\n| join\r\n(SecurityIncident \r\n| summarize arg_max(TimeGenerated, CreatedTime, Status, Severity, Owner, AdditionalData, IncidentUrl, Comments, Classification, ClassificationReason, ClassificationComment, Labels, Title, AlertIds) by IncidentNumber\r\n) on $left.Alert == $right.Title\r\n| project Date, IncidentNumber, Alert, Header = \"Recommended Actions\" \r\n| union SecurityIncident\r\n| extend actions_ = iif(isnotempty(Header),\"Actions available\",\" \")\r\n| summarize by value=IncidentNumber, display = strcat(IncidentNumber,': ',actions_,' : ',Alert)\r\n| order by value desc",
+            "crossComponentResources": [
+              "{Workspace}"
+            ],
+            "value": null,
+            "isHiddenWhenLocked": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
             "timeContext": {
               "durationMs": 0
             },
             "timeContextFromParameter": "TimeRange",
-            "value": ""
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
           },
           {
             "id": "9ef1a34d-5c8e-42ad-b1d7-1353e0091060",
             "version": "KqlParameterItem/1.0",
             "name": "testRemediation",
             "type": 1,
-            "description": "Hidden calculation to test if remediation data exists",
             "isRequired": true,
             "query": "SecurityIncident\r\n| where IncidentNumber == '{IncidentNumber:value}' \r\n| summarize arg_max(LastModifiedTime,*) by tostring(IncidentNumber)\r\n| extend Alerts = extract(\"\\\\[(.*?)\\\\]\", 1, tostring(AlertIds))\r\n| mv-expand AlertIds to typeof(string)\r\n| join \r\n(\r\n    SecurityAlert\r\n    | extend Remediation_ = parse_json(RemediationSteps)\r\n    | mv-expand Remediation_\r\n) on $left.AlertIds == $right.SystemAlertId\r\n| summarize  Remediation=make_set(tostring(Remediation_)) by IncidentNumber, Title, Severity\r\n| mv-expand Remediation to typeof(string)\r\n| project value=iif(isempty(Remediation),'0','1')",
             "isHiddenWhenLocked": true,
@@ -321,7 +340,6 @@
             "version": "KqlParameterItem/1.0",
             "name": "watchListExists",
             "type": 1,
-            "description": "Hidden calculation to test if the SocRA watchlist exists",
             "isRequired": true,
             "query": "_GetWatchlist('SocRA')\r\n| limit 1",
             "crossComponentResources": [
@@ -488,7 +506,6 @@
           "size": "auto"
         }
       },
-      "customWidth": "67",
       "name": "general info"
     },
     {
@@ -496,80 +513,9 @@
       "content": {
         "version": "NotebookGroup/1.0",
         "groupType": "editable",
-        "items": [
-          {
-            "type": 1,
-            "content": {
-              "json": "## Closing Classifications of Similar Incidents"
-            },
-            "name": "Headline - classification"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "Closing classifications of incidents that where created from the same rule in the past month",
-              "style": "info"
-            },
-            "conditionalVisibility": {
-              "parameterName": "Help",
-              "comparison": "isEqualTo",
-              "value": "Yes"
-            },
-            "name": "Info - Copy"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "let alertText =  strcat_array(dynamic([{RuleId}]),\",\");\r\nlet getAmountOfIncidentForRuleId = (classification:string){\r\n    SecurityIncident\r\n    | where TimeGenerated >= ago(30d)\r\n    | where Classification == classification\r\n    | mv-expand AlertId=AlertIds\r\n    | extend AlertId=tostring(AlertId)\r\n    | join  (SecurityAlert| where TimeGenerated >=ago(30d)) on $left.AlertId==$right.SystemAlertId\r\n    | mv-expand RuleId=RelatedAnalyticRuleIds\r\n    | extend RuleId=iff(ProductName!= 'Azure Sentinel', ProductName,RuleId)\r\n    | summarize counter=count() by RuleIdentifier=tostring(RuleId)\r\n    | extend RuleId=RuleIdentifier\r\n    | project-away RuleIdentifier\r\n};\r\nlet falsePositiveClassificationTable = getAmountOfIncidentForRuleId(\"FalsePositive\") | extend FalsePositiveCounter=counter | project-away counter;\r\nlet undeterminedClassificationTable = getAmountOfIncidentForRuleId(\"Undetermined\") | extend UndeterminedCounter=counter | project-away counter;\r\nlet benignPositiveClassificationTable = getAmountOfIncidentForRuleId(\"BenignPositive\") | extend BenignPositiveCounter=counter | project-away counter;\r\nlet truePositiveClassificationTable = getAmountOfIncidentForRuleId(\"TruePositive\") | extend TruePositiveCounter=counter | project-away counter;\r\nlet closedIncidentTable = SecurityIncident| where TimeGenerated >= ago(30d) |where Status == \"Closed\" | mv-expand AlertId=AlertIds| extend AlertId=tostring(AlertId)| join  SecurityAlert on $left.AlertId==$right.SystemAlertId| mv-expand RelatedAnalyticRuleIds| extend RuleId= iff(ProductName == 'Azure Sentinel', tostring(RelatedAnalyticRuleIds), ProductName);\r\nlet joinByRuleId = (T:(RuleId:string), S:(RuleId:string)){\r\n    T \r\n    | join kind=fullouter S on $left.RuleId == $right.RuleId\r\n    | extend RuleId= iff(RuleId == '', RuleId1,RuleId)\r\n    | project-away RuleId1\r\n};\r\njoinByRuleId(joinByRuleId(joinByRuleId(joinByRuleId(falsePositiveClassificationTable, undeterminedClassificationTable) , benignPositiveClassificationTable), truePositiveClassificationTable),closedIncidentTable)\r\n| join kind=leftouter  (SecurityAlert\r\n| where TimeGenerated >= ago(30d)\r\n| where ProductName  ==  'Azure Sentinel'\r\n| extend RuleId = parsejson( tostring(todynamic(ExtendedProperties)['Analytic Rule Ids']))\r\n| mv-expand RuleId=RuleId\r\n| extend RuleId=tostring(RuleId)\r\n| extend RuleName=  tostring(todynamic(ExtendedProperties)['Analytic Rule Name'])\r\n| project RuleId,RuleName\r\n| distinct RuleId,RuleName)\r\n on $left.RuleId==$right.RuleId\r\n| extend RuleName=iff(isempty(RuleName),RuleId,RuleName)\r\n| project-away RuleId1\r\n| where alertText has RuleId \r\n| summarize dcount(IncidentNumber) by Classification",
-              "size": 0,
-              "noDataMessage": "No recent closed incident were found",
-              "noDataMessageStyle": 4,
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ],
-              "visualization": "piechart",
-              "sortBy": [],
-              "tileSettings": {
-                "titleContent": {
-                  "columnMatch": "Field1",
-                  "formatter": 1,
-                  "numberFormat": {
-                    "unit": 0,
-                    "options": {
-                      "style": "decimal"
-                    }
-                  }
-                },
-                "leftContent": {
-                  "columnMatch": "Value",
-                  "formatter": 1
-                },
-                "showBorder": false,
-                "sortCriteriaField": "Order",
-                "sortOrderField": 1,
-                "size": "auto"
-              },
-              "chartSettings": {
-                "createOtherGroup": null
-              }
-            },
-            "name": "Closing classification"
-          }
-        ]
-      },
-      "customWidth": "33",
-      "name": "Similar"
-    },
-    {
-      "type": 12,
-      "content": {
-        "version": "NotebookGroup/1.0",
-        "groupType": "editable",
-        "title": "⚠️ Remediations found - click to Open",
+        "title": "⚠️ Recommendations found - click to Open",
         "expandable": true,
+        "expanded": true,
         "items": [
           {
             "type": 1,
@@ -581,8 +527,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Remediations and Actions Help\r\nIn this section of the Workbook, which only is visiable if an Alert has remediation entries, the default Remediations that are contained in the Alert data will be shown (Basic view). \r\nNote, not all Alerts have this data. \r\nHowever you can provide you own set of Alerts mapped to the Alert \"Title\".  This enhanced feature, uses a Watchlist which has an alias name of: SocRA when you import it (Advanced view).\r\n\r\n \r\n### WatchList Instructions\r\n\r\n* You must download the Watchlist file called:\r\n### SOCAnalystActionsByAlert.csv \r\n\r\n<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"a75e3f3a-2661-410b-82fb-d300d37dea2d\" width=\"18\" height=\"18\" viewBox=\"0 0 18 18\"><defs><linearGradient id=\"aff60ddf-eec1-40bf-8bf5-f3e3b50e8818\" x1=\"9\" y1=\"16.21\" x2=\"9\" y2=\"0.62\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#1b93eb\"/><stop offset=\"0.21\" stop-color=\"#2095eb\"/><stop offset=\"0.44\" stop-color=\"#2e9ced\"/><stop offset=\"0.69\" stop-color=\"#45a7ef\"/><stop offset=\"0.95\" stop-color=\"#64b6f1\"/><stop offset=\"1\" stop-color=\"#6bb9f2\"/></linearGradient></defs><title>Icon-security-248</title><path d=\"M16,8.44c0,4.57-5.53,8.25-6.73,9a.43.43,0,0,1-.46,0C7.57,16.69,2,13,2,8.44V2.94a.44.44,0,0,1,.43-.44C6.77,2.39,5.78.5,9,.5s2.23,1.89,6.53,2a.44.44,0,0,1,.43.44Z\" fill=\"#1b93eb\"/><path d=\"M15.38,8.48c0,4.2-5.07,7.57-6.17,8.25a.4.4,0,0,1-.42,0c-1.1-.68-6.17-4.05-6.17-8.25v-5A.41.41,0,0,1,3,3c3.94-.11,3-1.83,6-1.83S11.05,2.93,15,3a.41.41,0,0,1,.39.4Z\" fill=\"url(#aff60ddf-eec1-40bf-8bf5-f3e3b50e8818)\"/><path d=\"M9,6.53A2.88,2.88,0,0,1,11.84,9a.49.49,0,0,0,.49.4h1.4a.49.49,0,0,0,.5-.53,5.26,5.26,0,0,0-10.46,0,.49.49,0,0,0,.5.53h1.4A.49.49,0,0,0,6.16,9,2.88,2.88,0,0,1,9,6.53Z\" fill=\"#c3f1ff\"/><circle cx=\"9\" cy=\"9.4\" r=\"1.91\" fill=\"#fff\"/></svg>(https://github.com/Azure/Azure-Sentinel/blob/master/docs/SOCAnalystActionsByAlert.csv)\r\n \r\n * Name the Watchlist alias as:  \r\n ### SocRA  \r\n * Note: SocRA is case sensitive, you need an uppercase S, R and A.",
-              "style": "info"
+              "json": "### Remediations and Actions  Help\r\n- Basic, level shows the Remediation that is contained in the Alert data\r\n- Advanced, level shows an enriched Remediation and Action set, this is obtained for the SocRA Watchlist. \r\n\t- Instructions, you must install the Watchlist file called, SocRa.csv file from \r\n<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"a75e3f3a-2661-410b-82fb-d300d37dea2d\" width=\"18\" height=\"18\" viewBox=\"0 0 18 18\"><defs><linearGradient id=\"aff60ddf-eec1-40bf-8bf5-f3e3b50e8818\" x1=\"9\" y1=\"16.21\" x2=\"9\" y2=\"0.62\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"#1b93eb\"/><stop offset=\"0.21\" stop-color=\"#2095eb\"/><stop offset=\"0.44\" stop-color=\"#2e9ced\"/><stop offset=\"0.69\" stop-color=\"#45a7ef\"/><stop offset=\"0.95\" stop-color=\"#64b6f1\"/><stop offset=\"1\" stop-color=\"#6bb9f2\"/></linearGradient></defs><title>Icon-security-248</title><path d=\"M16,8.44c0,4.57-5.53,8.25-6.73,9a.43.43,0,0,1-.46,0C7.57,16.69,2,13,2,8.44V2.94a.44.44,0,0,1,.43-.44C6.77,2.39,5.78.5,9,.5s2.23,1.89,6.53,2a.44.44,0,0,1,.43.44Z\" fill=\"#1b93eb\"/><path d=\"M15.38,8.48c0,4.2-5.07,7.57-6.17,8.25a.4.4,0,0,1-.42,0c-1.1-.68-6.17-4.05-6.17-8.25v-5A.41.41,0,0,1,3,3c3.94-.11,3-1.83,6-1.83S11.05,2.93,15,3a.41.41,0,0,1,.39.4Z\" fill=\"url(#aff60ddf-eec1-40bf-8bf5-f3e3b50e8818)\"/><path d=\"M9,6.53A2.88,2.88,0,0,1,11.84,9a.49.49,0,0,0,.49.4h1.4a.49.49,0,0,0,.5-.53,5.26,5.26,0,0,0-10.46,0,.49.49,0,0,0,.5.53h1.4A.49.49,0,0,0,6.16,9,2.88,2.88,0,0,1,9,6.53Z\" fill=\"#c3f1ff\"/><circle cx=\"9\" cy=\"9.4\" r=\"1.91\" fill=\"#fff\"/></svg>(https://github.com/Azure/Azure-Sentinel)\r\n and name the Watchlist alias as: SocRa"
             },
             "conditionalVisibility": {
               "parameterName": "Help",
@@ -756,7 +701,7 @@
               "version": "KqlItem/1.0",
               "query": "_GetWatchlist('SocRA')\r\n| join\r\n  (\r\n   SecurityIncident | where IncidentNumber == '{IncidentNumber}' \r\n   | summarize arg_max(TimeGenerated, CreatedTime, Status, Severity, Owner, AdditionalData, IncidentUrl, Comments, Classification, ClassificationReason, ClassificationComment, Labels, Title, AlertIds) by IncidentNumber\r\n  ) on $left.Alert == $right.Title\r\n| project-keep  A*, Status, Severity //, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19\r\n| project-reorder Alert, Status, Severity, A* asc\r\n| project-away AlertIds, AdditionalData\r\n| evaluate narrow()\r\n| extend url_ = iif(Value contains 'https://',extract (\"https://([a-zA-Z0-9-_://@.?%=&# +]*)\",0,Value),\"\")\r\n| extend r = iif(Column startswith 'A', extract(@\"\\d+\",0,tostring(Column)),\"\")\r\n| where isnotempty(Value)\r\n| project tostring(Column), RemediationStep =Value, URLtoOpen=url_,toint(r)\r\n| order by Column desc, r asc \r\n\r\n\r\n\r\n\r\n\r\n\r\n",
               "size": 0,
-              "title": "Incident and Remediations - Advanced View (from Watchlist, \"SocRA\") Incident Number:{IncidentNumber}",
+              "title": "Incident and Remediations - Advanced View (from Watchlist, \"SocRa\") Incident Number:{IncidentNumber}",
               "timeContext": {
                 "durationMs": 2592000000
               },
@@ -959,10 +904,81 @@
       },
       "conditionalVisibility": {
         "parameterName": "testRemediation",
-        "comparison": "isNotEqualTo",
-        "value": "0"
+        "comparison": "isNotEqualTo"
       },
       "name": "RecActions"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Closing Classifications of Similar Incidents"
+            },
+            "name": "Headline - classification"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "Closing classifications of incidents that where created from the same rule in the past month",
+              "style": "info"
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
+            },
+            "name": "Info - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let alertText =  strcat_array(dynamic([{RuleId}]),\",\");\r\nlet getAmountOfIncidentForRuleId = (classification:string){\r\n    SecurityIncident\r\n    | where TimeGenerated >= ago(30d)\r\n    | where Classification == classification\r\n    | mv-expand AlertId=AlertIds\r\n    | extend AlertId=tostring(AlertId)\r\n    | join  (SecurityAlert| where TimeGenerated >=ago(30d)) on $left.AlertId==$right.SystemAlertId\r\n    | mv-expand RuleId=RelatedAnalyticRuleIds\r\n    | extend RuleId=iff(ProductName!= 'Azure Sentinel', ProductName,RuleId)\r\n    | summarize counter=count() by RuleIdentifier=tostring(RuleId)\r\n    | extend RuleId=RuleIdentifier\r\n    | project-away RuleIdentifier\r\n};\r\nlet falsePositiveClassificationTable = getAmountOfIncidentForRuleId(\"FalsePositive\") | extend FalsePositiveCounter=counter | project-away counter;\r\nlet undeterminedClassificationTable = getAmountOfIncidentForRuleId(\"Undetermined\") | extend UndeterminedCounter=counter | project-away counter;\r\nlet benignPositiveClassificationTable = getAmountOfIncidentForRuleId(\"BenignPositive\") | extend BenignPositiveCounter=counter | project-away counter;\r\nlet truePositiveClassificationTable = getAmountOfIncidentForRuleId(\"TruePositive\") | extend TruePositiveCounter=counter | project-away counter;\r\nlet closedIncidentTable = SecurityIncident| where TimeGenerated >= ago(30d) |where Status == \"Closed\" | mv-expand AlertId=AlertIds| extend AlertId=tostring(AlertId)| join  SecurityAlert on $left.AlertId==$right.SystemAlertId| mv-expand RelatedAnalyticRuleIds| extend RuleId= iff(ProductName == 'Azure Sentinel', tostring(RelatedAnalyticRuleIds), ProductName);\r\nlet joinByRuleId = (T:(RuleId:string), S:(RuleId:string)){\r\n    T \r\n    | join kind=fullouter S on $left.RuleId == $right.RuleId\r\n    | extend RuleId= iff(RuleId == '', RuleId1,RuleId)\r\n    | project-away RuleId1\r\n};\r\njoinByRuleId(joinByRuleId(joinByRuleId(joinByRuleId(falsePositiveClassificationTable, undeterminedClassificationTable) , benignPositiveClassificationTable), truePositiveClassificationTable),closedIncidentTable)\r\n| join kind=leftouter  (SecurityAlert\r\n| where TimeGenerated >= ago(30d)\r\n| where ProductName  ==  'Azure Sentinel'\r\n| extend RuleId = parsejson( tostring(todynamic(ExtendedProperties)['Analytic Rule Ids']))\r\n| mv-expand RuleId=RuleId\r\n| extend RuleId=tostring(RuleId)\r\n| extend RuleName=  tostring(todynamic(ExtendedProperties)['Analytic Rule Name'])\r\n| project RuleId,RuleName\r\n| distinct RuleId,RuleName)\r\n on $left.RuleId==$right.RuleId\r\n| extend RuleName=iff(isempty(RuleName),RuleId,RuleName)\r\n| project-away RuleId1\r\n| where alertText has RuleId \r\n| summarize dcount(IncidentNumber) by Classification",
+              "size": 0,
+              "noDataMessage": "No recent closed incident were found",
+              "noDataMessageStyle": 4,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "sortBy": [],
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Field1",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 1
+                },
+                "showBorder": false,
+                "sortCriteriaField": "Order",
+                "sortOrderField": 1,
+                "size": "auto"
+              },
+              "chartSettings": {
+                "createOtherGroup": null
+              }
+            },
+            "name": "Closing classification"
+          }
+        ]
+      },
+      "customWidth": "33",
+      "name": "Similar"
     },
     {
       "type": 1,
@@ -1366,7 +1382,6 @@
       }
     }
   ],
-
   "fromTemplateId": "sentinel-IncidentOverview",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
