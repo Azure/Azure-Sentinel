@@ -63,7 +63,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 - [Analytics Rules based on Threat Intelligence data](./Modules/Module-7-Threat-Intelligence.md#exercise-3-analytics-rules-based-on-threat-intelligence-data)
 - [Threat Intelligence Workbook](./Modules/Module-7-Threat-Intelligence.md#exercise-5-threat-intelligence-workbook)
 
-[**Module 8 - Azure Sentinel Solutions**](./Modules/Module-8-Azure-Sentinel-Solutions.md)
-- [Explore Azure Sentinel Solutions gallery](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-1-explore-azure-sentinel-solutions-gallery)
+[**Module 8 - Azure Sentinel Content hub**](./Modules/Module-8-Azure-Sentinel-Solutions.md)
+- [Explore Azure Sentinel Content hub](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-1-explore-azure-sentinel-content-hub)
 - [Deploy a new solution](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-2-deploy-a-new-solution)
 - [Review and enable deployed artifacts](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-3-review-and-enable-deployed-artifacts)
