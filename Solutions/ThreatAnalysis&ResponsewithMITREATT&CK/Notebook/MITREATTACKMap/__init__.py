@@ -53,14 +53,10 @@ def parse_yaml(parent_dir, child_dir):
     yaml_queries = glob.glob(f"{parent_dir}/{child_dir}/**/*.yaml", recursive=True)
     df = pd.DataFrame()
 
-    #     # Parse and load yaml
-    #     parsed_yaml = YAML(typ="safe")
-
     # Recursively load yaml Files and append to dataframe
     for query in yaml_queries:
         with open(query, "r", encoding="utf-8", errors="ignore") as f:
             parsed_yaml_df = json_normalize(yaml.load(f, Loader=yaml.FullLoader))
-            #             parsed_yaml_df = json_normalize(parsed_yaml.load(f))
             parsed_yaml_df["DetectionURL"] = query.replace(parent_dir, sentinel_repourl)
             df = df.append(parsed_yaml_df, ignore_index=True, sort=True)
 
@@ -75,7 +71,7 @@ def parse_yaml(parent_dir, child_dir):
 
 
 def get_fusion_alerts():
-    alerts_url = "https://docs.microsoft.com/azure/sentinel/fusion"
+    alerts_url = "https://docs.microsoft.com/azure/sentinel/fusion-scenario-reference"
 
     session = HTMLSession()
 
@@ -334,27 +330,7 @@ def clean_and_preprocess_data(df):
     )
     null_df["Platform"] = ""
 
-    new_columns = [
-        "DetectionType",
-        "DetectionService",
-        "id",
-        "name",
-        "description",
-        "connectorId",
-        "dataTypes",
-        "query",
-        "queryFrequency",
-        "queryPeriod",
-        "triggerOperator",
-        "triggerThreshold",
-        "tactics",
-        "relevantTechniques",
-        "severity",
-        "DetectionURL",
-        "IngestedDate",
-        "Platform",
-    ]
-
+    new_columns.append("Platform")
     result_null_df = null_df[new_columns]
 
     result = pd.concat([result_not_null_df, result_null_df], axis=0)
@@ -362,31 +338,6 @@ def clean_and_preprocess_data(df):
     return result
 
 
-def get_mitre_matrix_flat():
-    # Create the client
-    lift = attack_client()
-
-    # Pull all the techniques without STIX Format
-    all_techniques = lift.get_techniques(stix_format=False)
-    techniques_normalized = json_normalize(all_techniques)
-
-    # Selecting specific columns of output dataset and reindex the dataframe
-    techniques = techniques_normalized.reindex(
-        ["matrix", "tactic", "technique", "technique_id"], axis=1
-    )
-    mitre_attack = techniques["matrix"] == "mitre-attack"
-    mitre_attack_df = techniques[mitre_attack]
-    mitre_attack_df = mitre_attack_df.reset_index(drop=True)
-
-    # Exploding Platform and Tactic Columns to flatten the table
-    mitre_attack_df = mitre_attack_df.explode("tactic").reset_index(drop=True)
-
-    # Creae a new column by removing subtechniques
-    mitre_attack_df["technique_id_parsed"] = mitre_attack_df["technique_id"].str.split(
-        ".", n=1, expand=True
-    )[0]
-
-    return mitre_attack_df
 
 
 # Custom ConnectorId to Platform Mapping
@@ -531,7 +482,7 @@ def get_azure_defender_alerts():
 
     # Add and Rename columns
     azdefender_df["Detection Service"] = (
-        "Azure Defender" + " for " + azdefender_df["Provider"]
+        "Microsoft Defender" + " for " + azdefender_df["Provider"]
     )
     azdefender_df = azdefender_df.rename(
         columns={"MITRE tactics(Learn more)": "Tactic"}
@@ -624,7 +575,7 @@ def get_mcas_alerts():
 
     mcas_df["Severity"] = "N.A."
     mcas_df["Provider"] = "N.A."
-    mcas_df["Detection Service"] = "Microsoft Cloud Application Security (MCAS)"
+    mcas_df["Detection Service"] = "Microsoft Defender for Cloud Apps"
     mcas_df["DetectionURL"] = alerts_url
     mcas_df["connectorId"] = "MicrosoftCloudAppSecurity"
     mcas_df["dataTypes"] = "SecurityAlert (MCAS) | McasShadowItReporting"
@@ -680,17 +631,6 @@ def main(mytimer: func.TimerRequest) -> None:
         # Append the Fusion dataset to Pre-procesed result
         result = result.append(fusion_df, ignore_index=True)
         logging.info(f"The no of records in results: {len(result)}")
-        # Joining with MITRE Dataset
-        # mitre_attack_df = get_mitre_matrix_flat()
-        # logging.info(f"The no of records in mitre_attack_df: {len(result)}")
-
-        # newdf = pd.merge(
-        #     result,
-        #     mitre_attack_df,
-        #     left_on=["relevantTechniques"],
-        #     right_on=["technique_id_parsed"],
-        #     how="outer",
-        # )
 
         # Renaming columns
         result = result.rename(
@@ -705,7 +645,6 @@ def main(mytimer: func.TimerRequest) -> None:
                 "severity": "DetectionSeverity",
                 "tactics": "Tactic",
                 "relevantTechniques": "TechniqueId",
-                # "technique": "TechniqueName",
                 "query": "Query",
                 "queryFrequency": "QueryFrequency",
                 "queryPeriod": "QueryPeriod",
@@ -717,10 +656,8 @@ def main(mytimer: func.TimerRequest) -> None:
 
         # Column Seletion and Ordering
         columns = [
-            # "MITREMatrix",
             "Tactic",
             "TechniqueId",
-            # "TechniqueName",
             "Platform",
             "DetectionType",
             "DetectionService",
@@ -748,7 +685,7 @@ def main(mytimer: func.TimerRequest) -> None:
         # Export the whole dataset
         logging.info(f"Writing csv files to temporary directory")
         out_path = tmp_path + "/AzureSentinel.csv"
-        # newdf.to_csv("AzureSentinel.csv", header=False, index=False)
+
         az_defender_alerts = get_azure_defender_alerts()
         logging.info(
             f"No of alerts scraped from Azure Defender: {len(az_defender_alerts)}"
