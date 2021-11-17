@@ -1,0 +1,11 @@
+class SiemTypes:
+    TYPE_DELIVERY = 'delivery'
+    TYPE_PROCESS = 'process'
+    TYPE_RECEIPT = 'receipt'
+    TYPE_TTP_URL = 'ttp_url'
+    TYPE_TTP_ATTACHMENT = 'ttp_ap'
+    TYPE_TTP_IMPERSONATION = 'impersonation'
+    TYPE_TTP_IEP = 'iep'
+    TYPE_JOURNAL = 'jrnl'
+    TYPE_AV = 'av'
+    TYPE_SPAMEVENTTHREAD = 'spameventthread'
