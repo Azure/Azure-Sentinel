@@ -21,7 +21,8 @@ CONTAINER_NAME = os.environ['CONTAINER_NAME']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
-
+lineSeparator = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
+    
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
 
@@ -106,7 +107,7 @@ class AzureBlobStorageConnector:
             s = ''
             async for chunk in blob_cor.chunks():
                 s += chunk.decode()
-                lines =  re.split(r'[\n\r\x0b\v\x0c\f\x1c\x1d\x1e\u2028\u2029]+', s)
+                lines =  re.split(r'{0}'.format(lineSeparator), s)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
