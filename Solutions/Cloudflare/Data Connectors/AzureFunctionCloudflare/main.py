@@ -106,17 +106,14 @@ class AzureBlobStorageConnector:
             s = ''
             async for chunk in blob_cor.chunks():
                 s += chunk.decode()
-                lines = s.splitlines()
+                lines =  s.split('\n')
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
                             try :
                                 event = json.loads(line)
                             except ValueError as e:
-                                logging.info("Writing line value:");
-                                logging.info("Printing from blob {}".format(blob['name']));
-                                logging.info(line);
-                                logging.error("Error while loading json Event at line value {}".format(str(e)))
+                                logging.error('Error while loading json Event at line value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
                                 raise e
                             await sentinel.send(event)
                 s = line
@@ -124,10 +121,7 @@ class AzureBlobStorageConnector:
                 try :
                     event = json.loads(s)
                 except ValueError as e:
-                    logging.info("Writing s value:");
-                    logging.info("Printing from blob {}".format(blob['name']));
-                    logging.info(s);
-                    logging.error("Error while loading json Event at s value {}".format(str(e)))
+                    logging.error('Error while loading json Event at s value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
                     raise e
                 await sentinel.send(event)
             await sentinel.flush()
