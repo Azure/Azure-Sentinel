@@ -106,7 +106,7 @@ class AzureBlobStorageConnector:
             s = ''
             async for chunk in blob_cor.chunks():
                 s += chunk.decode()
-                lines =  s.split('\n')
+                lines =  re.split(r'[\n\r\x0b\v\x0c\f\x1c\x1d\x1e\x85\u2028\u2029]+', s)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
