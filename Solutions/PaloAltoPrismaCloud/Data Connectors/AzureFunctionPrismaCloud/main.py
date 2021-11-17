@@ -21,11 +21,10 @@ PASSWORD = os.environ['PrismaCloudSecretKey']
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 ALERT_LOG_TYPE = 'PaloAltoPrismaCloudAlert'
 AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
-
+AuditLogAccess = os.environ['AuditLogAccess']
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
 MAX_PERIOD_MINUTES = 60 * 24 * 7
-
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -43,9 +42,12 @@ async def main(mytimer: func.TimerRequest):
     prisma = PrismaCloudConnector(API_URL, USER, PASSWORD)
 
     tasks = [
-        prisma.process_alerts(),
-        prisma.process_audit_logs()
+        prisma.process_alerts()
     ]
+
+    if AuditLogAccess :
+        tasks.append(prisma.process_audit_logs())
+
     await asyncio.gather(*tasks)
 
     logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))
@@ -162,9 +164,6 @@ class PrismaCloudConnector:
             }
             data = json.dumps(data)
             async with session.post(uri, headers=headers, data=data) as response:
-                if response.status == 403:
-                    logging.warning('Customer does not have access to Alert Logs')
-                    return
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
@@ -208,9 +207,6 @@ class PrismaCloudConnector:
                 'endTime': unix_ts_now
             }
             async with session.get(uri, headers=headers, params=params) as response:
-                if response.status == 403:
-                    logging.warning('Customer does not have access to Audit Logs')
-                    return
                 if response.status != 200:
                     raise Exception('Error while getting audit logs. HTTP status code: {}'.format(response.status))
                 res = await response.text()
