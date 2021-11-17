@@ -25,8 +25,11 @@
 			"apiVersion": "2016-06-01",
 			"name": "[variables('AzureSentinelConnectionName')]",
 			"location": "[resourceGroup().location]",
+			"kind": "V1",
 			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
 				"customParameterValues": {},
+				"parameterValueType": "Alternative",
 				"api": {
 					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
 				}
@@ -50,6 +53,9 @@
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
 			"dependsOn": [
 				"[resourceId('Microsoft.Web/connections', variables('DNSDBApiKey'))]",
 				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
@@ -66,7 +72,7 @@
                         }
                     },
                     "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -77,24 +83,11 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            }
-                        },
                         "Co_Located_Hosts_": {
                             "runAfter": {
                                 "RRSET_Unique_IPS_Array": [
@@ -168,7 +161,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -190,7 +183,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
                                             "message": "<p><span style=\"font-size: 24px\">DNSDB Co-Located Domains for Domain: </span><span style=\"font-size: 24px\">@{variables('domain_name')}</span><span style=\"font-size: 24px\">(From Date: </span><span style=\"font-size: 24px\">@{variables('start_date')}</span><span style=\"font-size: 24px\">, To Date: </span><span style=\"font-size: 24px\">@{variables('end_date')}</span><span style=\"font-size: 24px\">)</span><br>\n<span style=\"font-size: 16px\"></span><span style=\"font-size: 16px\">@{body('Join')}</span><span style=\"font-size: 16px\"></span></p>"
                                         },
                                         "host": {
@@ -597,18 +590,14 @@
                             }
                         },
                         "Incident_Date": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
                                         "name": "end_date",
                                         "type": "string",
-                                        "value": "@body('Alert_-_Get_incident')?['properties']?['createdTimeUtc']"
+                                        "value": "@triggerBody()?['object']?['properties']?['createdTimeUtc']"
                                     }
                                 ]
                             }
@@ -738,7 +727,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
                             },
                             "farsightdnsdb": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('DNSDBApiKey'))]",
