@@ -1,11 +1,10 @@
-# TimerTrigger - Python
+# Threat Analysis & Response with MITRE ATT&CK Azure Function
 
-The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function every 5 minutes.
+This function app will download all the detection and hunting query yaml files from Microsoft Sentinel Github, parse it , convert it into structured tabular dataset and ingest as a customlog table named MITREATTACKMap_CL. For more details about the notebook, workflow, read the blog [Using Jupyter Notebook to analyze and visualize Azure Sentinel Analytics and Hunting Queries](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/using-jupyter-notebook-to-analyze-and-visualize-azure-sentinel/ba-p/1770400)
 
 ## How it works
 
-For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 5 minutes is `0 */5 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 5, for any hour, day of the month, month, day of the week, or year".
+The function will be deployed automatically once the solution is deployed. Once the function is deployed , plase set variables WorkspaceId and Workspacekey in the App Settings. For more information, check the docs [Configure App Settings](https://docs.microsoft.com/azure/azure-functions/functions-how-to-use-azure-function-app-settings)".
 
-## Learn more
 
-<TODO> Documentation
+
