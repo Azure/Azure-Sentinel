@@ -120,6 +120,11 @@ namespace Kqlvalidations.Tests
             {
                 Console.WriteLine(fil);
             }
+            Console.WriteLine("----------------------------");
+            foreach(var yfil in yamlFiles)
+            {
+                Console.WriteLine(yfil);
+            }
             Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml {numberOfNotYamlFiles} {AllFiles.Count} {yamlFiles.Count}");
         }
 
