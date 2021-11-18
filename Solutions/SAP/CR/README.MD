@@ -6,7 +6,7 @@ The following table lists the SAP Log change requests that you must configure in
    
    For a typical installation on SAP Basis 7.4  install NPLK900146
    
-   For the  role creation (any version) install NPLK900140
+   For the  role creation (any version) install NPLK900163
 
 <u><b>SAP notes required for version below SAP Basis 7.5 SP13:</u></b>
 
@@ -23,5 +23,5 @@ The following table lists the SAP Log change requests that you must configure in
 | --- | -------------- | -------------------------- |
 | **All Logs** | NPLK900144 | 0.0.23 <br> <br>Use the complete package<br> <br>Basis>=7.5 |
 | **All Logs** | NPLK900146 | 0.0.23 <br> <br>Use the complete package<br> <br>Basis<7.5 |
-| **Sample Authorizations Role** | NPLK900140 | 0.0.23 | 
+| **Sample Authorizations Role** | NPLK900163 | 0.0.24 | 
 

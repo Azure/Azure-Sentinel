@@ -77,7 +77,7 @@ class AzureSentinelConnector:
         headers = {
             'content-type': content_type,
             'Authorization': signature,
-            'Log-Type': log_type,
+            'Log-Type': 'ProofpointPOD_' + log_type,
             'x-ms-date': rfc1123date
         }
 

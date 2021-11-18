@@ -10,7 +10,7 @@ Included watchlists:
   
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
 <br>
  
 | Watchlist | Deploy |

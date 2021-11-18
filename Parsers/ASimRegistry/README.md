@@ -1,15 +1,15 @@
-# Azure Sentinel Information Model (ASIM) Registry parsers 
+# Advanced SIEM Information Model (ASIM) Registry parsers 
 
-This template deploys all ASIM Registry parsers. The template is part of the Azure Sentinel Information Mode (ASIM).
+This template deploys all ASIM Registry parsers. The template is part of the Advanced SIEM Information Model (ASIM).
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
-Note: Please ensure that the subscription, resource group and location are the same as your current Azure Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
+Note: Please ensure that the subscription, resource group and location are the same as your current Microsoft Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Registry events normalization schema reference](https://aka.ms/AzSentinelRegistryEventDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Microsoft Sentinel Registry events normalization schema reference](https://aka.ms/AzSentinelRegistryEventDoc)
 
 
 
