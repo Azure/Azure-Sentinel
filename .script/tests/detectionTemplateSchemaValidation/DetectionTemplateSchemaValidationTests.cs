@@ -116,11 +116,11 @@ namespace Kqlvalidations.Tests
             var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
             AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
-            string test = ""
             foreach(var fil in AllFiles)
+            {
                 Console.WriteLine(fil);
-                string test = test + "," file.Print();
-            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml {numberOfNotYamlFiles} {AllFiles.Count} {yamlFiles.Count} {test}");
+            }
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml {numberOfNotYamlFiles} {AllFiles.Count} {yamlFiles.Count}");
         }
 
         [Fact]
