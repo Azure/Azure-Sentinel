@@ -89,7 +89,7 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
     - **Collection ID**: 135
     - **Username**: guest
     - **Password**: guest
-    - **Import Indicators**: At most one month old (review all available options)
+    - **Import Indicators**: All available (review all available options)
     - **Polling frequency**: Once an minute (review all available options)
 
 ![taxii1](../Images/taxii11.png)
