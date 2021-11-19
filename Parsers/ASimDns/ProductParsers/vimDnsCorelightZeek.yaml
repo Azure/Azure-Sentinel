@@ -1,12 +1,12 @@
 Parser:
   Title: Corelight Zeek DNS Parametrized Parser 
-  Version: '0.1'
-  LastUpdated: Sep 2nd, 2021
+  Version: '0.2'
+  LastUpdated: Nov 11 2021
 Product:
   Name: Corelight Zeek
 Normalization:
   Schema: Dns
-  Version: '0.1.1'
+  Version: '0.1.3'
 References:
 - Title: ASIM DNS Schema
   Link: https://aka.ms/AzSentinelDnsDoc
@@ -39,7 +39,7 @@ ParserParams:
     Default: dynamic([])
   - Name: eventtype
     Type: string
-    Default: 'lookup'
+    Default: 'Query'
   - Name: disabled
     Type: bool
     Default: false
@@ -49,14 +49,14 @@ ParserQuery: |
     , srcipaddr:string='*'
     , domain_has_any:dynamic=dynamic([]) 
     , responsecodename:string='*', response_has_ipv4:string='*'
-    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
     , disabled:bool=false
     ){
     Corelight_CL | where not(disabled)
     | where log_file_s has "dns"
     //  Pre-parsing filtering:
     | where
-      (eventtype=='lookup')
+      (eventtype in~ ('lookup', 'Query'))
       and (isnull(starttime) or TimeGenerated >= starttime)
       and (isnull(endtime) or TimeGenerated <= endtime)
       and (srcipaddr=='*' or has_ipv4(Message, srcipaddr))
@@ -77,9 +77,10 @@ ParserQuery: |
         EventCount=int(1),
         EventProduct="Zeek",
         EventVendor="Corelight",
-        EventSchemaVersion="0.1.2",
+        EventSchema = "Dns",
+        EventSchemaVersion="0.1.3",
         Dvc="Zeek",
-        EventType="lookup",
+        EventType="Query",
         EventSubType='response', // ?? rejected?
         EventEndTime= todatetime(data.ts),
         EventOriginalUid = tostring(data.uid),
@@ -100,7 +101,7 @@ ParserQuery: |
         DnsQueryClass = toint(data.qclass),
         DnsQueryTypeName =tostring(data.qtype_name), 
         DnsQueryType = toint(data.qtype),
-        NetworkDuration = toint(data.rtt),
+        DnsNetworkDuration = toint(data.rtt),
         DnsResponseName = tostring(pack ('answers', data.answers, 'ttls', data.TTLs, 'authoritative ', data.auth, 'additional', data.addl))    | extend
         EventStartTime = EventEndTime,
         EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure')
@@ -108,8 +109,11 @@ ParserQuery: |
     | extend 
         DnsResponseCodeName=EventResultDetails, 
         Domain=DnsQuery,
-        IpAddr=SrcIpAddr
-    // Backward Competability
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        Dst=DstIpAddr,
+        Duration=DnsNetworkDuration
+    // Backward Compatibility
     | extend
         Query=DnsQuery,
         QueryType=DnsQueryType,

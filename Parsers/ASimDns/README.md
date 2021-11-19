@@ -6,12 +6,12 @@ The Advanced SIEM Information Model (ASIM) enables you to use and create source-
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Microsoft Sentinel DNS normalization schema reference](https://aka.ms/AzSentinelDnsDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/MsASIM)
+- [Microsoft Sentinel DNS normalization schema reference](https://aka.ms/ASimDnsDoc)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelDnsARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM)
 
 <br>
 
@@ -37,28 +37,4 @@ The template deploys the following parsers:
   - **zScaler ZIA** - AsimDnszScalerZIA (regular), vimDnszScalerZIA (parametrized) 
 
 
-use regular parsers when you want to query interactively your DNS logs. Use parameterized parsers when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query
-
-## Parser parameters
-
-Parametersize parsers support the following parameters which allow for pre-filtering and therefore significantly enhance parser perofrmance. All parameters are optional. The results will match all of the used parameters (AND logic).
-
-To use parameters, set their value as you invoke the parser, for example
-
-`imDns (srcipaddr = '192.168.0.1') | ...`
-
-Supported parameters: 
-
-| Name     | Type      | Default value |
-|----------|-----------|---------------|
-| starttime|  datetime | datetime(null)|
-|  endtime |  datetime | datetime(null) |
-|  srcipaddr |  string | '*' |
-|  domain_has_any|  dynamic | dynamic([]) |
-|  responsecodename |  string | '*' |
-|  response_has_ipv4 |  string | '*' |
-|  response_has_any|  dynamic| dynamic([])|
-|  eventtype|  string | 'lookup' |
-
-
-Note: the template asks for the list of Infoblox computers. You can ignore this input if you do not use Infoblox.  
+use regular parsers when you want to query interactively your DNS logs. Use parameterized parsers when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query. For more information see 
