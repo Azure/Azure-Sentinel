@@ -1,0 +1,63 @@
+id: tobeadded
+name: TI map IP entity to AzureFirewall
+description: |
+  'Identifies a match in AzureFirewall (NetworkRule & ApplicationRule Logs) from any IP IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | join (
+      AzureDiagnostics
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
+      | parse kind=regex flags=U msg_s with Protocol 'request from ' SourceHost 'to ' DestinationHost @'\.? Action:' Action
+      | extend SourceAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?',1,SourceHost)
+      | extend DestinationAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?',1,DestinationHost)
+      | where not(ipv4_is_private(DestinationAddress))
+      // renaming time column so it is clear the log this came from
+      | extend AzureFirewall_TimeGenerated = TimeGenerated
+  )
+  on $left.TI_ipEntity == $right.DestinationAddress
+  | where AzureFirewall_TimeGenerated >= LatestIndicatorTime and AzureFirewall_TimeGenerated < ExpirationDateTime
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore, AzureFirewall_TimeGenerated,
+  TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Action, Protocol, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = AzureFirewall_TimeGenerated, IPCustomEntity = TI_ipEntity, URLCustomEntity = Url
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled
