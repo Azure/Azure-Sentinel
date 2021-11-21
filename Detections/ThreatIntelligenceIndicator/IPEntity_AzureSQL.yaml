@@ -26,27 +26,24 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
         AzureDiagnostics
+        | where TimeGenerated >= ago(dt_lookBack)
         | where ResourceProvider == 'MICROSOFT.SQL'
         | where Category == 'SQLSecurityAuditEvents'
-        | where TimeGenerated >= ago(dt_lookBack)
         | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated, ClientIP = client_ip_s
   )
   on $left.TI_ipEntity == $right.ClientIP
-  | where SQLSecurityAuditEvents_TimeGenerated  >= TimeGenerated and SQLSecurityAuditEvents_TimeGenerated < ExpirationDateTime
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, SQLSecurityAuditEvents_TimeGenerated,
-  TI_ipEntity, ClientIP, LogicalServerName_s, action_name_s, database_name_s, object_name_s, additional_information_s, application_name_s, host_name_s, server_principal_name_s, succeeded_s, database_principal_name_s, NetworkIP,  NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | where SQLSecurityAuditEvents_TimeGenerated < ExpirationDateTime
+  | summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by IndicatorId, ClientIP
+  | project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  TI_ipEntity, ClientIP, LogicalServerName_s, action_name_s, database_name_s, object_name_s, additional_information_s, application_name_s, host_name_s, server_principal_name_s, succeeded_s, database_principal_name_s, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = SQLSecurityAuditEvents_TimeGenerated
-  entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: ClientIP
 version: 1.0.0
 kind: Scheduled
