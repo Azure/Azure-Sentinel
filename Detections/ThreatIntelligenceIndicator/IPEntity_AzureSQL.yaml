@@ -32,13 +32,16 @@ query: |
         | where TimeGenerated >= ago(dt_lookBack)
         | where ResourceProvider == 'MICROSOFT.SQL'
         | where Category == 'SQLSecurityAuditEvents'
-        | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated, ClientIP = client_ip_s
+        | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated
+        // projecting fields with column if exists as this is in AzureDiag and if the event is not in the table, then queries will fail due to event specific schemas
+        | extend ClientIP = column_ifexists("client_ip_s", "Not Available"), Action = column_ifexists("action_name_s", "Not Available"), 
+        Application = column_ifexists("application_name_s", "Not Available"), HostName = column_ifexists("host_name_s", "Not Available")
   )
   on $left.TI_ipEntity == $right.ClientIP
   | where SQLSecurityAuditEvents_TimeGenerated < ExpirationDateTime
   | summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by IndicatorId, ClientIP
   | project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, ClientIP, LogicalServerName_s, action_name_s, database_name_s, object_name_s, additional_information_s, application_name_s, host_name_s, server_principal_name_s, succeeded_s, database_principal_name_s, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  TI_ipEntity, ResourceId, ClientIP, Action, Application, HostName, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = SQLSecurityAuditEvents_TimeGenerated
 entityMappings:
   - entityType: IP
