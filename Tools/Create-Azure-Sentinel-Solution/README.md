@@ -108,6 +108,8 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
 ### Create Solution Metadata File
 
 Create a  file and place it in the base path of solution `https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/`.
+* Refer to the [Microsoft Sentinel content and solutions categories documentation](https://aka.ms/sentinelcontentcategories) for a complete list of valid Microsoft Sentinel categories.
+* Refer to [Microsoft Sentinel content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for information on valid support models.
 
 #### **Metadata File Format:**
 
