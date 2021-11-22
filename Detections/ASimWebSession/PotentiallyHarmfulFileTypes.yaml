@@ -1,0 +1,41 @@
+id: 09c49590-4e9d-4da9-a34d-17222d0c9e7e
+name: Request to blocklisted file type
+description: |
+  'Detects request to potentially harmful file types (.ps1, .bat, .vbs, etc.).
+  To use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AdvancedSentinelInformationModel)'
+severity: Medium
+tags:
+  - Id: de58ee9e-b229-4252-8537-41a4c2f4045e
+    version: 1.0.0
+  - Schema: ASimWebSession
+    SchemaVersion: 0.2.1
+requiredDataConnectors: []
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: |
+  let file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+  let lbtime = 10m;
+  imWebSession(starttime=lbtime, url_has_any=file_ext_blocklist, eventresult='Success')
+  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
+  | extend requestedFileExtension=extract(@(\.\w+)$,1,requestedFileName, typeof(string))
+  | where requestedFileExtension in (file_ext_blocklist)
+  | project TimeGenerated, SrcIpAddr, requestedFileName
+  | extend IPCustomEntity = SrcIpAddr
+
+alertDetailsOverride:
+  alertDisplayNameFormat: The file {{requestedFileName}}, of sensitive filetype, was accessed (ASimWebSession)
+
+customDetails:
+  requestedFileName: requestedFileName
+  
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
