@@ -1,0 +1,52 @@
+id: 69660e65-0e5c-4700-8b99-5caf59786606
+name: (Preview) Insider Risk - Microsoft 365 Insider Risk Management Alert Observed
+description: |
+  'This alert is triggered when a Microsoft 365 Insider Risk Management alert is recieved in Azure Sentinel via the Microsoft 365 Insider Risk Management Connector. The alert extracts usernames from security alerts to provide UserPrincipalName, Alert Name, Reporting Product Name, Status, Alert Link, Previous Alerts Links, Time Generated. There is an option for configuration of correlations against Azure Sentinel watchlists. For more information, see [Learn about insider risk management in Microsoft 365](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management)'
+severity: High
+requiredDataConnectors:
+  - connectorId: OfficeATP
+    dataTypes:
+      - SecurityAlert (Office 365)
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  let AlertLinks = SecurityAlert
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | mv-expand todynamic(Entities)
+  | where Entities["Type"] =~ "account"
+  | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+            Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+  | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | where UPN <> ""
+  | summarize PreciousSecurityAlertLinks=make_set(AlertLink) by UPN;
+  SecurityAlert
+  | where ProductName == "Microsoft 365 Insider Risk Management"
+      | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+      | mv-expand todynamic(Entities)
+      | where Entities["Type"] =~ "account"
+      | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+          Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+      | extend UPN = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | join kind=inner (AlertLinks) on UPN
+  | extend UserPrincipalName = UPN
+  | extend PreviousAlertsLinks = strcat(PreciousSecurityAlertLinks)
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | project UserPrincipalName, AlertName, ProductName, Tactics, Status, AlertLink, PreviousAlertsLinks, TimeGenerated
+  | sort by TimeGenerated desc
+  | limit 25
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

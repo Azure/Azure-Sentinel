@@ -27,7 +27,7 @@ This exercise shows you how to enable the Azure Activity data connector. This co
 
 ![azactivity2](../Images/azactivity2.png)
 
-3. In the Azure Activity connector page, go to option number 2 **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compred to the old method (more details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
+3. In the Azure Activity connector page, go to option number 2 **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compared to the old method (more details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
 
 
 4. Click on the **Launch Azure Policy Assignment wizard**, this will redirect you to the policy creation page.
@@ -80,7 +80,7 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
 
 1. Go to you Azure Sentinel workspace and select *Data Connectors* under *Configuration* section.
 
-2. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII (Preview)* connector and click on *Open connector page*.
+2. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII* connector and click on *Open connector page*.
 
 3. In the Threat Intelligence - TAXII connector page, add the following information under *Configuration* menu:
 
@@ -89,7 +89,7 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
     - **Collection ID**: 135
     - **Username**: guest
     - **Password**: guest
-    - **Import Indicators**: At most one month old (review all available options)
+    - **Import Indicators**: All available (review all available options)
     - **Polling frequency**: Once an minute (review all available options)
 
 ![taxii1](../Images/taxii11.png)

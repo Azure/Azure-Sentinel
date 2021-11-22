@@ -1,13 +1,13 @@
-# Azure Sentinel Information Model (ASIM) Network Session, Web Session and Network Notables parsers 
+# Advanced SIEM Information Model (ASIM) Network Session, Web Session and Network Notables parsers 
 
-This template deploys all ASIM Network parsers. The template is part of the Azure Sentinel Information Model (ASIM).
+This template deploys all ASIM Network parsers. The template is part of the Advanced SIEM Information Model (ASIM).
 
-The Azure Sentinel Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Network Session normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Microsoft Sentinel Network Session normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
 
 <br>
 

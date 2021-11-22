@@ -1,13 +1,13 @@
-# Azure Sentinel Information Model (ASIM) FileEvent parsers 
+# Advanced SIEM Information Model (ASIM) FileEvent parsers 
 
-This template deploys all ASIM FileEvent parsers. The template is part of the Azure Sentinel Information Mode (ASIM).
+This template deploys all ASIM FileEvent parsers. The template is part of the Advanced SIEM Information Model (ASIM).
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel FileEvent normalization schema reference](https://aka.ms/AzSentinelFileEventDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Microsoft Sentinel FileEvent normalization schema reference](https://aka.ms/AzSentinelFileEventDoc)
 
 <br>
 
