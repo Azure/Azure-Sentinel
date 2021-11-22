@@ -47,18 +47,17 @@ query: |
   | where anomalies > 0 and baseline > baselinethreshold
   | extend AnomalyHour = TimeGenerated
   | project UserPrincipalName, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
-  let AnomalyHours = TimeSeriesAlerts | where TimeGenerated > startofday(ago(timeframe)) | project TimeGenerated;
   // Filter the alerts for specified timeframe
   TimeSeriesAlerts
   | where TimeGenerated > startofday(ago(timeframe))
   | join kind=inner ( 
     allSignins
     | where TimeGenerated > startofday(ago(timeframe))
-    | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
-    | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
-    | summarize HourlyCount=count(), LatestAnomalyTime = arg_max(timestamp,*) by bin(TimeGenerated,1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName
-  ) on UserPrincipalName
-  | project LatestAnomalyTime,  OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, HourlyCount, baseline, anomalies, score
+    // create a new column and round to hour
+    | extend DateHour = bin(TimeGenerated, 1h)
+    | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName
+  ) on UserPrincipalName, $left.AnomalyHour == $right.DateHour
+  | project LatestAnomalyTime, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = HourlyCount, baseline, anomalies, score
   | extend timestamp = LatestAnomalyTime, IPCustomEntity = IPAddress, AccountCustomEntity = UserPrincipalName
 entityMappings:
   - entityType: Account
