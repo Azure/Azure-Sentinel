@@ -4,7 +4,7 @@ This guide provides an overview of Azure Sentinel Solutions and how one can buil
 
 Azure Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Azure Sentinel. This experience is powered by [Azure Marketplace](https://azuremarketplace.microsoft.com/marketplace/) for Solutions’ discoverability, deployment and enablement and [Microsoft Partner Center](https://docs.microsoft.com/partner-center/overview) for Solutions’ authoring and publishing. Providers or partners can deliver combined product or domain or vertical value via solutions in Azure Sentinel and be able to productize investments. More details are covered in [Azure Sentinel documentation](https://aka.ms/azuresentinelsolutionsdoc) and review the [catalog](https://aka.ms/sentinelsolutionscatalog) for complete list of Azure Sentinel solutions. 
 
-Azure Sentinel Solutions include packaged content or integrations or service offerings for Azure Sentinel. This guide focuses on building packages content type solutions that includes combination of one or many data connectors, workbooks, analytic rules, playbooks, hunting queries, parsers, watchlists, and more for Azure Sentinel. Reach out to [Azure Sentinel Solutions Onboarding Team](mailto:sentinelsolutionbld@microsoft.com) if you plan to build an integration type or service offering type or want to build any other type of Solution not covered above.
+Azure Sentinel Solutions include packaged content or integrations or service offerings for Azure Sentinel. This guide focuses on building packages content type solutions that includes combination of one or many data connectors, workbooks, analytic rules, playbooks, hunting queries, parsers, watchlists, and more for Azure Sentinel. Reach out to [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) if you plan to build an integration type or service offering type or want to build any other type of Solution not covered above.
 
 ![Azure Sentinel solutions build process](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_steps.png)
 
@@ -57,12 +57,12 @@ For the following steps we’ll rely on Partner Center’s detailed documentatio
 6.	[Validate and Test](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish) the offer once done.  
 7.	Once you’ve validated the offer, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process (can take up to 3 business days). 
 
-**Note:** The Azure Sentinel team will need to make a change so that your Solution shows up in the Azure Sentinel Solutions gallery, hence before going live, email [Azure Sentinel Solutions Onboarding Team](mailto:sentinelsolutionbld@microsoft.com) with your Solutions offer ID and Publisher ID so that we can make the necessary changes.
+**Note:** The Azure Sentinel team will need to make a change so that your Solution shows up in the Azure Sentinel Solutions gallery, hence before going live, email [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your Solutions offer ID and Publisher ID so that we can make the necessary changes.
 
 **Note:** Making the offer public is very important for it to show up in the Azure Sentinel Solutions gallery.
  
 
 ## Feedback
-[Email Azure Sentinel Solutions Onboarding Team](mailto:sentinelsolutionbld@microsoft.com) with any feedback on this process or for new scenarios not covered in this guide or with any constraints you may encounter. 
+[Email Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process or for new scenarios not covered in this guide or with any constraints you may encounter. 
 
 
