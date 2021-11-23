@@ -128,7 +128,11 @@ function Netskope () {
         $count = 0
         Do {
             $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
-            $netskopeevents = $response.data
+            $netskopeevents = $response.data | Convertfrom-Json
+			$netskopeevents | ForEach-Object{
+				$_.dlp_incident_id = [string]$_.dlp_incident_id
+				$_.dlp_parent_id = [string]$_.dlp_parent_id
+			}
             $dataLength = $response.data.Length
             $alleventobjs += $netskopeevents
     
