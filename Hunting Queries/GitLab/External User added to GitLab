@@ -1,0 +1,48 @@
+id: c1544d8f-cbbd-4e35-8d32-5b9312279833
+name: GitLab - External User Added to GitLab
+description: |
+  'This queries GitLab Application logs to list external user accounts (i.e.: account not in allow-listed domains) which have been added to GitLab users.'
+severity: Medium
+requiredDataConnectors:
+   - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Credential Access
+  - Persistence
+query: |
+
+let allowedDomain = pack_array("mydomain.com");
+Syslog
+// Using syslog Facility and ProcessName for pre-filtering could help performances. 
+// Example: using a specific facility for GitLab and a process name for Syslog ingestion.
+// | where Facility == 'local7'
+// | where ProcessName contains 'GitLab-Application-Logs'
+| where SyslogMessage contains "\"add\":\"user\""
+| extend parsedMessage = parse_json(SyslogMessage)
+| project Author = parsedMessage.author_name, AuthorIPAddress = parsedMessage.ip_address, UserAdded = tostring(parsedMessage.entity_path), SyslogMessage
+| join (Syslog 
+| where SyslogMessage contains "User" and SyslogMessage contains " was created" 
+| parse kind=regex SyslogMessage with EventTime ": User \"" Username "\"" EmailAddress " was created"
+| project UserAdded = tostring(Username), EmailAddress = substring(EmailAddress,2,strlen(EmailAddress)-3)) on UserAdded
+| project  Author, AuthorIPAddress, UserAdded, EmailAddress, SyslogMessage, DomainName = tostring(extract("@(.*)$", 1, EmailAddress))
+| where allowedDomain !contains DomainName
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: AuthorIPAddress
+   - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserAdded
+   - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName        
+version: 1.0.0
