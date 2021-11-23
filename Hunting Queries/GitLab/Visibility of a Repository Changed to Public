@@ -1,0 +1,43 @@
+id: 8b291c3d-90ba-4ebf-af2c-0283192d430e
+name: GitLab - Repository visibility to Public
+description: |
+  'This query leverages GitLab Audit Logs. A repository in GitLab changed visibility from Private or Internal to Public which could indicate compromise, error or misconfiguration leading to exposing the repository to the public.'
+severity: Medium
+requiredDataConnectors:
+   - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Defense Evasion
+  - Execution
+query: |
+
+let SyslogResults = Syslog
+// Using syslog Facility and ProcessName for pre-filtering could help performances. 
+// Example: using a specific facility for GitLab and a process name for Syslog ingestion.
+// | where Facility == 'local7'
+// | where ProcessName contains 'GitLab-Audit-Logs'
+| where SyslogMessage contains 'visibility' and SyslogMessage contains '"from":"Public"';
+SyslogResults
+| parse kind=regex SyslogMessage with "\"severity\":\"" Severity "\",\"time\":\"" EventTime "\",\"correlation_id\":\"" CorrelationID "\",\"author_id\":" AuthorID ",\"author_name\":\"" AuthorName "\",\"entity_id\":" EntityID ",\"entity_type\":\"" EntityType "\",\"ip_address\":\"" IPAddress "\",\"change\":\"" ChangeType "\",\"from\":\"" From "\",\"to\":\"" To "\",\"target_id\":" TargetID ",\"target_type\":\"" TargetType "\",\"target_details\":\"" TargetDetails "\",\"entity_path\":\"" EntityPath
+| project EventTime, IPAddress, AuthorName, ChangeType, TargetType, From, To, TargetDetails, EntityPath
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+   - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AuthorName
+   - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: EntityPath        
+version: 1.0.0
