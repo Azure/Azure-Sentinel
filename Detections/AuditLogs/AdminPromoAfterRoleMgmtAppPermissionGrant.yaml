@@ -1,8 +1,10 @@
 id: f80d951a-eddc-4171-b9d0-d616bb83efdc
 name: Admin promotion after Role Management Application Permission Grant
 description: |
-  'This rule looks for a service principal being granted the Microsoft Graph RoleManagement.ReadWrite.Directory (application) permission before being used to add an Azure AD object or user account to an Admin directory role (i.e. Global Administrators). 
-  Ref : https://docs.microsoft.com/en-us/graph/permissions-reference#role-management-permissions, https://docs.microsoft.com/en-us/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'
+  'This rule looks for a service principal being granted the Microsoft Graph RoleManagement.ReadWrite.Directory (application) permission before being used to add an Azure AD object or user account to an Admin directory role (i.e. Global Administrators).
+  This is a known attack path that is usually abused when a service principal already has the AppRoleAssignment.ReadWrite.All permission granted. This permission Allows an app to manage permission grants for application permissions to any API.
+  A service principal can promote itself or other service principals to admin roles (i.e. Global Administrators). This would be considered a privilege escalation technique.
+  Ref : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions, https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'
 severity: High
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -30,12 +32,12 @@ query: |
   | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)
   | where displayName_ =~ "AppRole.Value"
   | extend AppRole = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))
-  | where AppRole contains "RoleManagement.ReadWrite.Directory"
+  | where AppRole has "RoleManagement.ReadWrite.Directory"
   | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
   | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
   | extend Target = tostring(parse_json(tostring(TargetResources.modifiedProperties[4].newValue)))
   | extend TargetId = tostring(parse_json(tostring(TargetResources.modifiedProperties[3].newValue)))
-  | summarize by bin(TimeGenerated, 1h), OperationName, Initiator, Target, TargetId, Result
+  | project TimeGenerated, OperationName, Initiator, Target, TargetId, Result
   | join (
     AuditLogs
     | where LoggedByService =~ "Core Directory"
@@ -54,13 +56,12 @@ query: |
     | extend Target = iif(isnotempty(TargetUser), TargetUser, tostring(TargetResources.displayName))
     | extend TargetType = tostring(TargetResources.type)
     | extend TargetId = tostring(TargetResources.id)
-    | summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Initiator, InitiatorId, Target, TargetId, TargetType, Result
+    | project TimeGenerated, OperationName,  RoleName, Initiator, InitiatorId, Target, TargetId, TargetType, Result
   ) on $left.TargetId == $right.InitiatorId
   | extend TimeRoleMgGrant = TimeGenerated, TimeAdminPromo = TimeGenerated1, ServicePrincipal = Initiator1, ServicePrincipalId = InitiatorId,
     TargetObject = Target1, TargetObjectId = TargetId1, TargetObjectType = TargetType
   | where TimeRoleMgGrant < TimeAdminPromo
   | project TimeRoleMgGrant, TimeAdminPromo, RoleName, ServicePrincipal, ServicePrincipalId, TargetObject, TargetObjectId, TargetObjectType
-  | extend timestamp = TimeRoleMgGrant, AccountCustomEntity = TargetObject
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -69,6 +70,6 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.1
+        columnName: TargetObject
+version: 1.0.0
 kind: scheduled
