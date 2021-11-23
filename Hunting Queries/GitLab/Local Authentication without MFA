@@ -1,0 +1,42 @@
+id: e0b45487-5c79-482d-8ac0-695de8c031af
+name: GitLab - Local Auth - No MFA 
+description: |
+  'This query checks GitLab Audit Logs to see if a user authenticated without MFA. Ot might mean that MFA was disabled for the GitLab server or that an external authentication provider was bypassed.
+ This rule focuses on 'admin' privileges but the parameter can be adapted to also include all users.'
+severity: Medium
+requiredDataConnectors:
+   - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Credential Access
+relevantTechniques:
+  - T1110
+query: |
+
+let isAdmin = true;
+let SyslogResults = Syslog
+// Using syslog Facility and ProcessName for pre-filtering could help performances. 
+// Example: using a specific facility for GitLab and a process name for Syslog ingestion.
+// | where Facility == 'local7'
+// | where ProcessName contains 'GitLab-Audit-Logs'
+| where TimeGenerated > TimeRange
+| where SyslogMessage contains "\"with\":\"standard\"" and ((isAdmin and SyslogMessage contains "Administrator") or (isAdmin==false));
+SyslogResults
+| parse kind=regex SyslogMessage with "\"severity\":\"" Severity "\",\"time\":\"" EventTime "\",\"correlation_id\":\"" CorrelationID "\",\"author_id\":" AuthorID ",\"author_name\":\"" AuthorName "\",\"entity_id\":" EntityID ",\"entity_type\":\"" EntityType "\",\"ip_address\":\"" IPAddress "\",\"with\":\"" AuthenticationType "\",\"target_id\":" TargetID ",\"target_type\":\"" TargetType "\",\"target_details\":\"" TargetDetails "\",\"entity_path\":\"" EntityPath
+| project Severity, EventTime, IPAddress, AuthorName, AuthenticationType, TargetType, TargetDetails, EntityPath
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+   - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AuthorName
+version: 1.0.0
