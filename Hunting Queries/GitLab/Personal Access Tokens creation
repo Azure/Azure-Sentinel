@@ -1,0 +1,43 @@
+id: 4d6d8b0e-6d9a-4857-a141-f5d89393cddb
+name: GitLab - Personal Access Tokens creation over time
+description: |
+  'This queries GitLab Audit Logs for access tokens. Attacker can exfiltrate data from you GitLab repository after gaining access to it by generating or hijacking access tokens. 
+  This hunting queries allows you to track the personal access tokens creation or each of your repositories. 
+  The visualization allow you to quickly identify anomalies/excessive creation, to further investigate repo access & permissions.'
+severity: Medium
+requiredDataConnectors:
+   - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1213
+query: |
+
+// l_min_tokens_created - minimum tokens created per repository per day to consider
+let l_min_tokens_created = 0;
+let auditMessagesPAT = Syslog
+// Using syslog Facility and ProcessName for pre-filtering could help performances. 
+// Example: using a specific facility for GitLab and a process name for Syslog ingestion.
+// | where Facility == 'local7'
+// | where ProcessName contains 'GitLab-Audit-Logs'
+| where SyslogMessage contains "PersonalAccessToken";
+let min_t = toscalar(auditMessagesPAT
+| summarize min(TimeGenerated));
+let max_t = toscalar(auditMessagesPAT
+| summarize max(TimeGenerated));
+auditMessagesPAT
+| parse kind=regex SyslogMessage with "\"severity:\"" Severity "\",\"time\":\"" EventTime "\",\"correlation_id\":\"" CorrelationID "\",\"author_id\":" AuthorID ",\"author_name\":\"" AuthorName "\",\"entity_id\":" EntityID ",\"entity_type\":\"" EntityType "\",\"ip_address\":\"" IPAddress "\",\"target_id\":" TargetID ",\"target_type\":\"" TargetType "\",\"target_details\":\"" TargetDetails "\",\"action\":\"" Action "\",\"custom_message\":\"" CustomMessage "\",\"entity_path\":\"" EntityPath "\""
+| project Severity, EventDay = bin(todatetime(EventTime),1d), AuthorName, IPAddress, Repository = EntityPath, Action, SyslogMessage
+| summarize sumTokens = count() by Repository, EventDay
+| where sumTokens > l_min_tokens_created
+| make-series num=sum(sumTokens) default=0 on EventDay in range(ago(2d), now(), 1d) by Repository
+| extend (anomalies, score, baseline) = series_decompose_anomalies(num, 1.5, -1, 'linefit')
+| render timechart
+
+version: 1.0.0
