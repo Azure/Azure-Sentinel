@@ -107,6 +107,7 @@ ParserQuery: |
     , httpuseragent_has_any:dynamic=dynamic([])
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
+    , eventresult:string='*'
     , disabled:bool=false
       )
       { 
@@ -115,6 +116,7 @@ ParserQuery: |
       let SecurityEvent_5152 = 
           SecurityEvent | where not(disabled)
           | where EventID==5152
+          | extend EventResult =  "Failure"
           // ***************  Prefilterring *****************************************************************
           |where (isnull(starttime) or TimeGenerated>=starttime)
             and  (isnull(endtime) or TimeGenerated<=endtime)
@@ -129,7 +131,7 @@ ParserQuery: |
             and (array_length(url_has_any)==0)
             and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
             and (array_length(hostname_has_any)==0 )
-            and (eventresult=='*' or EventResult==eventresult)
+            and (eventresult=='*' or eventresult=='Failure')
           // *************** / Prefilterring *****************************************************************
           | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>'
                               '\x0d\x0a  <Data Name="Application">'Application'</Data>'
@@ -146,6 +148,7 @@ ParserQuery: |
       let SecurityEvent_5154_5155_5158_5159 =
       SecurityEvent | where not(disabled)
           | where EventID in (5154, 5155, 5158, 5159)
+          | extend EventResult = iff(EventID in (5154, 5158), "Success", "Failure")
           // ***************  Prefilterring *****************************************************************
           |where (isnull(starttime) or TimeGenerated>=starttime)
             and  (isnull(endtime) or TimeGenerated<=endtime)
@@ -175,7 +178,8 @@ ParserQuery: |
           ;
       let SecurityEvent_5156_5157 =
           SecurityEvent | where not(disabled)
-              | where EventID in (5156, 5157)
+          | where EventID in (5156, 5157)
+           | extend EventResult = iff(EventID == 5156, "Success", "Failure")
           // ***************  Prefilterring *****************************************************************
           | where (isnull(starttime) or TimeGenerated>=starttime)
             and  (isnull(endtime) or TimeGenerated<=endtime)
@@ -192,22 +196,22 @@ ParserQuery: |
                 )
             and (array_length(url_has_any)==0 )
             and (isnull(httpuseragent_has_any) )
-            and (array_length(hostname_has_any)==0 ) 
-            and (eventresult=='*' or EventResult==eventresult)
+            and (array_length(hostname_has_any)==0 )
+            and (eventresult=='*' or EventResult==eventresult) 
           // *************** / Prefilterring *****************************************************************
-              | parse EventData with * '<Data Name="ProcessID">'ProcessID:string'</Data>'
-                                  '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-                                  '\x0d\x0a  <Data Name="Direction">'DirectionCode'</Data>'
-                                  '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress'</Data>'
-                                  '\x0d\x0a  <Data Name="SourcePort">'SourcePort'</Data>'
-                                  '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
-                                  '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
-                                  '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-                                  '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
-                                  '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-                                  '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
-                                  '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
-                                  '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*
+          | parse EventData with * '<Data Name="ProcessID">'ProcessID:string'</Data>'
+              '\x0d\x0a  <Data Name="Application">'Application'</Data>'
+              '\x0d\x0a  <Data Name="Direction">'DirectionCode'</Data>'
+              '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress'</Data>'
+              '\x0d\x0a  <Data Name="SourcePort">'SourcePort'</Data>'
+              '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
+              '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
+              '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
+              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
+              '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
+              '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
+              '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
+              '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*
               | project-away EventData;
       union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
       | lookup Directions on DirectionCode
@@ -240,10 +244,11 @@ ParserQuery: |
   let WindowsFirewall_WindowsEvent=(starttime:datetime=datetime(null), endtime:datetime=datetime(null)
   , srcipaddr_has_any_ipv4_prefix:dynamic=dynamic([]), dstipaddr_has_any_ipv4_prefix:dynamic=dynamic([]), dstportnumber:int=int(null)
   , url_has_any:dynamic=dynamic([]), httpuseragent_has_any:dynamic=dynamic([])
-  , hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), disabled:bool=false
+  , hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]),eventresult:string='*', disabled:bool=false
    ){   
       WindowsEvent | where not(disabled)
       | where EventID between (5150 .. 5159)
+      | extend EventResult = iff(EventID in (5154, 5156, 5158), "Success", "Failure")
       // ***************  Prefilterring *****************************************************************
       | where (isnull(starttime) or TimeGenerated>=starttime) 
               and (isnull(endtime) or TimeGenerated<=endtime) 
@@ -307,7 +312,6 @@ ParserQuery: |
               EventCount=toint(1),
               EventVendor = "Microsoft",
               EventProduct = "WindowsFirewall",
-              EventResult = iff(EventID in (5154, 5156, 5158), "Success", "Failure"),
               EventStartTime = TimeGenerated,
               EventEndTime = TimeGenerated,
               EventOriginalUid = EventOriginId,
