@@ -20,8 +20,9 @@ Contributor License Agreement (CLA) declaring that you have the right to, and ac
 the rights to use your contribution. For details, visit https://cla.microsoft.com.
 
 ## Add in your new or updated contributions to GitHub
-Note: If you are a first time contributor to this repository, [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo) before cloning. 
+Note: If you are a first time contributor to this repository, [General GitHub Fork the repo guidance](https://docs.github.com/github/getting-started-with-github/fork-a-repo) before cloning or [Specific steps for the Sentinel repo](https://github.com/Azure/Azure-Sentinel/blob/master/GettingStarted.md). 
 
+## General Steps
 Brand new or update to a contribution via these methods:
 * Submit for review directly on GitHub website 
     * Browse to the folder you want to upload your file to
