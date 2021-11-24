@@ -129,6 +129,7 @@ function Netskope () {
         Do {
             $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
             $netskopeevents = $response.data
+			Write-Host "Netskope event data: $netskopeevents"
 			$netskopeevents | ForEach-Object{
 				$_.dlp_incident_id = [string]$_.dlp_incident_id
 				$_.dlp_parent_id = [string]$_.dlp_parent_id
