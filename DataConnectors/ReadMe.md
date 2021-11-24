@@ -25,7 +25,7 @@ There are three types of data connectors providers can build to stream their dat
 
 The following table lists these and provides a high-level overview to help providers decide.
 
-| **MIcrosoft Sentinel Log Ingestion Format** | **Customer Experience** | **Why choose?** |
+| **Microsoft Sentinel Log Ingestion Format** | **Customer Experience** | **Why choose?** |
 | --- | --- | --- |
 | CEF (Preferred) | <ul><li>Log information is automatically ingested into standard CEF schema.</li><li>KQL Queries use strongly typed and well-known CEF schema.</li><li>Little or no additional parsing required by your customers</li><li>Your data will be meaningful to many queries.</li><li>Multi-step configuration - Customer needs to set up a machine / Azure VM to run an agent to push logs into Microsoft Sentinel </li></ul>|CEF results in the best query and analytics experience in Microsoft Sentinel as it will appear as the well know CEF (CommonSecurityLog) schema as columns in the Microsoft Sentinel Log tables.|
 | REST API | <ul><li>Log information is automatically ingested into custom tables with your schema.</li><li>	Custom queries required to use your data.</li><li> Customer must learn your schema.</li><li>Simple configuration - Customer does not need to set up a machine / Azure VM to run the agent </li></ul>|When you have data that does not conform to CEF or RAW Syslog formats you can create custom tables.<p>You want strict control over schema mapping and column names in Microsoft Sentinel tables on how you present your data.|
