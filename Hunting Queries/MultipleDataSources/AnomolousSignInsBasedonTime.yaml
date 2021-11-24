@@ -1,0 +1,42 @@
+id: 8ed5b8f1-a43a-49dc-847c-e44d7a590c17
+name: Anomolous Sign Ins Based on Time
+description: |
+  'Identifies anomolies in signin events based on the volume of signin events over time. Use this to identify suspicious authentication patterns such as spikes in activity or out of hours events.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let admins = (IdentityInfo
+  | where AssignedRoles contains "Admin"
+  | summarize by tolower(AccountUPN));
+  let ts_data = (SigninLogs
+  | where TimeGenerated > ago(14d)
+  | extend AccountUPN = tolower(UserPrincipalName)
+  | where AccountUPN in (admins)
+  | make-series count() on TimeGenerated step 1h by UserPrincipalName
+  | extend series_decompose(count_)
+  | extend NoLogons = count_);
+  let TimeSeriesAlerts=ts_data
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(count_, 2.5, -1, 'linefit',0, 'ctukey', 3)
+  | mv-expand NoLogons to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0
+  | where NoLogons > 15
+  | project UserPrincipalName, TimeGenerated, NoLogons, baseline, anomalies, score;
+  TimeSeriesAlerts
+  | join kind=inner (
+  SigninLogs
+  | summarize ResultTypeCount=count(),ResultTypes=make_set(ResultType), Locations=make_set(Location), Apps=make_set(AppDisplayName), Ips=make_set( IPAddress) by UserPrincipalName, bin(TimeGenerated, 1h)
+  ) on UserPrincipalName, TimeGenerated
+  | summarize AnomolyTimes = make_set(TimeGenerated), Ips = make_set(Ips), Apps = make_set(Apps), sum(anomalies), Locations=make_set(Locations) by UserPrincipalName
+  | sort by sum_anomalies desc

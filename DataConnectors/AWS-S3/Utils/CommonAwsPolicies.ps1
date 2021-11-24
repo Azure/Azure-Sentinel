@@ -1,4 +1,19 @@
-function Get-RoleArnPolicy{
+function Get-RoleArnPolicy
+{
+   <#
+	.SYNOPSIS
+		Returns a customized Arn policy using the Sentinel Workspace Id
+	.PARAMETER WorkspaceId
+		Specifies the Azure Sentinel workspace id 
+   #>
+[OutputType([string])]
+[CmdletBinding()]
+param (
+	[Parameter(position=0)]
+	[ValidateNotNullOrEmpty()]
+	[string]
+	$WorkspaceId
+)  
    $arnRolePolicy = "{
             'Version': '2012-10-17',
             'Statement': [
@@ -10,7 +25,7 @@ function Get-RoleArnPolicy{
                     'Action': 'sts:AssumeRole',
                     'Condition': {
                         'StringEquals': {
-                            'sts:ExternalId': '${workspaceId}'
+                            'sts:ExternalId': '$WorkspaceId'
                         }
                     }
                 }
@@ -19,7 +34,29 @@ function Get-RoleArnPolicy{
 	return $arnRolePolicy.Replace("'",'\"')
 }
 
-function Get-SQSPoliciesForS3AndRule {
+function Get-S3AndRuleSQSPolicies
+{
+   	<#
+	.SYNOPSIS
+		Returns a customized Sqs rule policy using the specified S3 bucket name, the Sqs ARN, and role ARN.
+	.PARAMETER EventNotificationName
+		Specifies the event notification name
+	.PARAMETER EventNotificationPrefix
+		Specifies the event notification prefix
+	.PARAMETER SqsArn
+		Specifies the Sqs ARN
+   #>
+   [OutputType([string])]
+   [CmdletBinding()]
+   param (
+	   [ValidateNotNullOrEmpty()][string]
+	   $RoleArn,
+	   [ValidateNotNullOrEmpty()][string]
+	   $BucketName,
+	   [ValidateNotNullOrEmpty()][string]
+	   $SqsArn
+   )  
+
 	$sqsPolicyForS3 = "
     {
 	  'Version': '2008-10-17',
@@ -32,10 +69,10 @@ function Get-SQSPoliciesForS3AndRule {
 				'Service': 's3.amazonaws.com'
 			  },
 			  'Action': 'SQS:SendMessage',
-			  'Resource': '${sqsArn}',
+			  'Resource': '$SqsArn',
 			  'Condition': {
 				'ArnLike': {
-				  'aws:SourceArn': 'arn:aws:s3:*:*:${bucketName}'
+				  'aws:SourceArn': 'arn:aws:s3:*:*:$BucketName'
 				}
 			  }
 		  },
@@ -43,7 +80,7 @@ function Get-SQSPoliciesForS3AndRule {
 		  'Sid': 'allow specific role to read/delete/change visibility of SQS messages and get queue url',
 		  'Effect': 'Allow',
 		  'Principal': {
-			'AWS': '${roleArn}'
+			'AWS': '$RoleArn'
 		  },
 		  'Action': [
 			'SQS:ChangeMessageVisibility',
@@ -51,7 +88,7 @@ function Get-SQSPoliciesForS3AndRule {
 			'SQS:ReceiveMessage',
             'SQS:GetQueueUrl'
 		  ],
-		  'Resource': '${sqsArn}'
+		  'Resource': '$SqsArn'
 		}
 	  ]
 	}"
@@ -59,20 +96,48 @@ function Get-SQSPoliciesForS3AndRule {
 	return $sqsPolicyForS3.Replace("'",'"')
 }
 
-function Get-SqsEventNotificationConfig {
-   $sqsEventConfig = "
+function Get-SqsEventNotificationConfig
+{ 
+   	<#
+	.SYNOPSIS
+		Returns a customized Sqs event notification config policy using the specified event notification name, the Sqs ARN, and notification prefix.
+	.PARAMETER EventNotificationName
+		Specifies the event notification name
+	.PARAMETER EventNotificationPrefix
+		Specifies the event notification prefix
+	.PARAMETER SqsArn
+		Specifies the Sqs ARN
+   #>
+[OutputType([string])]
+[CmdletBinding()]
+param (
+	[Parameter(position=0)]
+	[ValidateNotNullOrEmpty()]
+	[string]
+	$EventNotificationName,
+	[Parameter(position=1)]
+	[ValidateNotNullOrEmpty()]
+	[string]
+	$EventNotificationPrefix,
+	[Parameter(position=2)]
+	[ValidateNotNullOrEmpty()]
+	[string]
+	$SqsArn
+)  
+
+	$sqsEventConfig = "
    {
 	   'QueueConfigurations': [
 			{
-			  'Id':'${eventNotificationName}',
-			  'QueueArn': '${sqsArn}',
+			  'Id':'$EventNotificationName',
+			  'QueueArn': '$SqsArn',
 			  'Events': ['s3:ObjectCreated:*'],
 			  'Filter': {
 				'Key': {
 				  'FilterRules': [
 					{
 					  'Name': 'prefix',
-					  'Value': '${eventNotificationPrefix}'
+					  'Value': '$EventNotificationPrefix'
 					},
 					{
 					  'Name': 'suffix',
@@ -88,16 +153,36 @@ function Get-SqsEventNotificationConfig {
 	return $sqsEventConfig.Replace("'",'"')
 }
 
-function Get-S3PolicyForRole{
-	 $s3PolicyForArn = "{
+function Get-RoleS3Policy
+{
+	<#
+	.SYNOPSIS
+		Returns a customized Arn policy using the specified role ARN and bucket name
+	.PARAMETER RoleArn
+		Specifies the Role ARN
+	.PARAMETER BucketName
+		Specifies the S3 Bucket
+   #>
+[OutputType([string])]
+[CmdletBinding()]
+param (
+	[Parameter(position=0)]
+	[ValidateNotNullOrEmpty()][string]
+	$RoleArn,
+	[Parameter(position=1)]
+	[ValidateNotNullOrEmpty()][string]
+	$BucketName
+)  
+	
+	$s3PolicyForArn = "{
 	 'Statement': [{
             'Sid': 'Allow Arn read access S3 bucket',
             'Effect': 'Allow',
             'Principal': {
-                'AWS': '${roleArn}'
+                'AWS': '$RoleArn'
             },
             'Action': ['s3:Get*','s3:List*'],
-            'Resource': 'arn:aws:s3:::${bucketName}/*'
+            'Resource': 'arn:aws:s3:::$BucketName/*'
         }]}"
 			
 	return $s3PolicyForArn.Replace("'",'"')

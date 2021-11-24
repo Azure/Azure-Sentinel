@@ -20,8 +20,9 @@ Contributor License Agreement (CLA) declaring that you have the right to, and ac
 the rights to use your contribution. For details, visit https://cla.microsoft.com.
 
 ## Add in your new or updated contributions to GitHub
-Note: If you are a first time contributor to this repository, [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo) before cloning. 
+Note: If you are a first time contributor to this repository, [General GitHub Fork the repo guidance](https://docs.github.com/github/getting-started-with-github/fork-a-repo) before cloning or [Specific steps for the Sentinel repo](https://github.com/Azure/Azure-Sentinel/blob/master/GettingStarted.md). 
 
+## General Steps
 Brand new or update to a contribution via these methods:
 * Submit for review directly on GitHub website 
     * Browse to the folder you want to upload your file to
@@ -31,11 +32,13 @@ Brand new or update to a contribution via these methods:
     * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
     * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
     * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
-    * Do your additions/updates in GitHub Desktop 
+    * Do your additions/updates in GitHub Desktop
+    * Be sure to merge master back to your branch before you push. 
     * [Push your changes to GitHub](https://help.github.com/en/github/using-git/pushing-commits-to-a-remote-repository)
 
 ## Pull Request
 * After you push your changes, you will need to submit the [Pull Request (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests)
+* Details about the Proposed Changes are required, be sure to include a minimal level of detail so a review can clearly understand the reason for the change and what he change is related to in the code.
 * After submission, check the [Pull Request](https://github.com/Azure/Azure-Sentinel/pulls) for comments
 * Make changes as suggested and update your branch or explain why no change is needed. Resolve the comment when done.
 
@@ -130,7 +133,7 @@ Total tests: 171
 
 ### Detection schema validation tests
 Similarly to KQL Validation, there is an automatic validation of the schema of a detection.
-The schema vlidation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids ([valid connectors Ids list](https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateSchemaValidation/ValidConnectorIds.json)), etc.
+The schema validation includes the detection's frequency and period, the detection's trigger type and threshold, validity of connectors Ids ([valid connectors Ids list](https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateSchemaValidation/ValidConnectorIds.json)), etc.
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
 ### Run Detection Schema Validation Locally
