@@ -17,7 +17,9 @@ triggerThreshold: 0
 tactics:
   - InitialAccess
 query: |
-  let file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+  let default_file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+  let custom_file_ext_blocklist=toscalar(_GetWatchlist('RiskyFileTypes') | extend Extension=column_ifexists("Extension","") | where isnotempty(Extension) | summarize make_set(Extension));
+  let file_ext_blocklist = array_concat(default_file_ext_blocklist, custom_file_ext_blocklist);
   imWebSession(url_has_any=file_ext_blocklist, eventresult='Success')
   | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
   | extend requestedFileExtension=extract(@(\.\w+)$,1,requestedFileName, typeof(string))
@@ -30,6 +32,8 @@ alertDetailsOverride:
   alertDescriptionFormat: The client at address {{SrcIpAddr}} accessed the URL {{Url}} that has the extension {{requestedFileExtension}}. Downloading a file with this extension may be harmful and may indicate malicious activity.
 customDetails:
   requestedFileName: requestedFileName
+  requestedFileExtension: requestedFileExtension
+  Username: SrcUsername
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
