@@ -30,14 +30,14 @@ query: |
   | where isnotempty(FileHashValue);
   // Handle matches against both lower case and uppercase versions of the hash:
   ( fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
-    |union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
-  |  join (
-     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
-     | where isnotempty(FileHash)
-     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+    | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+      | where isnotempty(FileHash)
+      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
   )
   on $left.FileHashValue == $right.FileHash
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
   | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
   CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,

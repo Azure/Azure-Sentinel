@@ -31,15 +31,15 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
       AppServiceHTTPLogs | where TimeGenerated >= ago(dt_lookBack)
-    | where isnotempty(CIp)
-    | extend WebApp = split(_ResourceId, '/')[8]
-    // renaming time column so it is clear the log this came from
-    | extend AppService_TimeGenerated = TimeGenerated
+      | where isnotempty(CIp)
+      | extend WebApp = split(_ResourceId, '/')[8]
+      // renaming time column so it is clear the log this came from
+      | extend AppService_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.CIp
-  | where AppService_TimeGenerated < ExpirationDateTime
   | summarize AppService_TimeGenerated = arg_max(AppService_TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, AppService_TimeGenerated, TI_ipEntity, CsUsername, WebApp = split(_ResourceId, '/')[8], CIp, CsHost, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = AppService_TimeGenerated, AccountCustomEntity = CsUsername, IPCustomEntity = CIp, URLCustomEntity = CsHost

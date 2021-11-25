@@ -34,7 +34,8 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
       DnsEvents | where TimeGenerated >= ago(dt_lookBack)
       | where SubType =~ "LookupQuery" and isnotempty(IPAddresses)
       | extend SingleIP = split(IPAddresses, ",")
@@ -44,7 +45,6 @@ query: |
       | extend DNS_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.SingleIP
-  | where DNS_TimeGenerated < ExpirationDateTime
   | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore, DNS_TimeGenerated,
   TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress

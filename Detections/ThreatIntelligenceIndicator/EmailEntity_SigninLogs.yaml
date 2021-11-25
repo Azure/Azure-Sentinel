@@ -34,7 +34,8 @@ query: |
   | where Active == true
   //Filtering the table for Email related IOCs
   | where isnotempty(EmailSenderAddress)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
       table(tableName) | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserPrincipalName)
       //Normalizing the column to lower case for exact match with EmailSenderAddress column
       | extend UserPrincipalName = tolower(UserPrincipalName)
@@ -46,7 +47,6 @@ query: |
       | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type
   )
   on $left.EmailSenderAddress == $right.UserPrincipalName
-  | where SigninLogs_TimeGenerated < ExpirationDateTime
   | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, SigninLogs_TimeGenerated,
   EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName,
