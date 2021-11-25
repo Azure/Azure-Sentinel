@@ -21,7 +21,7 @@ PASSWORD = os.environ['PrismaCloudSecretKey']
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 ALERT_LOG_TYPE = 'PaloAltoPrismaCloudAlert'
 AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
-AUDITLOGACCESS = os.environ['AuditLogAccess']
+AUDITLOGACCESS = os.environ['AuditLogAccess'] if 'AuditLogAccess' in os.environ else True
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
 MAX_PERIOD_MINUTES = 60 * 24 * 7
