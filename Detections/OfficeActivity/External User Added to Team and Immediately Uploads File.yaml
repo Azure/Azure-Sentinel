@@ -1,0 +1,46 @@
+id: bff058b2-500e-4ae5-bb49-a5b1423cbd5b
+name: External User added to Team and immediately uploads file
+description: |
+  'This detection identifies an external user is added to a Team or Teams chat
+  and within 1 minute of being added upload a file via the chat. This might be
+  an indicator of suspicious activity.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+
+  let threshold = 1m;
+   OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation == "MemberAdded"
+  | extend UPN = tostring(parse_json(Members)[0].UPN)
+  | where UPN contains ("#EXT#")
+  | extend TeamName = iff(isempty(TeamName), Members[0].UPN, TeamName)
+  | project TimeGenerated, UploaderID=UPN, TeamName
+  | join (
+    OfficeActivity
+    | where RecordType == "SharePointFileOperation"
+    | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+    | where Operation == "FileUploaded"
+    | project UploadTime=TimeGenerated, UploaderID=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName
+    ) on UploaderID
+  | where UploadTime > TimeGenerated and UploadTime < TimeGenerated+threshold
+  | project-away UploaderID1
+  | extend timestamp=TimeGenerated, AccountCustomEntity = UploaderID 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled
