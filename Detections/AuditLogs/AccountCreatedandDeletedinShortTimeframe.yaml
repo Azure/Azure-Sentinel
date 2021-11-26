@@ -8,7 +8,7 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -19,19 +19,22 @@ relevantTechniques:
 tags:
   - AADSecOpsGuide
 query: |
+  let queryfrequency = 1h;
+  let queryperiod = 1d;
   AuditLogs
   | where OperationName =~ "Add user"
   | extend UPN = tostring(TargetResources[0].userPrincipalName)
   | join kind=inner (
     AuditLogs
+    | where TimeGenerated > ago(queryfrequency)
     | where OperationName =~ "Delete user"
-    | extend UPN = tostring(TargetResources[0].userPrincipalName)
-    //extend UPN = extract(@'([a-f0-9]{32})?(.*)', 2, UPN)
+    | extend UPN = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResources[0].userPrincipalName))
+    //extend UPN = tostring(TargetResources[0].userPrincipalName)
     | extend IPAddress = tostring(InitiatedBy.user.ipAddress)
   ) on UPN
   | extend timedelta = TimeGenerated1 - TimeGenerated
   | project-reorder TimeGenerated, TimeGenerated1, timedelta
-  | where timedelta < timespan(24h) and timedelta > timespan(0h)
+  | where timedelta < timespan(queryperiod) and timedelta > timespan(0h)
   | extend CustomAccountEntity = UPN, IPCustomEntity = IPAddress
 entityMappings:
   - entityType: Account
@@ -43,4 +46,4 @@ entityMappings:
       - identifier: Address
         columnName: IPCustomEntity
 version: 1.0.2
-kind: scheduled
+kind: Scheduled
