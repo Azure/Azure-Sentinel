@@ -31,14 +31,14 @@ query: |
   | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller
   // Limit to Run Command executions that Succeeded
   | where list_ActivityStatusValue has "Succeeded"
-  // Extract data from the Authorization field, allowing us to later extract the Caller (UPN) and CallerIpAddress
+  // Extract data from the Authorization field
   | extend Authorization_d = parse_json(Authorization)
   | extend Scope = Authorization_d.scope
   | extend Scope_s = split(Scope, "/")
   | extend Subscription = tostring(Scope_s[2])
   | extend VirtualMachineName = tostring(Scope_s[-1])
   | project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress
-  // Create a join key using  the Caller (UPN) and the Caller IP
+  // Create a join key using  the Caller (UPN)
   | extend joinkey = tolower(Caller)
   // Join the Run Command actions to UEBA data
   | join kind = inner (
@@ -49,7 +49,6 @@ query: |
       | where isnotempty(UserPrincipalName) and isnotempty(UEBASourceIPLocation)
       | extend joinkey = tolower(UserPrincipalName)
   ) on joinkey
-  | project StartTime, EndTime, Subscription, VirtualMachineName, Caller, CallerIpAddress, UEBAEventTime, UEBAActionType, UEBASourceIPLocation, UEBAActivityInsights, UEBAUsersInsights
   // Create a window around the UEBA event times, check to see if the Run Command action was performed within them
   | extend UEBAWindowStart = UEBAEventTime - 1h | extend UEBAWindowEnd = UEBAEventTime + 6h
   | where StartTime between (UEBAWindowStart .. UEBAWindowEnd)
