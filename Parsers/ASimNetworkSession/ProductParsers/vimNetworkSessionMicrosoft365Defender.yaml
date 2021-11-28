@@ -9,9 +9,9 @@ Normalization:
   Version: '0.2.0'
 References:
 - Title: ASIM Network Session Schema
-  Link: https://aka.ms/AzSentinelNetworkSessionDoc
+  Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AzSentinelNormalization
+  Link: https:/aka.ms/MsASIM
 Description: |
   This Query Parser maps M365 Defender network events to the Advanced SIEM Information Model Network Session schema.
 ParserName: vimNetworkSessionMicrosoft365Defender
@@ -43,6 +43,9 @@ ParserParams:
   - Name: dvcaction
     Type: dynamic
     Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: "'*'"
   - Name: disabled
     Type: bool
     Default: false
@@ -57,6 +60,7 @@ ParserQuery: |
     , httpuseragent_has_any:dynamic=dynamic([])
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
+    , eventresult:string='*'
     , disabled:bool=false
    ){
   let DirectionLookup=datatable(ActionType:string,NetworkDirection:string,Outbound:boolean)[
@@ -72,6 +76,8 @@ ParserQuery: |
     DeviceNetworkEvents | where not(disabled)
     // ***************  Prefilterring *****************************************************************
     |where (isnull(starttime) or TimeGenerated>=starttime) 
+           and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
+           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
            and (isnull(endtime) or TimeGenerated<=endtime) 
            and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
            and (array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) 
@@ -86,9 +92,9 @@ ParserQuery: |
            and (array_length(hostname_has_any)==0 
               or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
               ) 
-           and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
-           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
-    // *************** Prefilterring *****************************************************************
+    | extend EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
+    | where (eventresult=='*' or EventResult==eventresult)
+    // *************** / Prefilterring *****************************************************************
     | extend
       // Event
       EventOriginalUid = tostring(ReportId),
@@ -100,7 +106,6 @@ ParserQuery: |
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
       EventType = 'NetworkSession',
-      EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
     | project-rename
@@ -243,6 +248,6 @@ ParserQuery: |
      Hostname = DstHostname,
      IpAddr = SrcIpAddr,
      Src = SrcIpAddr,
-     Dst = DstIpAddr
+     Dst = DstIpAddr 
   };
   M365Defender(starttime, endtime, srcipaddr_has_any_ipv4_prefix, dstipaddr_has_any_ipv4_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, disabled)
