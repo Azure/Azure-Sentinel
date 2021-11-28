@@ -76,6 +76,8 @@ ParserQuery: |
     DeviceNetworkEvents | where not(disabled)
     // ***************  Prefilterring *****************************************************************
     |where (isnull(starttime) or TimeGenerated>=starttime) 
+           and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
+           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
            and (isnull(endtime) or TimeGenerated<=endtime) 
            and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
            and (array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) 
@@ -90,9 +92,9 @@ ParserQuery: |
            and (array_length(hostname_has_any)==0 
               or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
               ) 
-           and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
-           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
-    // *************** Prefilterring *****************************************************************
+    | extend EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
+    | where (eventresult=='*' or EventResult==eventresult)
+    // *************** / Prefilterring *****************************************************************
     | extend
       // Event
       EventOriginalUid = tostring(ReportId),
@@ -104,12 +106,8 @@ ParserQuery: |
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
       EventType = 'NetworkSession',
-      EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
-    // *************** Postfilterring *****************************************************************
-    | where (eventresult=='*' or EventResult==eventresult)
-    // *************** /Postfilterring *****************************************************************
     | project-rename
       NetworkProtocol = Protocol,
       DvcFQDN = DeviceName
@@ -248,6 +246,8 @@ ParserQuery: |
   union InboundNetworkEvents, OutboundNetworkEvents
   | extend // aliases
      Hostname = DstHostname,
-     IpAddr = SrcIpAddr 
+     IpAddr = SrcIpAddr,
+     Src = SrcIpAddr,
+     Dst = DstIpAddr 
   };
   M365Defender(starttime, endtime, srcipaddr_has_any_ipv4_prefix, dstipaddr_has_any_ipv4_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, disabled)
