@@ -1,9 +1,12 @@
-# Block-AADUser
-author: Nicholas DiCola
+# Block-AADUserOrAdmin
+author: Benjamin Kovacevic
 
 This playbook will disable the user in Azure Active Directory and add a comment to the incident. There is an option for incident and alert trigger below.<br>
-Note: This playbook will not be able to disable users if they are eligible or have active admin roles. To be able to disable admin users as well, please deploy playbook - Block-AADUserOrAdmin.<br>
-If user have manager, manager will be notified that the user have been disabled in Azure AD.
+If user have active admin assigment, approval process will be sent to selected email/emails. For users with eligible admin assigment, disabling process will be the same as for the regular user.<br>
+Note: Admin user will be disabled and approval will be sent after admin is disabled to approve or reject disabling process. Reject will re-enable admin, while Approve will leave admin disabled. If approval/rejection is not confirmed in 30 minutes, admin user will be disabled and notification will be sent.<br>
+If admin or regular user have manager, manager will be notified that user/admin has been disabled in Azure AD.<br><br>
+Note: This playbook will have high privilages and will be able to disable all admins, including the Global Admins in the process. Be careful not to lock yourself out!<br>
+If you don't want that playbook have option to disable admin users, please use Block-AADUser playbook!
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -12,18 +15,18 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUser%2Fincident-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUser%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUserOrAdmin%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUserOrAdmin%2Fincident-trigger%2Fazuredeploy.json)
 
 **Deploy with alert trigger**
 
 After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUser%2Falert-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUser%2Falert-trigger%2Fazuredeploy.json)<br><br>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUserOrAdmin%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUserOrAdmin%2Falert-trigger%2Fazuredeploy.json)<br><br>
 
 ## Prerequisites
-None<br><br>
+Available email account to whom approval to confirm or reject admin isolation will be sent. 
 
 ## Post-deployment
 1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity - https://docs.microsoft.com/azure/logic-apps/create-managed-service-identity?tabs=consumption#assign-managed-identity-role-based-access-in-the-azure-portal
@@ -56,7 +59,8 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole4.Id
 ```
 
-3. Open the playbook in the Logic App Designer and authorize Azure AD and Office 365 Outlook Logic App connections<br><br>
+3. Assign Global Administrator role from Azure Active Directory > Roles and administrators, search for Global Administrator and assign role to the playbook Managed Identity (Block-AADUserOrAdmin-Incident or Block-AADUserOrAdmin-Alert)
+4. Open the playbook in the Logic App Designer and authorize Azure AD and Office 365 Outlook Logic App connections<br><br>
 
 ## Screenshots
 **Incident Trigger**<br>
