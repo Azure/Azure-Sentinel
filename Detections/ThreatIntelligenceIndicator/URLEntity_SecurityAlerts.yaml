@@ -32,7 +32,8 @@ query: |
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
     SecurityAlert
     | where TimeGenerated >= ago(dt_lookBack)
     | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
@@ -45,10 +46,9 @@ query: |
     | extend Compromised_Host = tostring(parse_json(ExtendedProperties).["Compromised Host"])
     | extend Alert_TimeGenerated = TimeGenerated
   ) on Url
-  | where Alert_TimeGenerated >= TimeGenerated and Alert_TimeGenerated < ExpirationDateTime
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Alert_TimeGenerated,
-  AlertName, AlertSeverity, Description, Url, Compromised_Host
+  | where Alert_TimeGenerated < ExpirationDateTime
+  | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName
+  | project Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host
   | extend timestamp = Alert_TimeGenerated, HostCustomEntity = Compromised_Host, URLCustomEntity = Url
 entityMappings:
   - entityType: Host
