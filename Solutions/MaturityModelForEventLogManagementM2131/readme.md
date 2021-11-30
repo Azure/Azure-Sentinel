@@ -17,7 +17,7 @@ The Microsoft Sentinel: Maturity Model for Event Log Management (M-21-31) Soluti
 1️⃣ [Design Log Management Architecture](https://docs.microsoft.com/azure/azure-monitor/logs/design-logs-deployment)<br>
 2️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
 3️⃣ [Connect & Ingest Data Sources](https://docs.microsoft.com/azure/sentinel/connect-data-sources)<br>
-4️⃣ [Extend Microsft Sentinel Across Workspaces and Tenants](https://docs.microsoft.com/azure/sentinel/extend-sentinel-across-workspaces-tenants)<br>
+4️⃣ [Extend Microsoft Sentinel Across Workspaces and Tenants](https://docs.microsoft.com/azure/sentinel/extend-sentinel-across-workspaces-tenants)<br>
 5️⃣ [Configure 12 Months Active Storage with Data Retention](https://docs.microsoft.com/azure/azure-monitor/logs/manage-cost-storage#change-the-data-retention-period)<br>
 6️⃣ [Configure 18 Months Cold Data Storage with Azure Data Explorer](https://docs.microsoft.com/azure/sentinel/store-logs-in-azure-data-explorer?tabs=adx-event-hub)<br>
 7️⃣ [Onboard Microsoft Defender for Cloud](https://docs.microsoft.com/azure/security-center/security-center-get-started)<br>
