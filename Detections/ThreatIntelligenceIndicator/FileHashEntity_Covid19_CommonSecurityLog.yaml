@@ -21,17 +21,18 @@ query: |
   let fileHashIndicators = covidIndicators
   | where isnotempty(FileHashValue);
   // Handle matches against both lower case and uppercase versions of the hash:
-  ( fileHashIndicators | extend FileHashValue = tolower(FileHashValue)
-    | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
-  |  join (
+  (fileHashIndicators | extend FileHashValue = tolower(FileHashValue)
+  | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  |  join kind=innerunique (
      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) 
      | where isnotempty(FileHash)
      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
-  )
+     )
   on $left.FileHashValue == $right.FileHash
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by FileHashValue
-  | project LatestIndicatorTime, FileHashValue, FileHashType, Description, ThreatType,  
-  CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, 
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue
+  | project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,  
+  SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, 
   RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
   | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName
 entityMappings:
@@ -47,3 +48,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.2.0
+kind: Scheduled

@@ -3,14 +3,17 @@ name: Known Barium IP
 description: | 
   'Identifies a match across various data feeds for IP IOCs related to the Barium activity group.  
    References: https://www.justice.gov/opa/pr/seven-international-cyber-defendants-including-apt41-actors-charged-connection-computer' 
-severity: High 
+severity: High
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 requiredDataConnectors: 
   - connectorId: Office365 
     dataTypes: 
-     - OfficeActivity 
-  - connectorId: DNS 
-    dataTypes: 
-      - DnsEvents 
+     - OfficeActivity
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
   - connectorId: AzureMonitor(VMInsights) 
     dataTypes: 
       - VMConnection 
@@ -25,7 +28,10 @@ requiredDataConnectors:
       - SecurityEvent 
   - connectorId: AzureActiveDirectory 
     dataTypes: 
-      - SigninLogs 
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: AzureMonitor(WireData) 
     dataTypes: 
       - WireData 
@@ -40,7 +46,10 @@ requiredDataConnectors:
       - AWSCloudTrail 
   - connectorId: MicrosoftThreatProtection
     dataTypes: 
-      - DeviceNetworkEvents 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics  
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -72,10 +81,14 @@ query:  |
   |extend SourceIPAddress = ClientIP, Account = UserId 
   | where  SourceIPAddress in (IPList) 
   | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account 
-  ), 
+  ),
   (DnsEvents  
   | extend DestinationIPAddress = IPAddresses,  Host = Computer 
   | where  DestinationIPAddress has_any (IPList)  
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host 
+  ), 
+  (imDns (response_has_any_prefix=IPList)
+  | extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr 
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host 
   ), 
   (VMConnection  
@@ -103,6 +116,11 @@ query:  |
   | where isnotempty(IPAddress) 
   | where IPAddress in (IPList) 
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress 
+  ),
+  (AADNonInteractiveUserSignInLogs 
+  | where isnotempty(IPAddress) 
+  | where IPAddress in (IPList) 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress 
   ), 
   (W3CIISLog  
   | where isnotempty(cIP) 
@@ -125,7 +143,27 @@ query:  |
   | where isnotempty(RemoteIP)  
   | where RemoteIP in (IPList)  
   | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName  
-  ) 
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = SourceHost
+  ),
+  (
+  AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallNetworkRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (IPList)  
+  | extend DestinationIP = DestinationHost 
+  | extend IPCustomEntity = SourceHost
+  )
   ) 
 entityMappings:
   - entityType: Account
@@ -140,3 +178,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.1.1
+kind: Scheduled

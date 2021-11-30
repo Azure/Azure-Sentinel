@@ -6,7 +6,7 @@ export function isValidDataType(dataTypes: Array<DataType>): boolean {
         let name = dataType.name;
         if(name.indexOf(' ') >= 0)
         {
-            if ((name.includes("CommonSecurityLog") || name.includes("Syslog")))
+            if ((name.includes("CommonSecurityLog") || name.includes("Syslog") || name.includes("Event")))
             {
                 return true;
             }

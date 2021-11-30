@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionPaloAltoPanOS",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Palo Alto Network Sessions",
+            "category": "Security",
+            "FunctionAlias": "vimNetworkSessionPaloAltoPanOS",
+            "query": "let NetworkParserPaloAltoNetworks=(){\nCommonSecurityLog\n| where DeviceVendor==\"Palo Alto Networks\" and (Activity==\"TRAFFIC\" or (Activity==\"THREAT\" and DeviceEventClassID==\"url\"))\n| parse AdditionalExtensions with \"PanOSDstPackets=\"DstPackets:long\";PanOSsrc_packets=\"SrcPackets:long\";start=\"EventStartTime:datetime\";reason=\"*\n| project-rename \n      EventVendor=DeviceVendor\n    , EventProduct=DeviceProduct\n    , DvcHostname=DeviceName\n    , EventResourceId=_ResourceId \n    , NetworkApplicationProtocol=ApplicationProtocol\n    , SrcZone=DeviceCustomString4 \n    , DstZone=DeviceCustomString5\n    , NetworkRuleName=DeviceCustomString1\n    , NetworkProtocol=Protocol\n    , SrcBytes=SentBytes\n    , DstBytes=ReceivedBytes \n    , SrcUserUpn=SourceUserID\n    , DstUserUpn=DestinationUserID \n    , EventProductVersion=DeviceVersion\n    , EventSeverity=LogSeverity\n    , NetworkPackets=DeviceCustomNumber2\n    , SrcNatIpAddr=SourceTranslatedAddress\n    , DstNatIpAddr=DestinationTranslatedAddress\n    , UrlCategory=DeviceCustomString2\n    , LogProfile=DeviceCustomString6\n    , Flags=FlexString1\n    , VirtualSystem=DeviceCustomString3\n  // Proxy\n  , UrlOriginal=RequestURL\n  , HttpUserAgentOriginal=RequestClientApplication\n  , HttpContentType=RequestContext\n  , HttpRequestMethod=RequestMethod\n| extend\n    NetworkBytes=tolong(FlexNumber1)\n    , EventOriginalUid=_ItemId\n    , TimeGenerated  \n    , EventTimeIngested =ingestion_time()\n    , EventType=\"Traffic\"\n    , EventCount=toint(1)\n    , EventResult=case(DeviceAction==\"allow\",\"Success\",\"Failure\")\n    , NetworkSessionId=tostring(DeviceCustomNumber1)\n    , NetworkDuration=DeviceCustomNumber3\n    , EventSchemaVersion=\"1.0.0\"\n////////////////////////////////////////////////////////\n// Mitigating LA Autocomplete\n| project-rename\n      DvcMacAddr=DeviceMacAddress \n    , DstDvcHostname=DestinationHostName\n    , DstMacAddr=DestinationMACAddress\n  , SrcMacAddr=SourceMACAddress\n  // Trivial renames to mitigate Autocomplete\n    , NetworkDirection=CommunicationDirection\n    , EventEndTime=EndTime\n  , EventStartTime=EventStartTime\n  , EventMessage=Message\n  , TimeGenerated=TimeGenerated\n    , DstIpAddr=DestinationIP\n    , DstPortNumber=DestinationPort\n    , DstNatPortNumber=DestinationTranslatedPort\n  , SrcPortNumber=SourcePort\n    , SrcIpAddr=SourceIP\n    , DvcAction=DeviceAction\n  , DstUserName=DestinationUserName\n  , SrcNatPortNumber=SourceTranslatedPort\n  , DvcOutboundInterface=DeviceOutboundInterface\n  , DvcInboundInterface=DeviceInboundInterface\n  , SrcUserName=SourceUserName \n// parsed from additional extensions:\n| parse AdditionalExtensions with unparsedURL \"PanOSActionFlags=\"ActionFlags\n                                          \";cat=\"Category //https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClmHCAS\n                                        // \";PanOSXForwarderfor=\"HttpXff\n                                        // \";PanOSReferer=\"Referer \n                                          \";\"temp\"l1=\"temp2\"Gl4=\"temp3\n                                          //\";PanOSVsysName=\"VirtualSystem\n                                          //\";PanOSSrcUUID=\"SrcUUID\n                                          //\";PanOSDstUUID=\"DstUUID\n                                          //\";PanOSTunnelID=\"TunnelId\n                                          //\";PanOSMonitorTag=\"MonitorTag\n                                          //\";PanOSParentSessionID=\"ParentSessionId\n                                          //\";PanOSParentStartTime=\"ParentStartTime\n                                          //\";PanOSTunnelType=\"TunnelType\n                                          \";PanOSThreatCategory=\"ThreatCategory\n                                          \";PanOSContentVer=\"ContentVer\n// for EventClassIds==\"url\" it parses theses additional fields  \n| parse temp with \"PanOSXForwarderfor=\"HttpRequestXff\";PanOSReferer=\"HttpReferrerOriginal\t\";\" *\n| extend UrlOriginal=coalesce(UrlOriginal, unparsedURL)\n| project-away temp, temp2, temp3, unparsedURL\n};\nNetworkParserPaloAltoNetworks",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

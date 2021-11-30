@@ -12,25 +12,26 @@ relevantTechniques:
   - T1030
 query: |
 
-  let starttime = 14d;
-  let endtime = 1d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
   let historicalUA=
   OfficeActivity
   | where  RecordType == "SharePointFileOperation"
   | where Operation in ("FileDownloaded", "FileUploaded")
-  | where TimeGenerated between(ago(starttime)..ago(endtime))
+  | where TimeGenerated between(lookback..starttime)
   | summarize by ClientIP, UserAgent;
   let recentUA = OfficeActivity
   | where  RecordType == "SharePointFileOperation"
   | where Operation in ("FileDownloaded", "FileUploaded")
-  | where TimeGenerated > ago(endtime) 
+  | where TimeGenerated between(starttime..endtime)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by ClientIP, UserAgent;
   recentUA | join kind=leftanti (
-     historicalUA 
+     historicalUA
   ) on ClientIP, UserAgent
   // Some OfficeActivity records do not contain ClientIP information - exclude these for fewer results
-  | where not(isempty(ClientIP)) 
-  | extend timestamp = StartTime, IPCustomEntity = ClientIP 
+  | where not(isempty(ClientIP))
+  | extend timestamp = StartTime, IPCustomEntity = ClientIP
 entityMappings:
   - entityType: IP
     fieldMappings:

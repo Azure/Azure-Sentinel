@@ -1,0 +1,66 @@
+id: 972c89fa-c969-4d12-932f-04d55d145299
+name: MSHTML vulnerability CVE-2021-40444 attack 
+description: |
+   'This query detects attacks that exploit the CVE-2021-40444 MSHTML vulnerability using specially crafted Microsoft Office documents. 
+    The detection searches for relevant files used in the attack along with regex matches in commnadline to look for pattern similar to : ".cpl:../../msword.inf"
+    Refrence: https://www.microsoft.com/security/blog/2021/09/15/analyzing-attacks-that-exploit-the-mshtml-cve-2021-40444-vulnerability/'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:  
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1203
+tags:
+  - CVE-2021-40444
+  - DEV-0413
+query: |
+  ( union isfuzzy=true
+  (SecurityEvent
+  | where EventID==4688
+  | where isnotempty(CommandLine)
+  | extend FileName = Process, ProcessCommandLine = CommandLine
+  | where (FileName in~('control.exe','rundll32.exe') and ProcessCommandLine has '.cpl:')
+    or ProcessCommandLine matches regex @'\".[a-zA-Z]{2,4}:\.\.\/\.\.'
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (DeviceProcessEvents
+  | where (FileName in~('control.exe','rundll32.exe') and ProcessCommandLine has '.cpl:')
+  or ProcessCommandLine matches regex @'\".[a-zA-Z]{2,4}:\.\.\/\.\.'
+  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountUpn, HostCustomEntity = DeviceName
+  ),
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1 
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | extend Image = column_ifexists("Image", ""), ProcessCommandLine = column_ifexists("CommandLine", "")
+  | extend FileName = split(Image, '\\', -1)[-1]
+  | where (FileName in~('control.exe','rundll32.exe') and ProcessCommandLine has '.cpl:')
+    or ProcessCommandLine matches regex @'\".[a-zA-Z]{2,4}:\.\.\/\.\.'
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.0
+kind: Scheduled

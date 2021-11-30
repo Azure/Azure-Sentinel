@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDnsCorelightZeek",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Corelight Zeek DNS Query Parser",
+            "category": "Security",
+            "FunctionAlias": "ASimDnsCorelightZeek",
+            "query": "let DNSQuery_CorelightZeek=(disabled:bool=false){\n  Corelight_CL | where not(disabled)\n  | where log_file_s has \"dns\"\n  | extend data = todynamic(Message)\n  | extend \n      EventCount=int(1),\n      EventProduct=\"Zeek\",\n      EventVendor=\"Corelight\",\n      EventSchema = \"Dns\",\n      EventSchemaVersion=\"0.1.3\",\n      Dvc=\"Zeek\",\n      EventType=\"Query\",\n      EventSubType='response',\n      EventEndTime= todatetime(data.ts),\n      EventOriginalUid = tostring(data.uid),\n      SrcIpAddr = tostring (data.[\"id.orig_h\"]),\n      SrcPortNumber = toint (data.[\"id.orig_p\"]),\n      DstIpAddr = tostring (data.[\"id.dest_h\"]),\n      DstPortNumber = toint (data.[\"id.dest_p\"]),\n      NetworkProtocol = tostring(data.proto),\n      TransactionIdHex = tohex(toint(data.trans_id)), \n      DnsQuery = tostring(data.query),\n      DnsResponseCode = toint(data.rcode),\n      EventResultDetails = tostring (data.rcode_name),\n      DnsFlagsAuthoritative = tobool(data.AA),\n      DnsFlagsTruncated = tobool(data.TC),\n      DnsFlagsRecursionDesired = tobool(data.RD),\n      DnsFlagsZ = tobool(data.Z),\n      DnsQueryClassName =tostring(data.qclass_name), \n      DnsQueryClass = toint(data.qclass),\n      DnsQueryTypeName =tostring(data.qtype_name), \n      DnsQueryType = toint(data.qtype),\n      DnsNetworkDuration = toint(data.rtt),\n      DnsResponseName = tostring(pack ('answers', data.answers, 'ttls', data.TTLs, 'authoritative ', data.auth, 'additional', data.addl))\n  | extend\n      EventStartTime = EventEndTime,\n      EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure')\n  // Aliases\n  | extend \n      DnsResponseCodeName=EventResultDetails, \n      Domain=DnsQuery,\n      IpAddr=SrcIpAddr,\n      Src=SrcIpAddr,\n      Dst=DstIpAddr,\n      Duration=DnsNetworkDuration\n  // Backward Compatibility\n  | extend\n      Query=DnsQuery,\n      QueryType=DnsQueryType,\n      ResponseCodeName=DnsResponseCodeName,\n      QueryTypeName=DnsQueryTypeName\n  };\n  DNSQuery_CorelightZeek(disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

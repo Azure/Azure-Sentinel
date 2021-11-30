@@ -73,6 +73,7 @@
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
+                "displayName": "[parameters('UserName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
@@ -82,9 +83,9 @@
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
-        "name": "[parameters('PlaybookName')]",
-        "location": "[resourceGroup().location]",
-        "tags": {
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
             "LogicAppsCategory": "security"
         },
         "dependsOn": [
@@ -115,7 +116,7 @@
                         }
                     },
                     "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -156,7 +157,7 @@
                             "description": "Filter only the Entity IPs to send to GreyNoise"
                         },
                         "For_each_IP_Entity": {
-                            "foreach": "@body('Filter_IPs_Only')",
+                            "foreach": "@variables('PublicIPEntities')",
                             "actions": {
                                 "Condition": {
                                     "actions": {
@@ -172,7 +173,7 @@
                                                     "inputs": {
                                                         "body": {
                                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                            "message": "<p><span style=\"font-size: 24px; color: rgb(209,72,65)\">IP not observed scanning the internet in the last 90 Days or contained in RIOT data set.</span><span style=\"font-size: 24px\"><br>\n</span><span style=\"font-size: 24px\">@{items('For_each_IP_Entity')?['properties']?['address']}</span><span style=\"font-size: 24px\"></span></p>"
+                                                            "message": "<p><span style=\"font-size: 24px\">IP not observed scanning the internet in the last 90 Days or contained in RIOT data set.<br>\n</span><span style=\"font-size: 24px\">@{items('For_each_IP_Entity')}</span><span style=\"font-size: 24px\"></span></p>"
                                                         },
                                                         "host": {
                                                             "connection": {
@@ -226,7 +227,7 @@
                                                         "inputs": {
                                                             "body": {
                                                                 "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                "message": "<p><span style=\"font-size: 24px\">GreyNoise has observed IP address while scanning the Intenet in the last 90 Days<br>\n<br>\n</span><span style=\"font-size: 24px; color: rgb(41,105,176)\">IP General Information</span><br>\n@{base64ToString(body('Run_query_and_visualize_results_IP_Main')?['attachmentContent'])}<br>\n<br>\n<span style=\"font-size: 24px; color: rgb(163,143,132)\">IP Detail Information</span><br>\n@{base64ToString(body('Run_query_and_visualize_results_IP_Detail')?['attachmentContent'])}<br>\n<br>\n<span style=\"font-size: 24px; color: rgb(0,168,133)\">IP Geo Information</span><br>\n@{base64ToString(body('Run_query_and_visualize_results_IP_Geo')?['attachmentContent'])}<br>\n<br>\n<a href=\"https://viz.greynoise.io/ip/@{items('For_each_IP_Entity')?['properties']?['address']}\"><span style=\"font-size: 14px\">GreyNoise IPContext Visualize</span></a><span style=\"font-size: 14px\">&nbsp;</span></p>"
+                                                                "message": "<p><span style=\"font-size: 24px\">GreyNoise has observed IP address while scanning the Intenet in the last 90 Days<br>\n<br>\nIP General Information</span><br>\n@{base64ToString(body('Run_query_and_visualize_results_IP_Main')?['attachmentContent'])}<br>\n<br>\n<span style=\"font-size: 24px\">IP Detail Information</span><br>\n@{base64ToString(body('Run_query_and_visualize_results_IP_Detail')?['attachmentContent'])}<br>\n<br>\n<span style=\"font-size: 24px\">IP Geo Information</span><br>\n@{base64ToString(body('Run_query_and_visualize_results_IP_Geo')?['attachmentContent'])}<br>\n<br>\n<span style=\"font-size: 24px\"></span><span style=\"font-size: 24px\">@{variables('GreyNoiseVizURL')}</span><span style=\"font-size: 24px\"></span></p>"
                                                             },
                                                             "host": {
                                                                 "connection": {
@@ -429,7 +430,7 @@
                                                     },
                                                     "Run_query_and_visualize_results_IP_Main": {
                                                         "runAfter": {
-                                                            "Set_variable_IP_Geo": [
+                                                            "Set_variable_GreyNoiseVizURL2": [
                                                                 "Succeeded"
                                                             ]
                                                         },
@@ -483,6 +484,18 @@
                                                         "inputs": {
                                                             "name": "CVE",
                                                             "value": "@{null}"
+                                                        }
+                                                    },
+                                                    "Set_variable_GreyNoiseVizURL2": {
+                                                        "runAfter": {
+                                                            "Set_variable_IP_Geo": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "GreyNoiseVizURL",
+                                                            "value": "https://www.greynoise.io/viz/ip/@{items('For_each_IP_Entity')}"
                                                         }
                                                     },
                                                     "Set_variable_IP_Detail": {
@@ -574,7 +587,7 @@
                                                     "key": "@parameters('GreyNoiseKey')"
                                                 },
                                                 "method": "GET",
-                                                "uri": "https://api.greynoise.io/v2/noise/context/@{items('For_each_IP_Entity')?['properties']?['address']}"
+                                                "uri": "https://api.greynoise.io/v2/noise/context/@{items('For_each_IP_Entity')}"
                                             },
                                             "description": "Lookup IP context with GreyNoise"
                                         },
@@ -720,7 +733,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p><span style=\"font-size: 24px\">IP address is contained in RIOT Dataset<br>\n<br>\nGeneral Information<br>\n</span><span style=\"font-size: 12px\"></span><span style=\"font-size: 12px\">@{base64ToString(body('Run_query_and_visualize_results_IP_RIOT')?['attachmentContent'])}</span><span style=\"font-size: 12px\"><br>\n</span><span style=\"font-size: 24px\"><br>\n</span><span style=\"font-size: 14px\">Explanation: </span><span style=\"font-size: 14px\">@{body('GreyNoise_RIOT')?['explanation']}</span><span style=\"font-size: 14px\"><br>\n<br>\nReference:&nbsp;</span><span style=\"font-size: 14px\">@{body('GreyNoise_RIOT')?['reference']}</span><span style=\"font-size: 14px\"><br>\n<br>\n</span><a href=\"https://viz.greynoise.io/riot/@{items('For_each_IP_Entity')?['properties']?['address']}\"><span style=\"font-size: 14px\">GreyNoise RIOT Visulaize</span></a>&nbsp;</p>"
+                                                        "message": "<p><span style=\"font-size: 24px\">IP address is contained in RIOT Dataset<br>\n<br>\nGeneral Information<br>\n</span><span style=\"font-size: 12px\"></span><span style=\"font-size: 12px\">@{base64ToString(body('Run_query_and_visualize_results_IP_RIOT')?['attachmentContent'])}</span><span style=\"font-size: 12px\"><br>\n</span><span style=\"font-size: 24px\"><br>\n</span><span style=\"font-size: 14px\">Explanation: </span><span style=\"font-size: 14px\">@{body('GreyNoise_RIOT')?['explanation']}</span><span style=\"font-size: 14px\"><br>\n<br>\nReference:&nbsp;</span><span style=\"font-size: 14px\">@{body('GreyNoise_RIOT')?['reference']}</span><span style=\"font-size: 14px\"><br>\n<br>\n</span><span style=\"font-size: 24px\"></span><span style=\"font-size: 24px\">@{variables('GreyNoiseVizURL')}</span><span style=\"font-size: 24px\"></span></p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -834,6 +847,18 @@
                                                 },
                                                 "description": "Send results into Sentinel custom data table for further use or correlation in other logs."
                                             },
+                                            "Set_variable_GreyNoiseVizURL": {
+                                                "runAfter": {
+                                                    "Set_variable_IP_RIOT": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "GreyNoiseVizURL",
+                                                    "value": "https://viz.greynoise.io/riot/@{items('For_each_IP_Entity')}"
+                                                }
+                                            },
                                             "Set_variable_IP_RIOT": {
                                                 "runAfter": {
                                                     "Compose_IP_RIOT": [
@@ -850,7 +875,7 @@
                                             },
                                             "Update_incident_2": {
                                                 "runAfter": {
-                                                    "Set_variable_IP_RIOT": [
+                                                    "Set_variable_GreyNoiseVizURL": [
                                                         "Succeeded"
                                                     ]
                                                 },
@@ -862,7 +887,7 @@
                                                         "tagsToAdd": {
                                                             "TagsToAdd": [
                                                                 {
-                                                                    "Tag": "ObservedRIOT:@{items('For_each_IP_Entity')?['properties']?['address']}"
+                                                                    "Tag": "ObservedRIOT:@{items('For_each_IP_Entity')}"
                                                                 }
                                                             ]
                                                         }
@@ -899,13 +924,13 @@
                                             "Key": "@parameters('GreyNoiseKey')"
                                         },
                                         "method": "GET",
-                                        "uri": "https://api.greynoise.io/v2/riot/@{items('For_each_IP_Entity')?['properties']?['address']}"
+                                        "uri": "https://api.greynoise.io/v2/riot/@{items('For_each_IP_Entity')}"
                                     },
                                     "description": "Look up to see if IP is benin or malicious or not seen. | RIOT identifies IPs from known benign services and organizations that commonly cause false positives in network security and threat intelligence products"
                                 }
                             },
                             "runAfter": {
-                                "Filter_IPs_Only": [
+                                "For_each_IP_Entity_RFC1918": [
                                     "Succeeded"
                                 ]
                             },
@@ -916,6 +941,71 @@
                                     "repetitions": 1
                                 }
                             }
+                        },
+                        "For_each_IP_Entity_RFC1918": {
+                            "foreach": "@body('Filter_IPs_Only')",
+                            "actions": {
+                                "Condition_2": {
+                                    "actions": {},
+                                    "runAfter": {
+                                        "KQLRFC1918Check": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_array_variable": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "PublicIPEntities",
+                                                    "value": "@items('For_each_IP_Entity_RFC1918')?['properties']?['address']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('KQLRFC1918Check')?['value'][0]?['result']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Check if the ip address is Private then do nothing, if public then add to array for GreyNoise APIs to be run"
+                                },
+                                "KQLRFC1918Check": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "datatable(ip_string:string)\n[\n    \"@{items('For_each_IP_Entity_RFC1918')?['properties']?['address']}\"\n]\n| extend result = ipv4_is_private(ip_string)",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@parameters('SentinelWorkspaceName')",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                            "timerange": "Last 24 hours"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_PublicIPEntities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "Filter out private ips"
                         },
                         "Initialize_array_variable_IP_Detail": {
                             "runAfter": {
@@ -955,7 +1045,7 @@
                         },
                         "Initialize_array_variable_IP_Main": {
                             "runAfter": {
-                                "14_Days_From_Incident": [
+                                "Initialize_variable_GreyNoiseVizURL": [
                                     "Succeeded"
                                 ]
                             },
@@ -1002,6 +1092,40 @@
                                         "name": "CVE",
                                         "type": "string",
                                         "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_GreyNoiseVizURL": {
+                            "runAfter": {
+                                "14_Days_From_Incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GreyNoiseVizURL",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_PublicIPEntities": {
+                            "runAfter": {
+                                "Filter_IPs_Only": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PublicIPEntities",
+                                        "type": "array",
+                                        "value": []
                                     }
                                 ]
                             }

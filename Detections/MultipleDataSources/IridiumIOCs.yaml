@@ -25,6 +25,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
   - connectorId: AzureMonitor(IIS)
     dataTypes:
       - W3CIISLog
@@ -37,6 +40,9 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -44,7 +50,6 @@ triggerThreshold: 0
 tactics:
   - CommandAndControl
 query:  | 
-
   let IPList = dynamic(["154.223.45.38","185.141.207.140","185.234.73.19","216.245.210.106","51.91.48.210","46.255.230.229"]);
   (union isfuzzy=true
   (CommonSecurityLog
@@ -64,6 +69,10 @@ query:  |
   | where  DestinationIPAddress has_any (IPList) 
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
   ),
+  (imDns (response_has_any_prefix=IPList)
+  | extend DestinationIPAddress = DnsResponseName,  Host = Dvc
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Host
+  ),
   (VMConnection 
   | where isnotempty(SourceIp) or isnotempty(DestinationIp) 
   | where SourceIp in (IPList) or DestinationIp in (IPList) 
@@ -81,6 +90,11 @@ query:  |
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
   ),
   (SigninLogs
+  | where isnotempty(IPAddress)
+  | where IPAddress in (IPList)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  ),
+  (AADNonInteractiveUserSignInLogs
   | where isnotempty(IPAddress)
   | where IPAddress in (IPList)
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
@@ -135,3 +149,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.2.1
+kind: Scheduled

@@ -15,14 +15,17 @@ triggerThreshold: 0
 tactics:
   - CommandAndControl
 relevantTechniques:
-  - T1483
+  - T1568
   - T1008
 query: |
 
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
   let timeframe = 1d;
   let excludeTLD = dynamic(["arris","ati","virtusa","unknowndomain","onion","corp","domain","local","localdomain","host","home","gateway","lan",
   "services","hub","domain.name","WirelessAP","Digicom-ADSL","OpenDNS","dlinkrouter","Dlink","ASUS","device","router","Belkin","DHCP","Cisco"]);
   let nxDomainDnsEvents = DnsEvents
+  | where TimeGenerated between(starttime..endtime)
   | where ResultCode == 3 
   | where QueryType in ("A", "AAAA")
   | where ipv4_is_match("127.0.0.1", ClientIP) == False
@@ -49,7 +52,6 @@ query: |
   | project ClientIP, IPthreshold);
   let FilterOnIPThreshold_MainTable = (
   nxDomainDnsEvents
-  | where TimeGenerated > ago(timeframe)
   | summarize TotalNXLookups=dcount(truncatedDomain) by ClientIP
   | sort by TotalNXLookups desc
   | join ['threshold'] on ClientIP
@@ -77,7 +79,7 @@ query: |
   let FilterOnGlobalThreshold_MainTable = (
   nxDomainDnsEvents
   | where TimeGenerated > ago(timeframe)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TotalNXLookups = dcount(truncatedDomain) by ClientIP
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TotalNXLookups = dcount(truncatedDomain) by ClientIP
   | sort by TotalNXLookups desc
   // Comment the line below in order to view results filtered by IPThreshold only. 
   | where TotalNXLookups > GlobalThreshold 
@@ -86,9 +88,9 @@ query: |
       | summarize domainCount = dcount(Name) by truncatedDomain, ClientIP
       | project truncatedDomain = strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
       ) on ClientIP
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), SLDs_DistinctLookups = make_list(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), SLDs_DistinctLookups = make_list(truncatedDomain), UniqueSLDsCount=count(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
   | sort by TotalNXLookups desc);
   FilterOnIPThreshold_MainTable
   | join FilterOnGlobalThreshold_MainTable on ClientIP
-  | project StartTimeUtc, EndTimeUtc, ClientIP, TotalNXLookups, IPthreshold, GlobalThreshold, SLDs_DistinctLookups, UniqueSLDsCount
-  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP
+  | project StartTime, EndTime, ClientIP, TotalNXLookups, IPthreshold, GlobalThreshold, SLDs_DistinctLookups, UniqueSLDsCount
+  | extend timestamp = StartTime, IPCustomEntity = ClientIP

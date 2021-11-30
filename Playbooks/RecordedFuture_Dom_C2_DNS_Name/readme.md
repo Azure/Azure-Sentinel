@@ -8,18 +8,10 @@ Note: Due to internal Microsoft Logic Apps dependencies, please deploy first the
 
 Links to deploy the RecordedFuture_Dom_C2_DNS_Name_IndicatorProcessor playbook template:
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_IndicatorProcessor.json" target="_blank">
-	<img src="https://aka.ms/deploytoazurebutton"/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_IndicatorProcessor.json" target="_blank">
-	<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_IndicatorProcessor.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_IndicatorProcessor.json)
 
 Links to deploy the RecordedFuture_Dom_C2_DNS_Name_ImportToSentinel playbook template:
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_ImportToSentinel.json" target="_blank">
-	<img src="https://aka.ms/deploytoazurebutton"/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_ImportToSentinel.json" target="_blank">
-	<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_ImportToSentinel.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_Dom_C2_DNS_Name%2FRecordedFuture_Dom_C2_DNS_Name_ImportToSentinel.json)

@@ -1,0 +1,50 @@
+Id: ec41f36e-3fbe-44e3-a09e-adf99bc87dcb
+DisplayName: DefenderForIoT - IoT Devices communicating the most amount of data with this Host
+Description: IoT\OT Devices communicating the most amount of data with this Host during the range of -3d and +3d
+InputEntityType: Host
+InputFields:
+  - HostName
+OutputEntityTypes:
+  - IoTDevice
+QueryPeriodBefore: 3d
+QueryPeriodAfter: 3d
+DataSources:
+    - SecurityIoTRawEvent
+Tactics:
+  - Exfiltration
+  - CommandAndControl
+  - Collection
+query: |
+    let ConnectionData_DefenderForIoT_GetHost2IoTDevice = (v_Host_HostName:string) {
+    SecurityIoTRawEvent 
+    | extend ClientDeviceType = todynamic(extractjson("$ClientDevice", EventDetails)).deviceType
+    | extend ClientDeviceId = todynamic(extractjson("$ClientDevice", EventDetails)).deviceId
+    | extend ClientIpAddress = todynamic(extractjson("$ClientDevice", EventDetails)).ipAddress
+    | extend ClientisExternal = todynamic(extractjson("$ClientDevice", EventDetails)).isExternal
+    | extend ServerDeviceType = todynamic(extractjson("$ServerDevice", EventDetails)).deviceType
+    | extend ServerDeviceId = todynamic(extractjson("$ServerDevice", EventDetails)).deviceId
+    | extend ServerIpAddress = todynamic(extractjson("$ServerDevice", EventDetails)).ipAddress
+    | extend ServerisExternal = todynamic(extractjson("$ServerDevice", EventDetails)).isExternal
+    | extend ClientDeviceName = tostring(todynamic(extractjson("$ClientDevice", EventDetails)).deviceName)
+    | extend ServerDeviceName = tostring(todynamic(extractjson("$ServerDevice", EventDetails)).deviceName)
+    | extend Bandwidth = todynamic(extractjson("$Bandwidth", EventDetails))
+    | extend LastActivity = todynamic(extractjson("$LastActivity", EventDetails))
+    | extend Protocol = todynamic(extractjson("$Protocol", EventDetails))
+    | extend ServerPort = todynamic(extractjson("$ServerPort", EventDetails))
+    | extend ServerDevice = extractjson("$ServerDevice", EventDetails)
+    | extend ClientDevice = extractjson("$ClientDevice", EventDetails)
+    | extend SensorId = DeviceId
+    | extend ClientDeviceGUID = strcat(SensorId, "_", ClientDeviceId), ServerDeviceGUID = strcat(SensorId, "_", ServerDeviceId)
+    | where ClientDeviceName == v_Host_HostName or ServerDeviceName == v_Host_HostName
+    | extend Direction = iff(ClientDeviceName == v_Host_HostName, "Outbound", "Inbound")
+    | project DeviceGUID = iff(Direction == "Outbound", ServerDeviceGUID, ClientDeviceGUID), 
+    DeviceType = iff(Direction == "Outbound", ServerDeviceType, ClientDeviceType),
+    DeviceIp = iff(Direction == "Outbound", ServerIpAddress, ClientIpAddress),
+    DeviceName = iff(Direction == "Outbound", ServerDeviceName, ClientDeviceName),
+    SensorId, LastActivity = todatetime(LastActivity), Bandwidth = todouble(Bandwidth), Protocol, ServerPort
+    | summarize TotalBandwidth = sum(Bandwidth), IoTDevice_Aux_LastActivity = max(LastActivity), IoTDevice_Aux_Protocols = make_set(Protocol), IoTDevice_Aux_ServerPorts = make_set(ServerPort) by IoTDevice_DeviceId = DeviceGUID, IoTDevice_DeviceName =  DeviceName, IoTDevice_IpAddress = tostring(pack('Address',tostring(DeviceIp))), IoTDevice_DeviceType = tostring(DeviceType)
+    | project-rename IoTDevice_Aux_TotalBandwidth_MB = TotalBandwidth
+    | extend IoTDevice_Aux_TotalBandwidth_MB = floor(todecimal(IoTDevice_Aux_TotalBandwidth_MB / 1000), 0.1), IoTDevice_IpAddress=todynamic(IoTDevice_IpAddress)
+    | top 10 by IoTDevice_Aux_TotalBandwidth_MB
+    };
+    ConnectionData_DefenderForIoT_GetHost2IoTDevice('<HostName>')

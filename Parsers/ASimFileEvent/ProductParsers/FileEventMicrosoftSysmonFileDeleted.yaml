@@ -1,0 +1,103 @@
+Parser:
+  Title: Sysmon Events 23 and 26 - File Deleted
+  Version: '0.3'
+  LastUpdated: Sep 19, 2021
+Product:
+  Name: Windows Sysmon
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Schema
+  Link: https://aka.ms/AzSentinelFileEventDoc 
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: ASIM Sysmon File Deletion Event Parser (event number 23) from "Event" and "WindowsEvent" tables.
+ParserName: vimFileEventMicrosoftSysmonDeleted
+ParserQuery: |
+      let Sysmon23_26_Event=(){
+          Event
+            | where Source == "Microsoft-Windows-Sysmon"
+            | where EventID in (23,26)
+            | parse EventData with 
+            '<DataItem type="System.XmlData" time="'Time:datetime
+                    '" sourceHealthServiceId="'sourceHealthServiceId
+                    '"><EventData xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><Data Name="RuleName">'RuleName:string
+                    '</Data><Data Name="UtcTime">'UtcTime:datetime
+                    '</Data><Data Name="ProcessGuid">{'ProcessGuid:string
+                    '}</Data><Data Name="ProcessId">'ProcessId:string
+                    '</Data><Data Name="User">'User:string
+                    '</Data><Data Name="Image">'Image:string
+                    '</Data><Data Name="TargetFilename">'TargetFilename:string
+                    '</Data><Data Name="Hashes">SHA1='SHA1:string',MD5='MD5:string',SHA256='SHA256:string',IMPHASH='IMPHASH:string
+                    '</Data><Data Name="IsExecutable">'isExecutable:string
+                    '</Data>' DataSuffix
+            | parse DataSuffix with '<Data Name="Archived">'Archived'</Data></EventData></DataItem>'
+            | extend
+                EventType='FileDeleted'
+                , EventProduct='Sysmon'
+                , EventSchemaVersion = "0.1.0"
+                , EventResult='Success'
+                , EventCount=int(1)
+                , EventStartTime = TimeGenerated
+                , EventEndTime = TimeGenerated
+                , DvcOs='Windows'
+                , ActorUsernameType = 'Windows'
+                , TargetFileName_wo_Path=tostring(split(TargetFilename,'\\')[-1])
+                | project-rename
+                    DvcHostname = Computer
+                    , ActorUsername = User
+                    , ActingProcessName = Image
+                    , ActingProcessId = ProcessId
+                    , ActingProcessGuid = ProcessGuid
+                    , EventOriginalId=EventID
+                    , TargetFileMD5=MD5
+                    , TargetFileSHA1=SHA1
+                    , TargetFileSHA256=SHA256
+                    , TargetFileIMPHASH=IMPHASH
+                    , TargetFilePath=TargetFilename
+                    ,TargetFileName=TargetFileName_wo_Path
+                | extend
+                    User = ActorUsername
+                    , Process = ActingProcessName
+                    , Dvc = DvcHostname
+                    , FilePath = TargetFilePath
+                | project-away EventData, RenderedDescription, ParameterXml
+                    };
+      // this is the parser for sysmon from WindowsEvent table
+      let Sysmon23_26_WindowsEvent=(){
+          WindowsEvent
+              | where Provider == "Microsoft-Windows-Sysmon"
+              | where EventID in (23,26)
+              | extend hash = split(EventData.Hashes,'=')
+              | extend hash_algorithm = tostring(hash[0]),
+                      hash_value = tostring(hash[1])
+              | extend TargetFileMD5 = iff(hash_algorithm == "MD5", hash_value, ""),
+                      TargetFileSHA1 =  iff(hash_algorithm == "SHA1", hash_value, ""),
+                      TargetFileSHA256 = iff(hash_algorithm == "SHA256", hash_value, ""),
+                      TargetFileIMPHASH = iff(hash_algorithm == "IMPHASH", hash_value, "")
+              | extend
+                      EventType='FileDeleted',
+                      EventProduct='Sysmon',
+                      EventMessage=tostring(EventData.RenderedDescription),
+                      EventSchemaVersion = "0.1.0",
+                      EventResult='Success',
+                      EventCount=int(1),
+                      EventStartTime = TimeGenerated,
+                      EventEndTime = TimeGenerated,
+                      EventOriginalType=tostring(EventID),
+                      DvcOs='Windows',
+                      ActorUsernameType = 'Windows',
+                      TargetFileName_wo_Path=tostring(split(tostring(EventData.TargetFilename),'\\')[-1]),
+                      TargetFilePath=tostring(EventData.TargetFilename),
+                      DvcHostname = Computer,
+                      ActorUsername = tostring(EventData.User),
+                      ActingProcessName = tostring(EventData.Image),
+                      ActingProcessId = tostring(EventData.ProcessId),
+                      ActingProcessGuid = tostring(EventData.ProcessGuid)
+              | project-rename
+                          TargetFileName=TargetFileName_wo_Path
+              | project-away hash, hash_algorithm, hash_value, EventData
+      };
+      union isfuzzy=true Sysmon23_26_Event,
+                        Sysmon23_26_WindowsEvent

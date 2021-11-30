@@ -1,5 +1,5 @@
 id: 2441bce9-02e4-407b-8cc7-7d597f38b8b0
-name: (Preview) TI map IP entity to AzureActivity
+name: TI map IP entity to AzureActivity
 description: |
   'Identifies a match in AzureActivity from any IP IOC from TI'
 severity: Medium
@@ -25,6 +25,7 @@ query: |
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
@@ -33,15 +34,17 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
       AzureActivity | where TimeGenerated >= ago(dt_lookBack)
       // renaming time column so it is clear the log this came from
       | extend AzureActivity_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.CallerIpAddress
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, AzureActivity_TimeGenerated,
-  TI_ipEntity, CallerIpAddress, Caller, OperationName, ActivityStatus, Category, ResourceId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | where AzureActivity_TimeGenerated < ExpirationDateTime
+  | summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by IndicatorId, CallerIpAddress
+  | project AzureActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CallerIpAddress, 
+  Caller, OperationNameValue, ActivityStatusValue, CategoryValue, ResourceId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = AzureActivity_TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller, URLCustomEntity = Url
 entityMappings:
   - entityType: Account
@@ -56,3 +59,9 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.2.1
+kind: Scheduled

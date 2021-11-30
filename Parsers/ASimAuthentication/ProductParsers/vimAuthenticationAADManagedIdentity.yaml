@@ -1,0 +1,93 @@
+Parser:
+  Title: Azure active directory managed identity authentication
+  Version: '0.1.0'
+  LastUpdated: June 17, 2021
+Product:
+  Name: Azure active directory managed identity signin logs
+Normalization:
+  Schema: Authentication
+  Version: 0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+  This Query Parser maps Azure Active Directory Managed Identity sign in logs (AADManagedIdentitySignInLogs) to the Advanced SIEM Information Model authenticaion schema.
+ParserName: vimAuthenticationAADManagedIdentitySignInLogs
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AADMIAuthentication=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
+    AADManagedIdentitySignInLogs | where not(disabled)
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime) 
+      and (isnull(endtime)     or TimeGenerated <= starttime)
+      and (targetusername_has=='*' or (ServicePrincipalName has targetusername_has))
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
+    | extend
+        EventVendor = 'Microsoft'
+        , EventProduct = 'AAD Managed Identity'
+        , EventCount=int(1)
+        , EventSchemaVersion='0.1.0'
+        , EventResult = iff (ResultType ==0, 'Success', 'Failure')
+        //, EventOriginalResultDetails = ResultType
+        , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
+        , EventStartTime = TimeGenerated
+        , EventEndTime= TimeGenerated
+        , EventType= 'Logon'
+        , Location = todynamic(LocationDetails)
+        , TargetAppId = ResourceIdentity 
+        , TargetAppName=ResourceDisplayName
+        , TargetUserType='ServicePrincipal'
+        , TargetUsername=ServicePrincipalName
+        , TargetUserId=ServicePrincipalId
+        , TargetUsernameType='Simple'
+        , TargetUserIdType='AADID'
+    | extend
+        SrcGeoCity=tostring(Location.city)
+        , SrcGeoCountry=tostring(Location.countryOrRegion)
+        , SrcGeoLatitude=toreal(Location.geoCoordinates.latitude)
+        , SrcGeoLongitude=toreal(Location.geoCoordinates.longitude)
+    | project-rename
+        EventOriginalUid = Id
+        , TargetSessionId = CorrelationId
+        , SrcDvcIpAddr = IPAddress
+    | project-reorder
+        TimeGenerated
+        ,EventProduct
+        , EventOriginalUid
+        , EventResult
+        //, EventOriginalResultDetails 
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , TargetSessionId
+        , SrcGeoCountry
+        , SrcGeoCity
+        , TargetAppName
+        , TargetAppId
+        | lookup AADSTSErrorCodes on ResultType
+        // ** Aliases
+        | extend 
+          User=TargetUsername
+        , LogonTarget=ResourceIdentity
+        , Dvc=EventVendor
+        };
+  AADMIAuthentication(starttime, endtime, targetusername_has, disabled)

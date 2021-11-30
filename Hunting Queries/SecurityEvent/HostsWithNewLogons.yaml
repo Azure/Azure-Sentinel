@@ -1,8 +1,8 @@
 id: 62e2df59-1535-4c8e-ac6c-c91faeed0179
 name: Hosts with new logons
 description: |
-  'Shows new accounts that have logged onto a host for the first time - this may clearly be benign activity but an account 
-  logging onto multiple hosts for the first time can also be used to look for evidence of that account being used to move 
+  'Shows new accounts that have logged onto a host for the first time - this may clearly be benign activity but an account
+  logging onto multiple hosts for the first time can also be used to look for evidence of that account being used to move
   laterally across a network.'
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -15,28 +15,30 @@ relevantTechniques:
   - T1110
 query: |
 
-  let starttime = 7d;
-  let endtime = 1d;
-  let LogonEvents=() { 
-  let logonSuccess=SecurityEvent 
-  | where EventID==4624 
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  let LogonEvents=() {
+  let logonSuccess=SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4624
   | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='Logon';
-  let logonFail=SecurityEvent 
-  | where EventID==4625 
+  let logonFail=SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4625
   | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='LogonFailure';
-  logonFail 
+  logonFail
   | union logonSuccess
   };
-  LogonEvents 
-  | where TimeGenerated > ago(endtime) 
-  | where ActionType == 'Logon' 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by ComputerName, AccountName 
-  | join kind=leftanti ( 
-  LogonEvents 
-  | where TimeGenerated between(ago(starttime)..ago(endtime)) 
-  | where ActionType == 'Logon' 
-  | summarize count() by ComputerName, AccountName 
-  ) on ComputerName, AccountName 
+  LogonEvents
+  | where TimeGenerated between(ago(lookback)..starttime)
+  | where ActionType == 'Logon'
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by ComputerName, AccountName
+  | join kind=leftanti (
+  LogonEvents
+  | where TimeGenerated between(starttime..endtime)
+  | where ActionType == 'Logon'
+  | summarize count() by ComputerName, AccountName
+  ) on ComputerName, AccountName
   | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), HostCount=dcount(ComputerName), HostSet=makeset(ComputerName, 10)  by AccountName, ComputerName
   | extend timestamp = StartTimeUtc, AccountCustomEntity = AccountName
- 

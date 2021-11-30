@@ -1,5 +1,5 @@
 id: 69b7723c-2889-469f-8b55-a2d355ed9c87
-name: (Preview) TI map IP entity to DnsEvents
+name: TI map IP entity to DnsEvents
 description: |
   'Identifies a match in DnsEvents from any IP IOC from TI'
 severity: Medium
@@ -25,6 +25,7 @@ query: |
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
@@ -33,7 +34,8 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
       DnsEvents | where TimeGenerated >= ago(dt_lookBack)
       | where SubType =~ "LookupQuery" and isnotempty(IPAddresses)
       | extend SingleIP = split(IPAddresses, ",")
@@ -43,8 +45,9 @@ query: |
       | extend DNS_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.SingleIP
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, DNS_TimeGenerated,
+  | where DNS_TimeGenerated < ExpirationDateTime
+  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated , *) by IndicatorId, SingleIP
+  | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,
   TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = DNS_TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer, URLCustomEntity = Url
 entityMappings:
@@ -60,3 +63,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.2
+kind: Scheduled

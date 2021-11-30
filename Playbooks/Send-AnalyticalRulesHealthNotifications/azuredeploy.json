@@ -1,0 +1,715 @@
+{
+	"metadata": {
+		"prerequisites": "",
+		"lastUpdateTime": "9/29/2021",
+		"title": "Send-AnalyticalRulesHealthNotifications",
+		"prerequisitesDeployTemplateFile": "",
+		"support": {
+			"tier": "community"
+		},
+		"tags": [],
+		"author": {
+			"name": "Sreedhar Ande"
+		},
+		"description": "Send notifications on Azure Sentinel Analytical Rules - auto-disabled rules",
+		"entities": []
+	},
+	"contentVersion": "1.0.0.0",
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"resources": [
+		{
+			"properties": {
+				"provisioningState": "Succeeded",
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						},
+						"ChannelId": {
+							"defaultValue": "[parameters('ChannelId')]",
+							"type": "String"
+						},
+						"CurrentSubscriptionId": {
+							"defaultValue": "[subscription().subscriptionId]",
+							"type": "String"
+						},
+						"MailingList": {
+							"defaultValue": "[parameters('MailingList')]",
+							"type": "String"
+						},
+						"ResourceGroupName": {
+							"defaultValue": "[parameters('AzureSentinelResourceGroupName')]",
+							"type": "String"
+						},
+						"TeamsId": {
+							"defaultValue": "[parameters('TeamsId')]",
+							"type": "String"
+						},
+						"WorkspaceName": {
+							"defaultValue": "[parameters('AzureSentinelWorkspaceName')]",
+							"type": "String"
+						}
+					},
+					"triggers": {
+						"Recurrence": {
+							"recurrence": {
+								"frequency": "Minute",
+								"interval": 30
+							},
+							"evaluatedRecurrence": {
+								"frequency": "Minute",
+								"interval": 30
+							},
+							"type": "Recurrence"
+						}
+					},
+					"actions": {
+						"Analytical_Rules": {
+							"runAfter": {},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "AutoDisabledAnalyticalRules",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Channel_Id": {
+							"runAfter": {
+								"Teams_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ChannelId",
+										"type": "string",
+										"value": "@parameters('ChannelId')"
+									}
+								]
+							}
+						},
+						"Condition_2": {
+							"actions": {
+								"Create_HTML_table": {
+									"runAfter": {},
+									"type": "Table",
+									"inputs": {
+										"columns": [
+											{
+												"header": "Rule Name",
+												"value": "@item()?['Rule Name']"
+											},
+											{
+												"header": "Reason",
+												"value": "@item()?['Reason']"
+											},
+											{
+												"header": "KQL Query",
+												"value": "@item()?['KQL Query']"
+											},
+											{
+												"header": "Severity",
+												"value": "@item()?['Severity']"
+											}
+										],
+										"format": "HTML",
+										"from": "@variables('AutoDisabledAnalyticalRules')"
+									}
+								},
+								"Post_message_in_a_chat_or_channel": {
+									"runAfter": {
+										"Send_an_email_(V2)": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"messageBody": "<p>!!! ATTENTION NEEDED !!!<br>\nFollowing Sentinel Analytical Rules from @{variables('LogAnalyticsWorkspaceName')} has been Auto Disabled.<br>\n<br>\n@{body('Create_HTML_table')}</p>",
+											"recipient": {
+												"channelId": "@variables('ChannelId')",
+												"groupId": "@variables('TeamsId')"
+											}
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['teams']['connectionId']"
+											}
+										},
+										"method": "post",
+										"path": "/beta/teams/conversation/message/poster/@{encodeURIComponent('Flow bot')}/location/@{encodeURIComponent('Channel')}"
+									}
+								},
+								"Send_an_email_(V2)": {
+									"runAfter": {
+										"Create_HTML_table": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"Body": "<p><span style=\"font-family: Segoe UI\">!!! ATTENTION NEEDED !!!<br>\nFollowing Sentinel Analytical Rules from </span><span style=\"font-family: Segoe UI\">@{variables('LogAnalyticsWorkspaceName')}</span><span style=\"font-family: Segoe UI\"> has been Auto Disabled.<br>\n<br>\n</span><span style=\"font-family: Segoe UI\">@{body('Create_HTML_table')}</span><span style=\"font-family: Segoe UI\"></span></p>",
+											"Importance": "High",
+											"Subject": "!!!IMPORTANT!!! Analytical Rule disabled",
+											"To": "@{variables('MailingList')}"
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['office365']['connectionId']"
+											}
+										},
+										"method": "post",
+										"path": "/v2/Mail"
+									}
+								}
+							},
+							"runAfter": {
+								"For_each": [
+									"Succeeded"
+								]
+							},
+							"expression": {
+								"and": [
+									{
+										"greater": [
+											"@length(variables('AutoDisabledAnalyticalRules'))",
+											0
+										]
+									}
+								]
+							},
+							"type": "If"
+						},
+						"For_each": {
+							"foreach": "@body('Parse_JSON')?['value']",
+							"actions": {
+								"Condition": {
+									"actions": {
+										"Append_to_array_variable": {
+											"runAfter": {
+												"Compose": [
+													"Succeeded"
+												]
+											},
+											"type": "AppendToArrayVariable",
+											"inputs": {
+												"name": "AutoDisabledAnalyticalRules",
+												"value": "@outputs('Compose')"
+											}
+										},
+										"Compose": {
+											"runAfter": {},
+											"type": "Compose",
+											"inputs": {
+												"KQL Query": "@items('For_Each')?['properties']?['query']",
+												"Reason": "@items('For_Each')?['properties']?['description']",
+												"Rule Name": "@items('For_Each')?['properties']?['displayName']",
+												"Severity": "@items('For_Each')?['properties']?['severity']"
+											}
+										}
+									},
+									"runAfter": {},
+									"expression": {
+										"and": [
+											{
+												"startsWith": [
+													"@items('For_each')?['properties']?['displayName']",
+													"AUTO DISABLED"
+												]
+											},
+											{
+												"equals": [
+													"@items('For_Each')?['properties']?['enabled']",
+													false
+												]
+											}
+										]
+									},
+									"type": "If"
+								}
+							},
+							"runAfter": {
+								"Parse_JSON": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"HTTP": {
+							"runAfter": {
+								"Channel_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "Http",
+							"inputs": {
+								"authentication": {
+									"type": "ManagedServiceIdentity"
+								},
+								"method": "GET",
+								"uri": "https://management.azure.com/subscriptions/@{variables('SubscriptionId')}/resourceGroups/@{variables('LogAnalyticsResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('LogAnalyticsWorkspaceName')}/providers/Microsoft.SecurityInsights/alertRules?api-version=2020-01-01"
+							}
+						},
+						"Log_Analytics_Resource_group_Name": {
+							"runAfter": {
+								"SubscriptionId": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "LogAnalyticsResourceGroup",
+										"type": "string",
+										"value": "@parameters('ResourceGroupName')"
+									}
+								]
+							}
+						},
+						"Log_Analytics_Workspace_Name": {
+							"runAfter": {
+								"Log_Analytics_Resource_group_Name": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "LogAnalyticsWorkspaceName",
+										"type": "string",
+										"value": "@parameters('WorkspaceName')"
+									}
+								]
+							}
+						},
+						"Mailing_List": {
+							"runAfter": {
+								"Log_Analytics_Workspace_Name": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "MailingList",
+										"type": "string",
+										"value": "@parameters('MailingList')"
+									}
+								]
+							}
+						},
+				        "Teams_Id": {
+							"runAfter": {
+								"Mailing_List": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "TeamsId",
+										"type": "string",
+										"value": "@parameters('TeamsId')"
+									}
+								]
+							}
+						},
+						"Channel_Id": {
+							"runAfter": {
+								"Teams_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ChannelId",
+										"type": "string",
+										"value": "@parameters('ChannelId')"
+									}
+								]
+							}
+						},
+						"Parse_JSON": {
+							"runAfter": {
+								"HTTP": [
+									"Succeeded"
+								]
+							},
+							"type": "ParseJson",
+							"inputs": {
+								"content": "@body('HTTP')",
+								"schema": {
+									"properties": {
+										"body": {
+											"properties": {
+												"value": {
+													"items": {
+														"properties": {
+															"etag": {
+																"type": "string"
+															},
+															"id": {
+																"type": "string"
+															},
+															"kind": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															},
+															"properties": {
+																"properties": {
+																	"alertRuleTemplateName": {},
+																	"description": {
+																		"type": "string"
+																	},
+																	"displayName": {
+																		"type": "string"
+																	},
+																	"enabled": {
+																		"type": "boolean"
+																	},
+																	"eventGroupingSettings": {
+																		"properties": {
+																			"aggregationKind": {
+																				"type": "string"
+																			}
+																		},
+																		"type": "object"
+																	},
+																	"incidentConfiguration": {
+																		"properties": {
+																			"createIncident": {
+																				"type": "boolean"
+																			},
+																			"groupingConfiguration": {
+																				"properties": {
+																					"enabled": {
+																						"type": "boolean"
+																					},
+																					"entitiesMatchingMethod": {
+																						"type": "string"
+																					},
+																					"groupByEntities": {
+																						"type": "array"
+																					},
+																					"lookbackDuration": {
+																						"type": "string"
+																					},
+																					"reopenClosedIncident": {
+																						"type": "boolean"
+																					}
+																				},
+																				"type": "object"
+																			}
+																		},
+																		"type": "object"
+																	},
+																	"lastModifiedUtc": {
+																		"type": "string"
+																	},
+																	"query": {
+																		"type": "string"
+																	},
+																	"queryFrequency": {
+																		"type": "string"
+																	},
+																	"queryPeriod": {
+																		"type": "string"
+																	},
+																	"severity": {
+																		"type": "string"
+																	},
+																	"suppressionDuration": {
+																		"type": "string"
+																	},
+																	"suppressionEnabled": {
+																		"type": "boolean"
+																	},
+																	"tactics": {
+																		"items": {
+																			"type": "string"
+																		},
+																		"type": "array"
+																	},
+																	"triggerOperator": {
+																		"type": "string"
+																	},
+																	"triggerThreshold": {
+																		"type": "integer"
+																	}
+																},
+																"type": "object"
+															},
+															"type": {
+																"type": "string"
+															}
+														},
+														"required": [
+															"id",
+															"name",
+															"etag",
+															"type",
+															"kind",
+															"properties"
+														],
+														"type": "object"
+													},
+													"type": "array"
+												}
+											},
+											"type": "object"
+										},
+										"headers": {
+											"properties": {
+												"Cache-Control": {
+													"type": "string"
+												},
+												"Content-Length": {
+													"type": "string"
+												},
+												"Content-Type": {
+													"type": "string"
+												},
+												"Date": {
+													"type": "string"
+												},
+												"Expires": {
+													"type": "string"
+												},
+												"Pragma": {
+													"type": "string"
+												},
+												"Server": {
+													"type": "string"
+												},
+												"Strict-Transport-Security": {
+													"type": "string"
+												},
+												"Transfer-Encoding": {
+													"type": "string"
+												},
+												"Vary": {
+													"type": "string"
+												},
+												"X-Content-Type-Options": {
+													"type": "string"
+												},
+												"x-ms-correlation-request-id": {
+													"type": "string"
+												},
+												"x-ms-ratelimit-remaining-subscription-reads": {
+													"type": "string"
+												},
+												"x-ms-request-id": {
+													"type": "string"
+												},
+												"x-ms-routing-request-id": {
+													"type": "string"
+												}
+											},
+											"type": "object"
+										},
+										"statusCode": {
+											"type": "integer"
+										}
+									},
+									"type": "object"
+								}
+							}
+						},
+						"SubscriptionId": {
+							"runAfter": {
+								"Analytical_Rules": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "SubscriptionId",
+										"type": "string",
+										"value": "@parameters('CurrentSubscriptionId')"
+									}
+								]
+							}
+						},
+						"Teams_Id": {
+							"runAfter": {
+								"Mailing_List": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "TeamsId",
+										"type": "string",
+										"value": "@parameters('TeamsId')"
+									}
+								]
+							}
+						},
+						"Channel_Id": {
+							"runAfter": {
+								"Teams_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ChannelId",
+										"type": "string",
+										"value": "@parameters('ChannelId')"
+									}
+								]
+							}
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"office365": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]",
+								"connectionName": "[variables('office365ConnectionName')]"
+							},
+							"teams": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]",
+								"connectionName": "[variables('teamsConnectionName')]"
+							}
+						}
+					},
+					"ChannelId": {
+						"value": "[parameters('ChannelId')]"
+					},
+					"CurrentSubscriptionId": {
+						"value": "[subscription().subscriptionId]"
+					},
+					"MailingList": {
+						"value": "[parameters('MailingList')]"
+					},
+					"ResourceGroupName": {
+						"value": "[parameters('AzureSentinelResourceGroupName')]"
+					},
+					"TeamsId": {
+						"value": "[parameters('TeamsId')]"
+					},
+					"WorkspaceName": {
+						"value": "[parameters('AzureSentinelWorkspaceName')]"
+					}
+				}
+			},
+			"name": "[parameters('PlaybookName')]",
+			"type": "Microsoft.Logic/workflows",
+			"location": "[resourceGroup().location]",
+			"tags": {
+				"createddate": "",
+				"owner": "",
+				"hidden-SentinelTemplateName": "Send-AnalyticalRulesHealthNotifications",
+				"hidden-SentinelTemplateVersion": "1.0"
+			},
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"apiVersion": "2017-07-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]"
+			]
+		},
+		{
+			"apiVersion": "2016-06-01",
+			"name": "[variables('office365ConnectionName')]",
+			"properties": {
+				"customParameterValues": {},
+				"displayName": "[variables('office365ConnectionName')]",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+				}
+			},
+			"location": "[resourceGroup().location]",
+			"type": "Microsoft.Web/connections",
+			"kind": "V1"
+		},
+		{
+			"apiVersion": "2016-06-01",
+			"name": "[variables('teamsConnectionName')]",
+			"properties": {
+				"customParameterValues": {},
+				"displayName": "[variables('teamsConnectionName')]",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+				}
+			},
+			"location": "[resourceGroup().location]",
+			"type": "Microsoft.Web/connections",
+			"kind": "V1"
+		}
+	],
+	"variables": {
+		"teamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]",
+		"office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+	},
+	"parameters": {
+		"PlaybookName": {
+			"defaultValue": "Send-AnalyticalRulesHealthNotifications",
+			"type": "string"
+		},
+		"AzureSentinelWorkspaceName": {
+			"type": "string",
+			"metadata": {
+				"description": "Specifies the Azure Sentinel Workspace Name."
+			}
+		},
+		"AzureSentinelResourceGroupName": {
+			"type": "string",
+			"metadata": {
+				"description": "Specifies the Azure Sentinel Resource group Name."
+			}
+		},
+		"MailingList": {
+			"type": "string",
+			"metadata": {
+				"description": "Specifies E-mail id - separated by semi-colon"
+			}
+		},
+		"TeamsId": {
+			"type": "string",
+			"defaultValue": "TeamsId",
+			"metadata": {
+				"description": "Specifies TeamsId"
+			}
+		},
+		"ChannelId": {
+			"type": "string",
+			"defaultValue": "ChannelId",
+			"metadata": {
+				"description": "Specifies ChannelId"
+			}
+		}
+	}
+}
