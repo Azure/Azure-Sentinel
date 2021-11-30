@@ -30,11 +30,12 @@ In this document, you learned how to connect <<Partner Appliance Name>> to Micro
 - Get started [detecting threats with Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/detect-threats-built-in).
 - [Use workbooks](https://docs.microsoft.com/azure/sentinel/monitor-your-data) to monitor your data.
 
-### Create a solution (Preview)
+<### Install as a solution (Preview)
 
-You can also publish your data connector as a Microsoft Sentinel solution. 
-
-Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more. 
-
-For more information, see the [Microsoft Sentinel solution overview](https://docs.microsoft.com/azure/sentinel/sentinel-solutions) and our [Guide to Building Microsoft Sentinel Solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#readme).
+Include this section if you are planning on publishing your data connector as a Microsoft Sentinel solution. Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more. 
+         
+- When relevant, add instructions for installing your solution, either from the Azure Marketplace, or from the Microsoft Sentinel content hub. 
+- If your solution is being published to the content hub, also open a PR to have it listed in our [content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog). On the docs page, click Edit to open your PR.
+         
+For more information, see the [Microsoft Sentinel solution overview](https://docs.microsoft.com/azure/sentinel/sentinel-solutions) and our [Guide to Building Microsoft Sentinel Solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#readme).>
 
