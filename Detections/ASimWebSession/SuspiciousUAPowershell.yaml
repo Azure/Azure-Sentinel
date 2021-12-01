@@ -17,9 +17,15 @@ tactics:
   - CommandandControl
   - DefenseEvasion
 query: |
-  let querytimeframe = 15m;
-  imWebSession(starttime=querytimeframe, httpuseragent_has_any="WindowsPowerShell")
-  | project SrcIpAddr, DstIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername
+    let threatCategory="Powershell";
+    let knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)
+        [ @"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv"] 
+            with(format="csv", ignoreFirstRecord=True));
+    let knownUserAgents=toscalar(knownUserAgentsIndicators | where Category==threatCategory | where isnotempty(UserAgent) | summarize make_list(UserAgent));
+    let customUserAgents=toscalar(_GetWatchlist("UnwantedUserAgent") | where SearchKey==threatCategory | extend UserAgent=column_ifexists("UserAgent","") | where isnotempty(UserAgent) | summarize make_list(UserAgent)));
+    let fullUAList = array_concat(knownUserAgents,customUserAgents);
+    imWebSession(httpuseragent_has_any=fullUAList)
+    | project SrcIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername
 
 entityMappings:
   - entityType: URL
