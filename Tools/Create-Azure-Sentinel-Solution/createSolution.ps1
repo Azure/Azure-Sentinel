@@ -143,8 +143,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                         }
                         try {
-                            # Handle non-ASCII characters (Emoji's)
-                            $data = $rawData -replace "[^ -~\t]", ""
+                            $data = $rawData
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
