@@ -97,7 +97,7 @@ function Netskope () {
     $sharedKey = $env:workspacekey
     $apikey = $env:apikey
     $uri = $env:uri
-    $tableName = "Netskope"
+    $tableName = "NetskopeTest"
     $timeInterval = [int]($env:timeInterval) * 60
     $pageLimit = 5000
     $skip = 0
@@ -129,21 +129,33 @@ function Netskope () {
         Do {
             $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
             $netskopeevents = $response.data
-			Write-Host "Netskope event data:" $netskopeevents
 			if($null -ne $netskopeevents)
             {
-                foreach($event in $netskopeevents)
-                {
-                    if($null -ne $event.dlp_incident_id)
-                    {
-                        $event.dlp_incident_id = [string]$event.dlp_incident_id
-                    }
-                    if($null -ne $event.dlp_parent_id)
-                    {
-                        $event.dlp_parent_id = [string]$event.dlp_parent_id
-                    }
+				$netskopeevents | ForEach-Object{
+					if($_.dlp_incident_id -ne $NULL){
+							   $_.dlp_incident_id = [string]$_.dlp_incident_id
+					}
+					if($_.dlp_parent_id -ne $NULL){
+							   $_.dlp_parent_id = [string]$_.dlp_parent_id
+					}
+					if($_.connection_id -ne $NULL){
+							   $_.connection_id = [string]$_.connection_id
+					}
+					if($_.app_session_id -ne $NULL){
+							   $_.app_session_id = [string]$_.app_session_id
+					}
+					if($_.transaction_id -ne $NULL){
+							   $_.transaction_id = [string]$_.transaction_id
+					}
+					if($_.browser_session_id -ne $NULL){
+							   $_.browser_session_id = [string]$_.browser_session_id
+					}
+					if($_.request_id -ne $NULL){
+							   $_.request_id = [string]$_.request_id
+					}
                 }
             }
+			
             $dataLength = $response.data.Length
             $alleventobjs += $netskopeevents
     
