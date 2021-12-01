@@ -24,12 +24,11 @@ query: |
   let end = now() - detectionWindow;
   // Minimum numbers of backups, remove instances where a test backup is made once or twice
   let backupEventThreshold = 10;
-  // Collect recovery services data
   let rawData = 
   AzureActivity
   | where TimeGenerated > ago(timeRange)
   | where ResourceProviderValue =~ "MICROSOFT.RECOVERYSERVICES"
-  // Extract the resource name (VM name)
+  // Extract the resource name (in this case the VM name)
   | extend Resource = tostring(Properties_d.["entity Name"])
   | project TimeGenerated, Resource, Claims_d, OperationNameValue, ResourceGroup, Caller
   | where isnotempty(Resource);
@@ -50,7 +49,7 @@ query: |
   // Enforce threshold
   | where dcount_TimeGenerated >= backupEventThreshold
   | extend LastSeenBackup = todatetime(list_TimeGenerated[0])
-  // When it's an Azure Hosted VM we can determine if the VM resource was deleted altogether
+  // Determine if the VM resource was deleted
   | join kind = leftouter(
       AzureActivity
       | where TimeGenerated > ago(timeRange)
@@ -62,4 +61,4 @@ query: |
   ) on Resource
   | project Resource, ResourceId, LastSeenBackup, DeletedDate=min_TimeGenerated, ResourceDeleted=tobool(max_Deleted), CorrelationId, PreviousBackups=list_TimeGenerated, TotalBackups=dcount_TimeGenerated
   // Optionally filter on retention periods that were reduced but the resource was not deleted
-  | where ResourceDeleted == False
+  //| where ResourceDeleted == False
