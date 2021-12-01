@@ -24,9 +24,6 @@ AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
 # AUDITLOGACCESS = os.environ['AuditLogAccess'] if 'AuditLogAccess' in os.environ else True
 AUDITLOGACCESS = os.environ.get('AuditLogAccess',True)
 
-logging.info('AUDITLOGACCESS variable value is {}, whereas environ variable returned {}.'.format(AUDITLOGACCESS, os.environ.get('AuditLogAccess')))
-
-
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
 MAX_PERIOD_MINUTES = 60 * 24 * 7
 
