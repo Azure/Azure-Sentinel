@@ -1,0 +1,27 @@
+id: 5276aa01-75bd-48c1-a14c-af827841d7dd
+name: Azure Backup Possible Retention Tampering
+description: |
+  'This hunting query will detect anomalies where a backup policy modification has taken place that reduces backup reliability.
+  The query considers three possible reductions: A reduction in the frequency of days for backups (e.g. backup 5 days a week 
+  to only 1 day a week), a reduction in the retention period for a backup (e.g. retain for 30 days reduced to 60 days)
+  or a reduction in the frequency of backups per-day (e.g. backup twice a day reduced to once). A policy modification 
+  resulting in a reduction of any of these parameters may indicate malicious tampering with the intended to erode backup integrity.'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1490
+query: |
+  AddonAzureBackupPolicy
+  | where OperationName =~ "Policy"
+  | project TimeGenerated, PolicyUniqueId, PolicyName, BackupFrequency, MonthlyRetentionDuration, BackupDaysOfTheWeek, BackupTimes, VaultUniqueId
+  | extend Days = split(BackupDaysOfTheWeek, ","), Times = split(BackupTimes, ",")
+  | extend Days = array_length(Days), Times = array_length(Times)
+  | order by PolicyUniqueId, TimeGenerated asc
+  | extend nxtPolicy = next(PolicyUniqueId), nxtDays = next(Days), nxtTimes = next(Times), nxtMonthlyRetentionDuration = next(MonthlyRetentionDuration), nxtTimeGenerated=next(TimeGenerated)
+  | where PolicyUniqueId == nxtPolicy and (nxtDays < Days or nxtTimes < Times or nxtMonthlyRetentionDuration < MonthlyRetentionDuration)
+  | project PolicyUniqueId, PolicyName, TimeGenerated, AnomalyTimeGenerated = nxtTimeGenerated, DayChange = iff(nxtDays < Days, strcat(Days, " > ", nxtDays), "No Change"), TimeChange = iff(nxtTimes < Times, strcat(Times, " > ", nxtTimes), "No Change"), MonthlyRetentionDurationChange = iff(nxtMonthlyRetentionDuration < MonthlyRetentionDuration, strcat(MonthlyRetentionDuration, " > ", nxtMonthlyRetentionDuration), "No Change"),  DayAnomalyFlag = iff(nxtDays < Days, 1, 0),  TimeAnomalyFlag = iff(nxtTimes < Times, 1, 0), MonthlyRetentionDurationAnomalyFlag = iff(nxtMonthlyRetentionDuration < MonthlyRetentionDuration, 1, 0)

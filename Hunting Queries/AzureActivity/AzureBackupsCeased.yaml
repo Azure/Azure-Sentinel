@@ -1,0 +1,65 @@
+id: 8a5f0ed0-9257-46c0-81a5-7a304afd1aea
+name: Azure Backups Ceased
+description: |
+  'This query can be used during threat hunts to identify potentially malicious tampering with backup policies used
+  by Microsoft Recovery Services Vaults/Azure Backup. The query specifically identifies instances where a backup has stopped
+  being performed on a resource that was previously being backed up. The query executes over a 30 days training window to identify
+  existing backups, it will then perform detection over the most recent 3 days. Additionally, in instances where the backed up resource
+  is a VM, the query will join with virtual machine deletion events to determine if backups ceased due to resource deletion.'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1490
+query: |
+  // Total time range for the query, includes detection and training data
+  let timeRange = 60d;
+  // Detection window, by default last 3 days
+  let detectionWindow = 3d;
+  // Used to exclude detection window from training window
+  let end = now() - detectionWindow;
+  // Minimum numbers of backups, remove instances where a test backup is made once or twice
+  let backupEventThreshold = 10;
+  // Collect recovery services data
+  let rawData = 
+  AzureActivity
+  | where TimeGenerated > ago(timeRange)
+  | where ResourceProviderValue =~ "MICROSOFT.RECOVERYSERVICES"
+  // Extract the resource name (VM name)
+  | extend Resource = tostring(Properties_d.["entity Name"])
+  | project TimeGenerated, Resource, Claims_d, OperationNameValue, ResourceGroup, Caller
+  | where isnotempty(Resource);
+  // Process backups events in the training window
+  rawData
+  | where TimeGenerated between (ago(timeRange) .. end)
+  | summarize by Resource=tolower(Resource), ResourceGroup=tolower(ResourceGroup), bin(TimeGenerated, 1d)
+  | order by TimeGenerated desc
+  | summarize make_list(TimeGenerated), dcount(TimeGenerated) by Resource, ResourceGroup
+  // Join on detection Window, keep results where VM was present in the training data but has now vanished
+  | join kind = leftanti (
+      rawData
+      | where TimeGenerated > ago(detectionWindow)
+      | summarize by Resource=tolower(Resource), ResourceGroup=tolower(ResourceGroup), bin(TimeGenerated, 1d)
+      | order by TimeGenerated desc
+      | summarize make_list(TimeGenerated), dcount(TimeGenerated) by Resource, ResourceGroup
+  ) on Resource
+  // Enforce threshold
+  | where dcount_TimeGenerated >= backupEventThreshold
+  | extend LastSeenBackup = todatetime(list_TimeGenerated[0])
+  // When it's an Azure Hosted VM we can determine if the VM resource was deleted altogether
+  | join kind = leftouter(
+      AzureActivity
+      | where TimeGenerated > ago(timeRange)
+      | where OperationNameValue =~ "Microsoft.Compute/virtualMachines/delete"
+      | extend ResourceId = tolower(tostring(iff(isempty(ResourceId), _ResourceId, ResourceId)))
+      | extend Deleted = iff(ActivityStatusValue has_any ('Success', 'Succeeded'), 1, 0)
+      | summarize max(Caller), max(CallerIpAddress), min(TimeGenerated), max(TimeGenerated), max(Deleted) by CorrelationId,ResourceId, tolower(ResourceGroup)
+      | extend Resource = tolower(tostring(split(ResourceId, "/")[-1]))
+  ) on Resource
+  | project Resource, ResourceId, LastSeenBackup, DeletedDate=min_TimeGenerated, ResourceDeleted=tobool(max_Deleted), CorrelationId, PreviousBackups=list_TimeGenerated, TotalBackups=dcount_TimeGenerated
+  // Optionally filter on retention periods that were reduced but the resource was not deleted
+  | where ResourceDeleted == False
