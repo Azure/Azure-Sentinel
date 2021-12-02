@@ -1,8 +1,8 @@
 id: bff058b2-500e-4ae5-bb49-a5b1423cbd5b
-name: External User added to Team and immediately uploads file
+name: Accessed files shared by temporary external user
 description: |
   'This detection identifies an external user is added to a Team or Teams chat
-  and within 1 minute of being added upload a file via the chat. This might be
+  and shares a files which is accessed by many users (>10) and the users is removed within short period of time. This might be
   an indicator of suspicious activity.'
 severity: Low
 requiredDataConnectors:
@@ -18,25 +18,39 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-
-  let threshold = 1m;
-   OfficeActivity
+ let fileAccessThrehold = 10;
+ OfficeActivity
   | where OfficeWorkload =~ "MicrosoftTeams"
-  | where Operation == "MemberAdded"
+  | where Operation =~ "MemberAdded"
   | extend UPN = tostring(parse_json(Members)[0].UPN)
   | where UPN contains ("#EXT#")
-  | extend TeamName = iff(isempty(TeamName), Members[0].UPN, TeamName)
-  | project TimeGenerated, UploaderID=UPN, TeamName
-  | join kind = inner (
-    OfficeActivity
-    | where RecordType == "SharePointFileOperation"
-    | where SourceRelativeUrl has "Microsoft Teams Chat Files"
-    | where Operation == "FileUploaded"
-    | project UploadTime=TimeGenerated, UploaderID=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName
-    ) on UploaderID
-  | where UploadTime > TimeGenerated and UploadTime < TimeGenerated+threshold
-  | project-away UploaderID1
-  | extend timestamp=TimeGenerated, AccountCustomEntity = UploaderID 
+  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName
+  | join kind = inner(
+                        OfficeActivity
+                        | where OfficeWorkload =~ "MicrosoftTeams"
+                        | where Operation =~ "MemberRemoved"
+                        | extend UPN = tostring(parse_json(Members)[0].UPN)
+                        | where UPN contains ("#EXT#")
+                        | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName
+                      ) on UPN
+  | where TimeDeleted > TimeAdded
+  | join kind=inner 
+                    (
+                    OfficeActivity
+                    | where RecordType == "SharePointFileOperation"
+                    | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+                    | where Operation == "FileUploaded"
+                    | join kind = inner 
+                                        (
+                                        OfficeActivity
+                                        | where RecordType == "SharePointFileOperation"
+                                        | where Operation  == "FileAccessed"
+                                        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+                                        | summarize FileAccessCount = count() by OfficeObjectId
+                                        | where FileAccessCount > fileAccessThrehold
+                                        ) on $left.OfficeObjectId == $right.OfficeObjectId
+                    )on $left.UPN == $right.UserId
+  | extend timestamp=TimeGenerated, AccountCustomEntity = UserWhoAdded 
 entityMappings:
   - entityType: Account
     fieldMappings:
