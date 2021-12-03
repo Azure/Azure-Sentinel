@@ -233,46 +233,6 @@ function CarbonBlackAPI()
 
     GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
 
-    # IF ($Null -ne $s3BucketName) {
-    #     Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
-
-    #     while ($startTime -le $now) {
-    #         $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
-    #         Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "/tmp"
-    #         Write-Host "Files under $keyPrefix are downloaded."
-    
-    #         if (Test-Path -Path "/tmp/$keyPrefix") {
-    #             Get-ChildItem -Path "/tmp" -Recurse -Include *.gz | 
-    #             Foreach-Object {
-    #                 $filename = $_.FullName
-    #                 $infile = $_.FullName				
-    #                 $outfile = $_.FullName -replace ($_.Extension, '')
-    #                 Expand-GZipFile $infile.Trim() $outfile.Trim()
-    #                 $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
-    #                 $filename = $filename -replace ($_.Extension, '')
-    #                 $filename = $filename.Trim()
-                
-    #                 $logEvents = Get-Content -Raw -LiteralPath ($filename) 
-    #                 $logevents = ConvertFrom-Json $LogEvents -AsHashTable
-    #                 EventsFieldsMapping -events $logEvents
-    #                 $EventLogsJSON = $logEvents | ConvertTo-Json -Depth 5
-    
-    #                 if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
-    #                 {
-    #                     $responseObj = (ConvertFrom-Json $EventLogsJSON)
-    #                     $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $EventLogTable;
-    #                     Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-    #                 }
-    
-    #                 $null = Remove-Variable -Name LogEvents
-    #             }
-    
-    #             Remove-Item -LiteralPath "/tmp/$keyPrefix" -Force -Recurse
-    #         }
-    
-    #         $startTime = $startTime.AddMinutes(1)
-    #     }
-    # }
 
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
     {   
