@@ -16,20 +16,16 @@ tactics:
   - Persistence
 query: |
 
+// List of allow-listed domains
 let allowedDomain = pack_array("mydomain.com");
-Syslog
-// Using syslog Facility and ProcessName for pre-filtering could help performances. 
-// Example: using a specific facility for GitLab and a process name for Syslog ingestion.
-// | where Facility == 'local7'
-// | where ProcessName contains 'GitLab-Application-Logs'
-| where SyslogMessage contains "\"add\":\"user\""
-| extend parsedMessage = parse_json(SyslogMessage)
-| project Author = parsedMessage.author_name, AuthorIPAddress = parsedMessage.ip_address, UserAdded = tostring(parsedMessage.entity_path), SyslogMessage
-| join (Syslog 
-| where SyslogMessage contains "User" and SyslogMessage contains " was created" 
-| parse kind=regex SyslogMessage with EventTime ": User \"" Username "\"" EmailAddress " was created"
+GitLabAudit
+| where AddAction == "user"
+| project AuthorName, IPAddress, UserAdded = Entity_path
+| join (GitLabApp 
+| where Message contains "User" and Message contains " was created" 
+| parse kind=regex Message with EventTime ": User \"" Username "\"" EmailAddress " was created"
 | project UserAdded = tostring(Username), EmailAddress = substring(EmailAddress,2,strlen(EmailAddress)-3)) on UserAdded
-| project  Author, AuthorIPAddress, UserAdded, EmailAddress, SyslogMessage, DomainName = tostring(extract("@(.*)$", 1, EmailAddress))
+| project  AuthorName, IPAddress, UserAdded, EmailAddress, DomainName = tostring(extract("@(.*)$", 1, EmailAddress))
 | where allowedDomain !contains DomainName
 
 entityMappings:
