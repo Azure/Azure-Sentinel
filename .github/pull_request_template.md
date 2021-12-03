@@ -1,20 +1,27 @@
 Thank you for your contribution to the Microsoft Sentinel Github repo.
-Before submitting this PR please ensure that you have provided:
 
-# Description:  
-   Details of the code changes in your submitted PR. What is being added/changed and why. 
-   Providing descriptions for pull requests ensures, there is context to changes being made and greatly enhances the code review process.
+## Before submitting this PR please ensure that you have completed the following sections:
 
-#Testing
-  If possible, the code has been tested in a Microsoft Sentinel environment and see that it works.
+> The code should have been tested in a Microsoft Sentinel environment that does not have any custom parsers, functions or tables, so that you validate no incorrect syntax and execution functions properly.
 
+   - [ ] Testing Completed
 
-After the submission has been made, please look for:
+> Details of the code changes in your submitted PR.  Providing descriptions for pull requests ensures, there is context to changes being made and greatly enhances the code review process.  Providing associated Issues that this resolves also easily connects the reason.
+   
+   Change(s):
+   - Updated syntax for XYZ
 
-#Validation Checks
-   Checked that the validation checks are passing and addressed any issues that are present. Let us know if you have tried fixing and need help. 
-   Some details about this is here: https://github.com/Azure/Azure-Sentinel#pull-request-detection-template-structure-validation-check
+   Reason for Change(s):
+   - New schema used for XYZ
+   - Resolves ISSUE #1234
 
-Please refer to our contributing documentation for any questions around pull requests and for more guidance for each contribution type :
-https://github.com/Azure/Azure-Sentinel#contributing
-https://github.com/Azure/Azure-Sentinel/wiki#what-can-you-contribute-and-how-can-you-create-contributions
+## After the submission has been made, please look at the Validation Checks:
+
+> Check that the validations are passing and address any issues that are present. Let us know if you have tried fixing and need help.
+
+- [ ] Validations successful
+
+> References: 
+> - [Guidance for Detection checks](https://github.com/Azure/Azure-Sentinel#pull-request-detection-template-structure-validation-check)
+> - [General contribution guidance](https://github.com/Azure/Azure-Sentinel/wiki#what-can-you-contribute-and-how-can-you-create-contributions)
+> - [PR validation troubleshooting](https://github.com/Azure/Azure-Sentinel#pull-request)
