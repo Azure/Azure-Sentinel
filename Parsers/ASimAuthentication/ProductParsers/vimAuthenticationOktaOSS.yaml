@@ -1,0 +1,107 @@
+Parser:
+  Title: ASIM Okta identity management authentication parser
+  Version: '0.1.0'
+  LastUpdated: June 17, 2021
+Product:
+  Name: Okta identity management
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+      This Query Parser maps Okta sign in logs (Okta_CL) to the Advanced SIEM Information Model authenticaion schema.
+ParserName: vimAuthenticationOktaSSO
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let OktaSignin=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
+    let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
+    let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);
+    let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
+    // https://developer.okta.com/docs/reference/api/event-types/#catalog
+    Okta_CL | where not(disabled)
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime) 
+      and (isnull(endtime)     or TimeGenerated <= starttime)
+      and (targetusername_has=='*' or (actor_alternateId_s has targetusername_has))
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
+    | where eventType_s in (OktaSigninEvents)
+    | extend 
+        EventProduct='Okta'
+        , EventVendor='Okta'
+        , EventCount=int(1)
+        , EventSchemaVersion='0.1.0'
+        , EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success',outcome_result_s in (OktaFailedOutcome),'Failure', 'Partial')
+        , EventStartTime=TimeGenerated
+        , EventEndTime=TimeGenerated
+        , EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
+        , EventSubType=legacyEventType_s
+        , TargetUserIdType='OktaId'
+        , TargetUsernameType='Upn'
+        , SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d)
+        , SrcGeoLongitude=toreal(client_geographicalContext_geolocation_lon_d)
+        , ActingAppType = "Browser"
+    | project-rename 
+        EventMessage=displayMessage_s
+        ,EventOriginalResultDetails=outcome_reason_s
+        , LogonMethod = authenticationContext_credentialType_s
+        , TargetSessionId=authenticationContext_externalSessionId_s
+        , TargetUserId= actor_id_s
+        , TargetUsername=actor_alternateId_s
+        , TargetUserType=actor_type_s
+        , SrcDvcOs=client_userAgent_os_s
+        , HttpUserAgent=client_userAgent_rawUserAgent_s
+        , ActingAppName = client_userAgent_browser_s
+        , SrcIsp=securityContext_isp_s
+        , SrcGeoCity=client_geographicalContext_city_s
+        , SrcGeoCountry=client_geographicalContext_country_s
+        , EventOriginalUid = uuid_g_g
+    | project-reorder
+        EventProduct
+        , EventOriginalUid
+        , TimeGenerated
+        , EventMessage
+        , EventResult
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , EventType
+        , EventSubType
+        , LogonMethod
+        , TargetSessionId
+        , TargetUserId
+        , TargetUsername
+        , TargetUserType
+        , SrcDvcOs
+        , HttpUserAgent
+        , SrcIsp
+        , SrcGeoCity
+        , SrcGeoCountry
+        , SrcGeoLongitude
+        , SrcGeoLatitude
+        // ** Aliases
+        | extend 
+          User=TargetUsername
+          , Dvc=EventVendor
+    };
+  OktaSignin(starttime, endtime, targetusername_has, disabled)
