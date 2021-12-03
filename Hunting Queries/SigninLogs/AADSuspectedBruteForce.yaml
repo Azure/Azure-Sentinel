@@ -6,31 +6,33 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
       - AADNonInteractiveUserSignInLogs
 tactics:
   - CredentialAccess
 relevantTechniques:
   - T1110
+tags:
+  - AADSecOpsGuide
 query: |
 
     let authenticationWindow = 24h;
     let aadFunc = (tableName:string){
-    table(tableName)
-        | where TimeGenerated > ago(1d)
-        | extend Activities = pack("datetime", TimeGenerated,"ResultEventId", ResultType , "AppDisplayName", AppDisplayName, "ResultDescription", ResultDescription ,"IpAddress", IPAddress, "DeviceDetail", todynamic(DeviceDetail), "Status", todynamic(DeviceDetail), "Locationdetails", todynamic(LocationDetails))
-        | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")
-        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), SuccesEvents =  make_list_if(Activities, ResultType in ("0", "50125", "50140", "70043", "70044")),FailureEvents = make_list_if(Activities, ResultType !in ("0", "50125", "50140", "70043", "70044")) , FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success")
-          by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, Type
-        | where FailureCount > 100
-        |where SuccessCount > 0
-        | order by FailureCount, UserDisplayName, Type  
-        };
+      table(tableName)
+      | where TimeGenerated > ago(1d)
+      | extend Activities = pack("datetime", TimeGenerated,"ResultEventId", ResultType , "AppDisplayName", AppDisplayName, "ResultDescription", ResultDescription ,"IpAddress", IPAddress, "DeviceDetail", todynamic(DeviceDetail), "Status", todynamic(DeviceDetail), "Locationdetails", todynamic(LocationDetails))
+      | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), SuccesEvents =  make_list_if(Activities, ResultType in ("0", "50125", "50140", "70043", "70044")),FailureEvents = make_list_if(Activities, ResultType !in ("0", "50125", "50140", "70043", "70044")) , FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success") by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, Type
+      | where FailureCount > 100
+      |where SuccessCount > 0
+      | order by FailureCount, UserDisplayName, Type  
+    };
     let aadSignin = aadFunc("SigninLogs");
     let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
     union isfuzzy=true aadSignin, aadNonInt
-      
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: UserPrincipalName
+        columnName: AccountCustomEntity
