@@ -20,24 +20,22 @@ relevantTechniques:
 query: |
 
 // l_min_tokens_created - minimum tokens created per repository per day to consider
-let l_min_tokens_created = 0;
-let auditMessagesPAT = Syslog
-// Using syslog Facility and ProcessName for pre-filtering could help performances. 
-// Example: using a specific facility for GitLab and a process name for Syslog ingestion.
-// | where Facility == 'local7'
-// | where ProcessName contains 'GitLab-Audit-Logs'
-| where SyslogMessage contains "PersonalAccessToken";
-let min_t = toscalar(auditMessagesPAT
+let l_min_tokens_created = 1;
+// Earliest date from GitLab Audit logs - adapt if too far away - for instance, replace by ago(30d)
+let min_t = toscalar(GitLabAudit
 | summarize min(TimeGenerated));
-let max_t = toscalar(auditMessagesPAT
+// Most recent date from GitLab Audit logs 
+let max_t = toscalar(GitLabAudit
 | summarize max(TimeGenerated));
-auditMessagesPAT
-| parse kind=regex SyslogMessage with "\"severity:\"" Severity "\",\"time\":\"" EventTime "\",\"correlation_id\":\"" CorrelationID "\",\"author_id\":" AuthorID ",\"author_name\":\"" AuthorName "\",\"entity_id\":" EntityID ",\"entity_type\":\"" EntityType "\",\"ip_address\":\"" IPAddress "\",\"target_id\":" TargetID ",\"target_type\":\"" TargetType "\",\"target_details\":\"" TargetDetails "\",\"action\":\"" Action "\",\"custom_message\":\"" CustomMessage "\",\"entity_path\":\"" EntityPath "\""
-| project Severity, EventDay = bin(todatetime(EventTime),1d), AuthorName, IPAddress, Repository = EntityPath, Action, SyslogMessage
+// Graph Interval
+let interval = 1d;
+GitLabAudit
+| where TargetType == "PersonalAccessToken"
+| project Severity, EventDay = bin(todatetime(EventTime),1d), AuthorName, IPAddress, Repository = tostring(EntityPath), Action, TargetType
 | summarize sumTokens = count() by Repository, EventDay
 | where sumTokens > l_min_tokens_created
-| make-series num=sum(sumTokens) default=0 on EventDay in range(ago(2d), now(), 1d) by Repository
+| make-series num=sum(sumTokens) default=0 on EventDay in range(ago(30d), now(), interval) by Repository
 | extend (anomalies, score, baseline) = series_decompose_anomalies(num, 1.5, -1, 'linefit')
 | render timechart
 
-version: 1.0.0
+version: 1.0.1
