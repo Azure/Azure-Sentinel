@@ -26,7 +26,8 @@ query: |
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
    OfficeActivity
     | where TimeGenerated >= ago(dt_lookBack)
     //Extract the Url from a number of potential fields
@@ -38,10 +39,10 @@ query: |
     // Project a single user identity that we can use for entity mapping
     | extend User = iif(isnotempty(UserId), UserId, iif(isnotempty(Actor), tostring(parse_json(Actor)[0].ID), tostring(parse_json(Parameters)[0].Vlaue))) 
   ) on Url
-  | where OfficeActivity_TimeGenerated >= TimeGenerated and OfficeActivity_TimeGenerated < ExpirationDateTime
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, 
-  UserType, OfficeWorkload, Parameters, OfficeActivity_TimeGenerated, Url, User
+  | where OfficeActivity_TimeGenerated < ExpirationDateTime
+  | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, Url
+  | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, 
+  UserType, OfficeWorkload, Parameters, Url, User
   | extend timestamp = OfficeActivity_TimeGenerated, AccountCustomEntity = User, URLCustomEntity = Url
 entityMappings:
   - entityType: Account
@@ -52,5 +53,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.1.1
+version: 1.2.1
 kind: Scheduled
