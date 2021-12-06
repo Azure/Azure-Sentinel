@@ -369,7 +369,12 @@ function GetBucketDetails {
 
                     foreach ($logEvent in [System.IO.File]::ReadLines($filename))
                     {
-                        $logevents = ConvertFrom-Json $logEvent -AsHashTable
+                        #$logevents = ConvertFrom-Json $logEvent -AsHashTable
+                        $logs = $logEvent | ConvertFrom-Json
+                        $hash = @{}
+                        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
+                        $logevents = $hash
+                        
                         if($prefixFolder -eq "carbon-black-events")
                         {
                             EventsFieldsMapping -events $logevents
