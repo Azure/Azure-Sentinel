@@ -32,7 +32,7 @@ class AbnormalSoarConnectorAsync:
         """
         return {
             "Authorization": f"Bearer {self.api_key}",
-            "SOAR_INTEGRATION_ORIGIN": "AZURE SENTINEL",
+            "Soar-Integration-Origin": "AZURE SENTINEL",
         }
 
     def _get_filter_query(self, filter_param, gte_datetime=None, lte_datetime=None):
