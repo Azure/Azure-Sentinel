@@ -133,25 +133,25 @@ function Netskope () {
             {
 				$netskopeevents | ForEach-Object{
 					if($_.dlp_incident_id -ne $NULL){
-							   $_.dlp_incident_id = [string]$_.dlp_incident_id
+							   $_.dlp_incidentid = [string]$_.dlp_incident_id
 					}
 					if($_.dlp_parent_id -ne $NULL){
-							   $_.dlp_parent_id = [string]$_.dlp_parent_id
+							   $_.dlp_parentid = [string]$_.dlp_parent_id
 					}
 					if($_.connection_id -ne $NULL){
-							   $_.connection_id = [string]$_.connection_id
+							   $_.connectionid = [string]$_.connection_id
 					}
 					if($_.app_session_id -ne $NULL){
-							   $_.app_session_id = [string]$_.app_session_id
+							   $_.app_sessionid = [string]$_.app_session_id
 					}
 					if($_.transaction_id -ne $NULL){
-							   $_.transaction_id = [string]$_.transaction_id
+							   $_.transactionid = [string]$_.transaction_id
 					}
 					if($_.browser_session_id -ne $NULL){
-							   $_.browser_session_id = [string]$_.browser_session_id
+							   $_.browser_sessionid = [string]$_.browser_session_id
 					}
 					if($_.request_id -ne $NULL){
-							   $_.request_id = [string]$_.request_id
+							   $_.requestid = [string]$_.request_id
 					}
                 }
             }
