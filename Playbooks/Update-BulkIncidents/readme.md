@@ -1,10 +1,11 @@
 # Update-BulkIncidents
 authors: Priscila Viana, Nathan Swift
 
-This Logic App will act as listener, you can pass json object to a HTTP Endpoint to use KQL query to discover Azure Sentinel Security Incidents through the SecurityIncident table you wish to bulk change on. It includes a method to selective update by array [].
+This Logic App will act as listener, you can pass json object to a HTTP Endpoint to use KQL query to discover Microsoft Sentinel Security Incidents through the SecurityIncident table you wish to bulk change on. It includes a method to selective update by array [].
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-BulkIncidents%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-BulkIncidents%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-BulkIncidents%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FUpdate-BulkIncidents%2Fazuredeploy.json)
+
 
 **Additional Post Install Notes:**
 
@@ -20,7 +21,7 @@ To obtain your Logic App URI to make POST calls to, go to the Logic App designer
 
 You can use Postman, PowerShell, or your favorite shell to send a JSON body to the Logic App Endpoint. Below are some PowerShell code examples of usage.
 
-At this time the Logic App can only bulk update the Status of Azure Sentinel Incidents.
+At this time the Logic App can only bulk update the Status of Microsoft Sentinel Incidents.
 
 ```
 <#
@@ -29,8 +30,8 @@ At this time the Logic App can only bulk update the Status of Azure Sentinel Inc
 
     operationtype - acceptable values are 'kql' or 'ids' | 'kql' = you will pass a parameter 'operationquery' with the kql language, those results will be passed to bulk update incidents | 'ids' = use an array list in parameter 'operationids'
     operationstatus - Closed, New, InProgress  
-    operationkql - use a kql query to send results of Azure Sentinel Incidents to bulk update
-    operationids - using an array list of Azure Sentinel Incident Ids/case numbers to bulk update
+    operationkql - use a kql query to send results of Microsoft Sentinel Incidents to bulk update
+    operationids - using an array list of Microsoft Sentinel Incident Ids/case numbers to bulk update
 
     See below for examples
 
