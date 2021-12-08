@@ -1,0 +1,41 @@
+let DSTIMCorrelatedLogs = (_startDate:datetime, _endDate: datetime, _subscriptions:dynamic = dynamic("*"), _resourceGroups:dynamic = dynamic(["*"]), _userAccounts:dynamic = dynamic(["*"])) 
+{ 
+    let noClassificationView = datatable(Classification: string, CorrelationId:string, AssetType:string, SensitivityLabelName:string)
+['[{"Id":"","Name":"no classification","Count":"0","Confidence":"0","UniqueCount":"0"}]', "", "Unknown", "no label"];
+DSTIMAccess_CL 
+| project
+    TimeGenerated = TimeDiscovered_t,
+    Location = Location_s,
+    OperationName,
+    AuthenticationType = AuthenticationType_s,
+    RequesterAppId = iff(isempty(RequesterAppId_s), 'Anonymous app', RequesterAppId_s),
+    RequesterUpn = iff(isempty(RequesterUpn_s), 'Anonymous user', RequesterUpn_s),
+    StatusCode = StatusCode_s,
+    Uri = Uri_s,
+    CallerIPAddress,
+    UserAgentHeader = UserAgentHeader_s,
+    Category,
+    AggregationCount = AggregationCount_s,
+    AggregationLastEventTime = AggregationLastEventTime_t,
+    ResponseBodySize = ResponseBodySize_s,
+    ResourceSubscriptionId = ResourceSubscriptionId_g,
+    ResourceGroup,
+    StorageAccountName = StorageAccountName_s,
+    AccessCorrelationId = CorrelationId
+| where TimeGenerated between (_startDate .. _endDate) or AggregationLastEventTime between (_startDate .. _endDate) 
+| where _subscriptions == '*' or _subscriptions has ResourceSubscriptionId
+| where '["*"]' == tostring(_resourceGroups)  or ResourceGroup in (_resourceGroups)
+| where '["*"]' == tostring(_userAccounts) or RequesterUpn in (_userAccounts) or RequesterAppId in (_userAccounts)
+| join kind=leftouter(DSTIMClassification_CL
+    | project
+        Classification = Classification_s,
+        ClassificationCorrelationId = CorrelationId
+    | join kind=leftouter (DSTIMSensitivity_CL
+        | project
+            SensitivityLabelName = iff(isempty(SensitivityLabelName_s), 'no label', SensitivityLabelName_s),
+            SensitivityCorrelationId = CorrelationId)
+        on $left.ClassificationCorrelationId == $right.SensitivityCorrelationId
+        | union noClassificationView)
+    on $left.AccessCorrelationId == $right.ClassificationCorrelationId
+| project-away AccessCorrelationId, ClassificationCorrelationId, SensitivityCorrelationId
+ };
