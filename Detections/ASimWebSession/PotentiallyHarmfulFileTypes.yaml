@@ -1,0 +1,51 @@
+id: 09c49590-4e9d-4da9-a34d-17222d0c9e7e
+name: A client made a web request to a potentially harmful file (ASIM Web Session schema)
+description: |
+  'This rule identifies a web request to a URL that holds a file type, including .ps1, .bat, .vbs, and .scr that can be harmful if downloaded. This rule uses the [Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM. To use this Analytics Rule, deploy the Advanced SIEM information Model (ASIM).
+  To use this analytics rule, deploy the [Advanced SIEM information Model (ASIM)](https://aka.ms/DeployASIM)'
+severity: Medium
+tags:
+  - Id: de58ee9e-b229-4252-8537-41a4c2f4045e
+    version: 1.0.0
+  - Schema: ASimWebSession
+    SchemaVersion: 0.2.1
+requiredDataConnectors: []
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: |
+  let default_file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+  let custom_file_ext_blocklist=toscalar(_GetWatchlist('RiskyFileTypes') | extend Extension=column_ifexists("Extension","") | where isnotempty(Extension) | summarize make_set(Extension));
+  let file_ext_blocklist = array_concat(default_file_ext_blocklist, custom_file_ext_blocklist);
+  imWebSession(url_has_any=file_ext_blocklist, eventresult='Success')
+  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
+  | extend requestedFileExt=extract(@(\.\w+)$,1,requestedFileName, typeof(string))
+  | where requestedFileExtension in (file_ext_blocklist)
+  | summarize LastAttemptTime=max(TimeGenerated), NumFailedAttempts=count() by SrcIpAddr, requestedFileName, Url
+  | extend IPCustomEntity = SrcIpAddr, UrlCustomEntity=Url
+
+alertDetailsOverride:
+  alertDisplayNameFormat: Client {{SrcIpAddr}} accessed a URL with potentially harmful extension {{requestedFileExt}}
+  alertDescriptionFormat: The client at address {{SrcIpAddr}} accessed the URL {{Url}} that has the extension {{requestedFileExt}}. Downloading a file with this extension may be harmful and may indicate malicious activity.
+customDetails:
+  requestedFileName: requestedFileName
+  requestedFileExt: requestedFileExt
+  Username: SrcUsername
+
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+  
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: UrlCustomEntity
+version: 1.0.0
+kind: Scheduled

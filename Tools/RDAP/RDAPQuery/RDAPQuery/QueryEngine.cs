@@ -1,16 +1,11 @@
 // ***********************************************************************
 // Assembly         : RDAPQuery
-// Author           : MattEgen
+// Author           : Matt Egen @FlyingBlueMonkey
 // Created          : 04-13-2021
 //
-// Last Modified By : MattEgen
-// Last Modified On : 04-27-2021
-// ***********************************************************************
-// <copyright file="QueryEngine.cs" company="">
-//     Copyright (c) . All rights reserved.
-// </copyright>
-// <summary></summary>
-// ***********************************************************************
+// Last Modified By : Matt Egen @FlyingBlueMonkey
+// Last Modified On : 05-30-2021
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -50,7 +45,7 @@ namespace RDAPQuery
         /// <param name="myTimer">My timer.</param>
         /// <param name="log">The log.</param>
         [FunctionName("CheckDomains")]
-        public static void Run([TimerTrigger("0 */5 * * * *")]TimerInfo myTimer, ILogger log)
+        public static void Run([TimerTrigger("0 */30 * * * *")]TimerInfo myTimer, ILogger log)
         {
             //Log the initiation of the function
             log.LogInformation($"CheckDomains Timer trigger function executed at: {DateTime.Now}");
@@ -58,6 +53,7 @@ namespace RDAPQuery
             try
             {
                 string queryBody = GetEnvironmentVariable("query_string");
+                log.LogInformation(string.Format("Calling QueryData with query '{0}'", queryBody));
                 Task<QueryResults> task = LogAnalytics.QueryData(queryBody);
                 QueryResults results = task.Result;
                 //Ok, now that we have our domains, for each domain returned, call the bootstrap service and get the responsible server

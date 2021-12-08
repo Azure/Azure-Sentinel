@@ -219,4 +219,4 @@ Write-Host $status
 
 Write-Host $status
 
-Start-Sleep -Seconds 540
+Start-Sleep -Seconds 600

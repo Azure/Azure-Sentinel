@@ -1,17 +1,25 @@
 # Send notifications on Azure Sentinel Analytical Rules - auto-disabled rules
-Author: Sreedhar Ande
+**Author: Sreedhar Ande**
 
-In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:
-	- Disables the rule.
-    - Adds the words "AUTO DISABLED" to the beginning of the rule's name.
-    - Adds the reason for the failure (and the disabling) to the rule's description.
+It's a rare occurrence that a scheduled query rule fails to run, but it can happen. As shown in the image below, several Scheduled Analytics Rules that had been Auto-disabled  
 
-This Playbook will trigger immediately and inform SOC by sending either a mail or post message to Teams SOC Channel
+![Autodisabled_Rules](./images/Autodisabled_Rules.png)
+
+For more information, click [here](https://docs.microsoft.com/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
+
+Blog https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/monitoring-microsoft-sentinel-analytical-rules-push-health/ba-p/2793694  
+
+In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:  
+    - Disables the rule.  
+    - Adds the words "AUTO DISABLED" to the beginning of the rule's name.  
+    - Adds the reason for the failure (and the disabling) to the rule's description.  
+
+This Playbook will trigger immediately and inform Security teams by notifying them via mail or post message to Teams Channel
 
 ## Deployment
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-AnalyticalRulesHealthNotifications%2Fazuredeploy.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSend-AnalyticalRulesHealthNotifications%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AnalyticsHealth-Enterprise) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/AnalyticsHealth-Gov)
 
 ## Post Deployment Steps
 

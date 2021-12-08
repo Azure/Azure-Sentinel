@@ -1,18 +1,11 @@
 ﻿// ***********************************************************************
 // Assembly         : RDAPQuery
-// Author           : MattEgen
+// Author           : Matt Egen @FlyingBlueMonkey
 // Created          : 04-16-2021
 //
-// Last Modified By : MattEgen
-// Last Modified On : 04-26-2021
-// ***********************************************************************
-// <copyright file="LogAnalytics.cs" company="">
-//     Copyright (c) . All rights reserved.
-// </copyright>
-// <summary></summary>
-// ***********************************************************************
+// Last Modified By : Matt Egen @FlyingBlueMonkey
+// Last Modified On : 05-30-2021
 using Newtonsoft.Json;
-using RestSharp;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -68,7 +61,7 @@ namespace RDAPQuery
             Token token = null;
             HttpClient client = new HttpClient();
             #endregion
-
+            Console.Write("Received Call to GetbearerToken");
             // Set the base address of the HttpClient object
             client.BaseAddress = new Uri(baseAddress);
             // Add an Accept header for JSON format.
@@ -173,6 +166,7 @@ namespace RDAPQuery
         /// <returns>QueryResults.</returns>
         public static async Task<QueryResults> QueryData(string query)
         {
+            Console.Write("Received Call to QueryData, calling GetBearerToken");
             //Get the authorization bearer token
             Task<Token> task = GetBearerToken();
             Token token = task.Result;
@@ -187,21 +181,32 @@ namespace RDAPQuery
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
 
             var data = new StringContent(query, Encoding.UTF8, "application/json");
-            HttpResponseMessage queryResponse = await client.PostAsync(baseAddress,data);
-            if (queryResponse.IsSuccessStatusCode)
+            try
             {
-                var jsonContent = await queryResponse.Content.ReadAsStringAsync();
-                var jsonObject = JsonConvert.DeserializeObject<QueryResults>(jsonContent);
+                Console.WriteLine("Calling LogAnalytics in QueryData");
+                HttpResponseMessage queryResponse = await client.PostAsync(baseAddress, data);
+                if (queryResponse.IsSuccessStatusCode)
+                {
+                    var jsonContent = await queryResponse.Content.ReadAsStringAsync();
+                    var jsonObject = JsonConvert.DeserializeObject<QueryResults>(jsonContent);
+                    client.Dispose();
+                    return jsonObject;
+                }
+                else
+                {
+                    Console.WriteLine("{0} ({1})", (int)queryResponse.StatusCode, queryResponse.ReasonPhrase);
+                }
+                // Dispose of the client since all HttpClient calls are complete.
                 client.Dispose();
-                return jsonObject;
+                return null;
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine("{0} ({1})", (int)queryResponse.StatusCode, queryResponse.ReasonPhrase);
+                Console.WriteLine(ex.Message);
+                client.Dispose();
+                return null;
             }
-            // Dispose of the client since all HttpClient calls are complete.
-            client.Dispose();
-            return null;
+
         }
 
         /// <summary>

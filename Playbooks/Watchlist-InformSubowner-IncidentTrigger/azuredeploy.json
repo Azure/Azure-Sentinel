@@ -1,17 +1,23 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-        "metadata":{
-        "comments": "This playbook works on ASC incident creation rule, uses Sentienl Watchlists to find the subowner email in order to inform them by Email and Teams about the alert.",
-        "author": "Lior Tamir"
+	"metadata": {
+        "title": "Watchlists - Inform Subscription Owner", 
+        "description": "Use Microsoft Sentinel watchlists and a playbook to contact the subscription owner of the affected resource automatically. This template uses the subscription owner level, but you can implement this solution for any specified resource owner.<br>[Learn more](https://docs.microsoft.com/azure/sentinel/automate-playbook-watchlist)",
+        "prerequisites": ["Create a Watchlists that this playbook will query","1.Create an input comma-separated value (CSV) file with the following columns: SubscriptionId, SubscriptionName, OwnerName, OwnerEmail, where each row represents a subscription in an Azure tenant.", "2. Upload the table to the Microsoft Sentinel Watchlist area. Make a note of the value you use as the Watchlist Alias, as you'll use it to query this watchlist from the playbook."],
+        "lastUpdateTime": "2021-11-26T00:00:00.000Z", 
+        "entities": ["AzureResource"], 
+        "tags": ["Notification"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Lior Tamir"
+        }
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "InformSubowner-Watchlists-IncidentTrigger",
-            "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
             "type": "string"
         }
     },
@@ -27,10 +33,11 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[parameters('UserName')]",
-                "customParameterValues": {
-                },
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -42,7 +49,7 @@
         "name": "[variables('Office365ConnectionName')]",
         "location": "[resourceGroup().location]",
         "properties": {
-          "displayName": "[parameters('UserName')]",
+          "displayName": "[variables('Office365ConnectionName')]",
           "customParameterValues": {
           },
           "api": {
@@ -56,7 +63,7 @@
             "name": "[variables('AzureMonitorLogsConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
@@ -68,8 +75,13 @@
         "apiVersion": "2016-06-01",
         "name": "[variables('MicrosoftTeamsConnectionName')]",
         "location": "[resourceGroup().location]",
+	    "tags": {
+		"LogicAppsCategory": "security",
+		"hidden-SentinelTemplateName": "PlaybookName",
+		"hidden-SentinelTemplateVersion": "1.0"
+	    },
         "properties": {
-          "displayName": "[parameters('UserName')]",
+          "displayName": "[variables('MicrosoftTeamsConnectionName')]",
           "customParameterValues": {
           },
           "api": {
@@ -88,6 +100,9 @@
                 "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('MicrosoftTeamsConnectionName'))]"
             ],
+	"identity": {
+                "type": "SystemAssigned"
+            },
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -326,7 +341,12 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+				"connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "office365": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
