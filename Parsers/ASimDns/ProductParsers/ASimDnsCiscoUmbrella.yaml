@@ -1,23 +1,28 @@
 Parser:
-  Title: Cisco Umbrella DNS Events
-  Version: '0.1'
-  LastUpdated: May 10, 2021
+  Title: DNS activity ASIM parser for Cisco Umbrella
+  Version: '0.2'
+  LastUpdated: Nov 11 2021
 Product:
   Name: Cisco Umbrella
 Normalization:
   Schema: Dns
-  Version: '0.1.1'
+  Version: '0.1.3'
 References:
 - Title: ASIM DNS Schema
-  Link: https://aka.ms/AzSentinelDnsDoc
+  Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This is a Query Parser that is used to map Cisco Umbrella DNS Events (Cisco_Umbrella_dns_CL) to the Azure Sentinel Information Model DNS schema.
+  This ASIM parser supports normalizing Cisco Umbrella DNS logs to the ASIM DNS activity normalized schema.
 ParserName: ASimDnsCiscoUmbrella
+EquivalentBuiltInParser: _ASim_Dns_CiscoUmbrella
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let DNSQuery_CiscoUmbrella=(){
-      Cisco_Umbrella_dns_CL
+  let DNSQuery_CiscoUmbrella=(disabled:bool=false){
+      Cisco_Umbrella_dns_CL | where not(disabled)
       // 
       // *********** Parsing
       | parse QueryType_s with DnsQueryType:int " ("DnsQueryTypeName:string ")"
@@ -29,9 +34,10 @@ ParserQuery: |
          EventStartTime= column_ifexists("Timestamp_t", todatetime(column_ifexists("Timestamp_s",""))),
          EventProduct="Umbrella",
          EventVendor="Cisco Systems",
-         EventSchemaVersion="0.1.1",
+         EventSchema="Dns",
+         EventSchemaVersion="0.1.3",
          Dvc="CiscoUmbrella",
-         EventType="lookup",
+         EventType="Query",
          EventResult=iff(ResponseCode_s=~'NOERROR','Success','Failure'),
          EventResultDetails=ResponseCode_s,  // => ResponseCodeNames
          //
@@ -60,8 +66,9 @@ ParserQuery: |
         DnsResponseCodeName=EventResultDetails, 
         DomainCategory=UrlCategory,
         Domain=DnsQuery,
-        IpAddr=SrcIpAddr
-    // Backward Competability
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr
+    // Backward Compatibility
     | extend
         Query=DnsQuery
         , QueryType=DnsQueryType
@@ -69,4 +76,4 @@ ParserQuery: |
         , QueryTypeName=DnsQueryTypeName
         // 
          };
-  DNSQuery_CiscoUmbrella
+  DNSQuery_CiscoUmbrella(disabled)

@@ -1,33 +1,39 @@
 Parser:
-  Title: Corelight Zeek DNS Query Parser 
-  Version: '0.1'
-  LastUpdated: Sep 2nd, 2021
+  Title: DNS activity ASIM parser for Corelight Zeek
+  Version: '0.2'
+  LastUpdated: Nov 11 2021
 Product:
   Name: Corelight Zeek
 Normalization:
   Schema: Dns
-  Version: '0.1.1'
+  Version: '0.1.3'
 References:
 - Title: ASIM DNS Schema
-  Link: https://aka.ms/AzSentinelDnsDoc
+  Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This Parser normalizes Corelight DNS query events to the Azure Sentinel Information Model DNS schema.
+  This ASIM parser supports normalizing Corelight Zeek DNS logs to the ASIM DNS activity normalized schema.
 ParserName: ASimDnsCorelightZeek
+EquivalentBuiltInParser: _ASim_Dns_CorelightZeek
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let DNSQuery_CorelightZeek=(){
-    Corelight_CL
+  let DNSQuery_CorelightZeek=(disabled:bool=false){
+    Corelight_CL | where not(disabled)
     | where log_file_s has "dns"
     | extend data = todynamic(Message)
     | extend 
         EventCount=int(1),
         EventProduct="Zeek",
         EventVendor="Corelight",
-        EventSchemaVersion="0.1.2",
+        EventSchema = "Dns",
+        EventSchemaVersion="0.1.3",
         Dvc="Zeek",
-        EventType="lookup",
-        EventSubType='response', // ?? rejected?
+        EventType="Query",
+        EventSubType='response',
         EventEndTime= todatetime(data.ts),
         EventOriginalUid = tostring(data.uid),
         SrcIpAddr = tostring (data.["id.orig_h"]),
@@ -47,7 +53,7 @@ ParserQuery: |
         DnsQueryClass = toint(data.qclass),
         DnsQueryTypeName =tostring(data.qtype_name), 
         DnsQueryType = toint(data.qtype),
-        NetworkDuration = toint(data.rtt),
+        DnsNetworkDuration = toint(data.rtt),
         DnsResponseName = tostring(pack ('answers', data.answers, 'ttls', data.TTLs, 'authoritative ', data.auth, 'additional', data.addl))
     | extend
         EventStartTime = EventEndTime,
@@ -56,12 +62,15 @@ ParserQuery: |
     | extend 
         DnsResponseCodeName=EventResultDetails, 
         Domain=DnsQuery,
-        IpAddr=SrcIpAddr
-    // Backward Competability
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        Dst=DstIpAddr,
+        Duration=DnsNetworkDuration
+    // Backward Compatibility
     | extend
         Query=DnsQuery,
         QueryType=DnsQueryType,
         ResponseCodeName=DnsResponseCodeName,
         QueryTypeName=DnsQueryTypeName
     };
-    DNSQuery_CorelightZeek
+    DNSQuery_CorelightZeek(disabled)

@@ -51,9 +51,11 @@ To do so, press on the multi-select checkboxes for the queries you want to run. 
 13.	On the **Logs** screen press on the **+** icon to open a new search tab and run the above query
 
  ```powershell
-_GetWatchlist('ReferenceTemplate')
+_GetWatchlist('HighRiskApps')
  ```
-![incident1](../Images/hunting-8.png)
+![incident1](../Images/hunting-88.png)
+
+
 
 As you can see, this watchlist stores the application name, risk level and permissions. To correlate this information with our hunting results set, we need to run a simple join query.
 

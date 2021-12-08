@@ -1,20 +1,21 @@
 Parser:
-  Title: Generic DnsEvents
-  Version: '0.1'
-  LastUpdated: May 11, 2021
+  Title: DNS activity ASIM filtering parser
+  Version: '0.2'
+  LastUpdated: Oct 19 2021
 Product:
   Name: Source agnostic
 Normalization:
   Schema: Dns
-  Version: '0.1.1'
+  Version: '0.1.3'
 References:
 - Title: ASIM DNS Schema
-  Link: https://aka.ms/AzSentinelDnsDoc
+  Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
+  Link: https://aka.ms/AboutASIM
 Description: |
   ASIM Source Agnostic DNS Parser
 ParserName: imDns
+EquivalentBuiltInParser: _Im_Dns
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -40,15 +41,31 @@ ParserParams:
   - Name: eventtype
     Type: string
     Default: 'lookup'
+
 ParserQuery: |
-  let DnsGeneric=(starttime:datetime=datetime(null), endtime:datetime=datetime(null) , srcipaddr:string='*' , domain_has_any:dynamic=dynamic([]) , responsecodename:string='*', response_has_ipv4:string='*' , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup' ){
+  let Generic=(starttime:datetime=datetime(null), endtime:datetime=datetime(null) , srcipaddr:string='*' , domain_has_any:dynamic=dynamic([]) , responsecodename:string='*', response_has_ipv4:string='*' , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup' ){
+  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'imDns') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser);
+  let imDnsBuiltInDisabled=toscalar('imDnsBuiltIn' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
   union isfuzzy=true
-    vimDnsEmpty
-    , vimDnsCiscoUmbrella( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
-    , vimDnsInfobloxNIOS( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
-    , vimDnsMicrosoftOMS( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
-    , vimDnsGcp( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
-    , vimDnsCorelightZeek( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
-    , vimDnsMicrosoftSysmon( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
-   };
-  DnsGeneric( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
+      vimDnsEmpty
+    , vimDnsCiscoUmbrella  ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsCiscoUmbrella'   in (DisabledParsers) )))
+    , vimDnsInfobloxNIOS   ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsInfobloxNIOS'    in (DisabledParsers) )))
+    , vimDnsMicrosoftOMS   ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsMicrosoftOMS'    in (DisabledParsers) )))
+    , vimDnsGcp            ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsDnsGcp'          in (DisabledParsers) )))
+    , vimDnsCorelightZeek  ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsCorelightZeek'   in (DisabledParsers) )))
+    , vimDnsMicrosoftSysmon( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsMicrosoftSysmon' in (DisabledParsers) )))
+    , vimDnsAzureFirewall  ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsAzureFirewall'   in (DisabledParsers) )))
+    , vimDnsMicrosoftNXlog ( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, (imDnsBuiltInDisabled or('vimDnsMicrosoftNXlog'  in (DisabledParsers) )))
+     };
+  Generic( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype)
+
+Parsers:
+  - vimDnsEmpty
+  - vimDnsCiscoUmbrella
+  - vimDnsInfobloxNIOS
+  - vimDnsMicrosoftOMS
+  - vimDnsGcp
+  - vimDnsCorelightZeek
+  - vimDnsMicrosoftSysmon
+  - vimDnsAzureFirewall
+  - vimDnsMicrosoftNXlog

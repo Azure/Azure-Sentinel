@@ -116,7 +116,7 @@ We have 2 options to open the workbook:
 M5-close-incident
 
 
-### Exercise 3: Acknowledge a new incident
+### Exercise 3: Handling **"Solorigate Network Beacon"** incident
 
 1. If not already there, navigate to *Incidents* view in Azure Sentinel
 

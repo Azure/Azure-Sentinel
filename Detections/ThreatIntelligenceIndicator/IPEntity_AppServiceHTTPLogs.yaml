@@ -1,5 +1,5 @@
 id: f9949656-473f-4503-bf43-a9d9890f7d08
-name: (Preview) TI map IP entity to AppServiceHTTPLogs
+name: TI map IP entity to AppServiceHTTPLogs
 description: |
   'Identifies a match in AppServiceHTTPLogs from any IP IOC from TI'
 severity: Medium
@@ -22,6 +22,7 @@ query: |
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
@@ -30,16 +31,19 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
-      AppServiceHTTPLogs | where TimeGenerated >= ago(dt_lookBack)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+    AppServiceHTTPLogs | where TimeGenerated >= ago(dt_lookBack)
     | where isnotempty(CIp)
     | extend WebApp = split(_ResourceId, '/')[8]
     // renaming time column so it is clear the log this came from
     | extend AppService_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.CIp
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, AppService_TimeGenerated, TI_ipEntity, CsUsername, WebApp = split(_ResourceId, '/')[8], CIp, CsHost, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | where AppService_TimeGenerated < ExpirationDateTime
+  | summarize AppService_TimeGenerated = arg_max(AppService_TimeGenerated, *) by IndicatorId, CIp
+  | project AppService_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CsUsername, 
+  WebApp = split(_ResourceId, '/')[8], CIp, CsHost, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, _ResourceId
   | extend timestamp = AppService_TimeGenerated, AccountCustomEntity = CsUsername, IPCustomEntity = CIp, URLCustomEntity = CsHost
 entityMappings:
   - entityType: Host
@@ -58,4 +62,9 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: _ResourceId
+version: 1.2.1
+kind: Scheduled

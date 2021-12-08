@@ -15,7 +15,7 @@ To deploy Azure Sentinel Trainig Lab, **you must have a Microsoft Azure subscrip
 
 ## Last release notes
 
-* Version 0.2 - Azure Sentinel Training Lab **Beta** 
+* Version 1.0 - Azure Sentinel Training Lab 
 
 ## Getting started
 
@@ -24,8 +24,9 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 ## Modules
 
 [**Module 1 – Setting up the environment**](./Modules/Module-1-Setting-up-the-environment.md)
-- [Deploy Azure Sentinel Training Lab ARM template](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-deploy-azure-sentinel-training-lab-arm-template)
-- [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-configure-azure-sentinel-playbook)
+- [The Azure Sentinel workspace](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-the-azure-sentinel-workspace)
+- [Deploy the Azure Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-the-azure-sentinel-training-lab-solution)
+- [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-3-configure-azure-sentinel-playbook)
  
 [**Module 2 – Data Connectors**](./Modules/Module-2-Data-Connectors.md)
 - [Enable Azure Activity data connector](./Modules/Module-2-Data-Connectors.md#exercise-1-enable-azure-activity-data-connector)
@@ -42,7 +43,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 [**Module 4 – Incident Management**](./Modules/Module-4-Incident-Management.md)
 - [Review Azure Sentinel incident tools and capabilities](./Modules/Module-4-Incident-Management.md#exercise-1-review-azure-sentinel-incident-tools-and-capabilities)
 - [Handling Incident "Sign-ins from IPs that attempt sign-ins to disabled accounts"](./Modules/Module-4-Incident-Management.md#exercise-2-handling-incident-sign-ins-from-ips-that-attempt-sign-ins-to-disabled-accounts)
-- [Acknowledge a new incident](./Modules/Module-4-Incident-Management.md#exercise-3-Acknowledge-a-new-incident)
+- [Handling "Solorigate Network Beacon" incident](./Modules/Module-4-Incident-Management.md#exercise-3-Handling-solorigate-network-beacon-incident)
 - [Hunting for more evidence](./Modules/Module-4-Incident-Management.md#exercise-4-Hunting-for-more-evidence)
 - [Add IOC to Threat Intelligence](./Modules/Module-4-Incident-Management.md#exercise-5-Add-IOC-to-Threat-Intelligence)
 - [Handover incident](./Modules/Module-4-Incident-Management.md#exercise-6-Handover-incident)
@@ -62,7 +63,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 - [Analytics Rules based on Threat Intelligence data](./Modules/Module-7-Threat-Intelligence.md#exercise-3-analytics-rules-based-on-threat-intelligence-data)
 - [Threat Intelligence Workbook](./Modules/Module-7-Threat-Intelligence.md#exercise-5-threat-intelligence-workbook)
 
-[**Module 8 - Azure Sentinel Solutions**](./Modules/Module-8-Azure-Sentinel-Solutions.md)
-- [Explore Azure Sentinel Solutions gallery](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-1-explore-azure-sentinel-solutions-gallery)
+[**Module 8 - Azure Sentinel Content hub**](./Modules/Module-8-Azure-Sentinel-Solutions.md)
+- [Explore Azure Sentinel Content hub](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-1-explore-azure-sentinel-content-hub)
 - [Deploy a new solution](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-2-deploy-a-new-solution)
 - [Review and enable deployed artifacts](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-3-review-and-enable-deployed-artifacts)
