@@ -3,6 +3,7 @@ import datetime
 import logging
 import re
 import requests
+import json
 from requests.auth import HTTPBasicAuth
 from dateutil.parser import parse as parse_datetime
 from typing import List
@@ -96,14 +97,16 @@ class CiscoAMPClient:
         res = requests.get(url, params=params, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
         if not res.ok:
             raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
-        yield res['data']
-        next_link = res['metadata']['links'].get('next')
+        jsonData = json.loads(res.text)
+        yield jsonData['data']
+        next_link = jsonData['metadata']['links'].get('next')
         while next_link:
             res = requests.get(next_link, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
             if not res.ok:
                 raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
-            yield res['data']
-            next_link = res['metadata']['links'].get('next')
+            jsonData = json.loads(res.text)
+            yield jsonData['data']
+            next_link = jsonData['metadata']['links'].get('next')
         
     def get_events(self, start_time: datetime.datetime):
         url = f'https://{self.host}/v1/events'
@@ -117,14 +120,16 @@ class CiscoAMPClient:
         res = requests.get(url, params=params, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
         if not res.ok:
             raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
-        yield res['data']
-        next_link = res['metadata']['links'].get('next')
+        jsonData = json.loads(res.text)
+        yield jsonData['data']
+        next_link = jsonData['metadata']['links'].get('next')
         while next_link:
             res = requests.get(next_link, auth=HTTPBasicAuth(self._client_id, self._api_key), timeout=30)
             if not res.ok:
                 raise Exception(f'Error while calling Cisco API. Response code: {res.status_code}')
-            yield res['data']
-            next_link = res['metadata']['links'].get('next')
+            jsonData = json.loads(res.text)
+            yield jsonData['data']
+            next_link = jsonData['metadata']['links'].get('next')
 
 
 def parse_date_from(date_from: str) -> datetime.datetime:
