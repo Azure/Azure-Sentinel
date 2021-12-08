@@ -1,0 +1,51 @@
+id: d9524fcf-de06-4f95-84b0-1637a30ad595
+name: Privileged Accounts - Failed MFA
+description: |
+  ' Identifies failed MFA attempts from Privileged accounts. Privileged accounts list can be based on IdentityInfo UEBA table or built-in watchlist.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let aadFunc = (tableName:string){
+  IdentityInfo
+  | where AssignedRoles contains "Admin"
+  | mv-expand AssignedRoles
+  | extend Roles = tostring(AssignedRoles), AccountUPN = tolower(AccountUPN)
+  | where Roles contains "Admin"
+  | distinct Roles, AccountUPN
+  | join kind=inner (
+    // Failed Signins attempts with reasoning related to MFA.
+    table(tableName)
+    | where TimeGenerated between(starttime..endtime)
+    | where ResultDescription has_any ("MFA", "second factor", "multi-factor", "second factor") or ResultType in (50074, 50076, 50079, 50072, 53004, 500121)
+  ) on $left.AccountUPN == $right.UserPrincipalName
+  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = UserPrincipalName
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

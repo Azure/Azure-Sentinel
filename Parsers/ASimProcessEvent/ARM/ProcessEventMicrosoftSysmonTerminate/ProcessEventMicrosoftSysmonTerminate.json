@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Sysmon Process Termination Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessTerminateMicrosoftSysmon",
+            "query": "// this is the parser for sysmon from Event table\nlet ParsedProcessEvent_Event=(){\n    Event \n    | where Source == \"Microsoft-Windows-Sysmon\" and EventID==5\n    | parse EventData with * '<Data Name=\"RuleName\">'RuleName'</Data>'\n            '<Data Name=\"UtcTime\">'UtcTime'</Data>'\n            '<Data Name=\"ProcessGuid\">{'ProcessGuid'}</Data>'\n            '<Data Name=\"ProcessId\">'ProcessId:string'</Data>'\n            '<Data Name=\"Image\">'Image'</Data>'*\n    | parse EventData with * '<Data Name=\"User\">'ActorUsername '</Data>' *\n    | extend \n            EventType = \"ProcessTerminated\",\n            EventStartTime = todatetime(TimeGenerated),\n            EventEndTime = todatetime(TimeGenerated),\n            EventCount = int(1),\n            EventVendor = \"Microsoft\",\n            EventSchemaVersion = \"0.1.0\",\n            EventOriginalType=tostring(EventID),\n            EventProduct = \"Sysmon\",\n            EventResult = 'Success',\n            DvcOs = \"Windows\"\n    | project-rename\n            DvcHostname = Computer,\n            TargetProcessName = Image,\n            TargetProcessId = ProcessId\n    | extend\n            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n            TargetProcessGuid = ProcessGuid,\n            //***** Aliases ******\n            User = ActorUsername,\n            Process = TargetProcessName,\n            Dvc = DvcHostname\n    | project-away EventData, ParameterXml\n    };\n    let ParsedProcessEvent_WindowsEvent=(){\n    WindowsEvent \n    | where Provider == \"Microsoft-Windows-Sysmon\" and EventID==5\n    | extend \n            EventType = \"ProcessTerminated\",\n            EventStartTime = todatetime(TimeGenerated),\n            EventEndTime = todatetime(TimeGenerated),\n            EventCount = int(1),\n            EventVendor = \"Microsoft\",\n            EventSchemaVersion = \"0.1.0\",\n            EventOriginalType=tostring(EventID),\n            EventProduct = \"Sysmon\",\n            EventResult = 'Success',\n            DvcOs = \"Windows\",\n            ActorUsernameType = \"Windows\",\n            ActorUsername = tostring(EventData.User),\n            TargetProcessName = tostring(EventData.Image),\n            TargetProcessId = tostring(EventData.ProcessId),\n            TargetProcessGuid = tostring(EventData.ProcessGuid)\n    | project-rename\n            DvcHostname = Computer\n    | extend\n            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n            //***** Aliases ******\n            User = ActorUsername,\n            Process = TargetProcessName,\n            Dvc = DvcHostname\n    };union isfuzzy=true ParsedProcessEvent_Event,\n                            ParsedProcessEvent_WindowsEvent   \n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

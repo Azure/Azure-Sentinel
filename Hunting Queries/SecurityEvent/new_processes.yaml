@@ -1,8 +1,8 @@
 id: 513e3a11-e1bb-4cfc-8af9-451da0407e6b
 name: New processes observed in last 24 hours
 description: |
-  'These new processes could be benign new programs installed on hosts; however, especially in normally stable environments, 
-  these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run. 
+  'These new processes could be benign new programs installed on hosts; however, especially in normally stable environments,
+  these new processes could provide an indication of an unauthorized/malicious binary that has been installed and run.
   Reviewing the wider context of the logon sessions in which these binaries ran can provide a good starting point for identifying possible attacks.'
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -12,21 +12,26 @@ tactics:
   - Execution
 query: |
 
-  let starttime = 14d;
-  let endtime = 1d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
   let ProcessCreationEvents=() {
   let processEvents=SecurityEvent
+  | where TimeGenerated between(lookback..endtime)
   | where EventID==4688
-  | where TimeGenerated >= ago(starttime) 
-  | project TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName, FileName=tostring(split(NewProcessName, @'')[(-1)]), ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine='',InitiatingProcessParentFileName='';
+  | project TimeGenerated, Computer, Account, FileName=tostring(split(NewProcessName, @'')[(-1)]), NewProcessName, ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName;
   processEvents};
   ProcessCreationEvents
-  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
-  | summarize HostCount=dcount(ComputerName) by tostring(FileName)
+  | where TimeGenerated between(lookback..starttime)
+  | summarize HostCount=dcount(Computer) by FileName
   | join kind=rightanti (
       ProcessCreationEvents
-      | where TimeGenerated >= ago(endtime)
-      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Computers = makeset(ComputerName) , HostCount=dcount(ComputerName) by tostring(FileName)
+      | where TimeGenerated between(starttime..endtime)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Computers = makeset(Computer) , HostCount=dcount(Computer) by Account, NewProcessName, FileName, ProcessCommandLine, InitiatingProcessFileName
   ) on FileName
-  | project StartTimeUtc, Computers, HostCount, FileName
-  | extend timestamp = StartTimeUtc
+  | extend timestamp = StartTime, AccountCustomEntity = Account
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

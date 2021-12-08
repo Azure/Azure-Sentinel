@@ -1,5 +1,5 @@
 id: 5d33fc63-b83b-4913-b95e-94d13f0d379f
-name: (Preview) TI map File Hash to CommonSecurityLog Event
+name: TI map File Hash to CommonSecurityLog Event
 description: |
   'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'
 severity: Medium
@@ -25,20 +25,23 @@ query: |
   let ioc_lookBack = 14d;
   let fileHashIndicators = ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   | where isnotempty(FileHashValue);
   // Handle matches against both lower case and uppercase versions of the hash:
-  ( fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
-    |union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
-  |  join (
-     CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
-     | where isnotempty(FileHash)
-     | extend CommonSecurityLog_TimeGenerated = TimeGenerated
-  )
+  (fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
+  | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  |  join kind=innerunique (
+    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+    | where isnotempty(FileHash)
+    | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+    )
   on $left.FileHashValue == $right.FileHash
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-  CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
+  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,
   RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity
   | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName, URLCustomEntity = Url
 entityMappings:
@@ -58,3 +61,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.1
+kind: Scheduled

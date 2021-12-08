@@ -1,0 +1,35 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+DataTypes: []
+RequiredInputFieldsSets:
+- - Account_Name
+- - Account_Name
+  - Account_UPNSuffix
+- - Account_Name
+  - Account_NTDomain
+BaseQuery: |- 
+  let SignInsByResource = (Account_Name:string, Account_UPNSuffix:string, Account_NTDomain:string){
+  let acc_upn = iff(isnotempty(Account_Name) and isnotempty(Account_UPNSuffix) ,strcat(Account_Name,"@" ,Account_UPNSuffix),"");
+  let acc_win = iff(isnotempty(Account_Name) and isnotempty(Account_NTDomain) ,strcat(Account_NTDomain,"\\" ,Account_Name),"");
+  union isfuzzy=true 
+  (datatable(TimeGenerated:datetime)[]), 
+  (imAuthentication(targetusername_has=Account_Name)
+    | where (TargetUsernameType=='Upn' and TargetUsername =~ acc_upn) or 
+          (TargetUsernameType=='Simple' and TargetUsername =~ Account_Name) or
+          (TargetUsernameType=='Windows' and TargetUsername =~ acc_win)
+    | extend resultText = iff(EventResult=='Success', 'Successfully', 'Unsuccessfully')
+    | project resultText, LogonTarget, TimeGenerated
+  )
+  };
+  SignInsByResource('{{Account_Name}}', '{{Account_UPNSuffix}}', '{{Account_NTDomain}}')
+
+Activities:
+     EnabledByDefault: true
+     Title: "The user has authenticated (ASim Authentication)"
+     Content: "{{resultText}} authenticated to {{LogonTarget}} {{Count}} time(s)"
+     Items: 
+        - Id: 0f32df28-7e21-4596-b71c-54d09fee55d1
+          Description: This activity lists user's authentication events
+          QueryDefinitions:
+            SummarizeBy: LogonTarget, resultText

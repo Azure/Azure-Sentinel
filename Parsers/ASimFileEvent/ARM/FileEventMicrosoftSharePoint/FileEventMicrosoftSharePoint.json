@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimFileEventMicrosoftSharePoint",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Microsoft SharePoint File Operation and OneDrive for business - File Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimFileEventMicrosoftSharePoint",
+            "query": "let usertypes=datatable(UserType:string, ActorUserType:string)[\n // Regular, Regular\n \"Admin\", \"Admin\"\n , \"DcAdmin\", \"Admin\"\n , \"System\", \"System\"\n , \"Application\", \"Application\"\n , \"ServicePrincipal\", \"Service Principal\"\n , \"CustomPolicy\", \"Other\"\n , \"SystemPolicy\", \"Other\"\n , \"Reserved\", \"Other\"\n];\nlet SharepointFile=(){\n  OfficeActivity\n  | where OfficeWorkload=='SharePoint' \n        and ItemType in ('File', 'Folder', 'DocumentLibrary', 'Page')\n  | lookup usertypes on UserType\n  | extend\n        EventCount=int(1)\n      , EventStartTime= TimeGenerated \n      , EventEndTime= TimeGenerated\n      , EventType=Operation\n      , EventResult=case(ResultStatus =='Succeeded', 'Success'\n                          , ResultStatus == 'Failed', 'Failure'\n                          , 'Partial')\n      , EventProduct='SharePoint 365'\n      , EventVendor='Microsoft'\n      , EventSchemaVersion='0.1.0' \n      , ActorUsernameType='upn'\n      , ActorUserIdType='Puid' //(PUID) for events performed by users in SharePoint, OneDrive\n      /// If operation is copied/moved than SourceFile us the \"Previous file\". (what about FileRenamed?)\n      , TargetFilePath =iff(Operation in ('FileCopied', 'FileMoved')\n                              , DestinationFileName\n                              , strcat(Site_Url, '/', SourceRelativeUrl,'/',SourceFileName)) \n      ,  TargetFilename=iff(Operation in ('FileCopied', 'FileMoved'), DestinationFileName, SourceFileName) \n   // , SensitivityLabel:string // ? \n     , SrcFileName=iff(Operation in ('FileCopied', 'FileMoved'), SourceFileName,'')\n     , SrcFilePath=iff(Operation in ('FileCopied', 'FileMoved'), strcat(Site_Url, '/', SourceRelativeUrl),'')\n   ////  Not in scheam??  , TargetAppName='SharePoint'\n   | project-rename ActorOriginalUserType =UserType\n          , ActorUsername=UserId \n          , ActorUserId=UserKey\n          , HttpUserAgent=UserAgent\n          , SrcIpAddr =ClientIP\n   // Aliases\n   | extend \n      User=ActorUsername\n      , FilePath=TargetFilename\n };\n SharepointFile\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

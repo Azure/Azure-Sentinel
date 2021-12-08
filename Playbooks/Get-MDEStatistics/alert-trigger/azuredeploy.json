@@ -1,0 +1,489 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook will get IP, File and Domain statistics from Microsoft Defender for Endpoint and them to a comment on the Incident in Azure Sentinel.",
+        "author": "Nicholas DiCola"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-MDEStatistics",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "MDATPConnectionName": "[concat('wdatp-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MDATPConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_FileHashes": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Ips_-_Get_the_statistics_for_the_given_ip_address": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>MDE Statistics for the last 30 days<br>\nipAddress: @{body('Ips_-_Get_the_statistics_for_the_given_ip_address')?['ipAddress']}<br>\norgPrevalence: @{body('Ips_-_Get_the_statistics_for_the_given_ip_address')?['orgPrevalence']}<br>\norgFirstSeen: @{body('Ips_-_Get_the_statistics_for_the_given_ip_address')?['orgFirstSeen']}<br>\norgLastSeen: @{body('Ips_-_Get_the_statistics_for_the_given_ip_address')?['orgLastSeen']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Ips_-_Get_the_statistics_for_the_given_ip_address": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/ips/@{encodeURIComponent(items('For_each')?['Address'])}/stats",
+                                        "queries": {
+                                            "lookBackHours": 720
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_2": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)_3": {
+                                            "runAfter": {
+                                                "Domains_-_Get_the_statistics_for_the_given_domain_name": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "message": "<p>MDE Statistics for the last 30 days<br>\nhost: @{body('Domains_-_Get_the_statistics_for_the_given_domain_name')?['host']}<br>\norgPrevalence: @{body('Domains_-_Get_the_statistics_for_the_given_domain_name')?['orgPrevalence']}<br>\norgFirstSeen: @{body('Domains_-_Get_the_statistics_for_the_given_domain_name')?['orgFirstSeen']}<br>\norgLastSeen: @{body('Domains_-_Get_the_statistics_for_the_given_domain_name')?['orgLastSeen']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Domains_-_Get_the_statistics_for_the_given_domain_name": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/api/domains/@{encodeURIComponent(items('For_each_2')?['DnsDomain'])}/stats",
+                                                "queries": {
+                                                    "lookBackHours": 720
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_2')['Type']",
+                                                    "dns"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_3": {
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_2": {
+                                    "runAfter": {
+                                        "Files_-_Get_the_statistics_for_the_given_file": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>MDE Statistics for the last 30 days<br>\nsha1: @{body('Files_-_Get_the_statistics_for_the_given_file')?['sha1']}<br>\norgPrevalence: @{body('Files_-_Get_the_statistics_for_the_given_file')?['orgPrevalence']}<br>\norgFirstSeen: @{body('Files_-_Get_the_statistics_for_the_given_file')?['orgFirstSeen']}<br>\norgLastSeen: @{body('Files_-_Get_the_statistics_for_the_given_file')?['orgLastSeen']}<br>\nglobalPrevalence: @{body('Files_-_Get_the_statistics_for_the_given_file')?['globalPrevalence']}<br>\nglobalFirstObserved: @{body('Files_-_Get_the_statistics_for_the_given_file')?['globalFirstObserved']}<br>\n globalLastObserved: @{body('Files_-_Get_the_statistics_for_the_given_file')?['globalLastObserved']}<br>\ntopFileNames: @{body('Files_-_Get_the_statistics_for_the_given_file')?['topFileNames']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Files_-_Get_the_statistics_for_the_given_file": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/files/@{encodeURIComponent(items('For_each_3')?['Value'])}/stats",
+                                        "queries": {
+                                            "lookBackHours": 720
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['Entities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "$id": {
+                                                "type": "string"
+                                            },
+                                            "AadUserId": {
+                                                "type": "string"
+                                            },
+                                            "Account": {
+                                                "properties": {
+                                                    "$ref": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "Address": {
+                                                "type": "string"
+                                            },
+                                            "Algorithm": {
+                                                "type": "string"
+                                            },
+                                            "CommandLine": {
+                                                "type": "string"
+                                            },
+                                            "CreatedTimeUtc": {
+                                                "type": "string"
+                                            },
+                                            "CreationTimeUtc": {
+                                                "type": "string"
+                                            },
+                                            "Directory": {
+                                                "type": "string"
+                                            },
+                                            "DnsDomain": {
+                                                "type": "string"
+                                            },
+                                            "DomainName": {
+                                                "type": "string"
+                                            },
+                                            "ElevationToken": {
+                                                "type": "string"
+                                            },
+                                            "FileHashes": {
+                                                "items": {
+                                                    "properties": {
+                                                        "$ref": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "$ref"
+                                                    ],
+                                                    "type": "object"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "Host": {
+                                                "properties": {
+                                                    "$ref": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "HostName": {
+                                                "type": "string"
+                                            },
+                                            "ImageFile": {
+                                                "properties": {
+                                                    "$ref": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "IsDomainJoined": {
+                                                "type": "boolean"
+                                            },
+                                            "IsDownloaded": {
+                                                "type": "boolean"
+                                            },
+                                            "IsPe": {
+                                                "type": "boolean"
+                                            },
+                                            "IsValid": {
+                                                "type": "boolean"
+                                            },
+                                            "LastAccessTimeUtc": {
+                                                "type": "string"
+                                            },
+                                            "LastWriteTimeUtc": {
+                                                "type": "string"
+                                            },
+                                            "MachineId": {
+                                                "type": "string"
+                                            },
+                                            "MachineIdType": {
+                                                "type": "integer"
+                                            },
+                                            "NTDomain": {
+                                                "type": "string"
+                                            },
+                                            "Name": {
+                                                "type": "string"
+                                            },
+                                            "ParentProcess": {
+                                                "properties": {
+                                                    "$ref": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "ProcessId": {
+                                                "type": "string"
+                                            },
+                                            "Sid": {
+                                                "type": "string"
+                                            },
+                                            "SizeInBytes": {
+                                                "type": "integer"
+                                            },
+                                            "Type": {
+                                                "type": "string"
+                                            },
+                                            "UPNSuffix": {
+                                                "type": "string"
+                                            },
+                                            "Url": {
+                                                "type": "string"
+                                            },
+                                            "Value": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "$id",
+                                            "Type"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "wdatp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName'))]",
+                                "connectionName": "[variables('MDATPConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

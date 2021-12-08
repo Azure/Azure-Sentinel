@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateMicrosoftWindowsEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Microsoft WindowsEvent Process Termination Events Parser",
+            "category": "Security",
+            "FunctionAlias": "vimProcessTerminateMicrosoftWindowsEvents",
+            "query": "let ProcessEvents=(){\nWindowsEvent | where EventID == 4689\n    // -- Filter\n    // -- Map\n      | extend\n    // Event\n  EventCount = int(1),\n  EventVendor = \"Microsoft\",\n  EventProduct = \"Security Event\",\n  EventSchemaVersion = \"0.1.0\",\n  EventStartTime = todatetime(TimeGenerated),\n  EventEndTime = todatetime(TimeGenerated),\n  EventType = \"ProcessTerminated\",\n  EventResult = 'Success',\n  EventOriginalType = tostring(EventID),\n// EventOriginalUid = EventOriginId, Field will be added later on\n  EventResultDetails = tostring(EventData.Status),\n  EventOriginalResultDetails = tostring(EventData.Status), \n// Device\n  DvcId = tostring(EventData.SourceComputerId),\n  DvcHostname = Computer,\n  DvcOs = \"Windows\",\n// Users\n  ActorUserId = tostring(EventData.SubjectUserSid),\n  ActorUserIdType = \"SID\",\n  ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @\"\\\" , EventData.SubjectUserName))),\n  ActorUsernameType = iff(EventData.SubjectDomainName == '-','Simple', 'Windows'),\n  ActorSessionId = tostring(toint(EventData.SubjectLogonId)),\n// Processes \n  TargetProcessId = tostring(toint(EventData.ProcessId)),\n  TargetProcessName = tostring(EventData.ProcessName),\n  TargetProcessCommandLine = tostring(EventData.CommandLine),\n  TargetProcessTokenElevation = tostring(EventData.TokenElevationType)\n// Aliases\n    | extend \n  User = ActorUsername,\n  Dvc = DvcHostname,\n  Process = TargetProcessName\n   | project-away EventData\n  }; ProcessEvents",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionMD4IoT",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Network Sessions Parser for Microsoft Defender for IoT - Endpoint",
+            "category": "Security",
+            "FunctionAlias": "vimNetworkSessionMD4IoT",
+            "query": "let DirectionNetworkEvents =\n  SecurityIoTRawEvent | where not(disabled)\n  // ***************  Prefilterring *****************************************************************\n  |where \n      (eventresult=='*' or eventresult=='Success')\n      and (array_length(url_has_any)==0)\n      and (array_length(hostname_has_any)==0) \n      and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing\n      and (array_length(dvcaction) ==0  )     /// if filtered by action return nothing\n      and (isnull(starttime) or TimeGenerated>=starttime) \n      and (isnull(endtime) or TimeGenerated<=endtime) \n      and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) \n      and (array_length(srcipaddr_has_any_prefix)==0 \n           or has_any_ipv4_prefix(RemoteAddress,srcipaddr_has_any_prefix)\n           or has_any_ipv4_prefix(LocalAddress ,srcipaddr_has_any_prefix)\n          ) \n      and (array_length(dstipaddr_has_any_prefix)==0 \n           or has_any_ipv4_prefix(RemoteAddress,dstipaddr_has_any_prefix)\n           or has_any_ipv4_prefix(LocalAddress ,dstipaddr_has_any_prefix)\n          ) \n  // *************** Prefilterring *****************************************************************\n  | where RawEventName == \"NetworkActivity\"\n  | parse EventDetails with * ',\"LocalPort\":' LocalPort:int ',\"RemotePort\":' RemotePort:int ',' *\n  | extend outbound = LocalPort > RemotePort\n  ;\n  let parser = (T: (EventDetails: string)) {\n    T \n    | parse EventDetails with \n      '{\"LocalAddress\":\"' LocalAddress:string '\",'\n      '\"RemoteAddress\":\"' RemoteAddress:string '\",'\n      *\n      '\"BytesIn\":' BytesIn:int ','\n      '\"BytesOut\":' BytesOut:int ','\n      '\"Protocol\":\"' Protocol:string '\",'\n      '\"ProcessId\":' ProcessId:string ','\n      '\"UserId\":' UserId:string ','\n      '\"ApplicationProtocol\":\"' ApplicationProtocol:string '\",'\n      * // '\"AzureResourceId\":\"' AzureResourceId:string '\",'\n      '\"DeviceId\":\"' DeviceId:string '\",'\n      '\"MessageSource\":\"' MessageSource:string '\",'\n      '\"OriginalEventId\":\"' OriginalEventId:string '\",'\n      '\"TimestampUTC\":\"' TimestampUTC:datetime '\",'\n      *\n  }\n  ; \n  let OutboundNetworkEvents = \n    DirectionNetworkEvents\n    | where outbound\n    // ***************  Postfilterring *****************************************************************\n    | where (array_length(dstipaddr_has_any_prefix)==0 or RemoteAddress==dstipaddr_has_any_prefix) and\n            (array_length(srcipaddr_has_any_prefix)==0 or LocalAddress ==srcipaddr_has_any_prefix) and\n            (isnull(dstportnumber) or dstportnumber==RemotePort)\n    // ***************  Postfilterring *****************************************************************\n    | invoke parser ()\n    | project-rename\n      SrcBytes = BytesOut,\n      DstBytes = BytesIn,\n      SrcPortNumber = LocalPort,\n      DstIpAddr = RemoteAddress,\n      DstPortNumber = RemotePort,\n      SrcProcessId = ProcessId\n    | extend\n      SrcIpAddr = LocalAddress,\n      SrcDvcIdType = \"MD4IoTid\",\n      SrcUserId = UserId,\n      SrcUserIdType = \"Linux\",\n      SrcDvcId = DeviceId,\n      Process = SrcProcessId, // alias\n      SrcDvcOs = iif (MessageSource == \"Linux\", \"Linux\", \"Windows\")\n  ;\n  let InboundNetworkEvents = \n    DirectionNetworkEvents\n    | where not(outbound)\n    // ***************  Postfilterring *****************************************************************\n    | where (array_length(srcipaddr_has_any_prefix)==0 or RemoteAddress==srcipaddr_has_any_prefix) and\n            (array_length(dstipaddr_has_any_prefix)==0 or LocalAddress ==dstipaddr_has_any_prefix) and\n            (isnull(dstportnumber) or dstportnumber==RemotePort)\n    // ***************  Postfilterring *****************************************************************\n    | invoke parser ()\n    | project-rename\n      DstBytes = BytesOut,\n      SrcBytes = BytesIn,\n      DstPortNumber = LocalPort,\n      SrcIpAddr = RemoteAddress,\n      SrcPortNumber = RemotePort,\n      DstProcessId = ProcessId\n    | extend\n      DstIpAddr = LocalAddress,\n      DstDvcIdType = \"MD4IoTid\",\n      DstUserId = UserId,\n      DstUserIdType = \"Linux\",\n      DstDvcId = DeviceId,\n      Process = DstProcessId, // alias\n      DstDvcOs = iif (MessageSource == \"Linux\", \"Linux\", \"Windows\")\n  ;\n  let NetworkSessionMD4IoT = \n    union InboundNetworkEvents, OutboundNetworkEvents\n    | extend\n      EventCount = int(1),\n      EventProduct = 'Azure Defender for IoT', \n      EventVendor = 'Microsoft',\n      EventSchemaVersion = '0.2.0',\n      EventSchema = \"NetworkSession\", \n      EventType = 'NetworkSession',\n      EventStartTime = TimeGenerated, // Open question about timestamps\n      EventEndTime = TimeGenerated,  // Open question about timestamps\n      EventResult = 'Success',\n      EventSeverity = 'Informational'\n    | project-rename\n      EventProductVersion = AgentVersion, // Not available in Windows\n      _ResourceId = AssociatedResourceId, \n      _SubscriptionId = AzureSubscriptionId, \n      EventOriginalUid = OriginalEventId,  // OK pending question\n      DvcOs = MessageSource,\n      NetworkProtocol = Protocol,\n      NetworkApplicationProtocol = ApplicationProtocol,\n      DvcId = DeviceId,\n      DvcIpAddr = LocalAddress\n    | extend\n      Dvc = DvcId,\n      DvcIdType = \"MD4IoTid\",\n      User = UserId,\n      IpAddr = SrcIpAddr,\n      Src = SrcIpAddr,\n      Dst = DstIpAddr\n  ;\n  NetworkSessionMD4IoT\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), url_has_any:dynamic=dynamic([]), httpuseragent_has_any:dynamic=dynamic([]), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

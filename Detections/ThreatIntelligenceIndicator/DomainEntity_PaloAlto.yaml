@@ -1,5 +1,5 @@
 id: ec21493c-2684-4acd-9bc2-696dbad72426
-name: (Preview) TI map Domain entity to PaloAlto
+name: TI map Domain entity to PaloAlto
 description: |
   'Identifies a match in Palo Alto data in CommonSecurityLog table from any Domain IOC from TI'
 severity: Medium
@@ -38,7 +38,8 @@ query: |
         | where Active == true
         // Picking up only IOC's that contain the entities we want
         | where isnotempty(DomainName)
-        | join (
+        // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+        | join kind=innerunique (
             CommonSecurityLog
             | extend IngestionTime = ingestion_time()
             | where IngestionTime > ago(dt_lookBack)
@@ -58,10 +59,13 @@ query: |
             | extend tld = parts[(array_length(parts)-1)]
             //Validate parsed domain by checking TLD against TLDs from threat feed and drop domains where there is no chance of a match
             | where tld in~ (list_tlds)
-            | extend CSL_TimeGenerated = TimeGenerated
+            | extend CommonSecurityLog_TimeGenerated = TimeGenerated
         ) on $left.DomainName==$right.Domain
-        | project LatestIndicatorTime, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, CSL_TimeGenerated, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod
-        | extend timestamp = CSL_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, URLCustomEntity = PA_Url
+        | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+        | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain
+        | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, 
+        DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod
+        | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, URLCustomEntity = PA_Url
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -75,3 +79,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.0
+kind: Scheduled

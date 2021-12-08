@@ -14,33 +14,32 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CredentialAccess 
+  - CredentialAccess
   - Persistence
 relevantTechniques:
   - T1003
   - T1098
 query: |
- 
+
   let starttime = 14d;
   let endtime = 1d;
   // The number of operations below which an IP address is considered an unusual source of role assignment operations
   let alertOperationThreshold = 5;
-  let SensitiveOperationList = dynamic(
-  ["List keys", "List Storage Account Keys", "Register Subscription", "Create or Update Snapshot", "Create or Update Network Security Group"]);
+  let SensitiveOperationList =  dynamic(["microsoft.compute/snapshots/write", "microsoft.network/networksecuritygroups/write", "microsoft.storage/storageaccounts/listkeys/action"]);
   let SensitiveActivity = AzureActivity
-  | where OperationName in~ (SensitiveOperationList)
-  | where ActivityStatus =~ "Succeeded";
+  | where OperationNameValue in~ (SensitiveOperationList) or OperationNameValue hassuffix "listkeys/action"
+  | where ActivityStatusValue =~ "Succeeded";
   SensitiveActivity
   | where TimeGenerated between (ago(starttime) .. ago(endtime))
-  | summarize count() by CallerIpAddress, Caller
+  | summarize count() by CallerIpAddress, Caller, OperationNameValue
   | where count_ >= alertOperationThreshold
   | join kind = rightanti ( 
   SensitiveActivity
   | where TimeGenerated >= ago(endtime)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue), 
   OperationIds = makelist(OperationId), CorrelationIds = makelist(CorrelationId), Resources = makelist(Resource), ResourceGroups = makelist(ResourceGroup), ResourceIds = makelist(ResourceId), ActivityCountByCallerIPAddress = count()  
-  by CallerIpAddress, Caller, OperationName
-  ) on CallerIpAddress, Caller
+  by CallerIpAddress, Caller, OperationNameValue
+  ) on CallerIpAddress, Caller, OperationNameValue
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
 entityMappings:
   - entityType: Account
@@ -51,3 +50,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.1.0
+kind: Scheduled

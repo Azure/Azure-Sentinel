@@ -1,0 +1,42 @@
+SchemaVersion: '1.0'
+DataTypes:
+- DataType: ABAPAuditLog_CL
+Provider: Sentinel
+Type: KQL
+EntitiesFilter: {}
+BaseQuery: union isfuzzy=true (datatable(User_s:string, AlertSeverityText_s:string, SystemID_s:string, MessageText_s:string, Computer:string, SystemRole:string, TimeGenerated:datetime, Host_s:string, Instance_s:string, ClientID_s:string, AlertSeverity_d:real, MessageClass_s:string)[]), (ABAPAuditLog_CL | extend emailSplitted = split(Email_s, '@') | mv-expand accountName = emailSplitted[0], UPNSuffix = emailSplitted[1] | where accountName == '{{Account_Name}}' and UPNSuffix == '{{Account_UPNSuffix}}' and User_s != '' and AlertSeverityText_s == 'High' | lookup kind=leftouter _GetWatchlist('SAP - Systems') on $left.SystemID_s == $right.SearchKey)
+RequiredInputFieldsSets:
+- - Account_Name
+  - Account_UPNSuffix
+Insights:
+  Id: 375c6f6a-fef4-4f44-b2b1-97154b43a35e
+  DisplayName: 'SAP User: The recent top 10 high severity alerts are (Preview)'
+  Description: Recent top 10 high severity alerts of current user.
+  DefaultTimeRange:
+    BeforeRange: 2d
+    AfterRange: 2d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: SystemID
+      OutputType: String
+      SupportDeepLink: false
+    - Header: SystemRole
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Message
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Computer
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Count
+      OutputType: Number
+      SupportDeepLink: false
+    QueriesDefinitions:
+    - Filter: where 1 == 1
+      Summarize: summarize count() by SystemID_s, SystemRole = iff(isempty(SystemRole), 'Unknown', SystemRole), MessageText_s, Computer  | top 10 by count_ desc
+      Project: project SystemID = SystemID_s, SystemRole, Message = MessageText_s, Computer, Count = count_
+  AdditionalQuery:
+    Text: View all user high severity alerts
+    Query: sort by TimeGenerated | project TimeGenerated, Host = Host_s, SystemID = SystemID_s, Instance = Instance_s, ClientID = ClientID_s, SystemRole = iff(isempty(SystemRole), 'Unknown', SystemRole), AlertSeverity = AlertSeverity_d, Message = MessageText_s, MessageClass = MessageClass_s, Computer

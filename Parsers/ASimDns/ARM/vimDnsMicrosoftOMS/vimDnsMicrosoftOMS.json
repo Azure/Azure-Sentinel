@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimDnsMicrosoftOMS",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Microsoft DNS",
+            "category": "Security",
+            "FunctionAlias": "vimDnsMicrosoftOMS",
+            "query": "let EventTypeTable=datatable(EventId:int,EventType:string,EventSubType:string, EventResult:string)[\n   256, 'Query', 'request', 'NA'\n , 257, 'Query', 'response', 'Success'\n , 258, 'Query', 'response', 'Based on RCODE'\n , 259, 'Query', 'response', 'Based on RCODE'\n , 260, 'Query', 'request', 'NA'\n , 261, 'Query', 'response', 'NA'\n , 262, 'Query', 'response', 'Based on RCODE'\n , 263, 'Update', 'request', 'NA'\n , 264, 'Update', 'response', 'Based on RCODE'\n , 265, 'XFR', 'request', 'NA' \n , 266, 'XFR', 'request', 'NA'\n , 267, 'XFR', 'response', 'Based on RCODE'\n , 268, 'XFR', 'response', 'Based on RCODE'\n , 269, 'XFR', 'request', 'NA'\n , 270, 'XFR', 'request', 'NA'\n , 271, 'XFR', 'response', 'Based on RCODE'\n , 272, 'XFR', 'response', 'Based on RCODE'\n , 273, 'XFR', 'request', 'NA'\n , 274, 'XFR', 'request', 'NA'\n , 275, 'XFR', 'response', 'Success'\n , 276, 'XFR', 'response', 'Success'\n , 277, 'Update', 'request', 'NA'\n , 278, 'Update', 'response', 'Based on RCODE'\n , 279, 'Query', 'NA', 'NA'\n , 280, 'Query', 'NA', 'NA'\n ];\n let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[\n    0, 'NOERROR'\n  , 1, \"FORMERR\"\n  , 2,\"SERVFAIL\"\n  , 3,'NXDOMAIN'\n  , 4,'NOTIMP'\n  , 5,'REFUSED'\n  , 6,'YXDOMAIN'\n  , 7,'YXRRSET'\n  , 8,'NXRRSET'\n  , 9,'NOTAUTH'\n  , 10,'NOTZONE'\n  , 11,'DSOTYPENI'\n  , 16,'BADVERS'\n  , 16,'BADSIG'\n  , 17,'BADKEY'\n  , 18,'BADTIME'\n  , 19,'BADMODE'\n  , 20,'BADNAME'\n  , 21,'BADALG'\n  , 22,'BADTRUNC'\n  , 23,'BADCOOKIE'];\n let DNSQuery_MS=(\n   starttime:datetime=datetime(null), \n   endtime:datetime=datetime(null),\n   srcipaddr:string='*',\n   domain_has_any:dynamic=dynamic([]),\n   responsecodename:string='*', \n   response_has_ipv4:string='*',\n   response_has_any_prefix:dynamic=dynamic([]),\n   eventtype:string='Query',\n   disabled:bool=false\n   ){\n   let rcodenames=toscalar(RCodeTable | where DnsResponseCodeName == responsecodename | project DnsResponseCode);\n   DnsEvents | where not(disabled)\n   // ******************************************************************\n     //  Pre-parsing filtering:\n   | where\n         (isnull(starttime) or TimeGenerated >= starttime)\n         and (isnull(endtime) or TimeGenerated <= endtime)\n         and (srcipaddr=='*' or ClientIP==srcipaddr)\n         and (array_length(domain_has_any) ==0 or Name has_any (domain_has_any))\n         and (responsecodename=='*' or ResultCode == rcodenames)\n         and (response_has_ipv4=='*' or has_ipv4(IPAddresses,response_has_ipv4) )\n         and (array_length(response_has_any_prefix) ==0 or has_any_ipv4_prefix(IPAddresses, response_has_any_prefix)  )\n   // *****************************************************************\n   | where EventId < 500\n   | lookup EventTypeTable on EventId\n   // late filtering:\n   | extend\n     eventtype = iff (eventtype == \"lookup\", \"Query\", eventtype)\n   | where (eventtype == \"*\" or eventtype == EventType)\n   | project-rename\n        Dvc=Computer ,\n        SrcIpAddr = ClientIP,\n        DnsQueryTypeName=QueryType,\n        EventMessage = Message,\n        EventOriginalType = EventId,\n        EventReportUrl = ReportReferenceLink,\n        DnsResponseName = IPAddresses,\n        DnsQuery = Name,\n        DnsResponseCode = ResultCode\n | extend\n        EventCount=int(1),\n        EventStartTime=TimeGenerated,\n        EventVendor = \"Microsoft\",\n        EventProduct = \"Microsoft DNS Server\",\n        EventSchema = \"Dns\",\n        EventSchemaVersion=\"0.1.3\",\n        EventEndTime=TimeGenerated,\n        EventSeverity = tostring(Severity),\n        DvcHostname = Dvc\n   | lookup RCodeTable on DnsResponseCode\n   | extend EventResultDetails = case (isnotempty(DnsResponseCodeName), DnsResponseCodeName\n                                   , DnsResponseCode between (3841 .. 4095), 'Reserved for Private Use'\n                                   , 'Unassigned'),\n     EventResult = iff (EventResult == \"Based on RCODE\", iff(DnsResponseCode == 0, \"Success\", \"Failure\"),EventResult)\n   // **************Aliases\n   | extend\n       DnsResponseCodeName=EventResultDetails,\n       Domain=DnsQuery,\n       IpAddr=SrcIpAddr,\n       Src=SrcIpAddr,\n   // Backward Competability\n     Query=DnsQuery\n     , QueryTypeName=DnsQueryTypeName\n     , ResponseName=DnsResponseName\n     , ResponseCode=DnsResponseCode\n     , ResponseCodeName=DnsResponseCodeName\n       };\n DNSQuery_MS (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr:string='*', domain_has_any:dynamic=dynamic([]), responsecodename:string='*', response_has_ipv4:string='*', response_has_any_prefix:dynamic=dynamic([]), eventtype:string='Query', disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

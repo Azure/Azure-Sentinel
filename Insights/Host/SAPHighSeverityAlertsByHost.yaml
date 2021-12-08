@@ -1,0 +1,38 @@
+SchemaVersion: '1.0'
+DataTypes:
+- DataType: ABAPAuditLog_CL
+Provider: Sentinel
+Type: KQL
+EntitiesFilter: {}
+BaseQuery: union isfuzzy=true (datatable(User_s:string, AlertSeverityText_s:string, Host_s:string, SystemID_s:string, MessageText_s:string, SystemRole:string, TimeGenerated:datetime, Instance_s:string, AlertSeverity_d:real, MessageClass_s:string)[]), (ABAPAuditLog_CL | where Host_s == '{{Host_HostName}}' and User_s == '' and AlertSeverityText_s == 'High' | lookup kind=leftouter _GetWatchlist('SAP - Systems') on $left.SystemID_s == $right.SearchKey)
+RequiredInputFieldsSets:
+- - Host_HostName
+Insights:
+  Id: c58df45f-eb21-4383-91e9-643d108eb7fb
+  DisplayName: 'SAP Host: The recent top 10 high severity alerts are (Preview)'
+  Description: Recent top 10 high severity alerts of current host.
+  DefaultTimeRange:
+    BeforeRange: 2d
+    AfterRange: 2d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: SystemID
+      OutputType: String
+      SupportDeepLink: false
+    - Header: SystemRole
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Message
+      OutputType: String
+      SupportDeepLink: false
+    - Header: Count
+      OutputType: Number
+      SupportDeepLink: false
+    QueriesDefinitions:
+    - Filter: where 1 == 1
+      Summarize: summarize count() by SystemID_s, SystemRole = iff(isempty(SystemRole), 'Unknown', SystemRole), MessageText_s  | top 10 by count_ desc
+      Project: project SystemID = SystemID_s, SystemRole, Message = MessageText_s, Count = count_
+  AdditionalQuery:
+    Text: View all host high severity alerts
+    Query: sort by TimeGenerated | project TimeGenerated, SystemID = SystemID_s, Instance = Instance_s, SystemRole = iff(isempty(SystemRole), 'Unknown', SystemRole), AlertSeverity = AlertSeverity_d, Message = MessageText_s, MessageClass = MessageClass_s

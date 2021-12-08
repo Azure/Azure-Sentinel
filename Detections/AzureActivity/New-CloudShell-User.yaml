@@ -18,19 +18,28 @@ relevantTechniques:
   - T1059
 query: |
 
+  let match_window = 3m;
   AzureActivity
-  | extend message = tostring(parse_json(Properties).message)
-  | extend AppId = tostring(parse_json(Claims).appid)
-  | where AppId contains "c44b4083-3bb0-49c1-b47d-974e53cbdf3c"
-  | where OperationName =~ "Microsoft.Portal/consoles/write"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+  | where ResourceGroup has "cloud-shell"
+  | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/listKeys/action") 
+  | where ActivityStatusValue == "Success"
+  | extend TimeKey = bin(TimeGenerated, match_window), AzureIP = CallerIpAddress
+  | join kind = inner
+  (AzureActivity
+  | where ResourceGroup has "cloud-shell"
+  | where (OperationNameValue =~ "Microsoft.Storage/storageAccounts/write") 
+  | extend TimeKey = bin(TimeGenerated, match_window), UserIP = CallerIpAddress
+  ) on Caller, TimeKey
+  | summarize count() by TimeKey, Caller, ResourceGroup, SubscriptionId, TenantId, AzureIP, UserIP, HTTPRequest, Type, Properties, CategoryValue, OperationList = strcat(OperationNameValue, ' , ', OperationNameValue1)
 
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Caller
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: UserIP
+version: 1.1.0
+kind: Scheduled

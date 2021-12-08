@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimRegistryEventMicrosoftWindowsEvent",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM windows Event Registry Creation Event Parser",
+            "category": "Security",
+            "FunctionAlias": "vimRegistryEventMicrosoftWindowsEvent",
+            "query": "let RegistryType = datatable (TypeCode:string,TypeName:string)\n[\n  \"%%1872\", \"Reg_None\",\n  \"%%1873\",\t\"Reg_Sz\",\n  \"%%1874\",\t\"Reg_Expand_Sz\",\n  \"%%1875\",\t\"Reg_Binary\",\n  \"%%1876\",\t\"Reg_DWord\",\n  \"%%1879\",\t\"Reg_Multi_Sz\",\n  \"%%1883\",\t\"Reg_QWord\"\n];\nlet RegistryAction = datatable (EventOriginalSubType:string,EventType:string)\n  [\n    \"%%1904\", \"RegistryValueSet\",\n    \"%%1905\", \"RegistryValueSet\",      \n    \"%%1906\", \"RegistryValueDeleted\"             \n  ];\nlet Hives = datatable (KeyPrefix:string,Hive:string)\n  [\n    \"MACHINE\", \"HKEY_LOCAL_MACHINE\",\n    \"USER\", \"HKEY_USERS\",   \n  ];\nlet RegistryEvents=(){\n          WindowsEvent \n          | where EventID == 4657\n          | extend\n          EventCount = int(1), \n          EventVendor = 'Microsoft', \n          EventProduct = 'Windows Event', \n          EventSchemaVersion = '0.1.0', \n          EventStartTime = todatetime(TimeGenerated), \n          EventEndTime = todatetime(TimeGenerated),\n          EventOriginalType = tostring(EventID), \n          ObjectName = tostring(EventData.ObjectName),\n          OldValue = tostring(EventData.OldValue),\n          NewValue = tostring(EventData.NewValue),\n          RegistryValue = tostring(EventData.ObjectValueName),\n          NewValueType = tostring(EventData.NewValueType),\n          OldValueType = tostring(EventData.OldValueType)\n| extend\n            EventOriginalSubType = tostring(EventData.OperationType)\n            //EventOriginalUid = EventOriginId - No EventOriginId field in WindowsEvent\n| lookup RegistryAction on EventOriginalSubType\n        // Registry\n        // Normalize key hive\n        | parse ObjectName with \"\\\\REGISTRY\\\\\" KeyPrefix \"\\\\\" Key\n        | lookup Hives on KeyPrefix\n        | extend RegistryKey = strcat (Hive, \"\\\\\", Key)\n        | project-away Hive, Key, KeyPrefix, ObjectName\n        | extend\n          RegistryValueData = iff (EventOriginalSubType == \"%%1906\", OldValue, NewValue), \n          RegistryPreviousKey = iff (EventOriginalSubType == \"%%1905\", RegistryKey, \"\"),\n          RegistryPreviousValue = iff (EventOriginalSubType == \"%%1905\", RegistryValue, \"\"),\n          RegistryPreviousValueData = iff (EventOriginalSubType == \"%%1905\", OldValue, \"\")\n        | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName\n        | lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryPreviousValueType = TypeName\n        | project-away OldValue, NewValue, OldValueType, NewValueType, EventOriginalSubType\n        // Device\n        | extend\n            // DvcId = SourceComputerId, No such fields in WindowsEvent\n            DvcHostname = Computer,\n            DvcOs = 'Windows',\n        // User\n            ActorUserId = tostring(EventData.SubjectUserSid), \n            ActorSessionId = tostring( toint(EventData.SubjectLogonId)), \n            ActorDomainName = tostring(EventData.SubjectDomainName),\n            ActorUserIdType = 'SID',\n            ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @\"\\\" , EventData.SubjectUserName))), \n            ActorUsernameType = iff(tostring(EventData.ActorDomainName) == '-','Simple', 'Windows'),              \n        // Process \n            ActingProcessId = tostring( toint(EventData.ProcessId)), \n            ActingProcessName = tostring(EventData.ProcessName)\n      | extend     \n      // -- Aliases\n            User = ActorUsername,\n            UserId = ActorUserId,\n            Dvc = DvcHostname,\n            Process = ActingProcessName\n        }; RegistryEvents",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,358 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Update-Watchlist-With-NamedLocations",
+            "type": "String"
+        },
+        "TenantId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "SubscriptionId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "resourceGroupName": {
+            "defaultValue": "",
+             "type": "String",
+              "metadata": {
+                "description": "The resource group where your Azure Sentinel workspace is located."
+                        }
+          },
+        "workspaceName": {
+            "defaultValue": "",
+             "type": "String",
+              "metadata": {
+                "description": "Your Azure Sentinel workspace."
+        }
+                        },
+        "NamedLocationID": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The ID of your Named Location (not the name). Can be fetched with API call."
+        }
+        },
+        "watchlistAlias": {
+            "defaultValue": "",
+             "type": "String",
+              "metadata": {
+                "description": "The alias of the watchlist where you will include IP addresses from the Named Location"
+        }
+             },
+        "ClientID": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Client ID of the app registration that will call the Graph API"
+        }
+        },
+        "KeyVault": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of your keyvault"
+        }
+        }
+       
+        
+
+    },
+     "variables": {
+            "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+            "connections_keyvault_externalid": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/keyvault')]"
+ 
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            
+            "properties": {
+                "api": {
+                  "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azureautomation')]"
+                  },
+                    "customParameterValues": {},
+                    "displayName": "[variables('AzureSentinelConnectionName')]",
+                    "parameterValueType": "Alternative"
+    }
+        }, 
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('KeyVault')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('KeyVault')]",
+                 "parameterValueType": "Alternative",
+                 "alternativeParameterValues": {
+            "vaultName": "[parameters('KeyVault')]"
+        },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[variables('connections_keyvault_externalid')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"],
+
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                         "TenantId": {
+                            "defaultValue": "[parameters('TenantId')]",
+                            "type": "String"
+                        },
+                        "SubscriptionId": {
+                            "defaultValue": "[parameters('SubscriptionId')]",
+                            "type": "String"
+                        },
+                        "resourceGroupName": {
+                            "defaultValue": "[parameters('resourceGroupName')]",
+                            "type": "String"
+                        },
+                        "workspaceName": {
+                            "defaultValue": "[parameters('workspaceName')]",
+                            "type": "String"
+                        },
+                        "KeyVault": {
+                            "defaultValue": "[parameters('KeyVault')]",
+                            "type": "String"
+                        },
+                        "ClientID": {
+                            "defaultValue": "[parameters('ClientID')]",
+                            "type": "String"
+                        },
+                        
+                        
+                       "NamedLocationID": {
+                            "defaultValue": "[parameters('NamedLocationID')]",
+                            "type": "String"
+                        },
+                        
+                        "watchlistAlias": {
+                            "defaultValue": "[parameters('watchlistAlias')]",
+                            "type": "String"
+                        }
+                        
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 7
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON_-_Named_Location')?['ipRanges']",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {},
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Watchlists_-_Add_a_new_watchlist_item": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "ip_range": "@items('For_each')?['cidrAddress']"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "put",
+                                                    "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceName'))}/watchlists/@{encodeURIComponent(parameters('watchlistAlias'))}/watchlistItem"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@string(body('HTTP_-_Get_Watchlist'))",
+                                                    "@string(items('For_each')?['cidrAddress'])"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Named_Location": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('KeyVault'))}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "HTTP_-_Get_Named_Location_IPs": {
+                            "runAfter": {
+                                "HTTP_-_Get_Watchlist": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "@parameters('ClientID')",
+                                    "secret": "@body('Get_secret')?['value']",
+                                    "tenant": "@{parameters('TenantId')}",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/@{parameters('NamedLocationID')}"
+                            }
+                        },
+                        "HTTP_-_Get_Watchlist": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions/@{parameters('SubscriptionId')}/resourceGroups/@{parameters('resourceGroupName')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspaceName')}/providers/Microsoft.SecurityInsights/watchlists/@{parameters('watchlistAlias')}/watchlistitems?api-version=2019-01-01-preview"
+                            }
+                        },
+                        "Parse_JSON_-_Named_Location": {
+                            "runAfter": {
+                                "HTTP_-_Get_Named_Location_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Get_Named_Location_IPs')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "@@odata.type": {
+                                            "type": "string"
+                                        },
+                                        "createdDateTime": {
+                                            "type": "string"
+                                        },
+                                        "displayName": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "ipRanges": {
+                                            "items": {
+                                                "properties": {
+                                                    "@@odata.type": {
+                                                        "type": "string"
+                                                    },
+                                                    "cidrAddress": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "@@odata.type",
+                                                    "cidrAddress"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "isTrusted": {
+                                            "type": "boolean"
+                                        },
+                                        "modifiedDateTime": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('KeyVault'))]",
+                                "connectionName": "[parameters('KeyVault')]",
+                                "connectionProperties": {
+                "authentication": {
+                    "type": "ManagedServiceIdentity"
+                }
+            },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
