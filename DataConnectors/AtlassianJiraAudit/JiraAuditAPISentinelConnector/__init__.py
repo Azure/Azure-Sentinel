@@ -20,7 +20,7 @@ jira_homesite_name = os.environ['JiraHomeSiteName']
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 log_type = 'Jira_Audit'
-jira_uri_audit = "https://" + jira_homesite_name + ".atlassian.net/rest/api/3/auditing/record"
+jira_uri_audit = "https://" + jira_homesite_name + "/rest/api/3/auditing/record"
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
