@@ -13,6 +13,7 @@ class Resources(Enum):
 class FilterParam(Enum):
     receivedTime = 0
     createdTime = 1
+    firstObserved = 2
 
 
 class AbnormalSoarConnectorAsync:
@@ -130,7 +131,7 @@ class AbnormalSoarConnectorAsync:
     async def get_all_cases(self, context, output_queue, caching_func=None):
         intermediate_queue = asyncio.Queue()
         async with aiohttp.ClientSession() as session:
-            filter_query = self._get_filter_query(FilterParam.createdTime, context.get("gte_datetime"), context.get("lte_datetime"))
+            filter_query = self._get_filter_query(FilterParam.firstObserved, context.get("gte_datetime"), context.get("lte_datetime"))
             producer_post_process_func = lambda x: caching_func(self._extract_case_ids(x)) if caching_func else self._extract_case_ids(x)
             producer = asyncio.create_task(self.generate_resource_ids(session, Resources.cases, filter_query, intermediate_queue, producer_post_process_func))
             consumers = [asyncio.create_task(self.process_resource_ids(session, Resources.cases, context, intermediate_queue, output_queue)) for _ in range(self.num_consumers)]
