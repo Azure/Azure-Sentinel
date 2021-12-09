@@ -1,12 +1,12 @@
 Parser:
-  Title: Web Session ASIM parser for zScaler ZIA
+  Title: Network Session ASIM parser for zScaler ZIA
   Version: '0.1'
-  LastUpdated: Dec 7, 2021
+  LastUpdated: Dec 8, 2021
 Product:
   Name: zScaler ZIA
 Normalization:
-  Schema: WebSession
-  Version: '0.1.0'
+  Schema: NetworkSession
+  Version: '0.2.1'
 References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
@@ -17,8 +17,8 @@ References:
 - Title: zScaler Sentinel deployment guide
   Link: https://help.zscaler.com/zia/zscaler-microsoft-azure-sentinel-deployment-guide
 Description: |
-  This ASIM parser supports normalizing zScaler ZIA proxy logs produced by the Azure Sentinel zScaler connector to the ASIM Web Session normalized schema. The parser supports squid native log format.
-ParserName: ASimWebSessionzScalerZIA
+  This ASIM parser supports normalizing zScaler ZIA proxy logs produced by the Azure Sentinel zScaler connector to the ASIM Network Session normalized schema. The parser supports squid native log format.
+ParserName: ASimNetworkSessionzScalerZIA
 ParserParams:
   - Name: disabled
     Type: bool
@@ -27,38 +27,42 @@ ParserQuery: |
   let parser=(disabled:bool=false){
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor == "Zscaler"
-  | where DeviceProduct == "NSSWeblog"
+  | where DeviceProduct == "NSSFWlog"
   // Event fields
   | extend 
-    EventCount=int(1), 
+    EventCount=int(1), // There is aggregation
     EventStartTime=TimeGenerated,  
-    EventVendor = "zScaler", 
-    EventProduct = "ZIA", 
-    EventSchema = "WebSession", 
-    EventSchemaVersion="0.1.0", 
-    EventType = 'HTTPsession',
+    EventVendor = "zScaler", // OK
+    EventProduct = "ZIA", // OK
+    EventSchema = "NetworkSession", // OK
+    EventSchemaVersion="0.2.1", // OK
+    EventType = 'NetworkSession', // OK
     EventEndTime=TimeGenerated
   | project-rename
     DvcAction = DeviceAction,
-    DvcHostname = Computer,
-    EventProductVersion = DeviceVersion,
+    DvcHostname = Computer, // OK
+    EventProductVersion = DeviceVersion, // OK
+    NetworkProtocol = Protocol, // OK
     NetworkApplicationProtocol = ApplicationProtocol,
     HttpContentType = FileType,
     HttpUserAgent = RequestClientApplication,
     HttpRequestMethod = RequestMethod,
     DstAppName = DestinationServiceName,
-    DstIpAddr = DestinationIP,
+    DstIpAddr = DestinationIP, // OK
+    DstPortNumber = DestinationPort, // OK
     DstFQDN = DestinationHostName,
-    DstBytes = ReceivedBytes,
-    SrcIpAddr = SourceIP,
+    DstBytes = ReceivedBytes, // OK
+    SrcIpAddr = SourceIP, // OK
+    SrcPortNumber = SourcePort, // OK
     SrcUsername = SourceUserName,
     SrcNatIpAddr= SourceTranslatedAddress,
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
-    SrcBytes = SentBytes,
+    SrcBytes = SentBytes, // OK
     ThreatRiskLevel = DeviceCustomNumber1,
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
-    FileMD5 = DeviceCustomString6
+    FileMD5 = DeviceCustomString6,
+    RuleName = Activity // OK
   // -- Parse
   | parse AdditionalExtensions with 
       "reason=" EventResultOriginalDetails:string ";"
