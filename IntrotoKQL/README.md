@@ -32,7 +32,7 @@ The exericse area is made up of 6 main items:
 
 ### Helpful Links
 
-**KQL Public Documentation:** https://docs.microsoft.com/en-us/azure/data-explorer/kusto/query/
+**KQL Public Documentation:** https://docs.microsoft.com/azure/data-explorer/kusto/query/
 
 **Pluralsight KQL Course:** https://www.pluralsight.com/courses/kusto-query-language-kql-from-scratch
 
