@@ -1,7 +1,7 @@
 <img src="logic_app_logo.png" alt="LogicApps Logo" width="350" height="200">
 
 ## About
-This repo contains sample security playbooks for security automation, orchestration and response (SOAR). Each folder contains a security playbook ARM template that uses Microsoft Azure Sentinel trigger.
+This repo contains sample security playbooks for security automation, orchestration and response (SOAR). Each folder contains a security playbook ARM template that uses Microsoft Sentinel trigger.
 
 ## Instructions for deploying a custom template
 After selecting a playbook, in the Azure portal:
@@ -12,7 +12,7 @@ After selecting a playbook, in the Azure portal:
 5. Fill in needed data and click **Purchase**
 
 Once deployment is complete, you will need to authorize each connection.
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -49,7 +49,7 @@ Once you have created a playbook that you want to export to share, go to the Log
     [concat('<connectorname>-', parameters('PlaybookName'))]
 ```
 
-* For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
+* For example, if you are using Azure Active Directory and Microsoft Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
 
 ```json
     "variables": {

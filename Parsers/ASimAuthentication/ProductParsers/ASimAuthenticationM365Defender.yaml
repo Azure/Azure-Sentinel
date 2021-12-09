@@ -1,0 +1,98 @@
+Parser:
+  Title: ASIM Microsoft 365 Defender DeviceLogonEvent Authentication parser
+  Version: '0.1.0'
+  LastUpdated: July 1, 2021
+Product:
+  Name: M365 Defender
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/AzSentinelAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+      This Query Parser maps M365 Defender Device Logon Events (DeviceLogonEvents) to the Advanced SIEM Information Model authenticaion schema.
+ParserName: ASimAuthenticationM365Defender
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let FaliureReason=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[
+    'InvalidUserNameOrPassword','No such user or password'
+    ];
+  let AuthM365D=(disabled:bool=false){
+    DeviceLogonEvents  | where not(disabled)
+    //
+    | project-rename 
+       EventOriginalResultDetails=FailureReason 
+    | extend 
+    // ----  Event
+        EventSubType=iff(LogonType=='Remote interactive (RDP) logons','RemoteInteractive',LogonType)
+       , EventCount=int(1)
+       , EventStartTime=TimeGenerated
+       , EventEndTime=TimeGenerated
+       , EventOriginalType = LogonType
+       , EventProduct='M365 Defender for EndPoint'
+       ,  EventResult = case(ActionType =='LogonSuccess', 'Success'
+                            , ActionType=='LogonFailed', 'Failure'
+                            , ActionType=='LogonAttempted', 'NA'
+                            , 'NA')
+      , EventSchemaVersion='0.1.0'
+      , EventType='Logon'
+      , EventVendor ='Microsoft'
+     //  ----   Target and Actor Users
+     | project-rename 
+         TargetUserId=AccountSid
+       , ActorUserId =InitiatingProcessAccountSid
+       , ActorUserUpn=InitiatingProcessAccountUpn
+       , ActorUserObjectId=InitiatingProcessAccountObjectId
+      | extend 
+         TargetUserIdType ='SID'
+       , TargetUsername = strcat(AccountDomain,'\\',AccountName)
+       , TargetUsernameType='Windows'
+       , ActorUserIdType='SID'
+       , ActorUsername=coalesce(ActorUserUpn, strcat(InitiatingProcessAccountDomain,'\\',InitiatingProcessAccountName)) // InitiatingProcessAccountName
+       , ActorUsernameType=case(isnotempty( ActorUserUpn), 'Upn/Email'
+                                , isnotempty(InitiatingProcessAccountDomain), 'Windows'
+                                , 'Simple')
+       , TargetDvcHostname=tostring(split(DeviceName,'.')[0])
+       , TargetDvcFQDN=DeviceName
+      | project-rename 
+        LogonProtocol=Protocol
+      , TargetDvcId=DeviceId
+      , SrcDvcIpAddr=RemoteIP
+      , OriginalEventUid=ReportId
+      , SrcDvcHostname=RemoteDeviceName 
+    //
+    , ActingProcessCommandLine = InitiatingProcessCommandLine
+    , ActingProcessCreationTime=InitiatingProcessCreationTime
+    , ActingProcessPath=InitiatingProcessFolderPath
+    , ActingProcessId=InitiatingProcessId
+    , ActingProcessMD5=InitiatingProcessMD5
+    , ActingProcessSHA1=InitiatingProcessSHA1
+    , ActingProcessSHA256= InitiatingProcessSHA256
+    , ActingProcessIntegrityLevel= InitiatingProcessIntegrityLevel
+    , ActingProcessTokenElevation=InitiatingProcessTokenElevation
+    , ParentProcessName=InitiatingProcessParentFileName
+    , ParentProcessId=InitiatingProcessParentId
+    , ParentProcessCreationTime=InitiatingProcessParentCreationTime
+      | extend 
+          ActingProcessName=iff(ActingProcessPath hassuffix InitiatingProcessFileName
+                            , ActingProcessPath
+                            , strcat(ActingProcessPath,'\\',InitiatingProcessFileName))
+      ,  TargetDvcHostnameType='FQDN'
+      , TargetDvcIdType='MDE'
+      , TargetPortNumber=RemotePort
+      , TargetSessionId = tostring(LogonId)
+      | lookup FaliureReason on EventOriginalResultDetails 
+    // TargetUrl 
+    // -----------  Alias
+      | extend 
+        User=TargetUsername 
+        , LogonTarget=TargetDvcHostname
+        , Dvc=TargetDvcHostname
+        };AuthM365D(disabled)
+
