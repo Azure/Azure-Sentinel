@@ -164,7 +164,7 @@ function Enable-GuardDuty
             Write-Log -Message "Executing: aws guardduty list-detectors" -LogFileName $LogFileName -Severity Verbose
             aws guardduty list-detectors
             
-            $script:detectorId = Read-ValidatedHost 'Please enter detector Id'
+            $script:detectorId = Read-ValidatedHost 'Please enter detector Id from the above list'
             Write-Log -Message "Detector Id: $detectorId" -LogFileName $LogFileName
         }
         else
@@ -214,11 +214,12 @@ function Set-GuardDutyPublishDestinationBucket
 
 # ***********       Main Flow       ***********
 
+# Validate AWS configuration
+Test-AwsConfiguration
+
 Write-Log -Message "Starting GuardDuty data connector configuration script" -LogFileName $LogFileName -Severity Verbose
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable GuardDuty Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
-
-# Connect using the AWS CLI
-Get-AwsConfig
+Write-ScriptNotes
 
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
@@ -261,4 +262,4 @@ Enable-GuardDuty
 Set-GuardDutyPublishDestinationBucket
  
 # Output information needed to configure Sentinel data connector
-Write-RequiredConnectorDefinitionInfo
+Write-RequiredConnectorDefinitionInfo -DestinationTable AWSGuardDuty

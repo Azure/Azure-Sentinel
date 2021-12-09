@@ -1,14 +1,14 @@
 id: 70be4a31-9d2b-433b-bdc7-da8928988069
-name: Illegal Function Codes (Microsoft Defender for IoT)
+name: Illegal Function Codes for ICS traffic (Microsoft Defender for IoT)
 description: |
-  'This alert leverages Microsoft Defender for IoT to detect Illegal function codes in SCADA equipment indicating improper application configuration or malicious activity such using illegal values within a protocol to exploit a PLC vulnerability.'
+  'This alert leverages Defender for IoT to detect Illegal function codes in SCADA equipment indicating improper application configuration or malicious activity such using illegal values within a protocol to exploit a PLC vulnerability.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: IoT
     dataTypes:
       - SecurityAlert (ASC for IoT)
-queryFrequency: 6h
-queryPeriod: 6h
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -34,20 +34,44 @@ query: |
   or AlertName == "Unauthorized communication was detected by a User Defined Protocol Rule"
   or AlertName == "Unauthorized Operation was detected by a User Defined whitelist Alert"
   or AlertName == "Illegal Protocol Version"
-  or AlertName contains "Slave Device Received"
+  or AlertName contains "Slave Device Received Illegal"
   | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
-  | extend IPAddress = tostring(parse_json(tostring(parse_json(Entities)[0].IpAddress)).Address)
-  | extend Protocol = tostring(parse_json(tostring(parse_json(Entities)[0].Protocols))[0])
-  | extend DeviceType = tostring(parse_json(Entities)[0].DeviceName)
-  | extend IoTSecurityAgentId = tostring(parse_json(Entities)[0].IoTSecurityAgentId)
-  | extend Vendor = tostring(parse_json(Entities)[0].Vendor)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
   | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
-  | project AlertName, ResourceId, DeviceId, IPAddress, Protocol, DeviceType, Vendor, IoTSecurityAgentId, Tactics, TimeGenerated, RemediationSteps
-  | extend IPCustomEntity = IPAddress
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+  RemidationSteps: RemediationSteps
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
 version: 1.0.0
 kind: Scheduled

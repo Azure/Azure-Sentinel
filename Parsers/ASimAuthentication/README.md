@@ -1,13 +1,13 @@
-# The Azure Sentinel Information Model (ASIM) Authentication parsers
+# The Advanced SIEM Information Model (ASIM) Authentication parsers
 
-This folder includes the the Azure Sentinel Information Model (ASIM) Authentication parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
+This folder includes the the Advanced SIEM Information Model (ASIM) Authentication parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Microsoft Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
 
 <br>
 

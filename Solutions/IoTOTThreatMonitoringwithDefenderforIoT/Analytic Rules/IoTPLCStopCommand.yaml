@@ -1,14 +1,14 @@
 id: a7d3f642-15d8-4e83-99ee-83ca3352525d
-name: Programmable Logic Controller Stop Command (Microsoft Defender for IoT)
+name: PLC Stop Command (Microsoft Defender for IoT)
 description: |
-  'This alert leverages Microsoft Defender for IoT to detect PLC stop commands which could indicate improper configuration or malicious activity on the network such as a threat manipulating PLC programming to affect the function of the network.'
+  'This alert leverages Defender for IoT to detect PLC stop commands which could indicate improper configuration or malicious activity on the network such as a threat manipulating PLC programming to affect the function of the network.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: IoT
     dataTypes:
       - SecurityAlert (ASC for IoT)
-queryFrequency: 6h
-queryPeriod: 6h
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -18,20 +18,53 @@ relevantTechniques:
 query: |
   SecurityAlert
   | where ProductName == "Azure Security Center for IoT"
-  | where AlertName contains "stop" or AlertName contains "restart" or AlertName contains "reset" or AlertName == "Slave Device Unrecoverable Failure" or AlertName == "Suspicion of Hardware Problems in Outstation"
+  | where AlertName == "An S7 Stop PLC Command was Sent"
+  or AlertName == "Controller Reset"
+  or AlertName == "Controller Stop"
+  or AlertName == "Excessive Restart Rate of an Outstation"
+  or AlertName == "GE SRTP Stop PLC Command was Sent"
+  or AlertName == "Outstation Restarted"
+  or AlertName == "Outstation Restarts Frequently"
+  or AlertName == "Profinet Device Factory Reset"
+  or AlertName == "Slave Device Unrecoverable Failure"
+  or AlertName == "Suspicion of Hardware Problems in Outstation"
   | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
-  | extend IPAddress = tostring(parse_json(tostring(parse_json(Entities)[0].IpAddress)).Address)
-  | extend Protocol = tostring(parse_json(tostring(parse_json(Entities)[0].Protocols))[0])
-  | extend DeviceType = tostring(parse_json(Entities)[0].DeviceName)
-  | extend IoTSecurityAgentId = tostring(parse_json(Entities)[0].IoTSecurityAgentId)
-  | extend Vendor = tostring(parse_json(Entities)[0].Vendor)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
   | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
-  | project AlertName, ResourceId, DeviceId, IPAddress, Protocol, DeviceType, Vendor, IoTSecurityAgentId, Tactics, TimeGenerated, RemediationSteps
-  | extend IPCustomEntity = IPAddress
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+  RemidationSteps: RemediationSteps
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
 version: 1.0.0
 kind: Scheduled

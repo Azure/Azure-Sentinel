@@ -1,14 +1,14 @@
 id: caa4665f-21fa-462d-bb31-92226e746c68
-name: IoT High Bandwidth (Microsoft Defender for IoT)
+name: High bandwidth in the network (Microsoft Defender for IoT)
 description: |
-  'This alert leverages Microsoft Defender for IoT to detect an unusually high bandwidth which may be an indication of a new service/process or malicious activity on the network. An example scenario is a cyber threat attempting to manipulate the SCADA network.'
+  'This alert leverages Defender for IoT to detect an unusually high bandwidth which may be an indication of a new service/process or malicious activity on the network. An example scenario is a cyber threat attempting to manipulate the SCADA network.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: IoT
     dataTypes:
       - SecurityAlert (ASC for IoT)
-queryFrequency: 6h
-queryPeriod: 6h
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -18,20 +18,48 @@ relevantTechniques:
 query: |
   SecurityAlert
   | where ProductName == "Azure Security Center for IoT"
-  | where AlertName == "Abnormal Traffic Bandwidth" or AlertName == "Abnormal Traffic Bandwidth Between Devices" or AlertName == "ARP Spoofing" or AlertName == "ICMP Flooding" or AlertName == "Excessive Number of Sessions"
+  | where AlertName == "Abnormal Traffic Bandwidth" 
+  or AlertName == "Abnormal Traffic Bandwidth Between Devices" 
+  or AlertName == "ARP Spoofing" 
+  or AlertName == "ICMP Flooding" 
+  or AlertName == "Excessive Number of Sessions"
   | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
-  | extend IPAddress = tostring(parse_json(tostring(parse_json(Entities)[0].IpAddress)).Address)
-  | extend Protocol = tostring(parse_json(tostring(parse_json(Entities)[0].Protocols))[0])
-  | extend DeviceType = tostring(parse_json(Entities)[0].DeviceName)
-  | extend IoTSecurityAgentId = tostring(parse_json(Entities)[0].IoTSecurityAgentId)
-  | extend Vendor = tostring(parse_json(Entities)[0].Vendor)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
   | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
-  | project AlertName, ResourceId, DeviceId, IPAddress, Protocol, DeviceType, Vendor, IoTSecurityAgentId, Tactics, TimeGenerated, RemediationSteps
-  | extend IPCustomEntity = IPAddress
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDevcieAddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+  RemidationSteps: RemediationSteps
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
 version: 1.0.0
 kind: Scheduled

@@ -1,0 +1,55 @@
+id: 57c7e832-64eb-411f-8928-4133f01f4a25
+name: TI map IP entity to Azure Key Vault logs
+description: |
+  'Identifies a match in Azure Key Vault logsfrom any IP IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureKeyVault
+    dataTypes:
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now() 
+  | where Active == true
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+          AzureDiagnostics
+         | where ResourceType =~ "VAULTS"
+         | where TimeGenerated >= ago(dt_lookBack)
+         | extend KeyVaultEvents_TimeGenerated = TimeGenerated, ClientIP = CallerIPAddress
+  )
+  on $left.TI_ipEntity == $right.ClientIP
+  | where KeyVaultEvents_TimeGenerated < ExpirationDateTime
+  | summarize KeyVaultEvents_TimeGenerated = arg_max(KeyVaultEvents_TimeGenerated, *) by IndicatorId, ClientIP
+  | project KeyVaultEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  TI_ipEntity, ClientIP, ResourceId, SubscriptionId, OperationName, ResultType, CorrelationId, id_s, clientInfo_s, httpStatusCode_d, identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g
+  | extend timestamp = KeyVaultEvents_TimeGenerated
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.1.0
+kind: Scheduled
