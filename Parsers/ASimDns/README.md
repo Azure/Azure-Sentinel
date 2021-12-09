@@ -21,8 +21,8 @@ The template deploys the following parsers:
 
 - Source Agnostic parsers:
   - **ASimDns** - Use this parser when you want to query interactively your DNS logs.
-  - **imDns** - Use this parser, which supports the optimization parameters desribed below, when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query 
-  - **vimDnsEmpty** - Emtpy ASIM DNS table
+  - **imDns** - Use this parser, which supports the filter parameters, when using DNS logs in your content such as detection, hunting queries or workbooks. You can also use it interactively if you want to optimize your query.
+  - **vimDnsEmpty** - Empty ASIM DNS table
 
 - Source Specific Parsers:
   - **Microsoft DNS Server**
