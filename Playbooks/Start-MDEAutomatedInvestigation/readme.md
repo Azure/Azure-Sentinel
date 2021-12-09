@@ -41,5 +41,6 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 ## Screenshots
 **Incident Trigger**<br>
 ![Incident Trigger](./incident-trigger/images/Start-MDEAutomatedInvestigation_incident.png)<br>
-**Alert Trigger**<br>
-![Alert Trigger](./alert--trigger/images/Start-MDEAutomatedInvestigation_alert.png)<br>
+
+**Alert Trigger**  
+![Alert Trigger](./alert-trigger/images/Start-MDEAutomatedInvestigation_alert.png)  

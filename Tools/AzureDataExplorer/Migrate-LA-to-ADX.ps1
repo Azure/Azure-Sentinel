@@ -310,14 +310,16 @@ function New-AdxRawMappingTables {
         else {
             $TableName = $table
         }
+
+        $TableName = $TableName.ToString().Trim()
                 
         if ($TableName -match '_CL$') {                
             Write-Log -Message "Custom log table : $TableName not supported" -LogFileName $LogFileName -Severity Information
         }
-        elseif ($supportedTables.SupportedTables -ccontains $TableName.ToString().Trim()) {        
+        elseif ($supportedTables.SupportedTables -ccontains $TableName) {        
             Write-Log -Message "Retrieving schema and mappings for $TableName" -LogFileName $LogFileName -Severity Information
             $query = $TableName + ' | getschema | project ColumnName, DataType'        
-            $AdxTablesArray.Add($TableName.Trim())
+            $AdxTablesArray.Add($TableName)
             
             Write-Verbose "Executing: (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results"																														  
             $output = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results
@@ -426,17 +428,17 @@ function New-EventHubNamespace {
                         Write-Log -Message "$EventHubNamespaceName created successfully" -LogFileName $LogFileName -Severity Information
                     }                
                 }
-                catch {
-                    
-                    Write-Log -Message "$($_.Exception.Response.StatusCode.value__)" -LogFileName $LogFileName -Severity Error                  
-                    Write-Log -Message "$($_.Exception.Response.StatusDescription)" -LogFileName $LogFileName -Severity Error
+                catch {                    
+                    Write-Log -Message "$($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+                    Write-Log -Message "$($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error
                 }
             }
         } 
         return $EventHubsArray
     }
-    catch {        
-        Write-Log -Message "An error occurred in Create-EventHubNamespace() method" -LogFileName $LogFileName -Severity Error		
+    catch {       
+        Write-Log -Message "An error occurred in Create-EventHubNamespace() method : $($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+        Write-Log -Message "An error occurred in Create-EventHubNamespace() method : $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error         
         exit
     }
 }
@@ -503,8 +505,8 @@ function New-LaDataExportRule {
                     Write-Log -Message $CreateDataExportRule -LogFileName $LogFileName -Severity Information
                 } 
                 catch {                    
-                    Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error                 
-                    Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error                
+                    Write-Log -Message "$($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+                    Write-Log -Message "$($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error                
                 }   
                 $Count++
             }
@@ -590,13 +592,12 @@ function New-ADXDataConnectionRules {
                 
             } 
             catch {
-                
-                Write-Log -Message "An error occurred in retrieving Event Hub topics from $AdxEH" -LogFileName $LogFileName -Severity Error        
+                Write-Log -Message "An error occurred in retrieving Event Hub topics - $($_.ErrorDetails.Message) $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error                                  
             }
         }
     }
     catch {
-        Write-Log -Message "An error occurred in Create-ADXDataConnectionRules() method" -LogFileName $LogFileName -Severity Error		
+        Write-Log -Message "An error occurred in Create-ADXDataConnectionRules() method - $($_.ErrorDetails.Message) $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error		
         exit
     }
 }
@@ -607,6 +608,7 @@ function New-ADXDataConnectionRules {
 
 Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
+Get-RequiredModules("Az.EventHub")
 
 # Check Powershell version, needs to be 5 or higher
 if ($host.Version.Major -lt 5) {
@@ -717,7 +719,7 @@ $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.Choice
 
 $DataConnectionQuestionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
 if ($DataConnectionQuestionDecision -eq 0) {
-    Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
+    Start-SleepMessage -Seconds 1200 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
     New-ADXDataConnectionRules -AdxEventHubs $EventHubsForADX
 }
 else {            

@@ -191,6 +191,10 @@ $status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentine
 
 Write-Host $status
 
+$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/Artifacts/Telemetry/AuditLogs_Hunting.csv" -EventsTable "AuditLogs"
+
+Write-Host $status
+
 #$status = SendToLogA -url "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Artifacts/Telemetry/ABAPAppLog_CL.csv" -EventsTable "ABAPAppLog_CL"
 
 Write-Host $status
@@ -215,4 +219,4 @@ Write-Host $status
 
 Write-Host $status
 
-Start-Sleep -Seconds 540
+Start-Sleep -Seconds 600

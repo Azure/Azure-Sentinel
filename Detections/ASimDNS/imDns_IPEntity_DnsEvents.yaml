@@ -1,0 +1,78 @@
+id: 67775878-7f8b-4380-ac54-115e1e828901
+name: (Preview) TI map IP entity to Dns Events (Normalized DNS)
+description: |
+  Identifies a match in DNS events from any IP IOC from TI
+  To use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelDns).
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+tags:
+  - Id: 69b7723c-2889-469f-8b55-a2d355ed9c87
+    version: 1.0.0
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let IP_TI = (ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+  // Taking the first non-empty value based on potential IOC match availability
+  | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"")
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId);
+  let TI_IP_List=IP_TI | summarize make_set( TI_ipEntity);
+  imDns(starttime=ago(dt_lookBack), response_has_any_prefix=todynamic(toscalar(TI_IP_List)))
+      | extend tilist = toscalar(TI_IP_List)
+      | mv-expand tilist
+      | extend SingleIP=tostring(tilist)
+      | project-away tilist
+      | where has_ipv4(DnsResponseName, SingleIP)
+      | extend DNS_TimeGenerated = TimeGenerated
+  | join IP_TI
+        on $left.SingleIP == $right.TI_ipEntity
+  | where DNS_TimeGenerated >= TimeGenerated and DNS_TimeGenerated < ExpirationDateTime
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, DNS_TimeGenerated,
+  TI_ipEntity, Dvc, EventId, SubType, SrcIpAddr, DnsQuery, DnsResponseName, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  | extend timestamp = DNS_TimeGenerated, IPCustomEntity = TI_ipEntity, HostCustomEntity = Dvc, URLCustomEntity = Url
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+customDetails:
+  LatestIndicatorTime: LatestIndicatorTime
+  Description: Description
+  ActivityGroupNames: ActivityGroupNames
+  IndicatorId: IndicatorId
+  ThreatType: ThreatType
+  ExpirationDateTime: ExpirationDateTime
+  ConfidenceScore: ConfidenceScore
+  DNSRequestTime: DNS_TimeGenerated
+  SourceIPAddress: SrcIpAddr
+  EventId: EventId
+  SubType: SubType 
+  DnsQuery: DnsQuery
+version: 1.0.0
+kind: Scheduled

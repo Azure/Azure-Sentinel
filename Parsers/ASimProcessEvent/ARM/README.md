@@ -1,13 +1,13 @@
-# Azure Sentinel Information Model (ASIM) ProcessEvent parsers 
+# Advanced SIEM Information Model (ASIM) ProcessEvent parsers 
 
-This folder includes the the Azure Sentinel Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
+This folder includes the the Advanced SIEM Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel ProcessEvent normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Microsoft Sentinel ProcessEvent normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
 
 <br>
 
@@ -31,7 +31,7 @@ This template deploys the following parsers:
   * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
   * **Windows Events** collecting using the Azure Monitor Agent - vimProcessCreateMicrosoftWindowsEvents, vimProcessCreationMicrosoftWindowsEvents. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
-  * **Azude Defender for IoT (AD4IoT)** - vimProcessEventAD4IoT  
+  * **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimProcessEventMD4IoT  
 
 ## Analytics rules
 

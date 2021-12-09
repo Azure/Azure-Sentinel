@@ -1,0 +1,107 @@
+Parser:
+  Title: DNS activity ASIM parser for Sysmon for Windows
+  Version: '0.2'
+  LastUpdated: Nov 11 2021
+Product:
+  Name: Microsoft Windows Events Sysmon
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: This ASIM parser supports normalizing Sysmon for Windows DNS events (event number 22) collected using the Log Analytic Agent to the ASIM DNS activity normalized schema. The parser supports events collected to both the Event and WindowsEvent tables.
+ParserName: ASimDnsMicrosoftSysmon
+EquivalentBuiltInParser: _ASim_Dns_MicrosoftSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+    let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
+        // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-
+        0, 'NOERROR'
+      , 9001, "FORMERR"
+      , 9002,"SERVFAIL"
+      , 9003,'NXDOMAIN'
+      , 9004,'NOTIMP'
+      , 9005,'REFUSED'
+      , 9006,'YXDOMAIN'
+      , 9007,'YXRRSET'
+      , 9008,'NXRRSET'
+      , 9009,'NOTAUTH'
+      , 9010,'NOTZONE'
+      , 9011,'DSOTYPENI'
+      , 9016,'BADVERS'
+      , 9016,'BADSIG'
+      , 9017,'BADKEY'
+      , 9018,'BADTIME'
+      , 9019,'BADMODE'
+      , 9020,'BADNAME'
+      , 9021,'BADALG'
+      , 9022,'BADTRUNC'
+      , 9023,'BADCOOKIE'
+      , 1460, 'TIMEOUT'
+      ];
+    let ParsedDnsEvent_Event =(disabled:bool=false) {
+        Event 
+        | where Source == "Microsoft-Windows-Sysmon" and EventID==22
+        | parse EventData with 
+           *'<Data Name="RuleName">' RuleName:string '</Data>' 
+            '<Data Name="UtcTime">' EventEndTime:datetime '</Data>'
+            '<Data Name="ProcessGuid">{' ProcessGuid:string '}</Data>'
+            '<Data Name="ProcessId">' ProcessId:string '</Data>'
+            '<Data Name="QueryName">' DnsQuery:string '</Data>'
+            '<Data Name="QueryStatus">' DnsResponseCode:int  '</Data>'
+            '<Data Name="QueryResults">' DnsResponseName:string '</Data>'
+            '<Data Name="Image">' Process:string '</Data>'*
+        | parse EventData with * '<Data Name="User">'SrcUsername:string '</Data>' *
+        | project-away EventData, ParameterXml, RenderedDescription
+    };
+    let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
+        WindowsEvent
+        | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
+        | extend 
+            RuleName = tostring(EventData.RuleName),
+            EventEndTime = todatetime(EventData.UtcTime),
+            ProcessGuid = extract ('{(.*)}', 1, tostring(EventData.ProcessGuid), typeof(string)),
+            ProcessId = tostring(EventData.ProcessId),  
+            DnsQuery = tostring(EventData.QueryName),
+            DnsResponseCode = toint(EventData.QueryStatus),
+            DnsResponseName = tostring(EventData.QueryResults),
+            Process = tostring(EventData.Image),
+            SrcUsername = tostring(EventData.User)
+        | project-away EventData
+    };
+    union isfuzzy=true ParsedDnsEvent_Event(disabled), ParsedDnsEvent_WindowsEvent(disabled)
+      | lookup RCodeTable on DnsResponseCode
+      | project-rename 
+          DvcHostname = Computer
+      | extend
+          EventOriginalUid = '22',
+          EventCount=int(1),
+          EventProduct = 'Sysmon',
+          EventVendor = 'Microsoft',
+          EventSchema = 'Dns',
+          EventSchemaVersion="0.1.3",
+          EventType = 'lookup',
+          EventResult = iff (DnsResponseCode == 0,'Success','Failure'),
+          EventStartTime = EventEndTime,
+          EventSubType= 'response',
+          EventSeverity= iif (DnsResponseCode == 0, 'Informational', 'Low'),
+          SrcUsernameType = 'Windows'
+      // -- Aliases
+      | extend 
+          EventResultDetails = DnsResponseCodeName,
+          Domain = DnsQuery,
+          Dvc = DvcHostname,
+          SrcHostname = DvcHostname,
+          Src = DvcHostname,
+          DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),
+          User = SrcUsername
+      // -- Backward Computability
+      | extend
+          Query=DnsQuery,
+          ResponseCodeName=DnsResponseCodeName

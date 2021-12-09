@@ -1,0 +1,62 @@
+Parser:
+  Title: DNS activity ASIM parser for GCP 
+  Version: '0.2'
+  LastUpdated: Nov 11 2021
+Product:
+  Name: GCP Cloud DNS
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports normalizing Google Cloud Platform (GCP) DNS logs to the ASIM DNS activity normalized schema.
+ParserName: ASimDnsGcp
+EquivalentBuiltInParser: _ASim_Dns_Gcp
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DNSQuery_GcpDns=(disabled:bool=false){
+    GCP_DNS_CL | where not(disabled)
+    | where resource_type_s == "dns_query"
+    | project-rename
+        DnsQuery=payload_queryName_s, 
+        DnsQueryTypeName=payload_queryType_s,
+        DnsResponseName=payload_rdata_s, 
+        EventResultDetails=payload_responseCode_s,
+        NetworkProtocol=payload_protocol_s, 
+        SrcIpAddr=payload_sourceIP_s,
+        EventOriginalUid=insert_id_s,
+        EventSeverity=severity_s    
+    | extend
+        EventCount=int(1),
+        EventProduct='Cloud DNS',
+        EventVendor='GCP',
+        EventSchema = 'Dns',
+        EventSchemaVersion="0.1.3",
+        Dvc="GCPDNS" ,
+        EventType = iif (resource_type_s == "dns_query", "Query", resource_type_s),
+        EventResult=iff(EventResultDetails=~'NOERROR','Success','Failure'),
+        EventSubType='response',
+        EventEndTime=todatetime(timestamp_t)
+    | extend
+        EventStartTime = EventEndTime,
+        EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure')
+   // -- Aliases
+    | extend 
+        DnsResponseCodeName=EventResultDetails, 
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr
+   // Backward Computability
+    | extend
+        Query=DnsQuery,
+        ResponseCodeName=DnsResponseCodeName,
+        QueryTypeName=DnsQueryTypeName
+    };
+    DNSQuery_GcpDns(disabled)

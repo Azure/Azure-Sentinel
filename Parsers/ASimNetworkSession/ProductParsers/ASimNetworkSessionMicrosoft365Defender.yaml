@@ -1,0 +1,184 @@
+Parser:
+  Title: M365 Defender Network Sessions
+  Version: '0.1'
+  LastUpdated: Aug 4, 2021
+Product:
+  Name: M365 Defender
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.0'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/AzSentinelNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: |
+  This Query Parser maps M365 Defender network events to the Advanced SIEM Information Model Network Session schema.
+ParserName: ASimNetworkSessionMicrosoft365Defender
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+ let M365Defender=(disabled:bool=false){
+  let DirectionLookup=datatable(ActionType:string,NetworkDirection:string,Outbound:boolean)[
+    'ConnectionSuccess','Outbound', true
+    ,'ConnectionFailed', 'Outbound', true
+    ,'ConnectionRequest','Outbound', true
+    ,'InboundConnectionAccepted', 'Inbound', false
+    ,'ConnectionFound', 'Unknown', false
+    ,'ListeningConnectionCreated', 'Listening', false 
+  ];
+  // -- Common preprocessing to both input and outbound events
+  let RawNetworkEvents =
+    DeviceNetworkEvents | where not(disabled)
+    | extend
+      // Event
+      EventOriginalUid = tostring(ReportId),
+      EventCount = int(1),
+      EventProduct = 'M365 Defender for Endpoint',
+      EventVendor = 'Microsoft',
+      EventSchema = 'NetworkSession',
+      EventSchemaVersion = '0.1.0',
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventType = 'NetworkSession',
+      EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
+      EventSeverity = "Informational",
+      DvcIdType = 'MDEid'
+    | project-rename
+      NetworkProtocol = Protocol,
+      DvcFQDN = DeviceName
+    | extend
+      User = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
+      UsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),
+      SplitHostname = split(DvcFQDN,"."),
+      SplitUrl = split(RemoteUrl,".")
+    | extend  
+      DvcHostname = SplitHostname[0],
+      DvcDomain = strcat_array(array_slice(SplitHostname, 1, -1), '.'),
+      UrlHostname = SplitUrl[0],
+      UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1), '.'),
+      SrcDomainType = "FQDN",
+      DvcDomainType = "FQDN",
+      DstDomainType = "FQDN",
+      DvcIpAddr = LocalIP
+    | extend
+      Dvc = DvcHostname  
+    | project-rename
+      DvcId = DeviceId
+    | project-away SplitUrl, SplitHostname
+  ;
+  let OutboundNetworkEvents = 
+    RawNetworkEvents
+    | lookup DirectionLookup on ActionType
+    | where Outbound
+    | project-rename
+       DstIpAddr = RemoteIP,
+       SrcIpAddr = LocalIP,
+       DstPortNumber = RemotePort,
+       SrcPortNumber = LocalPort,
+       SrcUsernameType = UsernameType,
+       SrcUserAadId = InitiatingProcessAccountObjectId,
+       SrcUserId = InitiatingProcessAccountSid,
+       SrcUserUpn = InitiatingProcessAccountUpn,
+       SrcUserDomain = InitiatingProcessAccountDomain
+    | extend
+       SrcUsername = User,
+       SrcDvcId = DvcId,
+       SrcDvcIdType = 'MDEid',
+       SrcUserIdType = "SID",
+      DstHostname = tostring(UrlHostname)
+    | project-rename
+       DstDomain = UrlDomain,
+       DstFQDN = RemoteUrl
+    | extend  
+       SrcHostname = DvcHostname,
+       SrcDomain = DvcDomain,
+       SrcFQDN = DvcDomain
+    // Processes
+    | extend
+       SrcProcessId = tostring(InitiatingProcessId),
+       ParentProcessId = tostring(InitiatingProcessParentId)
+    | project-rename
+       SrcProcessName = InitiatingProcessFileName,
+       SrcProcessCommandLine = InitiatingProcessCommandLine,
+       SrcProcessCreationTime = InitiatingProcessCreationTime,
+       SrcProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+       SrcProcessTokenElevation = InitiatingProcessTokenElevation,
+       ParentProcessName = InitiatingProcessParentFileName,
+       ParentProcessCreationTime = InitiatingProcessParentCreationTime
+       // SrcProcessFileSize = InitiatingProcessFileSize,
+       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
+       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
+       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
+       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
+       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
+       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
+    | extend
+       Process = SrcProcessName,
+       ProcessId = SrcProcessId,
+       SrcAppName = SrcProcessName,
+       SrcAppType = "Process"
+  ;
+  let InboundNetworkEvents = 
+    RawNetworkEvents
+    | lookup DirectionLookup on ActionType
+    | where not(Outbound)
+    | project-rename
+       SrcIpAddr = RemoteIP,
+       DstIpAddr = LocalIP,
+       SrcPortNumber = RemotePort,
+       DstPortNumber = LocalPort,
+       DstUsernameType = UsernameType,
+       DstUserAadId = InitiatingProcessAccountObjectId,
+       DstUserId = InitiatingProcessAccountSid,
+       DstUserUpn = InitiatingProcessAccountUpn,
+       DstUserDomain = InitiatingProcessAccountDomain
+    | extend
+       DstUsername = User,
+       DstDvcId = DvcId,
+       DstDvcIdType = 'MDEid',
+       DstUserIdType = 'SID'
+   | project-rename
+       SrcHostname = UrlHostname,
+       SrcDomain = UrlDomain,
+       SrcFQDN = RemoteUrl
+    | extend  
+       DstHostname = tostring(DvcHostname),
+       DstDomain = DvcDomain,
+       DstFQDN = DvcFQDN
+    // Processes
+    | extend
+       DstProcessId = tostring(InitiatingProcessId),
+       ParentProcessId = tostring(InitiatingProcessParentId)
+    | project-rename
+       DstProcessName = InitiatingProcessFileName,
+       DstProcessCommandLine = InitiatingProcessCommandLine,
+       DstProcessCreationTime = InitiatingProcessCreationTime,
+       DstProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+       DstProcessTokenElevation = InitiatingProcessTokenElevation,
+       ParentProcessName = InitiatingProcessParentFileName,
+       ParentProcessCreationTime = InitiatingProcessParentCreationTime
+       // SrcProcessFileSize = InitiatingProcessFileSize,
+       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
+       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
+       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
+       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
+       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
+       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
+    | extend
+       Process = DstProcessName,
+       ProcessId = DstProcessId,
+       DstAppName = DstProcessName,
+       DstAppType = "Process"
+  ;
+  union InboundNetworkEvents, OutboundNetworkEvents
+  | extend // aliases
+     Hostname = DstHostname,
+     IpAddr = SrcIpAddr,
+     Src = SrcIpAddr,
+     Dst = DstIpAddr
+  };
+  M365Defender(disabled)
+

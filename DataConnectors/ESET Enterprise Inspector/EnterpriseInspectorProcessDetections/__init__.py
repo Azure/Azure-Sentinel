@@ -17,6 +17,7 @@
 import logging
 import json
 import os
+import re
 
 import azure.functions as func
 
@@ -42,7 +43,7 @@ def main(eeimsg: func.QueueMessage) -> None:
     log_type = 'ESETEnterpriseInspector'
 
     if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
-        logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+        logAnalyticsUri = 'https://' + workspace_id + '.ods.opinsights.azure.com'
 
     pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
     match = re.match(pattern,str(logAnalyticsUri))

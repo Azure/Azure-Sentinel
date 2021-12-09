@@ -1,0 +1,52 @@
+id: 983a6922-894d-413c-9f04-d7add0ecc307
+name: Potential DGA detected (ASimDNS)
+description: |
+  'Identifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains
+  where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with 
+  NXDomain records in prior 10-day baseline period).
+  To use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelDns)''
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 10d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+tags:
+  - Id: a0907abe-6925-4d90-af2b-c7e89dc201a6
+    version: 1.0.0
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
+query: |
+  let referencestarttime = 10d;
+  let referenceendtime = 1d;
+  let threshold = 100;
+  let nxDomainDnsEvents = (stime:datetime, etime:datetime) 
+    {imDns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)
+    | where DnsQueryTypeName in ("A", "AAAA")
+    | where ipv4_is_match("127.0.0.1", SrcIpAddr) == False
+    | where DnsQuery !contains "/" and  DnsQuery contains "."};
+  nxDomainDnsEvents (stime=ago(referenceendtime) ,etime=now())
+    | extend sld = tostring(split(DnsQuery, ".")[-2])
+    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(sld) by SrcIpAddr
+    | where dcount_sld > threshold
+    // Filter out previously seen IPs
+    | join kind=leftanti (nxDomainDnsEvents (stime=ago(referencestarttime), etime=ago(referenceendtime))
+      | extend sld = tostring(split(DnsQuery, ".")[-2])
+      | summarize dcount(sld) by SrcIpAddr
+      | where dcount_sld > threshold ) on SrcIpAddr
+  // Pull out sample NXDomain responses for those remaining potentially infected IPs
+  | join kind = inner (nxDomainDnsEvents (stime=ago(referencestarttime), etime=now()) | summarize by DnsQuery, SrcIpAddr) on SrcIpAddr
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), sampleNXDomainList=make_list(DnsQuery, 100)  by SrcIpAddr, dcount_sld
+  | extend timestamp = StartTimeUtc, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

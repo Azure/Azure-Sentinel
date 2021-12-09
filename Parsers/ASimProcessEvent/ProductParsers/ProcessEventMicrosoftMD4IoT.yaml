@@ -1,0 +1,53 @@
+Parser:
+  Title: ASIM Process Event Parser for Microsoft Defender for IoT - Endpoint 
+  Version: '0.1.0'
+  LastUpdated: Aug 4, 2021
+Product:
+  Name: Microsoft Defender for IoT - Endpoint
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Azure Defender for IoT Process Events Parser
+ParserName: vimProcessEventMD4IoT
+ParserQuery: |
+             let ProcessEvents_MD4IoT=()
+              {
+                SecurityIoTRawEvent 
+                | where RawEventName == "Process" 
+                | extend
+                  EventDetails = todynamic(EventDetails),
+                  EventOriginalUid = tostring(EventDetails.OriginalEventId), 
+                  EventCount = toint(EventDetails.HitCount), 
+                  EventProduct = 'Azure Defender for IoT', 
+                  EventVendor = 'Microsoft', 
+                  EventSchemaVersion = '0.1.0', 
+                  EventStartTime = todatetime(EventDetails.TimestampUTC), 
+                  EventEndTime = todatetime(TimeGenerated), 
+                  EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), 
+                  EventSubType = tostring(EventDetails.EventType),
+                  EventResult = 'Success', 
+                  TargetProcessId = tostring(EventDetails.ProcessId), 
+                  TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), 
+                  TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline," ")[0]),
+                  DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"), // Intermediate fix
+                  TargetUsernameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
+                  TargetUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), ""), 
+                  ActingProcessId = iff (DvcOs == "Windows", tostring(EventDetails.ParentProcessId), "") 
+                | project-rename
+                   DvcHostname = DeviceId,
+                   EventProductVersion = AgentVersion, // Not available in Windows
+                  _ResourceId = AssociatedResourceId, 
+                  _SubscriptionId = AzureSubscriptionId 
+                | extend 
+                   // -- aliases
+                  User = TargetUsername, 
+                  CommandLine = TargetProcessCommandLine, 
+                  Process = TargetProcessName, 
+                  Dvc = DvcHostname 
+               };
+               ProcessEvents_MD4IoT

@@ -1,0 +1,51 @@
+Parser:
+  Title: ASIM Sysmon/Linux Process Termination Event Parser
+  Version: '0.1'
+  LastUpdated: Sep 26, 2021
+Product:
+  Name: Microsoft Linux Sysmon
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/AzSentinelProcessEventsDoc
+- Title: ASIM
+  Link: https:/aka.ms/AzSentinelNormalization
+Description: ASIM Sysmon/Linux Process Termination Event Parser (event number 5)
+ParserName: vimProcessTerminateLinuxSysmon
+ParserQuery: | 
+            let ParsedProcessEvent=(){
+            Syslog
+            | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>5</EventID>')
+            | parse SyslogMessage with * '<Data Name="RuleName">'RuleName'</Data>'
+                                        '<Data Name="UtcTime">'UtcTime'</Data>'
+                                        '<Data Name="ProcessGuid">{'ProcessGuid'}</Data>'
+                                        '<Data Name="ProcessId">'ProcessId:string'</Data>'
+                                        '<Data Name="Image">'Image'</Data>'*
+            | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>' *
+            | project-away SyslogMessage
+            | extend 
+                                    EventType = "ProcessTerminated",
+                                    EventStartTime = todatetime(TimeGenerated),
+                                    EventEndTime = todatetime(TimeGenerated),
+                                    EventCount = int(1),
+                                    EventVendor = "Microsoft",
+                                    EventSchemaVersion = "0.1.0",
+                                    EventOriginalType='5',
+                                    EventProduct = "Sysmon",
+                                    EventResult = 'Success',
+                                    DvcOs = "Linux"
+                            | project-rename
+                                    DvcHostname = Computer,
+                                    TargetProcessName = Image,
+                                    TargetProcessId = ProcessId
+                            | extend
+                                    ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                                    TargetProcessGuid = ProcessGuid,
+                                    //***** Aliases ******
+                                    User = ActorUsername,
+                                    Process = TargetProcessName,
+                                    Dvc = DvcHostname
+            }; ParsedProcessEvent
+

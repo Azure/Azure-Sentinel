@@ -89,7 +89,7 @@ In this exercise you will use Azure sentinel analytics rule wizard to create new
 	OfficeActivity_CL
 	| distinct Operation_s
     ```
-- As you can see the **New-Mailbox** operation is indeed captures in your index.
+- As you can see the **New-InboxRule** operation is indeed captured in your logs.
 
 ![fustion alert story](../Images/m3-distinct_Events.gif?raw=true)
 
