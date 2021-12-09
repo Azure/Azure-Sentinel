@@ -94,7 +94,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         Write-Host "Generating Workbook using $file"
 
                         $fileName = Split-Path $file -leafbase;
-
+                        $fileName = $fileName + "_workbook";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -216,6 +216,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
                         $fileName = Split-path -Parent $file | Split-Path -leaf
+                        $fileName = "playbook$playbookCounter-$fileName";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -747,7 +748,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             $fileName = Split-Path $file -leafbase;
-
+                            $fileName += "_HuntingQueries";
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -900,6 +901,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $content = ''
 
                             $fileName = Split-Path $file -leafbase;
+                            $fileName += "_AnalyticalRules";
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -956,12 +958,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
+                            
+                            # Handle optional fields
+                            foreach($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")){
+                                if($yaml.$yamlField){
+                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
+                                }
+                            }
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
-                                apiVersion = "2020-01-01";
+                                apiVersion = "2021-03-01-preview";
                                 kind       = "Scheduled";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
@@ -988,6 +997,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         $fileName = Split-Path $file -leafbase;
+                        $fileName = $fileName + "_Parser";
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
@@ -1075,9 +1085,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
             if($validJson -and $json) {
                 # Create Metadata Resource Object
-                if($json.publisherId  -and $json.planId)
+                if($json.publisherId  -and $json.offerId)
                 {
-                    $sourceId = $json.publisherId + "." + $json.planId;
+                    $sourceId = $json.publisherId + "." + $json.offerId;
                 }
                 if($json.support)
                 {
@@ -1152,7 +1162,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     criteria = $DependencyCriteria;
                 };
 
-                $newMetadata | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
 
                 if($json.firstPublishDate -and $json.firstPublishDate -ne "")
                 {
@@ -1172,13 +1182,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].Value.Length -gt 0)
                 {
                     $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].Value;
-                    $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
+                    $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
 
                 if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].Value.Length -gt 0)
                 {
                     $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value;
-                    $newMetadata | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
+                    $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
                 $baseMainTemplate.resources += $newMetadata;
             }

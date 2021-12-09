@@ -1,71 +1,169 @@
-function Set-ArnRole{
-    Write-Output `n`n'Arn Role Defenition'
-    Retry-Action({
-        $script:roleName = Read-Host 'Please insert Role Name. If you have already configured an Assume Role for Azure Sentinel in the past, please type the name'
+function New-ArnRole
+{
+   <#
+   .SYNOPSIS
+        Creates a new role
+   #>
+   Write-Log -Message "Assume role definition" -LogFileName $LogFileName -Severity Information -LinePadding 2
+   Write-Log -Message "Executing Set-RetryAction" -LogFileName $LogFileName -Severity Verbose
+    
+   Set-RetryAction({
+
+        $script:roleName = Read-ValidatedHost -Prompt 'Please enter role name. If you have already configured an assume role for Azure Sentinel, use the same role name'
+        Write-Log -Message "Using role name: $roleName" -LogFileName $LogFileName -Severity Information -Indent 2
+        
+        # Determine if this role already exists before continuing
+        Write-Log "Executing: aws iam get-role --role-name $roleName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
         aws iam get-role --role-name $roleName 2>&1| Out-Null
+
+        # If there was an error the role does not already exist, so it must be created.
         $isRuleNotExist = $lastexitcode -ne 0
-        if($isRuleNotExist)
+        if ($isRuleNotExist)
         {
-            $workspaceId = Read-Host 'Please insert Workspae Id (External Id)'
-            $rolePolicy = Get-RoleArnPolicy
-            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy 2>&1
-            if($lastexitcode -eq 0)
+            Write-Output "`n`n"
+            Write-Log "You must specify the the Azure Sentinel Workspace ID. This is found in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 1
+            
+            $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
+            Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
+
+            $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
+            
+            Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(Get-SentinelTagInJsonFormat) 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags [$(Get-SentinelTagInJsonFormat)] 2>&1
+            Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+            
+            # If the role was retrieved then the role was created successfully
+            if ($lastexitcode -eq 0)
             {
-                Write-Host  "${roleName} Role was successful created"
+                Write-Log -Message "$roleName role created successfully" -LogFileName $LogFileName -Severity Information -Indent 2
             }
         }
     })
 }
 
-function Set-S3Bucket{
-    Write-Output `n`n'S3 Bucket Definition.'
-    Retry-Action({
-        $script:bucketName = Read-Host 'Please insert S3 Bucket Name'
-        $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
-        $isBucketNotExist = $headBucketOutput -ne $null
-        if($isBucketNotExist)
+function New-S3Bucket
+{
+    <#
+   .SYNOPSIS
+        Creates a new S3 Bucket
+   #>
+   
+    Write-Output `n`n'S3 bucket definition.'
+    Set-RetryAction(
         {
-            $bucketRegion = Read-Host 'Please insert Bucket Region'
-            if($bucketRegion -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
+        
+        # Get s3 bucket name from user and clean up based on naming rules see https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
+        
+        $script:bucketName = (Read-ValidatedHost -Prompt "Please enter S3 bucket name (between 3 and 63 characters long)" -MaxLength 64 -MinLength 3)
+
+        Write-Log -Message "Using S3 Bucket name: $bucketname" -LogFileName $LogFileName -Indent 2
+        
+        $regionConfiguration = aws configure get region
+        Write-Log -Message "current region configuration: $regionConfiguration" -LogFileName $LogFileName -Severity Verbose
+
+        Write-Log -Message "Executing: aws s3api head-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
+            
+        $isBucketNotExist = $null -ne $headBucketOutput
+        if ($isBucketNotExist)
+        {      
+            if ($regionConfiguration -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
             {
+                Write-Log -Message "Executing: aws s3api create-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
                 $tempForOutput = aws s3api create-bucket --bucket $bucketName 2>&1
+                Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             }
             else
             {
-                $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$bucketRegion 2>&1
+                Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1" -LogFileName $LogFileName -Severity Verbose
+                $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1
+                Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
             }
-            
-            if($lastexitcode -eq 0)
+                
+            if ($lastexitcode -eq 0)
             {
-                Write-Host  "${bucketName} Bucket was successful created"
+                Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
             }
+            elseif($error[0] -Match "InvalidBucketName")
+            {
+                 Write-Log -Message "Please see AWS bucket name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
+            }
+
+            Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
+            aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
         }
     })
+    
+    Write-Log -Message "Executing: (aws sts get-caller-identity | ConvertFrom-Json).Account" -LogFileName $LogFileName -Severity Verbose
     $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
+    Write-Log -Message $callerAccount -LogFileName $LogFileName -Severity Verbose
+
 }
 
-function Set-SQSQueue{
-    Write-Output `n'Creating SQS queue'
-    Retry-Action({
-        $script:sqsName = Read-Host 'Please insert Sqs Name'
-        $tempForOutput = aws sqs create-queue --queue-name $sqsName 2>&1
+function New-SQSQueue
+{
+   <#
+   .SYNOPSIS
+        Creates a SQS Queue
+   #>
+    Write-Log -Message "Creating SQS queue:" -LogFileName $LogFileName -LinePadding 2
+    Set-RetryAction({
+
+        $script:sqsName = Read-ValidatedHost -Prompt "Please enter Sqs Name"
+        Write-Log -Message "Using Sqs name: $sqsName" -LogFileName $LogFileName -Indent 2
+
+        $sentinelTags =  "{\""$(Get-SentinelTagKey)\"": \""$(Get-SentinelTagValue)\""}"
+        Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $tempForOutput = aws sqs create-queue --queue-name $sqsName --tags $sentinelTags 2>&1
+        Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+
+        if ($lastexitcode -ne 0 -and $error[0] -Match "QueueAlreadyExists")
+        {
+            Write-Log -Message "Executing: aws sqs create-queue --queue-name $sqsName 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws sqs create-queue --queue-name $sqsName 2>&1
+            Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+        }
     })
 }
 
-function Enable-S3EventNotification{
-    Param([Parameter(Mandatory=$true)][string]$DefaultEvenNotificationPrefix)
-    Write-Output `n'Enabling S3 Event Notifications (for *.gz file)'
-    Retry-Action({
-        $eventNotificationName = Read-Host 'Please insert the Event Notifications Name'
-        $eventNotificationPrefix = $DefaultEvenNotificationPrefix
-        $prefixOverrideConfirm = Read-Host "The Default prefix is '${eventNotificationPrefix}'. `nDo you want to override the event notification prefix? [y/n](n by default)"
-        if($prefixOverrideConfirm -eq 'y')
+function Enable-S3EventNotification 
+{
+    <#
+   .SYNOPSIS
+        Enables S3 event notifications. User may override the default prefix
+
+    .PARAMETER DefaultEventNotificationPrefix
+        Specifies the default prefix. The user may override this prefix and specify a new one
+   #>
+    param(
+        [Parameter(Mandatory=$true)][string]$DefaultEventNotificationPrefix
+        )
+        Write-Log -Message "Enabling S3 event notifications (for *.gz file)" -LogFileName $LogFileName -LinePadding 2
+    
+    Set-RetryAction({
+        $eventNotificationName = ""
+        while ($eventNotificationName -eq "")
         {
-            $eventNotificationPrefix = Read-Host 'Please insert the Event Notifications Prefix'
+            $eventNotificationName = Read-ValidatedHost -Prompt 'Please enter the event notifications name'
+            Write-Log -Message "Using event notification name: $eventNotificationName" -LogFileName $LogFileName -Indent 2
         }
-        $newEventConfig = Get-SqsEventNotificationConfig
+
+        $eventNotificationPrefix = $DefaultEventNotificationPrefix
+
+        Write-Log -Message "Event notificaion prefix definition, to Limit the notifications to objects with key starting with specified characters." -LogFileName $LogFileName     
+        $prefixOverrideConfirm = Read-ValidatedHost -Prompt "The default prefix is '$eventNotificationPrefix'. `n  Do you want to override the event notification prefix? [y/n]" -ValidationType Confirm
+        if ($prefixOverrideConfirm -eq 'y')
+        {
+            $eventNotificationPrefix = Read-ValidatedHost 'Please enter the event notifications prefix'
+            Write-Log -Message "Using event notification prefix: $eventNotificationPrefix" -LogFileName $LogFileName -Indent 2
+        }
+
+        $newEventConfig = Get-SqsEventNotificationConfig -EventNotificationName $eventNotificationName -EventNotificationPrefix $eventNotificationPrefix -SqsArn $sqsArn
+
+        Write-Log -Message "Executing: aws s3api get-bucket-notification-configuration --bucket $bucketName" -LogFileName $LogFileName -Severity Verbose
         $existingEventConfig = aws s3api get-bucket-notification-configuration --bucket $bucketName
-        if($existingEventConfig -ne $null)
+
+        if ($null -ne $existingEventConfig)
         {
             $newEventConfigObject = $newEventConfig | ConvertFrom-Json
             $existingEventConfigObject = $existingEventConfig | ConvertFrom-Json 
@@ -77,24 +175,47 @@ function Enable-S3EventNotification{
         {
             $updatedEventConfigs = $newEventConfig.Replace('"','\"')
         }
+        Write-Log -Message "Executing: aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1" -LogFileName $LogFileName -Severity Verbose
         $tempForOutput = aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1
+        if ($null -ne $tempForOutput)
+        {
+            Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+        }
+        
     })
 }
 
-function Set-KMS{
-    Write-Output `n`n'Kms Definition.'
-    Retry-Action({
-        $script:kmaAliasName = Read-Host 'Please insert KMS alias Name'
-        $script:kmsKeyDescription = aws kms describe-key --key-id alias/$kmaAliasName 2>&1
+function New-KMS
+{
+    <#
+    .SYNOPSIS
+        Creates a new Kms
+    #>
+    Write-Log -Message "Kms definition." -LogFileName $LogFileName -LinePadding 2
+    Set-RetryAction({
+        $script:kmsAliasName = Read-ValidatedHost -Prompt "Please enter the KMS alias name"
+        Write-Log -Message "Using Kms alias name: $kmsAliasName" -LogFileName $LogFileName -Indent 2
+        Write-Log -Message "Executing: aws kms describe-key --key-id alias/$kmsAliasName 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $script:kmsKeyDescription = aws kms describe-key --key-id alias/$kmsAliasName 2>&1
+        Write-Log -Message $kmsKeyDescription -LogFileName $LogFileName -Severity Verbose
+
         $isKmsNotExist = $lastexitcode -ne 0
-        if($isKmsNotExist)
+        if ($isKmsNotExist)
         {
-            $script:kmsKeyDescription = aws kms create-key
+            $sentinelTag = "{\""TagKey\"": \""$(Get-SentinelTagKey)\"", \""TagValue\"": \""$(Get-SentinelTagValue)\""}"
+            Write-Log -Message "Executing: aws kms create-key --tags $sentinelTag" -LogFileName $LogFileName -Severity Verbose    
+            $script:kmsKeyDescription = aws kms create-key --tags $sentinelTag          
+            Write-Log -Message $kmsKeyDescription -LogFileName $LogFileName -Severity Verbose
             $kmsKeyId = ($script:kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
-            $tempForOutput = aws kms create-alias --alias-name alias/$kmaAliasName --target-key-id $kmsKeyId 2>&1
-            if($lastexitcode -eq 0)
+
+            Write-Log -Message "Executing: ws kms create-alias --alias-name alias/$kmsAliasName --target-key-id $kmsKeyId 2>&1" -LogFileName $LogFileName -Severity Verbose
+            $tempForOutput = aws kms create-alias --alias-name alias/$kmsAliasName --target-key-id $kmsKeyId 2>&1
+            Write-Log -Message "$tempForOutput" -LogFileName $LogFileName -Severity Verbose
+            
+            if ($lastexitcode -eq 0)
             {
-                Write-Host  "${kmaAliasName} Kms was successful created"
+
+                Write-Log -Message "$kmsAliasName created successfully" -LogFileName $LogFileName -Indent 2
             }
         }
     })

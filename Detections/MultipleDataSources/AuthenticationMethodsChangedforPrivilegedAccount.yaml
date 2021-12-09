@@ -1,0 +1,48 @@
+id: 694c91ee-d606-4ba9-928e-405a2dd0ff0f
+name: Authentication Methods Changed for Privileged Account
+description: |
+  'Identifies authentication methods being changed for a privileged account. This could be an indicated of an attacker adding an auth method to the account so they can have continued access.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - AADSecOpsGuide
+query: |
+  let queryperiod = 14d;
+  let queryfrequency = 2h;
+  let VIPUsers = (
+      IdentityInfo
+      | where TimeGenerated > ago(queryperiod)
+      | summarize arg_max(TimeGenerated, *) by AccountUPN
+      | mv-expand AssignedRoles
+      | where AssignedRoles matches regex 'Admin'
+      | summarize by tolower(AccountUPN));
+  AuditLogs
+  | where TimeGenerated > ago(queryfrequency)
+  | where Category =~ "UserManagement"
+  | where ActivityDisplayName =~ "User registered security info"
+  | where LoggedByService =~ "Authentication Methods"
+  | extend AccountCustomEntity = tostring(TargetResources[0].userPrincipalName), IPCustomEntity = tostring(InitiatedBy.user.ipAddress)
+  | where AccountCustomEntity in (VIPUsers)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled
