@@ -129,6 +129,14 @@ function Netskope () {
         Do {
             $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
             $netskopeevents = $response.data
+			$netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty app_sessionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
+			
 			if($null -ne $netskopeevents)
             {
 				$netskopeevents | ForEach-Object{
