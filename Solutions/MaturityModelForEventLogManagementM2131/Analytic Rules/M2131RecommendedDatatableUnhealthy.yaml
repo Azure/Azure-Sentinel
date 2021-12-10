@@ -1,0 +1,35 @@
+id: c61b167a-59ae-42af-bc98-36c78c5acb5c
+name: (Preview)M2131_RecommendedDatatableUnhealthy
+description: |
+  'This alert is designed to monitor recommended data tables aligned to the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when a recommended data table hasn't been observed in over 48 hours.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let M2131Mapping = externaldata(DataTable:string, MaturityLevel:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/M2131RecommendedDataTables.csv"] with (format="csv", ignoreFirstRecord=True);
+  let LastLogTime = Usage
+  | summarize LastLog_Time = arg_max(TimeGenerated, *) by DataType;
+  Usage
+  | summarize last_log = datetime_diff("day",now(), max(TimeGenerated)) by DataType
+  | where last_log > 0
+  | join kind=inner (LastLogTime) on DataType
+  | project DataTable = DataType, ['Last Log Received'] = last_log, LastLog_Time
+  | where ['Last Log Received'] > 2
+  | join kind=inner (M2131Mapping) on DataTable
+  | project-away DataTable1
+  | order by ['Last Log Received'] desc
+  | extend CloudApplication = DataTable
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: RecommendedDataTable
+version: 1.0.0
+kind: Scheduled
