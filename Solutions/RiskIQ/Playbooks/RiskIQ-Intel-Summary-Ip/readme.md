@@ -6,13 +6,32 @@ This playbook uses the RiskIQ PassiveTotal connector to automatically enrich inc
 ## Prerequisites
 This playbook inherits API connections created and established within a base playbook. Ensure you have deployed [RiskIQ-Base](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/RiskIQ/Playbooks/RiskIQ-Base/azuredeploy.json) prior to deploying this playbook. You will need your API credentials (email/secret) when configuring that playbook. Those can be found on your [account settings](https://community.riskiq.com/settings) page. For enterprise customers, it's preferred to use the "organization" credential pair, not the user. If you have trouble accessing your account or your credentials contact your account representative (support[@]riskiq.com).
 
-## Deployment
+## Quick Deployment
+**Deploy with incident trigger** (recommended)
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRiskIQ%2FPlaybooks%2FRiskIQ-Intel-Summary-Ip%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
+After deployment, attach this playbook to an **automation rule** so it runs when the incident is created.
+
+[Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRiskIQ%2FPlaybooks%2FRiskIQ-Intel-Summary-Ip%2Fincident-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton"/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRiskIQ%2FPlaybooks%2FRiskIQ-Intel-Summary-Ip%2Fazuredeploy.json" target="_blank">
-    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRiskIQ%2FPlaybooks%2FRiskIQ-Intel-Summary-Ip%2Fincident-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazuregovbutton"/>
+</a>
+
+
+**Deploy with alert trigger**
+
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRiskIQ%2FPlaybooks%2FRiskIQ-Intel-Summary-Ip%2Falert-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazurebutton"/>
+</a>
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRiskIQ%2FPlaybooks%2FRiskIQ-Intel-Summary-Ip%2Falert-trigger%2Fazuredeploy.json" target="_blank">
+<img src="https://aka.ms/deploytoazuregovbutton"/>
 </a>
 
 ### Post-Deployment Instructions
