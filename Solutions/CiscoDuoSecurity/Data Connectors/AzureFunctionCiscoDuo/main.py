@@ -75,6 +75,8 @@ def main(mytimer: func.TimerRequest) -> None:
 
 def get_log_types():
     res = str(os.environ.get('CISCO_DUO_LOG_TYPES', ''))
+    if not res:
+        res = 'trust_monitor,authentication,administrator,telephony,offline_enrollment'
     return [x.lower().strip() for x in res.split(',')]
 
 
