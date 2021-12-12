@@ -1,21 +1,21 @@
-# Azure Sentinel Content Hub
+# Microsoft Sentinel Content Hub
 
 #### 🎓 Level: 100 (Beginner)
 #### ⌛ Estimated time to complete this lab: 20 minutes
 
 ## Objectives
 
-In this module you will learn how to use the Azure Sentinel Content Hub to discover and deploy new content. Our official documentation on this topic is available here: [Azure Sentinel Content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog).
+In this module you will learn how to use the Microsoft Sentinel Content Hub to discover and deploy new content. Our official documentation on this topic is available here: [Microsoft Sentinel Content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog).
 
 #### Prerequisites
 
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need a Azure Sentinel workspace provisioned.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need a Microsoft Sentinel workspace provisioned.
 
-### Exercise 1: Explore Azure Sentinel Content hub
+### Exercise 1: Explore Microsoft Sentinel Content hub
 
 This exercise guides you through the Content Hub catalog.
 
-1. From the Azure Sentinel portal, navigate to **Content hub (Preview)** under **Content Management**.
+1. From the Microsoft Sentinel portal, navigate to **Content hub (Preview)** under **Content Management**.
 
 ![azsolutions](../Images/azsolutions1.png)
 
@@ -35,9 +35,9 @@ This exercise guides you through the Content Hub catalog.
 
 ### Exercise 2: Deploy a new solution
 
-This exercise explains how to install a new solution into your Azure Sentinel workspace.
+This exercise explains how to install a new solution into your Microsoft Sentinel workspace.
 
-1. From the Azure Sentinel portal, navigate to **Content hub (preview)** under **Content Management**
+1. From the Microsoft Sentinel portal, navigate to **Content hub (preview)** under **Content Management**
 
 2. In the search bar, type **Dynamics**. Select on the **Continuous Threat Monitoring for Dynamics 365** solution and click **Install**
 
@@ -47,7 +47,7 @@ This exercise explains how to install a new solution into your Azure Sentinel wo
 
 ![azsolutions](../Images/azsolutions5.png)
 
-4. Select your subscription, resource group and Azure Sentinel workspace. Click on **Next: Workbook**.
+4. Select your subscription, resource group and Microsoft Sentinel workspace. Click on **Next: Workbook**.
 
 ![azsolutions](../Images/azsolutions6.png)
 
@@ -66,7 +66,7 @@ This exercise explains how to install a new solution into your Azure Sentinel wo
 
 ### Exercise 3: Review and enable deployed artifacts
 
-1. Return to Azure Sentinel home page and navigate to **Analytics Rules**.
+1. Return to Microsoft Sentinel home page and navigate to **Analytics Rules**.
 
 2. Type **Dynamics** in the search box. You should see 6 different analytics rules that look at Dynamics 365 data.
 
@@ -84,5 +84,5 @@ This exercise explains how to install a new solution into your Azure Sentinel wo
 
 ## Summary
 
-In this module your learned how to use the Azure Sentinel content hub to bring new content into your workspace.
+In this module your learned how to use the Microsoft Sentinel content hub to bring new content into your workspace.
 
