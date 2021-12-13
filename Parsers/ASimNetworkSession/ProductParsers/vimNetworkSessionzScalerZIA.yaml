@@ -1,7 +1,7 @@
 Parser:
-  Title: Network Session ASIM parser for zScaler ZIA
+  Title: Network Session ASIM filtering parser for zScaler ZIA
   Version: '0.1'
-  LastUpdated: Dec 8, 2021
+  LastUpdated: Dec 14, 2021
 Product:
   Name: zScaler ZIA
 Normalization:
@@ -17,9 +17,33 @@ References:
 - Title: zScaler Sentinel deployment guide
   Link: https://help.zscaler.com/zia/zscaler-microsoft-azure-sentinel-deployment-guide
 Description: |
-  This ASIM parser supports normalizing zScaler ZIA proxy logs produced by the Azure Sentinel zScaler connector to the ASIM Network Session normalized schema. The parser supports squid native log format.
-ParserName: ASimNetworkSessionzScalerZIA
+  This ASIM parser supports filtering and normalizing zScaler ZIA proxy logs produced by the Azure Sentinel zScaler connector to the ASIM Network Session normalized schema. The parser supports squid native log format.
+ParserName: vimNetworkSessionzScalerZIA
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: "'*'"
   - Name: disabled
     Type: bool
     Default: false
@@ -34,11 +58,33 @@ ParserQuery: |
     'IPS Drop', 'Drop',
     'IPS Reset', 'Reset'
   ];
-  let parser=(disabled:bool=false){
+  let parser=  
+    (starttime:datetime=datetime(null)
+    , endtime:datetime=datetime(null)
+    , srcipaddr_has_any_prefix:dynamic=dynamic([])
+    , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , dstportnumber:int=int(null)
+    , hostname_has_any:dynamic=dynamic([])
+    , dvcaction:dynamic=dynamic([])
+    , eventresult:string='*'
+    , disabled:bool=false) {
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor == "Zscaler"
   | where DeviceProduct == "NSSFWlog"
-  // Event fields
+  // -- Pre-filtering
+  |where
+    (array_length(hostname_has_any) == 0) // No host name information, so always filter out if hostname filter used. 
+    and (isnull(starttime) or TimeGenerated >= starttime)
+    and  (isnull(endtime) or TimeGenerated <= endtime)
+    and  (isnull(dstportnumber) or dstportnumber == DestinationPort) 
+    and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SourceIP ,srcipaddr_has_any_prefix)) 
+    and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestinationIP ,dstipaddr_has_any_prefix))
+  | project-rename DvcOriginalAction = DeviceAction
+  | lookup ActionLookup on DvcOriginalAction 
+  | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
+  | extend EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure") 
+  | where (eventresult=='*' or EventResult == eventresult)
+  // -- Event fields
   | extend 
     EventCount=DeviceCustomNumber1, 
     EventStartTime=TimeGenerated, 
@@ -49,7 +95,6 @@ ParserQuery: |
     EventType = 'NetworkSession', 
     EventEndTime=TimeGenerated 
   | project-rename
-    DvcOriginalAction = DeviceAction, 
     DvcHostname = Computer, 
     EventProductVersion = DeviceVersion, 
     NetworkProtocol = Protocol, 
@@ -73,12 +118,10 @@ ParserQuery: |
     ThreatCategory = DeviceCustomString5, 
     RuleName = Activity 
   // -- Calculated fields
-  | lookup ActionLookup on DvcOriginalAction 
   | extend
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory) 
   // -- Enrichment
   | extend
-    EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure"),  
     DstAppType = "Service", 
     SrcUsernameType = "UPN" 
   // -- Aliases
@@ -89,4 +132,4 @@ ParserQuery: |
   | project-away 
     DeviceCustom*
   };
-  parser (disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, disabled)
