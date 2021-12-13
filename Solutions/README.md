@@ -13,7 +13,7 @@ Microsoft Sentinel solutions include packaged content, integrations, or service 
 
 The following image shows the steps in the solution building process, including content creation, packaging, and publishing:
 
-![Azure Sentinel solutions build process](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_steps.png)
+![Microsoft Sentinel solutions build process](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_steps.png)
 
 ## Step 1 – Create your content
 
