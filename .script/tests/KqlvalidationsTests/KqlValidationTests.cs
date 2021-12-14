@@ -53,15 +53,15 @@ namespace Kqlvalidations.Tests
             }
         
         }
-        [Theory]
-        [ClassData(typeof(InsightsYamlFilesTestData))]
-        public void Validate_InsightsQueries_HaveValidKqlBaseQuery(YamlFileProp fileProp)
-        {
-            var res = ReadAndDeserializeYaml(fileProp.FullPath);
-            var queryStr =  (string) res["BaseQuery"];
-            
-            ValidateKql(fileProp.FileName, queryStr);
-        }
+        // [Theory]
+        // [ClassData(typeof(InsightsYamlFilesTestData))]
+        // public void Validate_InsightsQueries_HaveValidKqlBaseQuery(YamlFileProp fileProp)
+        // {
+        //     var res = ReadAndDeserializeYaml(fileProp.FullPath);
+        //     var queryStr =  (string) res["BaseQuery"];
+        //     
+        //     ValidateKql(fileProp.FileName, queryStr);
+        // }
 
         private void ValidateKql(string id, string queryStr)
         {
