@@ -18,7 +18,7 @@ namespace Kqlvalidations.Tests
 
         static TemplatesToSkipValidationReader()
         {
-            var jsonFilePath = Path.Combine(DetectionsYamlFilesTestData.GetSkipTemplatesPath(), SKipJsonFileName);
+            var jsonFilePath = Path.Combine(DirectoryPathsUtils.GetTestDirectory(), SKipJsonFileName);
             using (StreamReader r = new StreamReader(jsonFilePath))
             {
                 string json = r.ReadToEnd();

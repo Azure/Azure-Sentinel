@@ -1,9 +1,7 @@
 ﻿using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using Newtonsoft.Json;
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace Kqlvalidations.Tests
 {
@@ -13,7 +11,10 @@ namespace Kqlvalidations.Tests
         public CustomTablesSchemasLoader()
         {
             _tableSchemas = new List<TableSchema>();
-            var jsonFiles = Directory.GetFiles(DetectionsYamlFilesTestData.GetCustomTablesPath(), "*.json");
+            
+            var jsonFilePath = Path.Combine(DirectoryPathsUtils.GetTestDirectory(), "CustomTables");
+            var jsonFiles = Directory.GetFiles(jsonFilePath, "*.json");
+
             foreach (var jsonFile in jsonFiles)
             {
                 var tableSchema = ReadTableSchema(jsonFile);
