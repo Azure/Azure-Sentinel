@@ -22,9 +22,9 @@ namespace Kqlvalidations.Tests
 
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_HaveValidKql(string detectionsYamlFileName, DetectionsYamlFilesLoader detectionsYamlFilesLoader)
+        public void Validate_DetectionQueries_HaveValidKql(YamlFileProp fileProp)
         {
-            var res = GetAndDeserializeYaml(detectionsYamlFileName, detectionsYamlFilesLoader);
+            var res = ReadAndDeserializeYaml(fileProp.FullPath);
             var queryStr =  (string) res["query"];
             var id = (string) res["id"];
 
@@ -39,9 +39,9 @@ namespace Kqlvalidations.Tests
         
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string detectionsYamlFileName, DetectionsYamlFilesLoader detectionsYamlFilesLoader)
+        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(YamlFileProp fileProp)
         {
-            var res = GetAndDeserializeYaml(detectionsYamlFileName, detectionsYamlFilesLoader);
+            var res = ReadAndDeserializeYaml(fileProp.FullPath);
             var queryStr =  (string) res["query"];
             var id = (string) res["id"];
         
@@ -55,12 +55,12 @@ namespace Kqlvalidations.Tests
         }
         [Theory]
         [ClassData(typeof(InsightsYamlFilesTestData))]
-        public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string insightsYamlFileName, InsightsYamlFilesLoader insightsYamlFilesLoader)
+        public void Validate_InsightsQueries_HaveValidKqlBaseQuery(YamlFileProp fileProp)
         {
-            var res = GetAndDeserializeYaml(insightsYamlFileName, insightsYamlFilesLoader);
+            var res = ReadAndDeserializeYaml(fileProp.FullPath);
             var queryStr =  (string) res["BaseQuery"];
             
-            ValidateKql(insightsYamlFileName, queryStr);
+            ValidateKql(fileProp.FileName, queryStr);
         }
 
         private void ValidateKql(string id, string queryStr)
@@ -79,11 +79,10 @@ namespace Kqlvalidations.Tests
 Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
-        private Dictionary<object, object> GetAndDeserializeYaml(string fileName, YamlFilesLoader yamlFilesLoader)
+        private Dictionary<object, object> ReadAndDeserializeYaml(string fullPath)
         {
-            var filePath = yamlFilesLoader.GetFilePath(fileName);
         
-            var yaml = File.ReadAllText(filePath);
+            var yaml = File.ReadAllText(fullPath);
             var deserializer = new DeserializerBuilder().Build();
             return deserializer.Deserialize<dynamic>(yaml);
         }

@@ -15,17 +15,6 @@ namespace Kqlvalidations.Tests
             DirectoryPaths = GetYamlFilesPaths();
         }
 
-
-        /// <summary>
-        ///Get yaml file from rule folder
-        /// </summary>
-        /// <param name="fileName">Yaml File Name</param>
-        /// <returns>yaml file path</returns>
-        public virtual string GetFilePath(string fileName)
-        {
-            return Directory.GetFiles(DirectoryPaths[0], fileName, SearchOption.AllDirectories).Single();
-        }
-
         public virtual List<string> GetFilesNames()
         {
             return Directory.GetFiles(DirectoryPaths[0], "*.yaml", SearchOption.AllDirectories).ToList();
