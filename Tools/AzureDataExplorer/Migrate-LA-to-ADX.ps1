@@ -727,7 +727,7 @@ if ($CreateOrUpdateQuestionDecision -eq 1) {
 
     $DataConnectionQuestionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
     if ($DataConnectionQuestionDecision -eq 0) {
-        Start-SleepMessage -Seconds 1200 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
+        Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
         New-ADXDataConnectionRules -AdxEventHubs $EventHubsForADX
     }
     else {            
