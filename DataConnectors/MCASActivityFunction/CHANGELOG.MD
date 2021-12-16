@@ -6,3 +6,5 @@
 - Function Schedule (CRON Expression) as parameter
 - Updated StorageAccountName and KeyVaultName
 - Updated Path for Function Package
+- Deleted the usage of Storage Account to write last run executions
+- Writing Last Run executions to Azure Storage Table
