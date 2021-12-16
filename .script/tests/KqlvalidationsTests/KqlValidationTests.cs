@@ -11,7 +11,6 @@ namespace Kqlvalidations.Tests
     public class KqlValidationTests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
-        // private static readonly List<string> DetectionPaths = DetectionsYamlFilesTestData.GetDetectionPaths();
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
@@ -20,9 +19,10 @@ namespace Kqlvalidations.Tests
                .Build();
         }
 
+        // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_HaveValidKql(YamlFileProp fileProp)
+        public void Validate_DetectionQueries_HaveValidKql(string fileName, YamlFileProp fileProp)
         {
             var res = ReadAndDeserializeYaml(fileProp.FullPath);
             var queryStr =  (string) res["query"];
@@ -37,9 +37,10 @@ namespace Kqlvalidations.Tests
             ValidateKql(id, queryStr);
         }
         
+        // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(YamlFileProp fileProp)
+        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, YamlFileProp fileProp)
         {
             var res = ReadAndDeserializeYaml(fileProp.FullPath);
             var queryStr =  (string) res["query"];
@@ -53,15 +54,17 @@ namespace Kqlvalidations.Tests
             }
         
         }
-        // [Theory]
-        // [ClassData(typeof(InsightsYamlFilesTestData))]
-        // public void Validate_InsightsQueries_HaveValidKqlBaseQuery(YamlFileProp fileProp)
-        // {
-        //     var res = ReadAndDeserializeYaml(fileProp.FullPath);
-        //     var queryStr =  (string) res["BaseQuery"];
-        //     
-        //     ValidateKql(fileProp.FileName, queryStr);
-        // }
+        
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
+        [ClassData(typeof(InsightsYamlFilesTestData))]
+        public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string fileName, YamlFileProp fileProp)
+        {
+            var res = ReadAndDeserializeYaml(fileProp.FullPath);
+            var queryStr =  (string) res["BaseQuery"];
+            
+            ValidateKql(fileProp.FileName, queryStr);
+        }
 
         private void ValidateKql(string id, string queryStr)
         {

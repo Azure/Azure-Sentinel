@@ -7,11 +7,15 @@ namespace Kqlvalidations.Tests
         protected YamlFilesTestData(YamlFilesLoader yamlFilesLoader)
         {
             var files = yamlFilesLoader.GetFilesNames();
-            files.ForEach(f => Add(new YamlFileProp()
+            files.ForEach(f =>
             {
-                FullPath = f, 
-                FileName = Path.GetFileName(f)
-            }));
+                var fileName = Path.GetFileName(f);
+                Add(fileName, new YamlFileProp()
+                {
+                    FullPath = f,
+                    FileName = fileName
+                });
+            });
         }
     }
 }
