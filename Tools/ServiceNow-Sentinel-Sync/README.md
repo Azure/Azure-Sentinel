@@ -291,6 +291,12 @@ You should have only one “true” row per Sentinel possible status:
 
 If you configured another incident table to store your Sentinel incidents, you must reflect this change to the two business rules being triggered by changes. You can also add additional filters if needed.
 
+⚠️ **IMPPORTANT** ⚠️  
+If you are running versions older than _Rome_, verify that the "When to run" value is using **async** and not **async_alway**:
+
+  ![Async business rule](media/async.png)
+
+
 The application uses the following business rules:
 
 - **add_work_note_to_sentinel**: sycnhronizes work notes to sentinel comments
