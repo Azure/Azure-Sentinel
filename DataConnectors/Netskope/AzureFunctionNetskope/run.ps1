@@ -97,7 +97,7 @@ function Netskope () {
     $sharedKey = $env:workspacekey
     $apikey = $env:apikey
     $uri = $env:uri
-    $tableName = "NetskopeTest"
+    $tableName = "Netskope"
     $timeInterval = [int]($env:timeInterval) * 60
     $pageLimit = 5000
     $skip = 0
