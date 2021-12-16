@@ -96,7 +96,7 @@ To identify the incidents created from Microsoft Sentinel incidents, we will cre
 
 ## Installation
 
-Import the application in ServiceNow
+Import the application in ServiceNow (available in this repo as **XML file**):
 
 1. Search for “update set” and select the “Retrieved Update Sets” module. Then, click on the “Import Update Set from XML” link
 
