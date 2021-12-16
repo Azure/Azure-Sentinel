@@ -55,16 +55,16 @@ namespace Kqlvalidations.Tests
         
         }
         
-        // We pass File name to test because in the result file we want to show an informative name for the test
-        [Theory]
-        [ClassData(typeof(InsightsYamlFilesTestData))]
-        public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string fileName, YamlFileProp fileProp)
-        {
-            var res = ReadAndDeserializeYaml(fileProp.FullPath);
-            var queryStr =  (string) res["BaseQuery"];
-            
-            ValidateKql(fileProp.FileName, queryStr);
-        }
+        // // We pass File name to test because in the result file we want to show an informative name for the test
+        // [Theory]
+        // [ClassData(typeof(InsightsYamlFilesTestData))]
+        // public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string fileName, YamlFileProp fileProp)
+        // {
+        //     var res = ReadAndDeserializeYaml(fileProp.FullPath);
+        //     var queryStr =  (string) res["BaseQuery"];
+        //     
+        //     ValidateKql(fileProp.FileName, queryStr);
+        // }
 
         private void ValidateKql(string id, string queryStr)
         {
