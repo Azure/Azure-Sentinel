@@ -1,8 +1,8 @@
-# Azure Sentinel Solutions Packaging Tool Guidance
+# Microsoft Sentinel Solutions Packaging Tool Guidance
 
-Azure Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Azure Sentinel. This experience is powered by Azure Marketplace for Solutions' discoverability, deployment and enablement and Microsoft Partner Center for Solutions’ authoring and publishing. Refer to details in [Azure Sentinel solutions documentation](https://aka.ms/azuresentinelsolutionsdoc). Detailed partner guidance for authoring and publishing solutions is covered in [building Azure Sentinel solutions guidance](https://aka.ms/sentinelsolutionsbuildguide). 
+Microsoft Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. This experience is powered by Azure Marketplace for Solutions' discoverability, deployment and enablement and Microsoft Partner Center for Solutions’ authoring and publishing. Refer to details in [Microsoft Sentinel solutions documentation](https://aka.ms/azuresentinelsolutionsdoc). Detailed partner guidance for authoring and publishing solutions is covered in [building Microsoft Sentinel solutions guidance](https://aka.ms/sentinelsolutionsbuildguide).
 
-The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Azure Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists. 
+The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Microsoft Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists.
 
 ## Setup
 
@@ -25,7 +25,7 @@ The packaging tool detailed below provides an easy way to generate your solution
   - Install [VSCode](https://code.visualstudio.com/).
 
   - Install the [Azure Resource Manager (ARM) Tools Extension](https://marketplace.visualstudio.com/items?itemName=msazurermtools.azurerm-vscode-tools).
-  
+
     - This extension provides language support, resource auto-completion, and automatic template validation within your IDE.
 
 ## Creating Solution Package
@@ -52,6 +52,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation
+ * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
  */
 {
   "Name": "{SolutionName}",
@@ -67,7 +68,8 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Data Connectors": [],
   "Watchlists": [],
   "BasePath": "{Path to Solution Content}",
-  "Version": "1.0.0"
+  "Version": "1.0.0",
+  "Metadata": "{Name of Solution Metadata file}",
 }
 
 ```
@@ -98,8 +100,74 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
     "Data Connectors/Connector_McAfee_ePO.json"
   ],
   "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/",
-  "Version": "1.0.0"
-}  
+  "Version": "1.0.0",
+  "Metadata": "SolutionMetadata.json"
+}
+```
+
+### Create Solution Metadata File
+
+Create a  file and place it in the base path of solution `https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/`.
+* Refer to the [Microsoft Sentinel content and solutions categories documentation](https://aka.ms/sentinelcontentcategories) for a complete list of valid Microsoft Sentinel categories.
+* Refer to [Microsoft Sentinel content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for information on valid support models.
+
+#### **Metadata File Format:**
+
+```json
+/**
+ * Solution Automation Metadata File Json
+ * -----------------------------------------------------
+ * The purpose of this json is to provide detail on the various fields the metadata solution can have. Refer to the metadata schema and example provided after the definitions for further context.
+ * publisherId: An identifier that's used by Partner Center to uniquely identify the publisher associated with a commercial marketplace account.- Ex. "azuresentinel", "CheckPoint", "semperis"
+ * offerId: Id of the Offer of Solution - Ex. "azure-sentinel-solution-ciscoaci", "azure-sentinel-solution-semperis-dsp"
+ * firstPublishDate: Solution first published date
+ * lastPublishDate: Latest published date of Solution
+ * providers: Provider of the solution. Specify one or many providers as a comma separated list as applicable for the solution - Ex. Cisco, Checkpoint, Microsoft
+ * categories: Domain and Vertical applicability of the solution. There can be multiple domain and/or vertical categories applicable to the same solution which can be represented as an array. For e.g. Domains - "Security - Network", "Application", etc. and Vertical - "Healthcare", "Finance". Refer to the [Microsoft Sentinel content and solutions categories documentation](https://aka.ms/sentinelcontentcategories) for a complete list of valid Microsoft Sentinel categories.
+ * support: Name, Email, Tier and Link for the solution support details.
+ * - NOTE: Additional metadata properties like Version, Author, etc. are used by the packaging tool based on the values provided in the input file. Format specified in the example below. Refer to [Microsoft 
+ content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for further information.
+ */
+{
+    "publisherId": {Id of Publisher},
+    "offerId": {Solution Offer Id},
+    "firstPublishDate": {Solution First Published Date},
+    "lastPublishDate": {Solution recent Published Date},
+    "providers": {Solution provider list},
+    "categories": {
+	"domains" : {Solution category domain list},
+	"verticals": {Solution category vertical list},
+     },
+     "support": {
+	"name": {Publisher ID},
+	"email": {Email for Solution Support},
+	"tier": {Support Tier},
+	"link": {Link of Support contacts for Solution},
+    }
+}
+
+```
+
+#### **Example of Input File: SolutionMetadata.json**
+
+```json
+{
+	"publisherId": "azuresentinel",
+	"offerId": "azure-sentinel-solution-mcafeeepo",
+	"firstPublishDate": "2021-03-26",
+	"lastPublishDate": "2021-08-09",
+	"providers": ["Cisco"],
+	"categories": {
+		"domains" : ["Security - Network"],
+		"verticals": []
+	},
+	"support": {
+	  "name": "Microsoft Corporation",
+	  "email": "support@microsoft.com",
+	  "tier": "Microsoft",
+	  "link": "https://support.microsoft.com"
+	}
+} 
 ```
 
 ### Generate Solution Package

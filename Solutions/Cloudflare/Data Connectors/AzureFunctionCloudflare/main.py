@@ -21,9 +21,10 @@ CONTAINER_NAME = os.environ['CONTAINER_NAME']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
-
+LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
+    
 # Defines how many files can be processed simultaneously
-MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 100))
+MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
 
 # Defines page size while listing files from blob storage. New page is not processed while old page is processing.
 MAX_PAGE_SIZE = int(os.environ.get('MAX_PAGE_SIZE', 1000))
@@ -106,15 +107,23 @@ class AzureBlobStorageConnector:
             s = ''
             async for chunk in blob_cor.chunks():
                 s += chunk.decode()
-                lines = s.splitlines()
+                lines =  re.split(r'{0}'.format(LINE_SEPARATOR), s)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
-                            event = json.loads(line)
+                            try :
+                                event = json.loads(line)
+                            except ValueError as e:
+                                logging.error('Error while loading json Event at line value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
+                                raise e
                             await sentinel.send(event)
                 s = line
             if s:
-                event = json.loads(s)
+                try :
+                    event = json.loads(s)
+                except ValueError as e:
+                    logging.error('Error while loading json Event at s value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
+                    raise e
                 await sentinel.send(event)
             await sentinel.flush()
             await self.delete_blob(blob, container_client)

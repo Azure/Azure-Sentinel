@@ -1,22 +1,54 @@
 Parser:
-  Title: Microsoft DNS
-  Version: '0.1'
-  LastUpdated: May 10, 2021
+  Title: DNS activity ASIM parser for Windows DNS Log collected using the Log Analytics Agent
+  Version: '0.2'
+  LastUpdated: Nov 11 2021
 Product:
   Name: MS DNS Events
 Normalization:
   Schema: Dns
-  Version: '0.1.1'
+  Version: '0.1.3'
 References:
 - Title: ASIM DNS Schema
-  Link: https://aka.ms/AzSentinelDnsDoc
+  Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This is a Query Parser that is used to map MS DNS (DnsEvents) to the Azure Sentinel Information Model DNS schema.  
+  This ASIM parser supports normalizing Windows DNS Log collected using the Log Analytics Agent to the ASIM DNS activity normalized schema.
 ParserName: ASimDnsMicrosoftOMS
+EquivalentBuiltInParser: _ASim_Dns_MicrosoftOMS
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let RCodeTable=datatable(ResponseCode:int,ResponseCodeName:string)[
+  let EventTypeTable=datatable(EventOriginalType:int,EventType:string,EventSubType:string, EventResult:string)[
+    256, 'Query', 'request', 'NA'
+  , 257, 'Query', 'response', 'Success'
+  , 258, 'Query', 'response', 'Based on RCODE'
+  , 259, 'Query', 'response', 'Based on RCODE'
+  , 260, 'Query', 'request', 'NA'
+  , 261, 'Query', 'response', 'NA'
+  , 262, 'Query', 'response', 'Based on RCODE'
+  , 263, 'Update', 'request', 'NA'
+  , 264, 'Update', 'response', 'Based on RCODE'
+  , 265, 'XFR', 'request', 'NA' 
+  , 266, 'XFR', 'request', 'NA'
+  , 267, 'XFR', 'response', 'Based on RCODE'
+  , 268, 'XFR', 'response', 'Based on RCODE'
+  , 269, 'XFR', 'request', 'NA'
+  , 270, 'XFR', 'request', 'NA'
+  , 271, 'XFR', 'response', 'Based on RCODE'
+  , 272, 'XFR', 'response', 'Based on RCODE'
+  , 273, 'XFR', 'request', 'NA'
+  , 274, 'XFR', 'request', 'NA'
+  , 275, 'XFR', 'response', 'Success'
+  , 276, 'XFR', 'response', 'Success'
+  , 277, 'Update', 'request', 'NA'
+  , 278, 'Update', 'response', 'Based on RCODE'
+  , 279, 'Query', 'NA', 'NA'
+  , 280, 'Query', 'NA', 'NA'
+  ];
+  let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
      0, 'NOERROR'
    , 1, "FORMERR"
    , 2,"SERVFAIL"
@@ -38,46 +70,48 @@ ParserQuery: |
    , 21,'BADALG'
    , 22,'BADTRUNC'
    , 23,'BADCOOKIE'];
-  let DNSQuery_MS=(){
-    DnsEvents |  where EventId in (257,258)
+  let DNSQuery_MS=(disabled:bool=false){
+    DnsEvents | where not(disabled)
+  | where EventId < 500
   | project-rename
          Dvc=Computer ,
          SrcIpAddr = ClientIP,
          DnsQueryTypeName=QueryType,
          EventMessage = Message,
+         EventOriginalType = EventId,
          EventReportUrl = ReportReferenceLink,
          DnsResponseName = IPAddresses,
          DnsQuery = Name,
-         ResponseCode = ResultCode
+         DnsResponseCode = ResultCode
   | extend
-  // ******************* Mandatory
          EventCount=int(1),
          EventStartTime=TimeGenerated,
          EventVendor = "Microsoft",
          EventProduct = "Microsoft DNS Server",
-         EventSchemaVersion="0.1.1",
-         //
+         EventSchema = "Dns",
+         EventSchemaVersion="0.1.3",
          EventEndTime=TimeGenerated,
-         EventSubType='response',
          EventSeverity = tostring(Severity),
-         EventType = 'lookup',
-         DvcHostname = Dvc,
-         EventResult = iff(EventId==257 and ResponseCode==0 ,'Success','Failure')
-     | lookup RCodeTable on ResponseCode
-     | extend EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
-                                    , ResponseCode between (3841 .. 4095), 'Reserved for Private Use'
-                                    , 'Unassigned')
-    // **************Aliases
+         DvcHostname = Dvc
+    | lookup RCodeTable on DnsResponseCode
+    | lookup EventTypeTable on EventOriginalType
+    | extend EventResultDetails = case (isnotempty(DnsResponseCodeName), DnsResponseCodeName
+                                    , DnsResponseCode between (3841 .. 4095), 'Reserved for Private Use'
+                                    , 'Unassigned'),
+      EventResult = iff (EventResult == "Based on RCODE", iff(DnsResponseCode == 0, "Success", "Failure"),EventResult)
+  // **************Aliases
     | extend
-        ResponseCodeName=EventResultDetails,
+        DnsResponseCodeName=EventResultDetails,
         Domain=DnsQuery,
         IpAddr=SrcIpAddr,
-    // Backward Competability
-      Query=DnsQuery
-      , QueryTypeName=DnsQueryTypeName
-      , ResponseName=DnsResponseName
-    // OSSEM 
-      , DnsResponseCode=ResponseCode
-      , DnsResponseCodeName=ResponseCodeName
+        Src=SrcIpAddr,
+    // Backward Compatibility
+        Query=DnsQuery,
+        QueryTypeName=DnsQueryTypeName,
+        ResponseName=DnsResponseName,
+        ResponseCode=DnsResponseCode,
+        ResponseCodeName=DnsResponseCodeName
+    | project-away 
+        SubType
         };
-  DNSQuery_MS
+  DNSQuery_MS(disabled)
