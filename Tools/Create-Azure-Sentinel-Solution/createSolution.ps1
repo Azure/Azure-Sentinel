@@ -99,9 +99,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind = "Workbook";
+                            kind      = "Workbook";
                             contentId = "[variables('_$fileName')]";
-                            version = $contentToImport.Version;
+                            version   = $contentToImport.Version;
                         };
 
                         if ($workbookCounter -eq 1) {
@@ -221,9 +221,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind = "Playbook";
+                            kind      = "Playbook";
                             contentId = "[variables('_$fileName')]";
-                            version = $contentToImport.Version;
+                            version   = $contentToImport.Version;
                         };
 
                         if ($playbookCounter -eq 1) {
@@ -405,45 +405,47 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $outputStr
                         }
                         function replaceVarsRecursively ($resourceObj) {
-                            foreach ($prop in $resourceObj.PsObject.Properties) {
-                                $key = $prop.Name
-                                if ($prop.Value -is [System.String]) {
-                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
-                                    if ($resourceObj.$key.StartsWith("[") -and $resourceObj.$key[$resourceObj.$key.Length - 1] -eq "]") {
-                                        $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                            if ($resourceObj.GetType() -ne [System.DateTime]) {
+                                foreach ($prop in $resourceObj.PsObject.Properties) {
+                                    $key = $prop.Name
+                                    if ($prop.Value -is [System.String]) {
+                                        $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                        if ($resourceObj.$key.StartsWith("[") -and $resourceObj.$key[$resourceObj.$key.Length - 1] -eq "]") {
+                                            $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                        }
+                                        $resourceObj.$key = $(node "$PSScriptRoot/templating/replaceLocationValue.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                        if ($resourceObj.$key.IndexOf($azureManagementUrl)) {
+                                            $resourceObj.$key = $resourceObj.$key.Replace($azureManagementUrl, "@{variables('azureManagementUrl')}")
+                                            $azureManagementUrlExists = $true
+                                        }
+                                        if ($key -eq "operationId") {
+                                            $baseMainTemplate.variables | Add-Member -NotePropertyName "operationId-$($resourceobj.$key)" -NotePropertyValue $($resourceobj.$key)
+                                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
+                                            $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
+                                        }
                                     }
-                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replaceLocationValue.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
-                                    if ($resourceObj.$key.IndexOf($azureManagementUrl)) {
-                                        $resourceObj.$key = $resourceObj.$key.Replace($azureManagementUrl, "@{variables('azureManagementUrl')}")
-                                        $azureManagementUrlExists = $true
-                                    }
-                                    if ($key -eq "operationId") {
-                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "operationId-$($resourceobj.$key)" -NotePropertyValue $($resourceobj.$key)
-                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
-                                        $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
-                                    }
-                                }
-                                elseif ($prop.Value -is [System.Array]) {
-                                    foreach ($item in $prop.Value) {
-                                        $itemIndex = $prop.Value.IndexOf($item)
-                                        if ($null -ne $itemIndex) {
-                                            if ($item -is [System.String]) {
-                                                $item = $(node "$PSScriptRoot/templating/replaceLocationValue.js" $item $playbookCounter)
-                                                $item = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $item $playbookCounter)
-                                                if ($item.StartsWith("[") -and $item[$item.Length - 1] -eq "]") {
-                                                    $item = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" $item $playbookCounter)
+                                    elseif ($prop.Value -is [System.Array]) {
+                                        foreach ($item in $prop.Value) {
+                                            $itemIndex = $prop.Value.IndexOf($item)
+                                            if ($null -ne $itemIndex) {
+                                                if ($item -is [System.String]) {
+                                                    $item = $(node "$PSScriptRoot/templating/replaceLocationValue.js" $item $playbookCounter)
+                                                    $item = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $item $playbookCounter)
+                                                    if ($item.StartsWith("[") -and $item[$item.Length - 1] -eq "]") {
+                                                        $item = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" $item $playbookCounter)
+                                                    }
+                                                    $resourceObj.$key[$itemIndex] = $item
                                                 }
-                                                $resourceObj.$key[$itemIndex] = $item
-                                            }
-                                            elseif ($item -is [System.Management.Automation.PSCustomObject]) {
-                                                $resourceObj.$key[$itemIndex] = $(replaceVarsRecursively $item)
+                                                elseif ($item -is [System.Management.Automation.PSCustomObject]) {
+                                                    $resourceObj.$key[$itemIndex] = $(replaceVarsRecursively $item)
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                else {
-                                    if (($prop.Value -isnot [System.Int32]) -and ($prop.Value -isnot [System.Int64])) {
-                                        $resourceObj.$key = $(replaceVarsRecursively $resourceObj.$key)
+                                    else {
+                                        if (($prop.Value -isnot [System.Int32]) -and ($prop.Value -isnot [System.Int64])) {
+                                            $resourceObj.$key = $(replaceVarsRecursively $resourceObj.$key)
+                                        }
                                     }
                                 }
                             }
@@ -518,9 +520,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$connectorId" -NotePropertyValue "[variables('$connectorId')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind = "DataConnector";
+                            kind      = "DataConnector";
                             contentId = "[variables('_$connectorId')]";
-                            version = $contentToImport.Version;
+                            version   = $contentToImport.Version;
                         };
                         function handleEmptyInstructionProperties ($inputObj) {
                             $outputObj = $inputObj |
@@ -665,9 +667,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$watchlistName" -NotePropertyValue "[variables('$watchlistName')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind = "Watchlist";
+                            kind      = "Watchlist";
                             contentId = "[variables('_$watchlistName')]";
-                            version = $contentToImport.Version;
+                            version   = $contentToImport.Version;
                         };
 
                         #Handle CreateUiDefinition Base Step
@@ -688,7 +690,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             text = "Azure Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Azure Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Azure Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.";
                                             link = [PSCustomObject]@{
                                                 label = "Learn more";
-                                                uri = "https://aka.ms/sentinelwatchlists";
+                                                uri   = "https://aka.ms/sentinelwatchlists";
                                             }
                                         }
                                     }
@@ -753,9 +755,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                             $DependencyCriteria += [PSCustomObject]@{
-                                kind = "HuntingQuery";
+                                kind      = "HuntingQuery";
                                 contentId = "[variables('_$fileName')]";
-                                version = $contentToImport.Version;
+                                version   = $contentToImport.Version;
                             };
 
                             function queryResourceExists () {
@@ -906,9 +908,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                             $DependencyCriteria += [PSCustomObject]@{
-                                kind = "AnalyticsRule";
+                                kind      = "AnalyticsRule";
                                 contentId = "[variables('_$fileName')]";
-                                version = $contentToImport.Version;
+                                version   = $contentToImport.Version;
                             };
 
                             foreach ($line in $rawData) {
@@ -940,10 +942,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                             }
                             $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
-                            if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')){
+                            if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')) {
                                 # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.
                                 # This block is for backwards compatibility as YAML doesn't require having strings quotes by single (or double) quotes
-                                $alertRule.description = $alertRule.description.substring(1, $alertRule.description.length-2)
+                                $alertRule.description = $alertRule.description.substring(1, $alertRule.description.length - 2)
                             }
 
                             # Check whether Day or Hour/Minut format need be used
@@ -958,12 +960,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
+                            
+                            # Handle optional fields
+                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
+                                if ($yaml.$yamlField) {
+                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
+                                }
+                            }
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
-                                apiVersion = "2020-01-01";
+                                apiVersion = "2021-03-01-preview";
                                 kind       = "Scheduled";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
@@ -995,9 +1004,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
 
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind = "Parser";
+                            kind      = "Parser";
                             contentId = "[variables('_$fileName')]";
-                            version = $contentToImport.Version;
+                            version   = $contentToImport.Version;
                         };
 
                         $content = ''
@@ -1076,23 +1085,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 $validJson = $false;
             }
 
-            if($validJson -and $json) {
+            if ($validJson -and $json) {
                 # Create Metadata Resource Object
-                if($json.publisherId  -and $json.offerId)
-                {
+                if ($json.publisherId -and $json.offerId) {
                     $sourceId = $json.publisherId + "." + $json.offerId;
                 }
-                if($json.support)
-                {
+                if ($json.support) {
                     $support = $json.support;
                 }
-                if($json.categories)
-                {
+                if ($json.categories) {
                     $categories = $json.categories;
                 }
 
-                if($sourceId)
-                {
+                if ($sourceId) {
                     $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $sourceId;
                     $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
                 }
@@ -1103,8 +1108,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                     apiVersion = "2021-03-01-preview";
                     properties = [PSCustomObject] @{
-                        version      = $contentToImport.Version;
-                        kind         = "Solution";
+                        version = $contentToImport.Version;
+                        kind    = "Solution";
                     };
                 };
 
@@ -1116,7 +1121,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     name  = $Author[0];
                     email = $Author[1];
                 };
-                if($sourceId){
+                if ($sourceId) {
                     $newMetadata | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
                     $newMetadata.Properties | Add-Member -Name 'contentId' -Type NoteProperty -Value "[variables('_sourceId')]";
                     $newMetadata.Properties | Add-Member -Name 'parentId' -Type NoteProperty -Value "[variables('_sourceId')]";
@@ -1129,24 +1134,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                 $supportDetails = New-Object psobject;
 
-                if($support -and $support.psobject.properties["name"] -and $support.psobject.properties["name"].value) {
+                if ($support -and $support.psobject.properties["name"] -and $support.psobject.properties["name"].value) {
                     $supportDetails | Add-Member -Name 'name' -Type NoteProperty -value $support.psobject.properties["name"].value;
                 }
 
-                if($support -and $support.psobject.properties["email"] -and $support.psobject.properties["email"].value) {
+                if ($support -and $support.psobject.properties["email"] -and $support.psobject.properties["email"].value) {
                     $supportDetails | Add-Member -Name 'email' -Type NoteProperty -value $support.psobject.properties["email"].value;
                 }
 
-                if($support -and $support.psobject.properties["tier"] -and $support.psobject.properties["tier"].value) {
+                if ($support -and $support.psobject.properties["tier"] -and $support.psobject.properties["tier"].value) {
                     $supportDetails | Add-Member -Name 'tier' -Type NoteProperty -value $support.psobject.properties["tier"].value;
                 }
 
-                if($support -and $support.psobject.properties["link"] -and $support.psobject.properties["link"].value) {
+                if ($support -and $support.psobject.properties["link"] -and $support.psobject.properties["link"].value) {
                     $supportDetails | Add-Member -Name 'link' -Type NoteProperty -value $support.psobject.properties["link"].value;
                 }
 
-                if($support.psobject.properties["name"] -or $support.psobject.properties["email"] -or $support.psobject.properties["tier"] -or $support.psobject.properties["link"])
-                {
+                if ($support.psobject.properties["name"] -or $support.psobject.properties["email"] -or $support.psobject.properties["tier"] -or $support.psobject.properties["link"]) {
                     $newMetadata.Properties | Add-Member -Name 'support' -Type NoteProperty -value $supportDetails;
                 }
 
@@ -1157,29 +1161,24 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                 $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
 
-                if($json.firstPublishDate -and $json.firstPublishDate -ne "")
-                {
+                if ($json.firstPublishDate -and $json.firstPublishDate -ne "") {
                     $newMetadata.Properties | Add-Member -Name 'firstPublishDate' -Type NoteProperty -value $json.firstPublishDate;
                 }
 
-                if($json.lastPublishDate -and $json.lastPublishDate -ne "")
-                {
+                if ($json.lastPublishDate -and $json.lastPublishDate -ne "") {
                     $newMetadata.Properties | Add-Member -Name 'lastPublishDate' -Type NoteProperty -value $json.lastPublishDate;
                 }
 
-                if($json.providers -and $json.providers -ne "")
-                {
+                if ($json.providers -and $json.providers -ne "") {
                     $newMetadata.Properties | Add-Member -Name 'providers' -Type NoteProperty -value $json.providers;
                 }
-                $categoriesDetails= New-Object psobject;
-                if($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].Value.Length -gt 0)
-                {
+                $categoriesDetails = New-Object psobject;
+                if ($categories -and $categories.psobject.properties['domains'] -and $categories.psobject.properties["domains"].Value.Length -gt 0) {
                     $categoriesDetails | Add-Member -Name 'domains' -Type NoteProperty -Value $categories.psobject.properties["domains"].Value;
                     $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }
 
-                if($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].Value.Length -gt 0)
-                {
+                if ($categories -and $categories.psobject.properties['verticals'] -and $categories.psobject.properties["verticals"].Value.Length -gt 0) {
                     $categoriesDetails | Add-Member -Name 'verticals' -Type NoteProperty -Value $categories.psobject.properties["verticals"].value;
                     $newMetadata.properties | Add-Member -Name 'categories' -Type NoteProperty -Value $categoriesDetails;
                 }

@@ -5,13 +5,13 @@ Parser:
 Product:
   Name: WindowsEventFirewall
 Normalization:
-  Schema: NetworkSessions
+  Schema: NetworkSession
   Version: '0.2.0'
 References:
 - Title: ASIM Network Session Schema
-  Link: https://aka.ms/AzSentinelNetworkSessionDoc
+  Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AzSentinelNormalization
+  Link: https:/aka.ms/MsASIM
 Description: |
         This Query Parser maps Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) to the Advanced SIEM Information Model Network Session schema.
         Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
@@ -104,7 +104,7 @@ ParserQuery: |
         '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress'</Data>'
         '\x0d\x0a  <Data Name="SourcePort">'SourcePort'</Data>'
         '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
-        '\x0d\x0a  <Data Name="DestPort">'DestPort'</Data>'
+        '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
         '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
         '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
         '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
@@ -114,6 +114,7 @@ ParserQuery: |
       | project-away EventData;
   union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
       | lookup Directions on DirectionCode
+      | project-rename DvcHostname = Computer
       | extend
         SrcAppName = iff(isOutBound, Application, ""),
         DstAppName = iff(not(isOutBound), Application, ""),
@@ -126,7 +127,9 @@ ParserQuery: |
         SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
         DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
         DstUserId = iff(isOutBound, RemoteUserID, ""),
-        SrcUserId = iff(not(isOutBound), RemoteUserID, "")
+        SrcUserId = iff(not(isOutBound), RemoteUserID, ""),
+        DstHostname = iff(isOutBound, "", DvcHostname),
+        SrcHostname = iff(isOutBound, DvcHostname, "")
   };
   //////////////////////////////////////////////////////
   // this query extract the data from WindowsEvent table
@@ -134,6 +137,7 @@ ParserQuery: |
   let WindowsFirewall_WindowsEvent=(){   
             WindowsEvent | where not(disabled)
             | where EventID between (5150 .. 5159)
+            | project-rename DvcHostname = Computer
             | extend 
                 EventSeverity=tostring(EventData.Severity),
                 LayerCode = tostring(EventData.LayerName),
@@ -152,12 +156,14 @@ ParserQuery: |
                       SrcProcessId =  iff(isOutBound, tostring(EventData.ProcessId), ""),
                       DstProcessId =  iff(not(isOutBound), tostring(EventData.ProcessId), ""),
                       DstUserId = iff(isOutBound, tostring(EventData.RemoteUserID), ""),
-                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), "")
+                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), ""),
+                      DstHostname = iff(isOutBound, "", DvcHostname),
+                      SrcHostname = iff(isOutBound, DvcHostname, "")
             | project-away EventData
         };
   // Main query -> outputs both schemas as one normalized table
   union WindowsFirewall_SecurityEvent, WindowsFirewall_WindowsEvent
-      | extend 
+       | extend 
               DvcAction = iff(EventID in (5154, 5156, 5158), "Allow", "Deny"),
               DvcOs = 'Windows',
               DstAppType = "Process",
@@ -174,7 +180,12 @@ ParserQuery: |
               EventStartTime = TimeGenerated,
               EventEndTime = TimeGenerated,
               EventOriginalUid = EventOriginId,
-              EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low")
+              EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low"),
+      // aliases
+              Hostname = DstHostname,
+              IpAddr = SrcIpAddr,
+              Src = SrcIpAddr,
+              Dst = DstIpAddr
       | project-rename DvcHostname = Computer
       | lookup LayerCodeTable on LayerCode
       | lookup ProtocolTable on Protocol

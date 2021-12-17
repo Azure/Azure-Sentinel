@@ -24,7 +24,7 @@
 param (
     [Parameter()]
     [string]
-    $LogPath=(Get-Location).Path,
+    $LogPath=(Join-Path (Get-Location).Path Logs),
     [Parameter()]
     [ValidateSet("VPC","CloudTrail","GuardDuty")][string]$AwsLogType
 )
@@ -33,6 +33,7 @@ param (
 . ".\Utils\AwsResourceCreator.ps1"
 . ".\Utils\CommonAwsPolicies.ps1"
 . ".\Utils\AwsPoliciesUpdate.ps1"
+. ".\Utils\AwsSentinelTag.ps1"
 
 # Verify that the AWS CLI is available
 if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 
@@ -45,6 +46,7 @@ if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue))
 }
 
 # Setup basic logging
+New-Item -ItemType Directory -Force -Path $LogPath | Out-Null
 $TimeStamp = Get-Date -Format MMddHHmm 
 $LogFileName = '{0}-{1}.csv' -f "AwsS3", $TimeStamp
 $LogFileName = Join-Path $LogPath $LogFileName

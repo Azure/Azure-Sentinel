@@ -1,15 +1,22 @@
-function Get-AwsConfig
+function Test-AwsConfiguration
 {
     <#
     .SYNOPSIS
         This function executes "aws configure" to ensure it is connected for subsequent commands.
     #>
 
-    Write-Log -Message "Setting up your AWS CLI environment..." -LogFileName $LogFileName -Severity Information -LinePadding 1
-    Write-Log -Message "Please ensure that the AWS CLI is connected:" -LogFileName $LogFileName -Severity Information -LinePadding 1
-    Write-Log -Message "Executing: aws configure" -LogFileName $LogFileName -Severity Verbose
+    Write-Log -Message "Checking AWS CLI configuration..." -LogFileName $LogFileName -Severity Information -LinePadding 1
 
-    aws configure
+    # validate aws configuration. in case of invalid region\credentials the following command will trow exception
+     aws ec2 describe-regions 2>&1 | Out-Null
+
+     if ($lastExitCode -ne 0 )
+     {
+        Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Please execute again 'aws configure' and verify that AWS configuration is correct." -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "For more details please see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html" -LogFileName $LogFileName -Severity Error               
+        exit
+     }
 }
 
 function Write-RequiredConnectorDefinitionInfo
@@ -17,10 +24,23 @@ function Write-RequiredConnectorDefinitionInfo
     <#
     .SYNOPSIS
         Write data needed to configure the Azure Sentinel Data Connector for user.
+    .PARAMETER DestinationTable
+        Specifies the connector destination table
     #>
+    param(
+        [Parameter(Mandatory=$true,Position=0)][string]$DestinationTable
+    )
     Write-Log -Message "Use the values below to configure the Amazon Web Service S3 data connector in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 3
-    Write-Log -Message "Role arn: $roleArn" -LogFileName $LogFileName -Severity Information -LinePadding 1
+    Write-Log -Message "Role Arn: $roleArn" -LogFileName $LogFileName -Severity Information -LinePadding 1
     Write-Log -Message "Sqs Url: $sqsUrl" -LogFileName $LogFileName -Severity Information
+    Write-Log -Message "Destination Table: $DestinationTable" -LogFileName $LogFileName -Severity Information
+}
+
+function Write-ScriptNotes
+{
+    Write-Log -Message "Notes:" -LogFileName $LogFileName -Severity Information -LinePadding 1 -Indent 2 -Color DarkYellow
+    Write-Log -Message "* You can find more information about the script in https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AWS-S3/README.md" -LogFileName $LogFileName -Severity Information -Indent 2 -Color DarkYellow
+    Write-Log -Message "* If a resource name(like: S3, Sqs, Kms) already exists, the script will use the available one and not create a new resource" -LogFileName $LogFileName -Severity Information -Indent 2 -Color DarkYellow
 }
 
 function Set-RetryAction
@@ -51,7 +71,7 @@ function Set-RetryAction
                 Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
 				if ($retryCount -lt $maxRetries)
 				{
-					Start-Sleep 10
+					Start-Sleep 5
                     Write-Log -Message "Retrying..." -LogFileName $LogFileName -Severity Information
 				}
             }
@@ -150,6 +170,8 @@ function Write-Log
         Specifies the number of empty rows to add before message in the console. This does not apply to the log on disk.
     .PARAMETER Indent
         Specified the number of characters to indent the message in the console. This does not apply to the log on disk.
+    .PARAMETER Color
+        Specified the color of the text for information severity.
 
     .EXAMPLE
         Write-Log -Message "Starting script" -LogFileName C:\temp\TestLog1.csv -Severity Information
@@ -166,7 +188,7 @@ function Write-Log
     .EXAMPLE
         Write-Log -Message "Detailed debugging text that most people do not want to see in the console" -LogFileName C:\temp\TestLog1.csv -Severity Verbose -Indent 2
         Write the message to the verbose channel and to the log. Users would only see this in the console if they have enabled Verbose messaging.
-        .EXAMPLE
+    .EXAMPLE
         Write-Log -Message "Text to only send to the log" -LogFileName C:\temp\TestLog1.csv -Severity Verbose -Indent 2
         Write the text only to the log and not to the console.    
     #>
@@ -184,7 +206,9 @@ function Write-Log
         [parameter(Mandatory=$false)]
         [int]$LinePadding = 0,
         [parameter(Mandatory=$false)]
-        [int]$Indent = 0
+        [int]$Indent = 0,
+        [parameter(Mandatory=$false)]
+        [ConsoleColor]$Color = "White"
     )
 
     # If data is passed in that is not a string, instead of generating an error, just convert it to string.
@@ -222,7 +246,7 @@ function Write-Log
 
     # Write the message to the correct output channel											  
     switch ($Severity) {
-        "Information" { Write-Host $Message }
+        "Information" { Write-Host $Message -ForegroundColor $Color }
         "Warning" { Write-Warning $Message }
         "Error" { Write-Host $Message -ForegroundColor Red }
         "Verbose" {Write-Verbose $Message }

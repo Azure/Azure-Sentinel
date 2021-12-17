@@ -233,11 +233,13 @@ function Set-OrganizationTrailConfig
 }
 
 # ***********       Main Flow       ***********
+
+# Validate AWS configuration
+Test-AwsConfiguration
+
 Write-Log -Message "Starting CloudTrail data connector configuration script" -LogFileName $LogFileName -Severity Verbose
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable CloudTrail Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -Severity Information -LinePadding 2
-
-# Connect using the AWS CLI
-Get-AwsConfig
+Write-ScriptNotes
 
 New-ArnRole
 
@@ -313,14 +315,14 @@ Set-RetryAction({
 	{
 		if ($kmsConfirmation -eq 'y')
 		{
-			Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId 2>&1" -LogFileName $LogFileName -Severity Verbose
-			$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId 2>&1
+			Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1" -LogFileName $LogFileName -Severity Verbose
+			$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --kms-key-id $kmsKeyId --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1
 			Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
 		}
 		else
 		{
-			Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
-			$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName 2>&1
+			Write-Log -Message "Executing: aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1" -LogFileName $LogFileName -Severity Verbose
+			$tempForOutput = aws cloudtrail create-trail --name $cloudTrailName --s3-bucket-name $bucketName --tags-list [$(Get-SentinelTagInJsonFormat)] 2>&1
 			Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
 		}
 		if($lastexitcode -eq 0)
@@ -361,4 +363,4 @@ Write-Log -Message "Executing: aws cloudtrail start-logging  --name $cloudTrailN
 aws cloudtrail start-logging  --name $cloudTrailName
 
 # Output information needed to configure Sentinel data connector
-Write-RequiredConnectorDefinitionInfo
+Write-RequiredConnectorDefinitionInfo -DestinationTable AWSCloudTrail
