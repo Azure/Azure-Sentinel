@@ -2,7 +2,7 @@
 
 namespace Kqlvalidations.Tests
 {
-    public class YamlFilesTestData : TheoryData<YamlFileProp>
+    public class YamlFilesTestData : TheoryData<string, YamlFileProp>
     {
         protected YamlFilesTestData(YamlFilesLoader yamlFilesLoader)
         {
