@@ -2,7 +2,7 @@
 
 namespace Kqlvalidations.Tests
 {
-    public class YamlFilesTestData : TheoryData<string, string>
+    public class YamlFilesTestData : TheoryData<string, YamlFileProp>
     {
         public YamlFilesTestData(YamlFilesLoader yamlFilesLoader)
         {
@@ -10,7 +10,11 @@ namespace Kqlvalidations.Tests
             files.ForEach(f =>
             {
                 var fileName = Path.GetFileName(f);
-                Add(fileName, f);
+                Add(fileName, new YamlFileProp()
+                {
+                    FullPath = f,
+                    FileName = fileName
+                });
             });
         }
     }
