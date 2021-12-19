@@ -38,22 +38,22 @@ namespace Kqlvalidations.Tests
         }
         
         // We pass File name to test because in the result file we want to show an informative name for the test
-        [Theory]
-        [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, YamlFileProp fileProp)
-        {
-            var res = ReadAndDeserializeYaml(fileProp.FullPath);
-            var queryStr =  (string) res["query"];
-            var id = (string) res["id"];
-        
-            //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
-            if (ShouldSkipTemplateValidation(id))
-            {
-                var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
-            }
-        
-        }
+        // [Theory]
+        // [ClassData(typeof(DetectionsYamlFilesTestData))]
+        // public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, YamlFileProp fileProp)
+        // {
+        //     var res = ReadAndDeserializeYaml(fileProp.FullPath);
+        //     var queryStr =  (string) res["query"];
+        //     var id = (string) res["id"];
+        //
+        //     //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
+        //     if (ShouldSkipTemplateValidation(id))
+        //     {
+        //         var validationRes = _queryValidator.ValidateSyntax(queryStr);
+        //         Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+        //     }
+        //
+        // }
         
         // // We pass File name to test because in the result file we want to show an informative name for the test
         // [Theory]
