@@ -244,8 +244,8 @@ function CarbonBlackAPI()
     {
         if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
         {   
-            GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
-            Write-Host "No SIEM API ID and/or Key value was defined."   
+            $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
+            Write-Host "$($alerts) found and pushed."   
         }
         else
         {                
@@ -363,6 +363,7 @@ function GetBucketDetails {
                         $responseObj = (ConvertFrom-Json $EventLogsJSON)
                         try {
                             $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $tableName;  
+                            Write-Host "Pushed events to $($tableName)"
                         }
                         catch {
                             Write-Host $_
