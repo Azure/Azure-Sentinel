@@ -211,10 +211,9 @@ function CarbonBlackAPI()
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
 
-    if($logType -contains "audit")
-    {
-        $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-    }
+
+    $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
+
     
     if ($auditLogsResult.success -eq $true)
     {
@@ -235,42 +234,39 @@ function CarbonBlackAPI()
         Write-Host "AuditLogsResult API status failed , Please check."
     }
 
-    if($logType -contains "event")
-    {
-        GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
+
+    GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
+
+
+    if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
+    {   
+        $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
+        Write-Host "$($alerts) found and pushed."   
     }
-    
-    if($LogType -contains "alert")
-    {
-        if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
-        {   
-            $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
-            Write-Host "$($alerts) found and pushed."   
-        }
-        else
+    else
+    {                
+        $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
+        $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
+        if ($notifications.success -eq $true)
         {                
-            $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
-            if ($notifications.success -eq $true)
-            {                
-                $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5       
-                if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
-                {
-                    $responseObj = (ConvertFrom-Json $NotifLogJson)
-                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-                    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-                }
-                else
-                {
-                        Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
-                }
+            $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5       
+            if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
+            {
+                $responseObj = (ConvertFrom-Json $NotifLogJson)
+                $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+                Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
             }
             else
             {
-                Write-Host "Notifications API status failed , Please check."
+                    Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
             }
         }
+        else
+        {
+            Write-Host "Notifications API status failed , Please check."
+        }
     }
+    
         
 }
 
