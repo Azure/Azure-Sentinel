@@ -22,7 +22,7 @@ namespace Kqlvalidations.Tests
 
         private static List<string> GetYamlFilesPaths()
         {
-            var rootDir = DirectoryPathsUtils.GetTestDirectory(6);
+            var rootDir = Utils.GetTestDirectory(6);
             List<string> detectionPaths = new List<string>();
             
             foreach (var dirName in DirectoryNames)

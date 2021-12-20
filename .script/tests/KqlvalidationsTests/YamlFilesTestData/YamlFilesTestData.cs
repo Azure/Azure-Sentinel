@@ -2,19 +2,15 @@
 
 namespace Kqlvalidations.Tests
 {
-    public class YamlFilesTestData : TheoryData<string, YamlFileProp>
+    public class YamlFilesTestData : TheoryData<string, string>
     {
         public YamlFilesTestData(YamlFilesLoader yamlFilesLoader)
         {
             var files = yamlFilesLoader.GetFilesNames();
-            files.ForEach(f =>
+            files.ForEach(filePath =>
             {
-                var fileName = Path.GetFileName(f);
-                Add(fileName, new YamlFileProp()
-                {
-                    FullPath = f,
-                    FileName = fileName
-                });
+                var fileName = Path.GetFileName(filePath);
+                Add(fileName, Utils.EncodeToBase64(filePath));
             });
         }
     }

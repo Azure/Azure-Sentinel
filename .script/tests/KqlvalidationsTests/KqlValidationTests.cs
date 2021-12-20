@@ -22,9 +22,9 @@ namespace Kqlvalidations.Tests
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_HaveValidKql(string fileName, YamlFileProp fileProp)
+        public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
-            var res = ReadAndDeserializeYaml(fileProp.FullPath);
+            var res = ReadAndDeserializeYaml(encodedFilePath);
             var queryStr =  (string) res["query"];
             var id = (string) res["id"];
 
@@ -40,9 +40,9 @@ namespace Kqlvalidations.Tests
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, YamlFileProp fileProp)
+        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
-            var res = ReadAndDeserializeYaml(fileProp.FullPath);
+            var res = ReadAndDeserializeYaml(encodedFilePath);
             var queryStr =  (string) res["query"];
             var id = (string) res["id"];
         
@@ -58,9 +58,9 @@ namespace Kqlvalidations.Tests
         // // We pass File name to test because in the result file we want to show an informative name for the test
         // [Theory]
         // [ClassData(typeof(InsightsYamlFilesTestData))]
-        // public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string fileName, YamlFileProp fileProp)
+        // public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string fileName, string encodedFilePath)
         // {
-        //     var res = ReadAndDeserializeYaml(fileProp.FullPath);
+        //     var res = ReadAndDeserializeYaml(encodedFilePath);
         //     var queryStr =  (string) res["BaseQuery"];
         //     
         //     ValidateKql(fileProp.FileName, queryStr);
@@ -82,10 +82,10 @@ namespace Kqlvalidations.Tests
 Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
-        private Dictionary<object, object> ReadAndDeserializeYaml(string fullPath)
+        private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
         {
         
-            var yaml = File.ReadAllText(fullPath);
+            var yaml = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
             var deserializer = new DeserializerBuilder().Build();
             return deserializer.Deserialize<dynamic>(yaml);
         }

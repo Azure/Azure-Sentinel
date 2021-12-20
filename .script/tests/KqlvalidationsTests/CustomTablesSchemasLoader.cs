@@ -12,7 +12,7 @@ namespace Kqlvalidations.Tests
         {
             _tableSchemas = new List<TableSchema>();
             
-            var jsonFilePath = Path.Combine(DirectoryPathsUtils.GetTestDirectory(), "CustomTables");
+            var jsonFilePath = Path.Combine(Utils.GetTestDirectory(), "CustomTables");
             var jsonFiles = Directory.GetFiles(jsonFilePath, "*.json");
 
             foreach (var jsonFile in jsonFiles)
