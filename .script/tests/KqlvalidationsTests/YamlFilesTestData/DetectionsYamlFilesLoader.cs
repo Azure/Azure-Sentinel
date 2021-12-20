@@ -6,16 +6,14 @@ namespace Kqlvalidations.Tests
 {
     public class DetectionsYamlFilesLoader : YamlFilesLoader
     {
-        public DetectionsYamlFilesLoader() : base(new List<string>() { "Detections", "Solutions"})
+        protected override List<string> GetDirectoryPaths()
         {
-        }
-        
-        public override List<string> GetFilesNames()
-        {
-            var files = Directory.GetFiles(DirectoryPaths[0], "*.yaml", SearchOption.AllDirectories).ToList();
-            files.AddRange(Directory.GetFiles(DirectoryPaths[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
+            var basePath = Utils.GetTestDirectory(TestFolderDepth);
+            var detectionsDir = new List<string> { Path.Combine(basePath, "Detections")};
+            var solutionDirectories = Path.Combine(basePath, "Solutions");
+            var analyticsRulesDir  = Directory.GetDirectories(solutionDirectories, "Analytic Rules", SearchOption.AllDirectories);
 
-            return files;
+            return analyticsRulesDir.Concat(detectionsDir).ToList();
         }
     }
 }
