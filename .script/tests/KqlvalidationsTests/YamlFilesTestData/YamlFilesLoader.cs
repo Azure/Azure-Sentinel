@@ -24,7 +24,7 @@ namespace Kqlvalidations.Tests
             });
         }
 
-        private List<string> GetYamlFilesPaths(List<string> directoryNames)
+        private static List<string> GetYamlFilesPaths(List<string> directoryNames)
         {
             var rootDir = Utils.GetTestDirectory(TestFolderDepth);
             List<string> detectionPaths = new List<string>();
