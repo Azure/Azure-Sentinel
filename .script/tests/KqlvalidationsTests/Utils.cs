@@ -6,7 +6,7 @@ namespace Kqlvalidations.Tests
 {
     public static class Utils
     {
-        public static string GetTestDirectory(int testFolderDepth = 3)
+        public static string GetTestDirectory(int testFolderDepth)
         {
             var rootDir = Directory.CreateDirectory(GetAssemblyDirectory());
             for (int i = 0; i < testFolderDepth; i++)
