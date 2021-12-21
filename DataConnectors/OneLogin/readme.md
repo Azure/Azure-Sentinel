@@ -46,7 +46,7 @@ If successfully deployed you should start to see events appear in your Azure Sen
 
 ### Step 1 - Deploy via VS Code
 
-Note: You will need to prepare VS code for Azure function development. See https://docs.microsoft.com/en-us/azure/azure-functions/functions-create-first-function-powershell#prerequisites
+Note: You will need to prepare VS code for Azure function development. See https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-powershell#prerequisites
 
 
 1. Download the [Zip](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/OneLogin/OneLogin_logs_template.zip?raw=true) file of the Azure Funciton app from Github.
@@ -169,4 +169,4 @@ Note: You will need to prepare VS code for Azure function development. See https
 
 12. After you completed the manual Deployment [Configure your One Login WebHook](#configure-your-one-login-webhook)
 
-If you run into issues there are a number of options for [monitoring](https://docs.microsoft.com/en-us/azure/azure-functions/functions-monitoring?tabs=cmd) and [deugging](https://docs.microsoft.com/en-us/azure/azure-functions/functions-debug-powershell-local) your Function App.
+If you run into issues there are a number of options for [functions monitoring](https://docs.microsoft.com/azure/azure-functions/functions-monitoring?tabs=cmd) and [functions deugging powershell](https://docs.microsoft.com/azure/azure-functions/functions-debug-powershell-local) your Function App.
