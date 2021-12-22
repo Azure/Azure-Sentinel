@@ -160,13 +160,14 @@ class PrismaCloudConnector:
                 "detailed": True
             }
             data = json.dumps(data)
-            logging.info('{} alert data'.format(data))
+            logging.info('{} alert data at 163'.format(data))
             async with session.post(uri, headers=headers, data=data) as response:
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
                 res = json.loads(res)
 
+            logging.info('{} alert response data at 170'.format(res))
             for item in res['items']:
                 yield item
 
@@ -175,11 +176,13 @@ class PrismaCloudConnector:
                     'pageToken': res['nextPageToken']
                 }
                 data = json.dumps(data)
+                logging.info('{} alert data at 178'.format(data))
                 async with session.post(uri, headers=headers, data=data) as response:
                     if response.status != 200:
                         raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                     res = await response.text()
                     res = json.loads(res)
+                logging.info('{} alert response data at 185'.format(res))
                 for item in res['items']:
                     yield item
 
