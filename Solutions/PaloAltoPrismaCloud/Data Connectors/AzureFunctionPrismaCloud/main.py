@@ -160,6 +160,7 @@ class PrismaCloudConnector:
                 "detailed": True
             }
             data = json.dumps(data)
+            logging.info('{} alert data'.format(data))
             async with session.post(uri, headers=headers, data=data) as response:
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
