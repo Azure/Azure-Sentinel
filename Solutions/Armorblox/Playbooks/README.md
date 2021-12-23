@@ -18,3 +18,7 @@ Note:  Email sent with this playbook will be from user that creates connection!
 After deployment, attach this playbook to the `Armorblox Needs Review` analytic rule so it runs when the alert is created.
 
 Note: Playbook is disabled by default. Please enable it before assigning to the Automation rule!
+
+## Screenshots
+### Playbook screenshot
+![Playbook](./images/Playbook_Send-email-alert.png)
