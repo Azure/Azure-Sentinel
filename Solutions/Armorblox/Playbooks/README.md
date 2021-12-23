@@ -15,8 +15,7 @@ Once this Playbooks template is deployed, you will need to go into the Logic App
 Note:  Email sent with this playbook will be from user that creates connection!
 
 ### Attach the playbook
-After deployment, attach this playbook to the `Armorblox Needs Review` analytic rule so it runs when the alert is created.
-[How?](https://docs.microsoft.com/en-us/azure/sentinel/tutorial-respond-threats-playbook)</br>
+After deployment, attach this playbook to the `Armorblox Needs Review` analytic rule so it runs when the alert is created.</br>
 Note: Playbook is disabled by default. Please enable it before assigning to the Automation rule!
 
 ## Screenshots
