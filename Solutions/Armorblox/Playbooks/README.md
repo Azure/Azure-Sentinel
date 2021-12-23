@@ -25,3 +25,4 @@ Note: Playbook is disabled by default. Please enable it before assigning to the 
 
 ## Screenshots
 ### Playbook screenshot
+![Playbook](./images/Playbook_Send-email-alert.png)
