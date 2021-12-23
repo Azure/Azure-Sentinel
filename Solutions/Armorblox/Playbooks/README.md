@@ -16,5 +16,5 @@ Note:  Email sent with this playbook will be from user that creates connection!
 
 ### Attach the playbook
 After deployment, attach this playbook to the `Armorblox Needs Review` analytic rule so it runs when the alert is created.
-[How?](https://docs.microsoft.com/en-us/azure/sentinel/tutorial-respond-threats-playbook#respond-to-alerts)
+
 Note: Playbook is disabled by default. Please enable it before assigning to the Automation rule!
