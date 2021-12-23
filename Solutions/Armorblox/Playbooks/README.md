@@ -8,10 +8,6 @@ An O365 account to be used to send email notification (The user account will be 
 ## Parameters
 Notification Email - The receiver's mail address.
 
-## Deployment                                                                                             
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Farmorblox%2FAzure-Sentinel%2Fmaster%2FSolutions%2FArmorblox%2FPlaybooks%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Farmorblox%2FAzure-Sentinel%2Fmaster%2FSolutions%2FArmorblox%2FPlaybooks%2Fazuredeploy.json)
-
 ## Post-deployment
 
 ### Configure connections
@@ -25,4 +21,4 @@ Note: Playbook is disabled by default. Please enable it before assigning to the 
 
 ## Screenshots
 ### Playbook screenshot
-
+![Playbook](./images/Playbook_Send-email-alert.png)
