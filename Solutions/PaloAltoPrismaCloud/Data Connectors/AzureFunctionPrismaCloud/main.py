@@ -71,17 +71,21 @@ class PrismaCloudConnector:
 
     async def process_alerts(self):
         last_alert_ts_ms = await self.alerts_state_manager.get()
+        logging.info('last_alert_ts_ms value : {0}'.format(last_alert_ts_ms))
         max_period = (int(time.time()) - MAX_PERIOD_MINUTES * 60) * 1000
+        logging.info('max_period value : {0}'.format(max_period))
         if not last_alert_ts_ms or int(last_alert_ts_ms) < max_period:
             alert_start_ts_ms = max_period
             logging.info('Last alert was too long ago or there is no info about last alert timestamp.')
         else:
             alert_start_ts_ms = int(last_alert_ts_ms) + 1
+            logging.info('alert_start_ts_ms value at line 81 : {0}'.format(alert_start_ts_ms))
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
             last_alert_ts_ms = alert['alertTime']
             alert = self.clear_alert(alert)
+            logging.info('last_alert_ts_ms value : {0}'.format(last_alert_ts_ms))
             await self.sentinel.send(alert, log_type=ALERT_LOG_TYPE)
             self.sent_alerts += 1
 
@@ -164,14 +168,14 @@ class PrismaCloudConnector:
                 "detailed": True
             }
             data = json.dumps(data)
-            logging.info('{} alert data at 163'.format(data))
+            logging.info('{} alert data at 167'.format(data))
             async with session.post(uri, headers=headers, data=data) as response:
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
                 res = json.loads(res)
 
-            logging.info('{} alert response data at 170'.format(res))
+            logging.info('{} alert response data at 174'.format(res))
             for item in res['items']:
                 yield item
 
@@ -180,13 +184,13 @@ class PrismaCloudConnector:
                     'pageToken': res['nextPageToken']
                 }
                 data = json.dumps(data)
-                logging.info('{} alert data at 178'.format(data))
+                logging.info('{} alert data at 183'.format(data))
                 async with session.post(uri, headers=headers, data=data) as response:
                     if response.status != 200:
                         raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                     res = await response.text()
                     res = json.loads(res)
-                logging.info('{} alert response data at 185'.format(res))
+                logging.info('{} alert response data at 189'.format(res))
                 for item in res['items']:
                     yield item
 
