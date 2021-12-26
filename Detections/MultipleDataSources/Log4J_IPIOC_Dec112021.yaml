@@ -68,111 +68,89 @@ query:  |
   (union isfuzzy=true
   (CommonSecurityLog
   | where SourceIP in (IPList) or DestinationIP in (IPList) or Message has_any (IPList)
+  | project TimeGenerated, SourceIP, DestinationIP, Message, SourceUserID, RequestURL, Type
   | extend MessageIP = extract(IPRegex, 0, Message)
   | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", "No Match")
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by SourceIP, DestinationIP, DeviceProduct, DeviceAction, Message, MessageIP, Protocol, SourcePort, DestinationPort, DeviceAddress, DeviceName, IPMatch, LogType = Type 
-  | extend timestamp = StartTime, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "No Match")
+  | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "No Match")
   ),
-  (OfficeActivity 
+  (OfficeActivity
+  | where  ClientIP in (IPList)
+  | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
   | extend SourceIPAddress = ClientIP, Account = UserId
-  | where  SourceIPAddress in (IPList)
-  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account, LogType = Type
+  | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account
   ),
   (DnsEvents
   | where  IPAddresses has_any (IPList)
+  | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
   | extend DestinationIPAddress = IPAddresses,  Host = Computer
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host, LogType = Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
   ),
   (imDns (response_has_any_prefix=IPList)
+  | project TimeGenerated, ResponseName, SrcIpAddr, Type
   | extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host, LogType = Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
   ),
   (imNetworkSession (dstipaddr_has_any_prefix=IPList)
-  | extend timestamp = TimeGenerated, IPCustomEntity = DstIpAddr, HostCustomEntity = SrcIpAddr, LogType = Type
+  | project TimeGenerated, DstIpAddr, SrcIpAddr, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = DstIpAddr, HostCustomEntity = SrcIpAddr
   ),
-   (VMConnection
+  (VMConnection
   | where SourceIp in (IPList) or DestinationIp in (IPList)
+  | project TimeGenerated, Computer, SourceIp, DestinationIp, Type
   | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None")
-  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer, LogType = Type
+  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer
   ),
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
   | where EventID == 3
+  | project TimeGenerated, EventData, UserName, Computer, Type
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
   | where SourceIP in (IPList) or DestinationIP in (IPList)
   | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), LogType = Type
-  ),
-  (WireData
-  | where isnotempty(RemoteIP) 
-  | where RemoteIP in (IPList) 
-  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = Computer, LogType = Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
   ),
   (SigninLogs
-  | where isnotempty(IPAddress)
   | where IPAddress in (IPList)
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, LogType = Type
+  | project TimeGenerated, UserPrincipalName, IPAddress, Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
   ),
   (AADNonInteractiveUserSignInLogs
-  | where isnotempty(IPAddress)
   | where IPAddress in (IPList)
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, LogType = Type
+  | project TimeGenerated, UserPrincipalName, IPAddress, Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
   ),
   (W3CIISLog
-  | where isnotempty(cIP)
   | where cIP in (IPList)
-  | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName, LogType = Type
+  | project TimeGenerated, Computer, cIP, csUserName, Type
+  | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName
   ),
   (AzureActivity
-  | where isnotempty(CallerIpAddress)
   | where CallerIpAddress in (IPList)
-  | extend timestamp = TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller, LogType = Type
+  | project TimeGenerated, CallerIpAddress, Caller
+  | extend timestamp = TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller
   ),
   (
   AWSCloudTrail
-  | where isnotempty(SourceIpAddress)
   | where SourceIpAddress in (IPList)
-  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, LogType = Type
+  | project TimeGenerated, SourceIpAddress, UserIdentityUserName
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
   ), 
   ( 
   DeviceNetworkEvents
-  | where isnotempty(RemoteIP)
   | where RemoteIP in (IPList)
-  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName, LogType = Type
+  | project TimeGenerated, RemoteIP, DeviceName
+  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName
   ),
   (
   AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallApplicationRule"
-  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
-  | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (IPList)
-  | extend DestinationIP = DestinationHost
-  | extend IPCustomEntity = SourceHost, LogType = Type
-  ),
-  (
-  AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallNetworkRule"
-  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
-  | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (IPList)
-  | extend DestinationIP = DestinationHost
-  | extend IPCustomEntity = SourceHost, LogType = Type
-  ),
-  (
-  DeviceProcessEvents 
-  | where InitiatingProcessFileName =~ "java.exe" and ProcessCommandLine has_all ('curl -s','wget') or
-  ProcessCommandLine has_all ('curl',@'${jndi') or 
-  ProcessCommandLine has_any ("${jndi:ldap://", "${jndi:rmi:/", "${jndi:ldaps:/", "${jndi:dns:/", "${jndi:iiop://","${jndi:",'${web:','${jvmrunargs:')
-  | extend LogType = Type
-  ),
-  (
-  DeviceNetworkEvents
-  | where RemoteIP in(IPList) and ActionType != "ConnectionFailed"
-  | extend LogType = Type
+  | where Category in ("AzureFirewallApplicationRule", "AzureFirewallNetworkRule")
+  | project TimeGenerated, msg_s
+  | parse msg_s with Protocol 'request from ' SourceIP ':' SourcePort 'to ' DestinationIP ':' DestinationPort '. Action:' Action
+  | where DestinationIP has_any (IPList)
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP
   )
   )
 entityMappings:
@@ -188,5 +166,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.4
+version: 1.1.0
 kind: Scheduled
