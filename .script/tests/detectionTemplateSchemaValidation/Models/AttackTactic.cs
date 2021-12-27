@@ -14,6 +14,7 @@
         Exfiltration,
         CommandAndControl,
         Impact,
-        PreAttack
+        PreAttack,
+        Reconnaissance
     }
 }
