@@ -17,6 +17,7 @@
         Reconnaissance,
         ResourceDevelopment,
         ImpairProcessControl,
-        InhibitResponseFunction
+        InhibitResponseFunction,
+        PreAttack
     }
 }
