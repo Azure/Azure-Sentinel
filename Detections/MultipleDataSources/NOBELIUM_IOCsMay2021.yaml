@@ -65,6 +65,8 @@ query:  |
   let sha256s = (iocs | where Type =~ "SHA256"| project IoC);
   let ips = (iocs | where Type =~ "IP"| project IoC);
   let IPList = dynamic(["192.99.221.77","83.171.237.173"]);
+  let ips_list=toscalar(ips | summarize makeset(IoC));
+  let full_ip_list= array_concat(ips_list, IPList)
   let domains = (iocs | where Type =~ "Domain"| project IoC);
   let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
   let sha256Hashes = dynamic(["2523f94bd4fba4af76f4411fe61084a7e7d80dec163c9ccba9226c80b8b31252",
@@ -114,6 +116,17 @@ query:  |
   (WindowsFirewall
   | where SourceIP in (IPList) or DestinationIP in (IPList) or SourceIP in (ips) or DestinationIP in (ips)
   | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", "None")
+  ),
+  (imNetworkSession(srcipaddr_has_any_prefix=full_ip_list)
+    | extend IPMatch =  "SourceIP"
+    | extend timestamp = TimeGenerated, HostCustomEntity = Dvc , IPCustomEntity = SrcIpAddr //, AccountCustomEntity =User
+  ),
+  (imNetworkSession(dstipaddr_has_any_prefix=full_ip_list)
+    | extend IPMatch =  "DestinationIP"
+    | extend timestamp = TimeGenerated, HostCustomEntity = Dvc , IPCustomEntity =  DstIpAddr //, AccountCustomEntity =User
+  ),
+  (imWebSession(url_has_any=domains)
+    | extend timestamp=TimeGenerated, HostCustomEntity=Dvc , DNSName=tostring(parse_url(Url)["Host"]), AccountCustomEntity=User
   ),
   (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
