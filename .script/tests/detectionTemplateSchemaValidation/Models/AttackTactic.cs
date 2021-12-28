@@ -14,7 +14,10 @@
         Exfiltration,
         CommandAndControl,
         Impact,
-        PreAttack,
-        Reconnaissance
+        Reconnaissance,
+        ResourceDevelopment,
+        ImpairProcessControl,
+        InhibitResponseFunction,
+        PreAttack
     }
 }
