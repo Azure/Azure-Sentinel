@@ -9,10 +9,10 @@ Thank you for your contribution to the Microsoft Sentinel Github repo.
 > Details of the code changes in your submitted PR.  Providing descriptions for pull requests ensures, there is context to changes being made and greatly enhances the code review process.  Providing associated Issues that this resolves also easily connects the reason.
    
    Change(s):
-   - Updated syntax for XYZ
+   - Updated syntax for XYZ.yaml
 
    Reason for Change(s):
-   - New schema used for XYZ
+   - New schema used for XYZ.yaml
    - Resolves ISSUE #1234
 
 ## After the submission has been made, please look at the Validation Checks:
