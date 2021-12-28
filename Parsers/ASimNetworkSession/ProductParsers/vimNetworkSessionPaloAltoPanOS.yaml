@@ -16,6 +16,36 @@ Description: |
   This Query Parser maps Palo Alto PanOS Firewall Events (CommonSecurityLogs) to the Advanced SIEM Information Model Network Session schema.
 ParserName: ASimNetworkSessionPaloAltoPanOS
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: "'*'"
   - Name: disabled
     Type: bool
     Default: false
@@ -23,6 +53,22 @@ ParserQuery: |
   let NWParser=(disabled:bool=false){
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor=="Palo Alto Networks" and (Activity=="TRAFFIC")
+  /// Prefilterring:
+  | where (starttime=datetime(null) or TimeGenerated>=starttime)
+      and (endtime  =datetime(null) or TimeGenerated<=endtime)
+      and (array_length(srcipaddr_has_any_prefix)==0 
+                or has_any_ipv4_prefix(SourceIP,srcipaddr_has_any_prefix)
+                )
+      and (array_length(dstipaddr_has_any_prefix)==0 
+                or has_any_ipv4_prefix(DestinationIP,dstipaddr_has_any_prefix)
+                )
+      and (dstportnumber=int(null) or DestinationPort==dstportnumber)
+      and (srcportnumber=int(null) or SourcePort==srcportnumber)
+      and (array_length(url_has_any)==0)
+      and (array_length(httpuseragent_has_any)==0)
+      and (array_length(hostname_has_any)==0 or DstHostname in (hostname_has_any))
+      // dvcaction - post filterring
+      and (eventresult="*" or (DeviceAction=="allow" and eventresult=="Success") or (eventresult=="Failure"))
   | parse AdditionalExtensions with "PanOSDstPackets="DstPackets:long";PanOSsrc_packets="SrcPackets:long";start="EventStartTime:datetime";reason="*
   | project-rename 
         EventVendor=DeviceVendor // Not documented
@@ -65,6 +111,7 @@ ParserQuery: |
       , EventSchemaVersion="0.2.0"
       , EventSchema="imNetworkSession"
       , DvcAction=case(DeviceAction=="reset client", "Reset Source",  DeviceAction=="reset server", "Reset Destination",  DeviceAction=="reset both", "Reset",  DeviceAction)
+  | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
   | project-rename
         // DvcMacAddr=DeviceMacAddress 
       , DstHostname=DestinationHostName
