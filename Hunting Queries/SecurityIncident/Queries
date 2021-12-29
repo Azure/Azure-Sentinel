@@ -1,0 +1,169 @@
+Here are few sample queries having logic to count the incident which are closed on same day , same week and same month. 
+
+
+
+Incident Closed on Same Day
+______________________________________ 
+
+SecurityIncident
+
+| where Status == "Closed"
+
+| extend create_day = startofday(CreatedTime)
+
+| extend closed_day = startofday(ClosedTime)
+
+| where create_day == closed_day 
+
+| extend Incident_Closed_On_SameDay = iif(create_day == closed_day, "This Incident is  closed on Same day", "Incident is not closed on same day" )
+
+
+
+
+
+
+Incident Closed within same week
+______________________________________ 
+
+
+SecurityIncident
+
+| where Status == "Closed"
+
+| extend create_week_day =  startofweek(CreatedTime)
+
+| extend closed_week_day = startofweek(ClosedTime)
+
+| where  create_week_day == closed_week_day
+
+| extend Incident_Closed_In_Same_Week = iif( create_week_day == closed_week_day , "This Incident is  closed in Same Week", "Incident is not closed in same week" )
+
+| project-away create_week_day, closed_week_day
+
+
+
+
+
+Incident Closed within same month
+______________________________________ 
+
+SecurityIncident
+
+| where Status == "Closed"
+
+| extend create_month =  startofmonth(CreatedTime)
+
+| extend closed_month = startofmonth(ClosedTime)
+
+| where create_month  == closed_month
+
+| extend Incident_Closed_Duration = iif( create_month  == closed_month , "This Incident is  closed in Same Month", "Incident is not closed in same month" )
+
+| project-away create_month, closed_month
+
+
+
+Incident Closed within 7 days or within 30 days
+______________________________________ 
+
+SecurityIncident
+
+| where Status == "Closed"
+
+| extend create_day = startofday(CreatedTime)
+
+| extend closed_day = startofday(ClosedTime)
+
+| extend Timedifference_In_Days = datetime_diff('day', closed_day, create_day)
+
+| extend Incident_Life = iif(Timedifference_In_Days <= 7, "This Incident is  closed within 7 Days", "Incident took more than 7 days for closure" )
+
+| extend Incident_Life_Month = iif(Timedifference_In_Days >= 7 and Timedifference_In_Days <= 30, "This Incident is  closed within 30 Days", "" )
+
+
+
+
+Incident Closed by engineers. 
+ ______________________________________ 
+
+SecurityIncident
+ | where Status == 'Closed'
+ | extend AssignedTo = tostring(Owner.assignedTo)
+ | summarize count() by AssignedTo
+
+
+
+
+
+Incident Closed by Tactics
+ ________________________________
+
+SecurityIncident
+ | where Status == 'Closed'
+ | extend Tactics = tostring(parse_json(tostring(AdditionalData.tactics))[0])
+ | summarize count() by Tactics
+
+
+
+
+Incident Closed 
+ _______________________
+
+SecurityIncident
+ | where Status == 'Closed'
+ | summarize arg_max(LastModifiedTime, *) by IncidentName
+
+
+
+
+
+
+
+
+
+
+Consolidated Query
+_______________________
+
+
+SecurityIncident
+
+| where Status contains "closed"
+
+| extend create_day = startofday(CreatedTime)
+
+| extend closed_day = startofday(ClosedTime)
+
+| extend create_week_day =  startofweek(CreatedTime)
+
+| extend closed_week_day = startofweek(ClosedTime)
+
+| extend create_month =  startofmonth(CreatedTime)
+
+| extend closed_month = startofmonth(ClosedTime)
+
+| extend Incident_Closed_On_SameDay = iif(create_day == closed_day, "This Incident is  closed on Same day", "" )
+
+| extend Incident_Closed_In_Same_Week = iif( create_week_day == closed_week_day , "This Incident is  closed in Same Week", "" )
+
+| extend Incident_Closed_In_Same_Month = iif( create_month  == closed_month , "This Incident is  closed in Same Month", "" )
+
+| project  Title, IncidentName, IncidentNumber, Status, CreatedTime, ClosedTime, Incident_Closed_On_SameDay, Incident_Closed_In_Same_Week, Incident_Closed_In_Same_Month
+
+
+
+
+You can also use the below line for further formatting. Just remove the last line that has 'project ' and use the below line instead. 
+
+
+| summarize count() by Incident_Closed_In_Same_Month, Incident_Closed_In_Same_Week, Incident_Closed_On_SameDay
+
+
+
+or 
+
+| summarize arg_max(TimeGenerated, *) by LastModifiedTime
+
+to find the unique incidents that are updated recently. 
+
+
