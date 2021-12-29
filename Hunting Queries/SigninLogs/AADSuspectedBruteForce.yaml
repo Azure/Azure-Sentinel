@@ -15,18 +15,15 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-    let authenticationWindow = 24h;
     let successCodes = dynamic(["0", "50125", "50140", "70043", "70044"]);
     let aadFunc = (tableName:string){
       table(tableName)
-      | where TimeGenerated > ago(authenticationWindow)
-      | extend Activities = pack("datetime", TimeGenerated,"ResultEventId", ResultType , "AppDisplayName", AppDisplayName, "ResultDescription", ResultDescription ,"IpAddress", IPAddress, "DeviceDetail", todynamic(DeviceDetail), "Status", todynamic(DeviceDetail), "Locationdetails", todynamic(LocationDetails))
       | extend FailureOrSuccess = iff(ResultType in (successCodes), "Success", "Failure")
-      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), SuccesEvents =  make_list_if(Activities, ResultType in (successCodes)),FailureEvents = make_list_if(Activities, ResultType !in (successCodes)) , FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success") by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, Type
+      | summarize FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success") by bin(TimeGenerated, 1h),UserPrincipalName, UserDisplayName, IPAddress
       | where FailureCount > 100
       | where SuccessCount > 0
-      | order by FailureCount, UserDisplayName, Type
-      | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName 
+      | order by UserPrincipalName, TimeGenerated asc
+      | extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
     };
     let aadSignin = aadFunc("SigninLogs");
     let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -36,3 +33,7 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
+   - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
