@@ -7,7 +7,7 @@ You can deploy the solution by clicking on the buttons below:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftInsiderRiskManagement%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftInsiderRiskManagement%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftInsiderRiskManagement/Workbooks/Images/InsiderRiskManagementBlack1.png?raw=true)
+![Workbook Overview](./InsiderRiskManagementBlack1.png)
 
 # Getting Started
 1)	Onboard [Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard) and [Microsoft 365 Insider Risk Management](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management-configure)

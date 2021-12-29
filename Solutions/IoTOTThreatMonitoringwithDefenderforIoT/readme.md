@@ -1,5 +1,5 @@
 # Overview
-There has been a long-standing split between ICS/SCADA (OT) and Corporate (IT) cybersecurity. This split was often driven by significant differences in technology/tooling. Microsoft Defender for IoT's integration with Microsoft Sentinel drives convergency by providing a single pane for coverage of both D4IOT (OT) and Microsoft Sentinel (IT) alerting. This solution includes Workbooks and Analytics rules providing a guide OT detection and Analysis.<br>
+There has been a long-standing split between ICS/SCADA (OT) and Corporate (IT) cybersecurity. This split was often driven by significant differences in technology/tooling. Microsoft Defender for IoT's integration with Microsoft Sentinel drives convergency by providing a single pane for coverage of both D4IOT (OT) and Microsoft Sentinel (IT) alerting. This solution includes Workbooks, Analytics rules, and Playbooks providing a guide OT detection, Analysis, and Response.<br>
 
 ## Try on Portal
 You can deploy the solution by clicking on the buttons below:
@@ -7,7 +7,8 @@ You can deploy the solution by clicking on the buttons below:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIoTOTThreatMonitoringwithDefenderforIoT%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIoTOTThreatMonitoringwithDefenderforIoT%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IoTOTThreatMonitoringwithDefenderforIoT/Workbooks/Images/IoTOTThreatMonitoringwithDefenderforIoTBlack.png?raw=true)
+![Workbook Overview](./IoTOTThreatMonitoringwithDefenderforIoTBlack.png)
+
 
 # Getting Started
 1)  [Onboard Microsoft Defender for IoT](https://docs.microsoft.com/azure/defender-for-iot/device-builders/quickstart-onboard-iot-hub)<br>
@@ -15,6 +16,7 @@ You can deploy the solution by clicking on the buttons below:
 3)  [Enable Microsoft Defender for IoT Connector to Microsoft Sentinel](https://docs.microsoft.com/azure/defender-for-iot/organizations/how-to-configure-with-sentinel)<br>
 4)  View the Workbook: Navigate to Microsoft Sentinel > Workbooks > My Workbooks > IoT/OT Threat Monitoring with Defender for IoT > View<br>
 5)  View the Analytics Rules: Navigate to Microsoft Sentinel > Analytics > Search "IOT"<br>
+6)  View the Playbooks: Navigate to Microsoft Sentinel> Automation > Playbooks > Search "IOT"<br>
 
 # Workbook
 The OT Threat Monitoring with Defender for IoT Workbook features OT filtering for Security Alerts, Incidents, and Asset Inventory. The workbook features a dynamic assessment of the MITRE ATT&CK for ICS matrix across your environment to analyze and respond to OT-based threats. This workbook is designed to enable SecOps Analysts, Security Engineers, and MSSPs to gain situational awareness for IT/OT security posture.<br>
@@ -56,3 +58,5 @@ In some cases, maintenance activities generate alerts in Sentinel which distract
 The following playbook will send mail to notify specific stake holders. One example can be in the case of specific security team per product line or per physical location. This playbook requires a watchlist which maps between the sensors name and the mail addresses of the alerts stockholders. For more information, see [AD4IoT-MailbyProductionLine](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AD4IoT-MailbyProductionLine)<br>
 ## 3) New Asset ServiceNow Ticket
 Normally, the authorized entity to program a PLC is the Engineering Workstation, to program a PLC attackers might create a new Engineering Workstation to create malicious programing. The following playbook will open a ticket in ServiceNow each time a new Engineering Workstation is detected. This playbook parses explicitly the IoT device entity fields. For more information, see [AD4IoT-NewAssetServiceNowTicket](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/AD4IoT-NewAssetServiceNowTicket/readme.md)<br>
+## 4) Get OT Device CVEs
+This playbook will get device CVEs from Defender for IoT. The CVEs will be written to a JSON blob in Azure Storage and a link will be added to the Microsoft Sentinel Incident comments. For more information, see [Get-AD4IoTDeviceCVEs](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Get-AD4IoTDeviceCVEs/readme.md)<br>

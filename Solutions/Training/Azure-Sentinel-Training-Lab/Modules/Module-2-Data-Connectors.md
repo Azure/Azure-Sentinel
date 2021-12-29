@@ -5,21 +5,21 @@
 
 ## Objectives
 
-In this module you will learn how to enable Data Connectors in Microsoft Sentinel to bring alerts and/or telemtry from different sources.
+In this module you will learn how to enable Data Connectors in Azure Sentinel to bring alerts and/or telemtry from different sources.
 
 #### Prerequisites
 
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need an Microsoft Sentinel workspace provisioned.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need an Azure Sentinel workspace provisioned.
 
 Some of the data connectors that will be used in this lab, require some specific permissions on the workspace or your azure subscription. If you don't have the appropriate permissions, you can still continue doing the rest of the labs.
 
 ### Exercise 1: Enable Azure Activity data connector
 
-This exercise shows you how to enable the Azure Activity data connector. This connector will bring into your Microsoft Sentinel workspace all the audit events for actions performed in your Azure subscription.
+This exercise shows you how to enable the Azure Activity data connector. This connector will bring into your Azure Sentinel workspace all the audit events for actions performed in your Azure subscription.
 
-**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Microsoft Sentinel. 
+**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Azure Sentinel. 
 
-1. Go to you Microsoft Sentinel workspace and select **Data Connectors** under **Configuration** section.
+1. Go to you Azure Sentinel workspace and select **Data Connectors** under **Configuration** section.
 
 ![azactivity1](../Images/azactivity1.png)
 
@@ -41,7 +41,7 @@ On the Scope selection select your relevant subscription.
 
 ![azactivity4](../Images/m2-activity-scope.png)
 
-5. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Microsoft Sentinel workspace:
+5. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Azure Sentinel workspace:
 
 ![azactivity8](../Images/m2-ws-target-foractivitylogs1.png)
 
@@ -52,15 +52,15 @@ On the Scope selection select your relevant subscription.
 
 ![azactivity7](../Images/azactivity7.png)
 
-8. It is normal if you don't immediately see the connector showing as connected and in green. Also, each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Microsoft Sentinel workspace.
+8. It is normal if you don't immediately see the connector showing as connected and in green. Also, each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Azure Sentinel workspace.
 
 ### Exercise 2: Enable Azure Defender data connector
 
-This exercise shows you how to enable the Azure Defender data connector. This connector allows you to stream your security alerts from Azure Defender into Microsoft Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
+This exercise shows you how to enable the Azure Defender data connector. This connector allows you to stream your security alerts from Azure Defender into Azure Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
 
 **NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable Azure Defender within Azure Security Center.
 
-1. Go to you Microsoft Sentinel workspace and select **Data Connectors** under *Configuration* section.
+1. Go to you Azure Sentinel workspace and select **Data Connectors** under *Configuration* section.
 
 2. In the data connectors screen, type *defender* in the search bar, select the *Azure Defender* connector and click on *Open connector page*.
 
@@ -74,11 +74,11 @@ This exercise shows you how to enable the Azure Defender data connector. This co
 
 ### Exercise 3: Enable Threat Intelligence TAXII data connector
 
-This exercise shows you how to enable the Threat Intelligence - TAXII data connector. This connector allows you to send threat indicators from TAXII servers to Microsoft Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes.
+This exercise shows you how to enable the Threat Intelligence - TAXII data connector. This connector allows you to send threat indicators from TAXII servers to Azure Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes.
 
 **NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable Azure Defender within Azure Security Center.
 
-1. Go to you Microsoft Sentinel workspace and select *Data Connectors* under *Configuration* section.
+1. Go to you Azure Sentinel workspace and select *Data Connectors* under *Configuration* section.
 
 2. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII* connector and click on *Open connector page*.
 

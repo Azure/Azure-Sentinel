@@ -32,7 +32,9 @@ A MCAS API Token is required. See the documentation to learn more about the [API
 	```
 
 ## Post Deployment Steps
-1. API Token and Workspace Key will be placed as "Secrets" in the Azure KeyVault `<<Function App Name>><<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
+1. There is a json file (lastrun-MCAS.json) in Function Dependencies folder
+2. Upload the file to the storage account "mcasactivity-logs" container from 
+4. API Token and Workspace Key will be placed as "Secrets" in the Azure KeyVault `<<Function App Name>><<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
 
 	```
 		a. Go to Azure KeyVault `<<Function App Name>><<uniqueid>>`
@@ -46,7 +48,7 @@ A MCAS API Token is required. See the documentation to learn more about the [API
 
 	```
 
-2. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
+6. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
    the schedule 
    ```
    a.	Click on Function App "Configuration" under Settings 
@@ -55,7 +57,7 @@ A MCAS API Token is required. See the documentation to learn more about the [API
    ```
    **Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 5 minutes is `0 */5 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 5, for any hour, day of the month, month, day of the week, or year".**
 
-3. If you change the TimerTigger you need to configure the Lookback setting to match the number of minutes between runs. If you want to change
+7. If you change the TimerTigger you need to configure the Lookback setting to match the number of minutes between runs. If you want to change
    the Lookback 
    ```
    a.	Click on Function App "Configuration" under Settings 

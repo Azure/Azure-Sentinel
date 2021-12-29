@@ -1,22 +1,19 @@
 ﻿using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace Kqlvalidations.Tests
 {
     public class CustomTablesSchemasLoader : ITableSchemasLoader
     {
         private readonly List<TableSchema> _tableSchemas;
-        private const int TestFolderDepth = 3;
-
         public CustomTablesSchemasLoader()
         {
             _tableSchemas = new List<TableSchema>();
-            
-            var jsonFilePath = Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables");
-            var jsonFiles = Directory.GetFiles(jsonFilePath, "*.json");
-
+            var jsonFiles = Directory.GetFiles(DetectionsYamlFilesTestData.GetCustomTablesPath(), "*.json");
             foreach (var jsonFile in jsonFiles)
             {
                 var tableSchema = ReadTableSchema(jsonFile);

@@ -9,7 +9,7 @@ You can deploy the solution by clicking on the buttons below:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatAnalysis%2526ResponsewithMITREATT%2526CK%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatAnalysis%2526ResponsewithMITREATT%2526CK%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ThreatAnalysis&Response/Workbooks/Images/ThreatAnalysis&ResponseForCloudBlack.png?raw=true)
+![Workbook Overview](./ThreatAnalysis&ResponseForCloudBlack.png)
 
 # Getting Started
 1️⃣  Onboard 💡[Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
