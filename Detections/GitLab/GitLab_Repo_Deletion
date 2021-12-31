@@ -13,9 +13,7 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Execution, Defense Evasion
-
 query: |
-  
   let LearningPeriod = 7d;
   let BinTime = 1h;
   let RunTime = 1h;
@@ -25,23 +23,20 @@ query: |
   let EndRunTime = StartTime - RunTime;
   let EndLearningTime = StartTime + LearningPeriod;
   let GitLabRepositoryDestroyEvents = (GitLabAudit
-  | where RemoveAction == "project" or RemoveAction == "repository");
+                                       | where RemoveAction == "project" or RemoveAction == "repository");
   GitLabRepositoryDestroyEvents
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
   | summarize count() by bin(TimeGenerated, BinTime)
   | summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)
   | extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)
   | extend Dummy = 1
-  | join kind=innerunique (
-    GitLabRepositoryDestroyEvents
-    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
-    | summarize CountInRunTime = count() by bin(TimeGenerated, BinTime)
-    | extend Dummy = 1
-  ) on Dummy
+  | join kind=innerunique (GitLabRepositoryDestroyEvents
+                           | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+                           | summarize CountInRunTime = count() by bin(TimeGenerated, BinTime)
+                           | extend Dummy = 1) on Dummy
   | project-away Dummy
   | where CountInRunTime > LearningThreshold
-  
-  entityMappings:
+entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -51,3 +46,4 @@ query: |
       - identifier: FullName
         columnName: AuthorName
 version: 1.0.0
+kind: Scheduled
