@@ -16,32 +16,30 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-
-let LearningPeriod = 7d; 
-let BinTime = 1h; 
-let RunTime = 1h; 
-let StartTime = 1h; 
-let NumberOfStds = 3; 
-let MinThreshold = 10.0; 
-let EndRunTime = StartTime - RunTime; 
-let EndLearningTime = StartTime + LearningPeriod;
-let GitLabFailedLogins = (GitLabApp
-| where Message contains "Failed Login"
-| parse kind=regex Message with EventTime ": Failed Login: username=" Username "ip=" IpAddress 
-| project TimeGenerated, EventTime, Username, IpAddress);
-GitLabFailedLogins 
+  let LearningPeriod = 7d; 
+  let BinTime = 1h; 
+  let RunTime = 1h; 
+  let StartTime = 1h; 
+  let NumberOfStds = 3; 
+  let MinThreshold = 10.0; 
+  let EndRunTime = StartTime - RunTime; 
+  let EndLearningTime = StartTime + LearningPeriod;
+  let GitLabFailedLogins = (GitLabApp
+  | where Message contains "Failed Login"
+  | parse kind=regex Message with EventTime ": Failed Login: username=" Username "ip=" IpAddress 
+  | project TimeGenerated, EventTime, Username, IpAddress);
+  GitLabFailedLogins 
   | where todatetime(EventTime) between (ago(EndLearningTime) .. ago(StartTime)) 
   | summarize FailedLoginsCountInBinTime = count() by User = Username, bin(todatetime(EventTime), BinTime) 
   | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User 
   | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold) 
   | join kind=innerunique ( 
     GitLabFailedLogins 
-    | where todatetime(EventTime) between (ago(StartTime) .. ago(EndRunTime)) 
-    | summarize FailedLoginsCountInRunTime = count() by User = Username, IpAddress 
+      | where todatetime(EventTime) between (ago(StartTime) .. ago(EndRunTime)) 
+      | summarize FailedLoginsCountInRunTime = count() by User = Username, IpAddress 
   ) on User 
   | where FailedLoginsCountInRunTime > LearningThreshold
   | extend User, IpAddress
-
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -52,3 +50,4 @@ entityMappings:
       - identifier: FullName
         columnName: User
 version: 1.0.0
+kind: Scheduled
