@@ -2,7 +2,7 @@
 
 To make it easy to build and validate data connectors user experience, we have data connector json templates available for partners to use, validate and submit. This guide provides information on how to fill out the json templates.
 
-The underlying json structure of any of the data connector template is the same, hence this connector template guidance is generalized for CEF, REST or Syslog data connector types in Azure Sentinel. There will be specific recommendations provided for different types as needed.
+The underlying json structure of any of the data connector template is the same, hence this connector template guidance is generalized for CEF, REST or Syslog data connector types in Microsoft Sentinel. There will be specific recommendations provided for different types as needed.
 
 # How to use the json template?
 
@@ -13,7 +13,7 @@ Download the json template based on the data connector type and rename it to as 
 The following nomenclatures appear in the json templates. Note these accordingly to represent your data connector and fill these values accordingly in the template.
 
 1. **PROVIDER NAME** – The name of the vendor who is building the data connector. For e.g. Microsoft, Symantec, Barracuda, etc.
-2. **APPLIANCE NAME** – The name of the specific product whose logs or data is being sent to Azure Sentinel via this data connector.  For e.g. CloudGen Firewall (from Barracuda), Security Analytics (from Citrix), etc.
+2. **APPLIANCE NAME** – The name of the specific product whose logs or data is being sent to Microsoft Sentinel via this data connector.  For e.g. CloudGen Firewall (from Barracuda), Security Analytics (from Citrix), etc.
 3. **DATATYPE\_NAME** – The name of the default table where the data / logs will be sent to. The location changes for each type of data connector. While naming these:
   1. Do **not** have spaces in the data type names.
   2. Represent both provider, appliance name and type of data [optionally] as a short name in the data type name. The goal is to be able to disambiguate different data types if there&#39;s going to be separate data types for different appliances from the same provider for different log types (like alerts, events, raw logs, network logs, etc.)
@@ -89,7 +89,7 @@ A data connector can have multiple data types and these can be represented by co
 3. **permissions** – Represents the required permissions needed for the data connector to be enabled or connected. For e.g. write permissions to the workspace is needed for connector to be enabled, etc. These appear in the connector UX in the prerequisites section. This property value need **not** be updated and can remain as-is.
 4. **instructionSteps** – These are the specific instructions to connect to the data connector.
   * For CEF and Syslog, leverage the existing text as-is and add anything custom as needed.
-  * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Azure Sentinel **or** provide detailed guidance for customers to send data to Azure Sentinel.
+  * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Microsoft Sentinel **or** provide detailed guidance for customers to send data to Microsoft Sentinel.
   * If Connector is dependent on Kusto Function (Parser), **additionalRequirementBanner** and **instruction step** about Parser need to be added in Connector. <p>
   
 # What is the format for redirection/Short links?
@@ -100,3 +100,13 @@ A data connector can have multiple data types and these can be represented by co
 
 
 Expand and add multiple instructions as needed by adding more title and description elements in this block.
+
+## Next steps
+
+Currently in preview, you can also publish your data connector as a Microsoft Sentinel solution. 
+
+Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more. 
+
+**Tip**: If your solution is being published to the content hub, also open a PR to have it listed in our [content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog). On the docs page, click Edit to open your PR.
+
+For more information, see the [Microsoft Sentinel solution overview](https://docs.microsoft.com/azure/sentinel/sentinel-solutions) and our [Guide to Building Microsoft Sentinel Solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#readme).

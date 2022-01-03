@@ -9,7 +9,8 @@ You can deploy the solution by clicking on the buttons below:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybersecurityMaturityModelCertification(CMMC)%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybersecurityMaturityModelCertification(CMMC)%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](./CybersecurityMaturityModelCertification(CMMC)Workbook.png)
+![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CybersecurityMaturityModelCertification(CMMC)/Workbooks/Images/CybersecurityMaturityModelCertification(CMMC)Black1.png?raw=true)
+
 
 # Getting Started
 This Solution is designed to augment staffing through automation, artificial intelligence, machine learning, query/alerting generation, and visualizations. This workbook leverages Azure Policy, Azure Resource Graph, and Azure Log Analytics to align with Cybersecurity Maturity Model Certification control requirements. A filter set is available for custom reporting by guides, subscriptions, workspaces, time-filtering, control family, and maturity level. This offering telemetry from 50+ Microsoft Security products, while only Microsoft Sentinel/Azure Security Center are required to get started, each offering provides additional enrichment for aligning with control requirements. Each CMMC control includes a Control Card detailing an overview of requirements, primary/secondary controls, deep-links to referenced product pages/portals, recommendations, implementation guides, compliance cross-walks and tooling telemetry for building situational awareness of cloud workloads. 
