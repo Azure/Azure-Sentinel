@@ -1,5 +1,5 @@
 Parser:
-  Title: Source Agnostic Web Sessions parser
+  Title: Web Session ASIM filtering parser
   Version: '0.1'
   LastUpdated: Nov 30, 2021
 Product:
@@ -13,23 +13,56 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  ASIM parametrized source agnostic Web Session parser
+    This ASIM parser supports filtering and normalizing Web Session logs from all supported sources to the ASIM DNS activity normalized schema.
 ParserName: ASimWebSession
-
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: eventresultdetils_has_any
+    Type: dyanmic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ASimWebSession') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser | where isnotempty(SourceSpecificParser));
-  let ASimBuiltInDisabled=toscalar('ASimWebSession' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
+  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'vimWebSession') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser | where isnotempty(SourceSpecificParser));
+  let vimBuiltInDisabled=toscalar('vimWebSession' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
   let parser=(
     starttime:datetime=datetime(null), 
     endtime:datetime=datetime(null),
-    srcipaddr_has_any_ipv4_prefix:dynamic=dynamic([]),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
     url_has_any:dynamic=dynamic([]), 
     httpuseragent_has_any:dynamic=dynamic([]), 
-    eventresultdetails_in:dynamic=dynamic([])
+    eventresultdetails_in:dynamic=dynamic([]),
+    eventresult:string='*')
   {
   union isfuzzy=true
-    vimWebSessionEmpty
+    vimWebSessionEmpty,
+    vimWebSessionSquidProxy (starttime, endtime, srcipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, vimBuiltInDisabled or ('vimWebSessionSquidProxy' in (DisabledParsers))),
+    vimWebSessionZscalerZIA (starttime, endtime, srcipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, vimBuiltInDisabled or ('vimWebSessionZscalerZIA' in (DisabledParsers)))
   };
-  parser (starttime, endtime, srcipaddr_has_any, url_has_any, httpuseragent_has_any, eventresultdetails_in)
+  parser (starttime, endtime, srcipaddr_has_any, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult)
 
 Parsers:
+  - vimWebSesssionEmpty
+  - vimWebSessionSquidProxy
+  - vimWebSessionZscalerZIA
