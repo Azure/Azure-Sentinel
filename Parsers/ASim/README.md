@@ -15,9 +15,10 @@ To deploy a single schema use the buttons below:
 | ASim Schema | Deploy |
 |-------------|--------|
 | [Authentication](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimAuthentication) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthenticationARM)|
-| [Dns](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimDns) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelDnsARM)|
+| [Dns](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimDns) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM)|
 | [File Event](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimFileEvent) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelFileEventARM)|
-| [Network Session](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelNetworkSessionARM)|
+| [Network Session](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimNetworkSessionARM)|
+| [Web Session](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimWebSession) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimWebSessionARM)|
 | [Process Event](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimAuthentication) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessEventARM)|
 | [Registry](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimRegistry) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelRegistryARM)|
 
