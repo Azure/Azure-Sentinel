@@ -6,7 +6,6 @@ import logging
 import azure.functions as func
 import re
 import time
-import aiohttp
 
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 
@@ -28,10 +27,10 @@ LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85
 MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
 
 # Defines page size while listing files from blob storage. New page is not processed while old page is processing.
-MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 1.5)
+MAX_PAGE_SIZE = int(os.environ.get('MAX_PAGE_SIZE', 1000))
 
 # Defines max number of events that can be sent in one request to Azure Sentinel
-MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 2000))
+MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 1000))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -50,21 +49,20 @@ async def main(mytimer: func.TimerRequest):
     conn = AzureBlobStorageConnector(AZURE_STORAGE_CONNECTION_STRING, CONTAINER_NAME, MAX_CONCURRENT_PROCESSING_FILES)
     container_client = conn._create_container_client()
     async with container_client:
-        async with aiohttp.ClientSession() as session:
-            cors = []
-            async for blob in conn.get_blobs():
-                cor = conn.process_blob(blob, container_client, session)
-                cors.append(cor)
-                if len(cors) >= MAX_PAGE_SIZE:
-                    await asyncio.gather(*cors)
-                    cors = []
-                if conn.check_if_script_runs_too_long():
-                    logging.info('Script is running too long. Stop processing new blobs.')
-                    break
-
-            if cors:
+        cors = []
+        async for blob in conn.get_blobs():
+            cor = conn.process_blob(blob, container_client)
+            cors.append(cor)
+            if len(cors) >= MAX_PAGE_SIZE:
                 await asyncio.gather(*cors)
-                logging.info('Processed {} files with {} events.'.format(conn.total_blobs, conn.total_events))
+                cors = []
+            if conn.check_if_script_runs_too_long():
+                logging.info('Script is running too long. Stop processing new blobs.')
+                break
+
+        if cors:
+            await asyncio.gather(*cors)
+            logging.info('Processed {} files with {} events.'.format(conn.total_blobs, conn.total_events))
 
     logging.info('Script finished. Processed files: {}. Processed events: {}'.format(conn.total_blobs, conn.total_events))
 
@@ -79,7 +77,10 @@ class AzureBlobStorageConnector:
         self.total_events = 0
 
     def _create_container_client(self):
-        return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False, max_single_get_size=2*1024*1024, max_chunk_get_size=2*1024*1024)
+        return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False)
+
+    def _create_sentinel_client(self):
+        return AzureSentinelConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
 
     async def get_blobs(self):
         container_client = self._create_container_client()
@@ -95,13 +96,13 @@ class AzureBlobStorageConnector:
         return duration > max_duration
 
     async def delete_blob(self, blob, container_client):
-        logging.info("Deleting blob {}".format(blob['name']))
+        logging.debug("Deleting blob {}".format(blob['name']))
         await container_client.delete_blob(blob['name'])
 
-    async def process_blob(self, blob, container_client, session: aiohttp.ClientSession):
+    async def process_blob(self, blob, container_client):
         async with self.semaphore:
-            logging.info("Start processing {}".format(blob['name']))
-            sentinel = AzureSentinelConnectorAsync(session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
+            logging.debug("Start processing {}".format(blob['name']))
+            sentinel = self._create_sentinel_client()
             blob_cor = await container_client.download_blob(blob['name'])
             s = ''
             async for chunk in blob_cor.chunks():
@@ -128,6 +129,6 @@ class AzureBlobStorageConnector:
             await self.delete_blob(blob, container_client)
             self.total_blobs += 1
             self.total_events += sentinel.successfull_sent_events_number
-            logging.info("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
+            logging.debug("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
             if self.total_blobs % 100 == 0:
                 logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))

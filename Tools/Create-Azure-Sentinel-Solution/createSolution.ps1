@@ -1,21 +1,6 @@
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 
-function handleEmptyInstructionProperties ($inputObj) {
-    $outputObj = $inputObj |
-    Get-Member -MemberType *Property |
-    Select-Object -ExpandProperty Name |
-    Sort-Object |
-    ForEach-Object -Begin { $obj = New-Object PSObject } {
-        if (($null -eq $inputObj.$_) -or ($inputObj.$_ -eq "") -or ($inputObj.$_.Count -eq 0)) {
-            Write-Host "Removing empty property $_"
-        }
-        else {
-            $obj | Add-Member -memberType NoteProperty -Name $_ -Value $inputObj.$_
-        }
-    } { $obj }
-    $outputObj
-}
 function removePropertiesRecursively ($resourceObj) {
     foreach ($prop in $resourceObj.PsObject.Properties) {
         $key = $prop.Name
@@ -158,7 +143,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                         }
                         try {
-                            $data = $rawData
+                            # Handle non-ASCII characters (Emoji's)
+                            $data = $rawData -replace "[^ -~\t]", ""
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
@@ -538,57 +524,46 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             contentId = "[variables('_$connectorId')]";
                             version   = $contentToImport.Version;
                         };
+                        function handleEmptyInstructionProperties ($inputObj) {
+                            $outputObj = $inputObj |
+                            Get-Member -MemberType *Property |
+                            Select-Object -ExpandProperty Name |
+                            Sort-Object |
+                            ForEach-Object -Begin { $obj = New-Object PSObject } {
+                                if (($null -eq $inputObj.$_) -or ($inputObj.$_ -eq "") -or ($inputObj.$_.Count -eq 0)) {
+                                    Write-Host "Removing empty property $_"
+                                }
+                                else {
+                                    $obj | Add-Member -memberType NoteProperty -Name $_ -Value $inputObj.$_
+                                }
+                            } { $obj }
+                            $outputObj
+                        }
                         foreach ($step in $connectorData.instructionSteps) {
                             # Remove empty properties from each instructionStep
                             $stepIndex = $connectorData.instructionSteps.IndexOf($step)
                             $connectorData.instructionSteps[$stepIndex] = handleEmptyInstructionProperties $step
                         }
 
-                        $connectorObj = [PSCustomObject]@{}
-                        # If direct title is available, assume standard connector format
-                        if ($connectorData.title) {
-                            $connectorObj = [PSCustomObject]@{
-                                id         = "[variables('_connector$connectorCounter-source')]";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]"
-                                apiVersion = "2021-03-01-preview";
-                                type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
-                                location   = "[parameters('workspace-location')]";
-                                kind       = "GenericUI";
-                                properties = [PSCustomObject]@{
-                                    connectorUiConfig = [PSCustomObject]@{
-                                        title                 = $connectorData.title;
-                                        publisher             = $connectorData.publisher;
-                                        descriptionMarkdown   = $connectorData.descriptionMarkdown;
-                                        graphQueries          = $connectorData.graphQueries;
-                                        sampleQueries         = $connectorData.sampleQueries;
-                                        dataTypes             = $connectorData.dataTypes;
-                                        connectivityCriterias = $connectorData.connectivityCriterias;
-                                        availability          = $connectorData.availability;
-                                        permissions           = $connectorData.permissions;
-                                        instructionSteps      = $connectorData.instructionSteps
-                                    }
-                                }
-                            }
-                        }
-                        elseif ($connectorData.resources -and 
-                            $connectorData.resources[0] -and 
-                            $connectorData.resources[0].properties -and 
-                            $connectorData.resources[0].properties.connectorUiConfig -and 
-                            $connectorData.resources[0].properties.pollingConfig) {
-                            # Else check if Polling connector
-                            $connectorData = $connectorData.resources[0]
-                            $connectorUiConfig = $connectorData.properties.connectorUiConfig
-                            $connectorUiConfig.PSObject.Properties.Remove('id')
-                            $connectorObj = [PSCustomObject]@{
-                                id         = "[variables('_connector$connectorCounter-source')]";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]"
-                                apiVersion = "2021-03-01-preview";
-                                type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
-                                location   = "[parameters('workspace-location')]";
-                                kind       = $connectorData.kind;
-                                properties = [PSCustomObject]@{
-                                    connectorUiConfig = $connectorUiConfig;
-                                    pollingConfig     = $connectorData.properties.pollingConfig;
+                        $connectorObj = [PSCustomObject]@{
+                            id         = "[variables('_connector$connectorCounter-source')]";
+                            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]"
+                            apiVersion = "2021-03-01-preview";
+                            type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
+                            location   = "[parameters('workspace-location')]";
+                            kind       = "GenericUI";
+                            properties = [PSCustomObject]@{
+                                connectorUiConfig = [PSCustomObject]@{
+                                    title                 = $connectorData.title;
+                                    publisher             = $connectorData.publisher;
+                                    descriptionMarkdown   = $connectorData.descriptionMarkdown;
+                                    graphQueries          = $connectorData.graphQueries;
+                                    sampleQueries         = $connectorData.sampleQueries;
+                                    dataTypes             = $connectorData.dataTypes;
+                                    connectivityCriterias = $connectorData.connectivityCriterias;
+                                    availability          = $connectorData.availability;
+                                    permissions           = $connectorData.permissions;
+                                    instructionSteps      = $connectorData.instructionSteps
                                 }
                             }
                         }

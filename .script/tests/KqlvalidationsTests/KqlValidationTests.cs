@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
-using Microsoft.Azure.Sentinel.KustoServices.Contract;
+﻿using Microsoft.Azure.Sentinel.KustoServices.Contract;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -11,6 +13,7 @@ namespace Kqlvalidations.Tests
     public class KqlValidationTests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
+        private static readonly List<string> DetectionPaths = DetectionsYamlFilesTestData.GetDetectionPaths();
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
@@ -19,14 +22,16 @@ namespace Kqlvalidations.Tests
                .Build();
         }
 
-        // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
+        public void Validate_DetectionQueries_HaveValidKql(string detectionsYamlFileName)
         {
-            var res = ReadAndDeserializeYaml(encodedFilePath);
-            var queryStr =  (string) res["query"];
-            var id = (string) res["id"];
+            var detectionsYamlFile = getDetectionsYamlFile(detectionsYamlFileName);
+            var yaml = File.ReadAllText(detectionsYamlFile);
+            var deserializer = new DeserializerBuilder().Build();
+            var res = deserializer.Deserialize<dynamic>(yaml);
+            string queryStr = res["query"];
+            string id = res["id"];
 
             //we ignore known issues
             if (ShouldSkipTemplateValidation(id))
@@ -34,61 +39,41 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
-            ValidateKql(id, queryStr);
-        }
-        
-        // We pass File name to test because in the result file we want to show an informative name for the test
-        [Theory]
-        [ClassData(typeof(DetectionsYamlFilesTestData))]
-        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
-        {
-            var res = ReadAndDeserializeYaml(encodedFilePath);
-            var queryStr =  (string) res["query"];
-            var id = (string) res["id"];
-        
-            //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
-            if (ShouldSkipTemplateValidation(id))
-            {
-                var validationRes = _queryValidator.ValidateSyntax(queryStr);
-                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
-            }
-        
-        }
-        
-        // // We pass File name to test because in the result file we want to show an informative name for the test
-        // [Theory]
-        // [ClassData(typeof(InsightsYamlFilesTestData))]
-        // public void Validate_InsightsQueries_HaveValidKqlBaseQuery(string fileName, string encodedFilePath)
-        // {
-        //     var res = ReadAndDeserializeYaml(encodedFilePath);
-        //     var queryStr =  (string) res["BaseQuery"];
-        //     
-        //     ValidateKql(fileProp.FileName, queryStr);
-        // }
-
-        private void ValidateKql(string id, string queryStr)
-        {
             var validationRes = _queryValidator.ValidateSyntax(queryStr);
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationRes.IsValid)
             {
                 firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
             }
-
-            Assert.True(validationRes.IsValid,
-                validationRes.IsValid 
-                    ? string.Empty 
-                    : @$"Template Id: {id} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
-Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+            Assert.True(validationRes.IsValid, validationRes.IsValid ? string.Empty : $"Template Id:{id} is not valid in Line:{firstErrorLocation.Line} col:{firstErrorLocation.Col} Errors:{validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
-        private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
+        [Theory]
+        [ClassData(typeof(DetectionsYamlFilesTestData))]
+        public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string detectionsYamlFileName)
         {
-        
-            var yaml = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
+            var detectionsYamlFile = getDetectionsYamlFile(detectionsYamlFileName);
+
+            var yaml = File.ReadAllText(detectionsYamlFile);
             var deserializer = new DeserializerBuilder().Build();
-            return deserializer.Deserialize<dynamic>(yaml);
+            var res = deserializer.Deserialize<dynamic>(yaml);
+            string queryStr = res["query"];
+            string id = res["id"];
+
+            //Templates that are in the skipped templates should not pass the validateion (if they pass, why skip?)
+            if (ShouldSkipTemplateValidation(id))
+            {
+                var validationRes = _queryValidator.ValidateSyntax(queryStr);
+                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+            }
+
+            else
+            {
+                return;
+            }
+
         }
+
         private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
@@ -111,6 +96,23 @@ Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate(
             }
             var col = (pos - curPos + 1);
             return (curlineIndex + 1, col);
+        }
+
+        /// <summary>
+        ///Get detection yaml file from Detection or solution analytics rule folder
+        /// </summary>
+        /// <param name="detectionsYamlFileName">Detections Yaml File Name</param>
+        /// <returns>detections yaml file path</returns>
+        private string getDetectionsYamlFile(string detectionsYamlFileName)
+        {
+            try
+            {
+                return Directory.GetFiles(DetectionPaths[0], detectionsYamlFileName, SearchOption.AllDirectories).Single();
+            }
+            catch
+            {
+                return  Directory.GetFiles(DetectionPaths[1], detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+            }
         }
     }
 

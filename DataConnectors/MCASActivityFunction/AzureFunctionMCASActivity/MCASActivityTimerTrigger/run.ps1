@@ -3,15 +3,13 @@
     Language:       PowerShell
     Version:        1.0
     Author:         Nicholas DiCola
-    Modified By:       Sreedhar Ande
-    Last Modified:  12/16/2021
+    Last Modified:  05/12/2021
     
     DESCRIPTION
     This Function App calls the MCAS Activity REST API (https://docs.microsoft.com/cloud-app-security/api-activities) to pull the MCAS
     Activity logs. The response from the MCAS API is recieved in JSON format. This function will build the signature and authorization header 
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post the data to MCASActivity_CL.
 #>
-
 # Input bindings are passed in via param block.
 param($Timer)
 
@@ -31,6 +29,8 @@ if ($env:MSI_SECRET -and (Get-Module -ListAvailable Az.Accounts)){
     Connect-AzAccount -Identity
 }
 
+#Wait-Debugger
+
 $AzureWebJobsStorage = $env:AzureWebJobsStorage
 $MCASAPIToken = $env:MCASAPIToken
 $workspaceId = $env:WorkspaceId
@@ -38,8 +38,8 @@ $workspaceKey = $env:WorkspaceKey
 $Lookback = $env:Lookback
 $MCASURL = $env:MCASURL
 $LAURI = $env:LAURI
-$TblLastRunExecutions = "MCASLastRunLogs"
-
+$storageAccountContainer = "mcasactivity-logs"
+$fileName = "lastrun-MCAS.json"
 
 $StartTime = (get-date).ToUniversalTime()
 $currentStartTime = $StartTime | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
@@ -202,28 +202,33 @@ $headers = @{
 }
 
 $EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
-# Retrieve Timestamp from last executions 
-# Check if Table has already been created and if not create it to maintain state between executions of Function
+
+#check for last run file
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
-
-$LastExecutionsTable = Get-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext -ErrorAction Ignore
-if($null -eq $LastExecutionsTable.Name) {  
-    New-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext
-    $LastRunExecutionsTable = (Get-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext.Context).cloudTable
-    Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
-}
-Else {
-    $LastRunExecutionsTable = (Get-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext.Context).cloudTable
-}
-
-# retrieve the row
-$LastRunExecutionsTableRow = Get-AzTableRow -table $LastRunExecutionsTable -partitionKey "MCASExecutions" -RowKey $workspaceId -ErrorAction Ignore
-if($null -ne $LastRunExecutionsTableRow.lastRunEpoch){
-    $StartEpoch = $LastRunExecutionsTableRow.lastRunEpoch    
+$checkBlob = Get-AzStorageBlob -Blob $fileName -Container $storageAccountContainer -Context $storageAccountContext
+if($checkBlob -ne $null){
+    #Blob found get data
+    Get-AzStorageBlobContent -Blob $fileName -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\$fileName" -Force
+    $lastRunContext = Get-Content "$env:temp\$fileName" | ConvertFrom-Json
+    $StartEpoch = $lastRunContext.lastRunEpoch
+    $lastRunContext.lastRunEpoch = $EndEpoch
+    $lastRunContext | ConvertTo-Json | out-file "$env:temp\$fileName"
 }
 else {
+    #no blob create the context
+    #$StartEpoch = ([int64]((Get-Date -Date $StartTime).AddMinutes(-$Lookback) - (get-date "1/1/1970")).TotalMilliseconds)
     $StartEpoch = ([int64]((Get-Date -Date $StartTime).AddDays(-$Lookback) - (get-date "1/1/1970")).TotalMilliseconds)
+    $lastRunContent = @"
+{
+"lastRun": "$CurrentStartTime",
+"lastRunEpoch": $EndEpoch
 }
+"@
+    $lastRunContent | Out-File "$env:temp\$fileName"
+    $lastRunContext = $lastRunContent | ConvertFrom-Json
+}
+
+
 
 #Build query
 $body = @"
@@ -241,6 +246,7 @@ $body = @"
 "@
 
   
+
 #Get the Activities
 Write-Host "Starting to process Tenant: $MCASURL"
 $uri = $MCASURL+"/api/v1/activities/"
@@ -269,7 +275,7 @@ do {
         Write-Host "Got some results: "($results.data.Count)
         $totalRecords += ($results.data.Count)
         Write-Host $totalRecords
-        SendToLogA -Data ($results.data) -customLogName "MCASActivity"
+        #SendToLogA -Data ($results.data) -customLogName "MCASActivity"
     }
     else{
         Write-Host "No new logs"
@@ -279,7 +285,7 @@ do {
     if($loopAgain -ne $false){
         # if there is more data update the query
         $newBody = $body | ConvertFrom-Json
-        If($null -eq $newBody.filters.date.lte){
+        If($newBody.filters.date.lte -eq $null){
             $newBody.filters.date | Add-Member -Name lte -Value ($results.nextQueryFilters.date.lte) -MemberType NoteProperty
         }
         else {
@@ -289,6 +295,10 @@ do {
         Write-Host $body
     }
     else {
-        Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
+        # no more data write last run to az storage
+        Set-AzStorageBlobContent -Blob $fileName -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\$fileName" -Force
     }
 } until ($loopAgain -eq $false)
+
+#clear the temp folder
+Remove-Item $env:temp\* -Recurse -Force -ErrorAction SilentlyContinue
