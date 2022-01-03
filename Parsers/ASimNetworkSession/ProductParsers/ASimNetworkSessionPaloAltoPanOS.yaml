@@ -1,19 +1,21 @@
 Parser:
-  Title: Palo Alto Network Sessions
-  Version: '0.1'
+  Title: Network Session ASIM filtering parser for Palo Alto Network
+  Version: '0.2'
   LastUpdated: Dec 20, 2021
 Product:
   Name: PaloAlto
 Normalization:
   Schema: NetworkSessions
-  Version: '0.2.0'
+  Version: '0.2.1'
 References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
+- Title: Palo Alto Networks Traffic Logs [pdf]
+  Link: https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/cef/pan-os-90-cef-configuration-guide.pdf
 Description: |
-  This Query Parser maps Palo Alto PanOS Firewall Events (CommonSecurityLogs) to the Advanced SIEM Information Model Network Session schema.
+  This ASIM parser supports filtering and normalizing traffic logs produced by the Palo Alto Networks Connector to the ASIM Web Session normalized schema.
 ParserName: ASimNetworkSessionPaloAltoPanOS
 ParserParams:
   - Name: disabled
@@ -25,11 +27,9 @@ ParserQuery: |
   | where DeviceVendor=="Palo Alto Networks" and (Activity=="TRAFFIC")
   | parse AdditionalExtensions with "PanOSDstPackets="DstPackets:long";PanOSsrc_packets="SrcPackets:long";start="EventStartTime:datetime";reason="*
   | project-rename 
-        EventVendor=DeviceVendor // Not documented
-      , EventProduct=DeviceProduct // Not Documented
+        EventProduct=DeviceProduct // Not Documented
       , EventProductVersion=DeviceVersion // Not Documented
       , DvcHostname=DeviceName   
-      , EventResourceId=_ResourceId  // Not Documented 
       , NetworkApplicationProtocol=ApplicationProtocol
       , SrcZone=DeviceCustomString4 
       , DstZone=DeviceCustomString5 
@@ -39,7 +39,7 @@ ParserQuery: |
       , DstBytes=ReceivedBytes 
       , SrcUsername=SourceUserID 
       , DstUsername=DestinationUserID 
-      , EventSeverity=LogSeverity // not documented
+      , EventOriginalSeverity=LogSeverity // not documented
       , NetworkPackets=DeviceCustomNumber2 
       , SrcNatIpAddr=SourceTranslatedAddress
       , DstNatIpAddr=DestinationTranslatedAddress
@@ -53,21 +53,22 @@ ParserQuery: |
     // , HttpContentType=RequestContext
     // , HttpRequestMethod=RequestMethod
   | extend
-      NetworkBytes=tolong(FlexNumber1)
+    EventVendor="Palo Alto Networks"
+      ,  NetworkBytes=tolong(FlexNumber1)
       , SrcUsernameType="UPN"
       , DstUsernameType="UPN"
-      , TimeGenerated  
       , EventType="NetworkSession" // it is not clear from doc when NWConnection and when NWSession
       , EventCount=toint(1)
       , EventResult=case(DeviceAction=="allow","Success","Failure")
       , NetworkSessionId=tostring(DeviceCustomNumber1)
-      , NetworkDuration=DeviceCustomNumber3
-      , EventSchemaVersion="0.2.0"
-      , EventSchema="imNetworkSession"
+      , NetworkDuration=1000*DeviceCustomNumber3
+      , EventSchemaVersion="0.2.1"
+      , EventSchema="NetworkSession"
       , DvcAction=case(DeviceAction=="reset client", "Reset Source",  DeviceAction=="reset server", "Reset Destination",  DeviceAction=="reset both", "Reset",  DeviceAction)
+      ,EventSeverity =
   | project-rename
         // DvcMacAddr=DeviceMacAddress 
-      , DstHostname=DestinationHostName
+    //  , DstHostname=DestinationHostName
       , DstMacAddr=DestinationMACAddress
     , SrcMacAddr=SourceMACAddress
       , DstIpAddr=DestinationIP
@@ -81,8 +82,8 @@ ParserQuery: |
     , DvcInboundInterface=DeviceInboundInterface
     // Trivial renames to mitigate Autocomplete
     /// , NetworkDirection: no such data 
-    //  , EventEndTime=EndTime
-    // , EventMessage=Message
+     // , EventEndTime=EndTime
+     , EventMessage=Message
     // parsed from additional extensions:
         // | parse AdditionalExtensions with unparsedURL "PanOSActionFlags="ActionFlags
         //   ";cat="Category //https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClmHCAS
@@ -106,7 +107,6 @@ ParserQuery: |
   // -- Aliases
   | extend
     Dvc = DvcHostname,
-    User = SrcUsername,
     IpAddr = SrcIpAddr,
     Rule=NetworkRuleName
     Dst=DstIpAddr,
