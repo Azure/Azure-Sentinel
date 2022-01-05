@@ -32,11 +32,12 @@ You can choose to deploy the whole package (Four playbook templates) from the De
 * [Enrichment playbook](./Playbooks/CrowdStrike_Enrichment_GetDeviceInformation) will post a comment to the incident with device information and related detections found in CrowdStrike.
 * [Response from Teams playbook](./Playbooks/CrowdStrike_ResponsefromTeams) will send the SOC Channel interactive cards with host information, allowing taking action on the host: Running a script or contain the host in CrowdStrike.
 
-  ![Crowdstrike-ResponsefromTeams](./Playbooks/Crowdstrike_ResponsefromTeams/adaptivecardcrowdstrike.png)
+  ![Crowdstrike-ResponsefromTeams](./Playbooks/CrowdStrike_ResponsefromTeams/adaptivecardcrowdstrike.png)
 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2Fazuredeploy.json)
 
 
 # Crowdstrike playbooks documentation 
@@ -50,7 +51,7 @@ Authentication methods this end point supports- [oauth2 authentication](https://
 
 ### Prerequisites for using and deploying playbooks
 1. Crowdstrike cloud end point should be known. (e.g.  https://{CrowdsrtikebaseURL})
-1. User should know the Client ID and Client Secret values, and store them in a Key Vault.
+1. User should know the Client ID and Client Secret values, and store them in a Key Vault. Least privileges permissions are Detections Read and Hosts Read for Enrichment playbook, add Hosts Write for containment playbook.
 1. Key vault needs to be created, and include the Client ID and Secret, under the same subscription of the Playbooks. [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)
 1. For playbook **Response From Teams**:
   * There should be a list of prewritten scripts created in Crowdstrike, so SOC analyst can choose from that list. [learn how to create scripts](https://falcon.crowdstrike.com/support/documentation/71/real-time-response-and-network-containment#rtr_custom_scripts) our playbook does not provide an option to create a script.

@@ -1,3 +1,4 @@
+#! /usr/local/bin/python3
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
@@ -10,7 +11,7 @@
 #       Oracle Linux 7
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS and 18.04 LTS
+#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
 #       SUSE Linux Enterprise Server 12, 15
 #   32-bit
 #       CentOS 7 and 8
@@ -36,7 +37,7 @@ class SystemInfo:
                                                                                                                   '%%')
 
 
-script_version = '1.0'
+script_version = '1.1'
 output_file_path = '/tmp/cef_get_info'
 
 command_dict = {
@@ -64,6 +65,8 @@ command_dict = {
     "agent_log_snip": ["sudo tail -15 /var/opt/microsoft/omsagent/log/omsagent.log"],
     "agent_config_dir": ["sudo ls -lR /etc/opt/microsoft/omsagent/"],
     "agent_cef_config": ["sudo cat /etc/opt/microsoft/omsagent/conf/omsagent.d/security_events.conf"],
+    "messages_log_snip": ["sudo tail -15 /var/log/messages"],
+    "syslog_log_snip": ["sudo tail -15 /var/log/syslog"],
     "tcpdump": ["sudo timeout 2 tcpdump -A -ni any port 25226 -vv"],
     "top_processes": ["sudo top -bcn1 -w512", "head -n 20"],
     "omsagent_process": ["sudo ps -aux", "grep omsagent"]
@@ -112,7 +115,8 @@ def run_command(command):
         o, e = command_to_run.communicate()
     except Exception:
         pass
-    o = o.decode(encoding='UTF-8')
+    if not isinstance(o, str):
+        o = o.decode(encoding='UTF-8')
     command_object = SystemInfo(command, o)
     return command_object
 

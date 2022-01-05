@@ -78,6 +78,7 @@ export function isValidPermissions(permissions: RequiredConnectorPermissions, co
     switch(connectorCategory)
     {
         case ConnectorCategory.CEF:
+        case ConnectorCategory.Event:
         case ConnectorCategory.RestAPI:
             if(!_.isEqual(permissions.resourceProvider, CEFRestAPIPermissions.resourceProvider))
             {
@@ -90,7 +91,7 @@ export function isValidPermissions(permissions: RequiredConnectorPermissions, co
                 throw new DataConnectorValidationError("Provided permissions does not match with Syslog Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json ");
             }
             break;
-            case ConnectorCategory.AzureFunction:
+        case ConnectorCategory.AzureFunction:
             if(!(_.isEqual(permissions.resourceProvider, AzureFunctionPermissions.resourceProvider) && isValidCustomPermission(permissions)))
             {
                 throw new DataConnectorValidationError("Provided permissions does not match with Azure Function Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json");

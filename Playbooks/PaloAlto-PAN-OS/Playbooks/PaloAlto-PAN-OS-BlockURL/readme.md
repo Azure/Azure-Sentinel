@@ -13,10 +13,10 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ![PaloAlto-PAN-OS-BlockURL](./designerScreenshot.PNG)<br>
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky URL for taking actions like block/unblock/ignore ::**<br><br>
-![Adaptive Card example](./AdaptiveCardtoBlockorUnblock.PNG)<br>
+![Adaptive Card example](./images/AdaptiveCardtoBlockorUnblock.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on URL and the incident configuration ::**<br><br>
-![Consolidated Adaptive Card example](./SummarizedAdaptiveCard.PNG)<br>
+![Consolidated Adaptive Card example](./images/SummarizedAdaptiveCard.PNG)<br>
 
 ### Prerequisites 
 1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
@@ -29,7 +29,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)   [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-BlockURL%2Fazuredeploy.json)
 
 
 

@@ -5,6 +5,9 @@ description: |
    Matches domain name IOCs related to the GALLIUM activity group with CommonSecurityLog, DnsEvents, VMConnection and SecurityEvents dataTypes.
    References: https://www.microsoft.com/security/blog/2019/12/12/gallium-targeting-global-telecom/ '
 severity: High
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
@@ -46,8 +49,12 @@ query: |
   (DnsEvents 
   | extend DNSName = Name
   | where isnotempty(DNSName)
-  | where DNSName  in~ (DomainNames)
+  | where DNSName has_any (DomainNames)
   | extend IPAddress = ClientIP
+  ),
+  ( imDns(domain_has_any=DomainNames)
+  | extend DNSName = DnsQuery
+  | extend IPAddress = SrcIpAddr
   ),
   (VMConnection 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
@@ -67,7 +74,10 @@ query: |
   | extend Account = UserName
   ),
   (SecurityAlert
-  | where Entities has_any (SigNames)
+  | where ProductName == "Microsoft Defender Advanced Threat Protection"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | where isnotempty(ThreatName)
+  | where ThreatName has_any (SigNames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName)
   ),
   (AzureDiagnostics
@@ -102,3 +112,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.4.0
+kind: Scheduled

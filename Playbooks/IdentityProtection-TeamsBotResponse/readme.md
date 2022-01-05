@@ -1,35 +1,30 @@
-# Identity Protection - Microsoft Teams Response
+# Identity Protection - response from Teams
 author: Lior Tamir
 
-This playbook uses Azure Identity Protection features in order to responde to risky users.
-Attach this playbook to alert creation rules which expects to have entities of type Account attached to. 
-When a new Azure Sentinel alert is created, the playbook iterates over the identities involved in the alert.
-The Microsoft Teams bot will post an adaptive card in the SOC channel, including the potential risky user information given by Azure AD Identity Protection. It will offer to configure the response on the Azure Sentinel incident and Identity Protection risky user with few clicks, directly from Teams.
+Run this playbook on incidents which contains suspicious AAD identities. When a new incident is created, this playbook iterates over the Accounts. It then posts an adaptive card in the SOC Microsoft Teams channel, including the potential risky user information given by Azure AD Identity Protection. The card offers to confirm the user as compromised or dismiss the compromised user in AADIP. It also allows to configure the Azure Sentinel incident. A summary comment will be posted to document the action taken and user information. [Learn more about Azure AD Identity Protection](https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection)
 
-Note: Azure AD Identity Protection is a premium feature. You need an Azure AD Premium P1 or P2 license to access the riskDetection API (note: P1 licenses receive limited risk information). The riskyUsers API is only available to Azure AD Premium P2 licenses only.
+## Prerequisites
+1. Using the riskyUsers API requires an Azure AD Premium P2 license. 
+2. Have a user which has permissions on Identity Protection API. [Learn more](https://docs.microsoft.com/graph/api/riskyuser-confirmcompromised?view=graph-rest-1.0#permissions)
+ 3. (optional) Create policies in Azure AD Identity protection to run when users are confirmed as compromised. [Learn more](https://docs.microsoft.com/azure/active-directory/identity-protection/concept-identity-protection-policies)
 
-<br><br>
-Overall:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-TeamsBotResponse/images/designerView.png"/>
-<br><br>
-Card to be sent by Microsoft Teams bot:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-TeamsBotResponse/images/msg.png"/><br><br>
+Overall:<br>
+![](./images/ImageLight1.png)
 
-Response Part:
-<img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/IdentityProtection-TeamsBotResponse/images/responsePart.png"/>
-<br><br>
+Card to be sent by Microsoft Teams bot: <br>
+![](./images/TeamsCard.png)
+
+Response Part:<br>
+![](./images/commmentLight.png)
+
 Documentation references:
 
 <li>Azure AD Identity Protection:
 <ul>
 <li><a href="https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection" target="_blank" rel="noopener">Learn more about Identity Protection</a></li>
 </ul>
-</li><br><br>
+</li>
 
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json)

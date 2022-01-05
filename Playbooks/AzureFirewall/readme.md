@@ -134,9 +134,9 @@ Once deployment is complete, you will need to authorize each connection.
 ##  Reference to the playbook templates and the connector
 
  Connector
-* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewallConnector)
+* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewallConnector)
 
 Playbooks
-* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addToIPGroup)
-* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addNewRule)
-* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/master/Playbooks/AzureFirewall/AzureFirewall-AddIPtoTIAllowList)
+* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addToIPGroup)
+* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addNewRule)
+* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewall-AddIPtoTIAllowList)

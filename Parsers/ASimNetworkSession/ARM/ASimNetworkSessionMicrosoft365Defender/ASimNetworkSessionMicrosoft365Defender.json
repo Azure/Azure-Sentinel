@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionMicrosoft365Defender",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "M365 Defender Network Sessions",
+            "category": "Security",
+            "FunctionAlias": "ASimNetworkSessionMicrosoft365Defender",
+            "query": "let M365Defender=(disabled:bool=false){\n let DirectionLookup=datatable(ActionType:string,NetworkDirection:string,Outbound:boolean)[\n   'ConnectionSuccess','Outbound', true\n   ,'ConnectionFailed', 'Outbound', true\n   ,'ConnectionRequest','Outbound', true\n   ,'InboundConnectionAccepted', 'Inbound', false\n   ,'ConnectionFound', 'Unknown', false\n   ,'ListeningConnectionCreated', 'Listening', false \n ];\n // -- Common preprocessing to both input and outbound events\n let RawNetworkEvents =\n   DeviceNetworkEvents | where not(disabled)\n   | extend\n     // Event\n     EventOriginalUid = tostring(ReportId),\n     EventCount = int(1),\n     EventProduct = 'M365 Defender for Endpoint',\n     EventVendor = 'Microsoft',\n     EventSchema = 'NetworkSession',\n     EventSchemaVersion = '0.1.0',\n     EventStartTime = TimeGenerated,\n     EventEndTime = TimeGenerated,\n     EventType = 'NetworkSession',\n     EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),\n     EventSeverity = \"Informational\",\n     DvcIdType = 'MDEid'\n   | project-rename\n     NetworkProtocol = Protocol,\n     DvcFQDN = DeviceName\n   | extend\n     User = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\\\', InitiatingProcessAccountName)),\n     UsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),\n     SplitHostname = split(DvcFQDN,\".\"),\n     SplitUrl = split(RemoteUrl,\".\")\n   | extend  \n     DvcHostname = SplitHostname[0],\n     DvcDomain = strcat_array(array_slice(SplitHostname, 1, -1), '.'),\n     UrlHostname = SplitUrl[0],\n     UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1), '.'),\n     SrcDomainType = \"FQDN\",\n     DvcDomainType = \"FQDN\",\n     DstDomainType = \"FQDN\",\n     DvcIpAddr = LocalIP\n   | extend\n     Dvc = DvcHostname  \n   | project-rename\n     DvcId = DeviceId\n   | project-away SplitUrl, SplitHostname\n ;\n let OutboundNetworkEvents = \n   RawNetworkEvents\n   | lookup DirectionLookup on ActionType\n   | where Outbound\n   | project-rename\n      DstIpAddr = RemoteIP,\n      SrcIpAddr = LocalIP,\n      DstPortNumber = RemotePort,\n      SrcPortNumber = LocalPort,\n      SrcUsernameType = UsernameType,\n      SrcUserAadId = InitiatingProcessAccountObjectId,\n      SrcUserId = InitiatingProcessAccountSid,\n      SrcUserUpn = InitiatingProcessAccountUpn,\n      SrcUserDomain = InitiatingProcessAccountDomain\n   | extend\n      SrcUsername = User,\n      SrcDvcId = DvcId,\n      SrcDvcIdType = 'MDEid',\n      SrcUserIdType = \"SID\",\n     DstHostname = tostring(UrlHostname)\n   | project-rename\n      DstDomain = UrlDomain,\n      DstFQDN = RemoteUrl\n   | extend  \n      SrcHostname = DvcHostname,\n      SrcDomain = DvcDomain,\n      SrcFQDN = DvcDomain\n   // Processes\n   | extend\n      SrcProcessId = tostring(InitiatingProcessId),\n      ParentProcessId = tostring(InitiatingProcessParentId)\n   | project-rename\n      SrcProcessName = InitiatingProcessFileName,\n      SrcProcessCommandLine = InitiatingProcessCommandLine,\n      SrcProcessCreationTime = InitiatingProcessCreationTime,\n      SrcProcessIntegrityLevel = InitiatingProcessIntegrityLevel,\n      SrcProcessTokenElevation = InitiatingProcessTokenElevation,\n      ParentProcessName = InitiatingProcessParentFileName,\n      ParentProcessCreationTime = InitiatingProcessParentCreationTime\n      // SrcProcessFileSize = InitiatingProcessFileSize,\n      // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,\n      // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,\n      // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,\n      // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,\n      // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,\n      // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription\n   | extend\n      Process = SrcProcessName,\n      ProcessId = SrcProcessId,\n      SrcAppName = SrcProcessName,\n      SrcAppType = \"Process\"\n ;\n let InboundNetworkEvents = \n   RawNetworkEvents\n   | lookup DirectionLookup on ActionType\n   | where not(Outbound)\n   | project-rename\n      SrcIpAddr = RemoteIP,\n      DstIpAddr = LocalIP,\n      SrcPortNumber = RemotePort,\n      DstPortNumber = LocalPort,\n      DstUsernameType = UsernameType,\n      DstUserAadId = InitiatingProcessAccountObjectId,\n      DstUserId = InitiatingProcessAccountSid,\n      DstUserUpn = InitiatingProcessAccountUpn,\n      DstUserDomain = InitiatingProcessAccountDomain\n   | extend\n      DstUsername = User,\n      DstDvcId = DvcId,\n      DstDvcIdType = 'MDEid',\n      DstUserIdType = 'SID'\n  | project-rename\n      SrcHostname = UrlHostname,\n      SrcDomain = UrlDomain,\n      SrcFQDN = RemoteUrl\n   | extend  \n      DstHostname = tostring(DvcHostname),\n      DstDomain = DvcDomain,\n      DstFQDN = DvcFQDN\n   // Processes\n   | extend\n      DstProcessId = tostring(InitiatingProcessId),\n      ParentProcessId = tostring(InitiatingProcessParentId)\n   | project-rename\n      DstProcessName = InitiatingProcessFileName,\n      DstProcessCommandLine = InitiatingProcessCommandLine,\n      DstProcessCreationTime = InitiatingProcessCreationTime,\n      DstProcessIntegrityLevel = InitiatingProcessIntegrityLevel,\n      DstProcessTokenElevation = InitiatingProcessTokenElevation,\n      ParentProcessName = InitiatingProcessParentFileName,\n      ParentProcessCreationTime = InitiatingProcessParentCreationTime\n      // SrcProcessFileSize = InitiatingProcessFileSize,\n      // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,\n      // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,\n      // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,\n      // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,\n      // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,\n      // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription\n   | extend\n      Process = DstProcessName,\n      ProcessId = DstProcessId,\n      DstAppName = DstProcessName,\n      DstAppType = \"Process\"\n ;\n union InboundNetworkEvents, OutboundNetworkEvents\n | extend // aliases\n    Hostname = DstHostname,\n    IpAddr = SrcIpAddr,\n    Src = SrcIpAddr,\n    Dst = DstIpAddr\n };\n M365Defender(disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

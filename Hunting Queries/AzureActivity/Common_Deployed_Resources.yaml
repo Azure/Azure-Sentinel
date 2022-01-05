@@ -16,10 +16,13 @@ relevantTechniques:
 query: |
 
   AzureActivity
-  | where OperationName == "Create or Update Virtual Machine" or OperationName == "Create Deployment" 
-  | where ActivityStatus == "Succeeded" 
-  | project Resource, ResourceGroup, Caller
+  | where OperationNameValue has_any (@"deployments/write", @"virtualMachines/write")  
+  | where ActivityStatusValue == "Succeeded"
+  | summarize by bin(TimeGenerated,1h), Resource, ResourceGroup, OperationNameValue, Caller
   | evaluate basket()
+  | where isnotempty(Caller) and isnotempty(Resource) and isnotempty(TimeGenerated)
+  | order by Percent desc, TimeGenerated desc
+  | extend timestamp = TimeGenerated
   // remove comments below on filters if the goal is to see more common or more rare Resource, Resource Group and Caller combinations
   //| where Percent <= 40 // <-- more rare
   //| where Percent >= 60 // <-- more common

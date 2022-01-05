@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDnsMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Sysmon DNS Parser",
+            "category": "Security",
+            "FunctionAlias": "ASimDnsMicrosoftSysmon",
+            "query": "let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[\n    // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-\n    0, 'NOERROR'\n  , 9001, \"FORMERR\"\n  , 9002,\"SERVFAIL\"\n  , 9003,'NXDOMAIN'\n  , 9004,'NOTIMP'\n  , 9005,'REFUSED'\n  , 9006,'YXDOMAIN'\n  , 9007,'YXRRSET'\n  , 9008,'NXRRSET'\n  , 9009,'NOTAUTH'\n  , 9010,'NOTZONE'\n  , 9011,'DSOTYPENI'\n  , 9016,'BADVERS'\n  , 9016,'BADSIG'\n  , 9017,'BADKEY'\n  , 9018,'BADTIME'\n  , 9019,'BADMODE'\n  , 9020,'BADNAME'\n  , 9021,'BADALG'\n  , 9022,'BADTRUNC'\n  , 9023,'BADCOOKIE'\n  , 1460, 'TIMEOUT'\n  ];\nlet ParsedDnsEvent_Event =(disabled:bool=false) {\n    Event \n    | where Source == \"Microsoft-Windows-Sysmon\" and EventID==22\n    | parse EventData with \n       *'<Data Name=\"RuleName\">' RuleName:string '</Data>' \n        '<Data Name=\"UtcTime\">' EventEndTime:datetime '</Data>'\n        '<Data Name=\"ProcessGuid\">{' ProcessGuid:string '}</Data>'\n        '<Data Name=\"ProcessId\">' ProcessId:string '</Data>'\n        '<Data Name=\"QueryName\">' DnsQuery:string '</Data>'\n        '<Data Name=\"QueryStatus\">' DnsResponseCode:int  '</Data>'\n        '<Data Name=\"QueryResults\">' DnsResponseName:string '</Data>'\n        '<Data Name=\"Image\">' Process:string '</Data>'*\n    | parse EventData with * '<Data Name=\"User\">'SrcUsername:string '</Data>' *\n    | project-away EventData, ParameterXml, RenderedDescription\n};\nlet ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {\n    WindowsEvent\n    | where Provider == \"Microsoft-Windows-Sysmon\" and EventID == 22\n    | extend \n        RuleName = tostring(EventData.RuleName),\n        EventEndTime = todatetime(EventData.UtcTime),\n        ProcessGuid = extract ('{(.*)}', 1, tostring(EventData.ProcessGuid), typeof(string)),\n        ProcessId = tostring(EventData.ProcessId),  \n        DnsQuery = tostring(EventData.QueryName),\n        DnsResponseCode = toint(EventData.QueryStatus),\n        DnsResponseName = tostring(EventData.QueryResults),\n        Process = tostring(EventData.Image),\n        SrcUsername = tostring(EventData.User)\n    | project-away EventData\n};\nunion isfuzzy=true ParsedDnsEvent_Event(disabled), ParsedDnsEvent_WindowsEvent(disabled)\n  | lookup RCodeTable on DnsResponseCode\n  | project-rename \n      DvcHostname = Computer\n  | extend\n      EventOriginalUid = '22',\n      EventCount=int(1),\n      EventProduct = 'Sysmon',\n      EventVendor = 'Microsoft',\n      EventSchema = 'Dns',\n      EventSchemaVersion=\"0.1.3\",\n      EventType = 'lookup',\n      EventResult = iff (DnsResponseCode == 0,'Success','Failure'),\n      EventStartTime = EventEndTime,\n      EventSubType= 'response',\n      EventSeverity= iif (DnsResponseCode == 0, 'Informational', 'Low'),\n      SrcUsernameType = 'Windows'\n  // -- Aliases\n  | extend \n      EventResultDetails = DnsResponseCodeName,\n      Domain = DnsQuery,\n      Dvc = DvcHostname,\n      SrcHostname = DvcHostname,\n      Src = DvcHostname,\n      DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),\n      User = SrcUsername\n  // -- Backward Computability\n  | extend\n      Query=DnsQuery,\n      ResponseCodeName=DnsResponseCodeName\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

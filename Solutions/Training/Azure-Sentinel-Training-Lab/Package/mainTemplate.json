@@ -1,0 +1,183 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[parameters('location')]",
+            "metadata": {
+                "description": "Region to deploy solution resources"
+            }
+        },
+        "workspace": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "The workspace name should include 4-63 letters, digits or '-'. The '-' shouldn't be the first or the last symbol"
+            }
+        },
+        "formattedTimeNow": {
+            "type": "string",
+            "defaultValue": "[utcNow('g')]",
+            "metadata": {
+                "description": "Appended to workbook displayNames to make them unique"
+            }
+        },
+        "workbook1-name": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Name for the workbook"
+            }
+        },
+        "playbook1-PlaybookName": {
+            "defaultValue": "Get-GeoFromIpAndTagIncident",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Resource name for the logic app playbook.  No spaces are allowed"
+            }
+        }
+    },
+    "variables": {
+        "_artifactsLocation": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/"
+    },
+    "resources": [
+        { 
+            "apiVersion": "2020-06-01",
+            "name": "pid-176a034f-b9bf-4a4a-b1e3-059033b9b394-partnercenter",
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": []
+                }
+            }
+        },
+        {
+            "name": "workspaceCreation",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/workspace.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspace')]"
+                    },
+                    "pricingTier": {
+                        "value": "PerGB2018"
+                    },
+                    "dataRetention": {
+                        "value": 90
+                    },
+                    "location": {
+                        "value": "[parameters('workspace-location')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "ingestEvents",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/ingestEvents.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "WorkspaceId": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceIdOutput.value]"
+                    },
+                    "SharedKey": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceKeyOutput.value]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "alertRules",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workbook')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/alertRules.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspace')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "playbook",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/playbook.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "PlaybookName": {
+                        "value": "[parameters('playbook1-PlaybookName')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "workbook",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/workbook.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workbookDisplayName": {
+                        "value": "[concat(parameters('workbook1-name'),' - ',parameters('formattedTimeNow'))]"
+                    },
+                    "workbookSourceId": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceResourceIdOutput.value]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

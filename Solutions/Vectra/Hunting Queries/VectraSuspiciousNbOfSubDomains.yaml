@@ -1,0 +1,35 @@
+id: b8bacbda-3faa-49fb-b000-9334b2b51c8e
+name: Vectra AI - Suspicious number of sub-domains
+description: |
+  'Query searches for number of sub-domains attached per domain
+  A high volume of sub-domains may indicate the usage of DNS Tunneling.
+  Metadata required = metadata_dns'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071.004
+  - T1048.003
+query: |
+  //Adjust the threshold as desired (default is 500)
+  let min_sub_domains = 500;
+  VectraStream
+  | where metadata_type == "metadata_dns"
+  | extend top_domain = extract(@"(?:(?P<rex_sub_domain>[^\.\s]+)\.)??(?P<rex_domain>(?:(?P<rex_domain_no_tld>[^\.\s]+)\.)?(?P<rex_tld>[^\.\s]{2,}))$",2,['query'])
+  | summarize sub_domains=dcount(['query']) by top_domain, orig_hostname, id_orig_h
+  | where sub_domains > min_sub_domains
+  | extend HostCustomEntity = orig_hostname, IPCustomEntity = id_orig_h
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

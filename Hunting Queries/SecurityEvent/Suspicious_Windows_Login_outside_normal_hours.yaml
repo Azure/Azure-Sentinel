@@ -1,7 +1,7 @@
 id: e7bfbc3f-98c7-4aaa-a64c-de9c058b86b2
 name: Suspicious Windows Login outside normal hours
 description: |
-  Looking for suspiciopus interactive logon events which are outside normal logon hours for the user. Current day logon events are comapred with last 14 days activity 
+  Looking for suspiciopus interactive logon events which are outside normal logon hours for the user. Current day logon events are comapred with last 14 days activity
   and filtered for events which are above or below of historical logon hour range seen for the user.
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -13,23 +13,24 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-  let v_StartTime = 14d;
-  let v_EndTime = 2d;
-  let lookback = 1d;
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
   let AllLogonEvents = materialize(
   SecurityEvent
-  | where TimeGenerated  between (ago(v_StartTime)..ago(v_EndTime))
+  | where TimeGenerated between (lookback..starttime)
   | where EventID in (4624, 4625)
   | where LogonTypeName in~ ('2 - Interactive','10 - RemoteInteractive')
   | where AccountType =~ 'User'
   | extend HourOfLogin = hourofday(TimeGenerated), DayNumberofWeek = dayofweek(TimeGenerated)
   | extend DayofWeek = case(
-  DayNumberofWeek == "00:00:00", "Sunday", 
-  DayNumberofWeek == "1.00:00:00", "Monday", 
-  DayNumberofWeek == "2.00:00:00", "Tuesday", 
-  DayNumberofWeek == "3.00:00:00", "Wednesday", 
-  DayNumberofWeek == "4.00:00:00", "Thursday", 
-  DayNumberofWeek == "5.00:00:00", "Friday", 
+  DayNumberofWeek == "00:00:00", "Sunday",
+  DayNumberofWeek == "1.00:00:00", "Monday",
+  DayNumberofWeek == "2.00:00:00", "Tuesday",
+  DayNumberofWeek == "3.00:00:00", "Wednesday",
+  DayNumberofWeek == "4.00:00:00", "Thursday",
+  DayNumberofWeek == "5.00:00:00", "Friday",
   DayNumberofWeek == "6.00:00:00", "Saturday","InvalidTimeStamp")
   // map the most common ntstatus codes
   | extend StatusDesc = case(
@@ -96,7 +97,7 @@ query: |
   | join kind= inner
   (
       AllLogonEvents
-      | where StartTime > ago(lookback)
+      | where StartTime between(starttime..endtime)
   )
   on TargetUserName
   // Filtering for logon events based on range of max and min of historical logon hour values seen
@@ -104,5 +105,5 @@ query: |
   // Also populating additional column showing historical days of week when logon was seen
   | extend historical_DayofWeek = tostring(historical_DayofWeek)
   | summarize Total= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=max(StartTime), EndTime = min(StartTime), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName), HostLoggedOn = make_set(Computer) by EventID, Activity, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
-  | extend historical_DayofWeek = todynamic(historical_DayofWeek) 
+  | extend historical_DayofWeek = todynamic(historical_DayofWeek)
   | extend timestamp = StartTime, AccountCustomEntity = TargetUserName

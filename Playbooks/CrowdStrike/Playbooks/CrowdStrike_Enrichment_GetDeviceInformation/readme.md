@@ -4,7 +4,8 @@
  1. Fetches the device information from Crowdstrike
  2. Enrich the incident with device information from Crowdstrike
 
-![Crowdstrike_Enrichment_GetDeviceInformation](./Enrichment.png)
+![comment](./images/comment.png)
+![Crowdstrike_Enrichment_GetDeviceInformation](./images/designerOverviewCollapsedLight.png)
 
 ### Prerequisites 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)

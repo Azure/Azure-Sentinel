@@ -17,11 +17,11 @@ tactics:
 relevantTechniques:
   - T1496
 query: |
-
+  let OperationNames = dynamic(["microsoft.compute/virtualMachines/write", "microsoft.resources/deployments/write"]);
   AzureActivity
   // We look for any Operation that modified and then was accepted or succeeded where a publicipaddress component is referenced
-  | where OperationName has_any ("Create", "Update", "Delete")// Virtual Machine" or OperationName == "Create Deployment" 
-  | where ActivityStatus has_any ("Succeeded", "Accepted")
+  | where OperationNameValue in~ (OperationNames)
+  | where ActivityStatusValue has_any ("Succeeded", "Accepted")
   | where Properties contains "publicipaddress"
   //| extend frontendIPConfigurations = Properties.responseBody.properties.frontendIPConfigurations
   // parsing the publicIPAddress from Properties. It is only available if the allocation method is Static.
@@ -30,7 +30,7 @@ query: |
   | extend publicIPAddressVersion_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAddressVersion) 
   | extend publicIPAllocationMethod_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).publicIPAllocationMethod) 
   | extend scope_ = tostring(parse_json(Authorization).scope) 
-  | project TimeGenerated, OperationName, publicIPAllocationMethod_ , publicIPAddressVersion_, scope_ , Caller, CallerIpAddress, ActivityStatus, Resource 
+  | project TimeGenerated, OperationNameValue, publicIPAllocationMethod_ , publicIPAddressVersion_, scope_ , Caller, CallerIpAddress, ActivityStatusValue, Resource 
   // Join in the AzureNetworkAnalytics so that we can determine if any connections were made via the public ip address and get the currently assigned ip address when allocation method is Dynamic
   | join kind= inner (
   union isfuzzy=true

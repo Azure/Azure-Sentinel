@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimDnsInfobloxNIOS",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "InfoBlox",
+            "category": "Security",
+            "FunctionAlias": "vimDnsInfobloxNIOS",
+            "query": "let Sources_by_SourceType=(sourcetype:string){_GetWatchlist('ASimSourceType') | where SearchKey == tostring(sourcetype) | extend Source=column_ifexists('Source','') | where isnotempty(Source)|summarize make_set(Source)};\nlet Infoblox=(\n  starttime:datetime=datetime(null), endtime:datetime=datetime(null)\n  , srcipaddr:string=\"*\"\n  , domain_has_any:dynamic=dynamic([]) \n  , responsecodename:string=\"*\", response_has_ipv4:string=\"*\"\n  , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string=\"Query\"\n  , disabled:bool=false\n  ){\n  let RawData = Syslog | where not(disabled)\n  | where ProcessName == \"named\" and SyslogMessage has \"client\"\n  | where Computer in (Sources_by_SourceType('InfobloxNIOS'))\n  // *****************************************************************\n  //  Pre-parsing filterring:\n  // This filtering is not accurate. Further filtering down the line\n      | where\n        (eventtype in~ ('lookup', 'Query'))\n        and (isnull(starttime) or TimeGenerated >= starttime)\n        and (isnull(endtime) or TimeGenerated <= endtime) \n        and (srcipaddr==\"*\" or  has_ipv4( SyslogMessage ,srcipaddr))\n        and (array_length(domain_has_any) ==0 or SyslogMessage has_any (domain_has_any))\n        and (responsecodename==\"*\" or SyslogMessage has responsecodename)\n        and (array_length(response_has_any_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, response_has_any_prefix))\n        and (response_has_ipv4=='*' or has_ipv4(SyslogMessage,response_has_ipv4))\n  // *****************************************************************\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\n    | extend ResponseTime = todatetime(Parser[0]),\n             Log_Type = tostring(Parser[1]),\n             RawData_subString = tostring(Parser[3])\n    | where Log_Type == \"client\"\n    | project-away Parser;\n  RawData \n  | extend dnsdata=tostring(extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0][3])\n  | extend EventSubType=iff(dnsdata has \"response:\", \"response\", \"request\")\n  | extend dnsclient=iff(EventSubType==\"response\"\n              //<client ip>#port <UDP or TCP>: [view: DNS view] query: <queried domain name> <class name> <type name> response: <rcode> <flags> [<RR in text format>; [<RR in text format>;] ...]\n              , extract_all(@\"^(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+):? (UDP|TCP):? (view: DNS view)?query: (\\S+) ([A-Z]+) (\\S+) response:? ([A-Z]+) (\\S+)(([^;]+;\\s*)*)\",dnsdata)[0]\n              //<client IP>#<port> query: <query_Domain name> <class name> <type name> <- or +>[SETDC] <(name server ip)>\n              , extract_all(@\"^(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+):? query: (\\S+) (\\S+) (\\S+) ([+-]) \\(([0-9.]+)\\)\",dnsdata)[0])\n  | project-away SyslogMessage\n  | extend \n      SrcIpAddr = tostring(dnsclient[1]),\n      DnsQuery = iff (EventSubType==\"response\",tostring(dnsclient[5]), tostring(dnsclient[3])),\n      DnsResponseCodeName = iff (EventSubType==\"response\",tostring(dnsclient[8]),\"\")\n  // Post-filtering accurately now that message is parsed\n  | where\n       (srcipaddr==\"*\" or  SrcIpAddr==srcipaddr)\n        and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))\n        and (responsecodename==\"*\" or DnsResponseCodeName has responsecodename)\n  | extend\n  // ******************* Mandatory\n       EventCount=int(1),\n       EventStartTime=todatetime(TimeGenerated),\n       EventProduct=\"Infoblox DNS\",\n       EventVendor=\"Infoblox\",\n       EventSchema=\"Dns\",\n       EventSchemaVersion=\"0.1.3\",\n       EventType=\"Query\", \n      EventResult=iff(EventSubType==\"request\" or tostring(dnsclient[8])==\"NOERROR\",\"Success\",\"Failure\"),\n       EventResultDetails=iff (EventSubType==\"response\",tostring(dnsclient[8]),\"\"),\n       EventSubType=iff(dnsclient has \"response:\", \"response\",\"request\"), \n      // \n      SrcPortNumber = toint(dnsclient[2]),\n      NetworkProtocol = iff (EventSubType==\"response\", tostring(dnsclient[3]),\"\"),        \n      DnsQueryClassName = iff (EventSubType==\"response\",tostring(dnsclient[6]),tostring(dnsclient[4])),\n      DnsQueryTypeName = iff (EventSubType==\"response\",tostring(dnsclient[7]),tostring(dnsclient[5])),\n      DnsFlags =iff (EventSubType==\"response\", tostring(dnsclient[9]),tostring(dnsclient[6])),\n      // \n      DnsResponseName = iff (EventSubType==\"response\",tostring(dnsclient[-2]),\"\"),\n      DstIpAddr=iff(EventSubType==\"response\",\"\",dnsclient[-1])\n  // Post filtering step 2\n  | where \n      (array_length(domain_has_any) ==0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix)) and\n      (response_has_ipv4 == '*' or has_ipv4(DnsResponseName,response_has_ipv4))\n  | project-rename\n     // * Added in version 0.1.1\n       DvcHostname=Computer\n       , DvcIpAddr=HostIP\n     // *\n     // **************Aliases\n  | extend\n    Dvc=DvcHostname,\n    Domain=DnsQuery,\n    IpAddr=SrcIpAddr,\n    Src=SrcIpAddr,\n    Dst=DstIpAddr,\n  // Backward Compatibility\n    Query=DnsQuery\n    , QueryTypeName=DnsQueryTypeName\n    , ResponseCodeName=DnsResponseCodeName\n    , QueryClassName=DnsQueryClassName\n    , Flags=DnsFlags\n  };\n  Infoblox(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr:string='*', domain_has_any:dynamic=dynamic([]), responsecodename:string='*', response_has_ipv4:string='*', response_has_any_prefix:dynamic=dynamic([]), eventtype:string='Query', disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

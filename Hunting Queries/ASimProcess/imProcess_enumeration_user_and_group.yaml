@@ -1,0 +1,19 @@
+id: 7b3ed03a-7474-4dad-9c6a-92e7b69f6584
+name: Enumeration of users and groups (Normalized Process Events)
+description: |
+  'Finds attempts to list users or groups using the built-in Windows 'net' tool '
+requiredDataConnectors: []
+tactics:
+  - Discovery
+query: |
+
+  imProcessCreate
+  | where (CommandLine has ' user ' or CommandLine has ' group ') and (CommandLine hassuffix ' /do' or CommandLine hassuffix ' /domain') 
+  | where Process has 'net.exe' // performance pre-filtering
+  | extend FileName=tostring(split(Process, '\\')[-1])
+  | where FileName == 'net.exe' and ActorUsername != "" and CommandLine !contains '\\'  and CommandLine !contains '/add' 
+  | extend Target = extract("(?i)[user|group] (\"*[a-zA-Z0-9-_ ]+\"*)", 1, CommandLine) 
+  | where Target  != '' 
+  | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by ActorUsername, Target, CommandLine, Dvc, EventVendor, EventProduct
+  | sort by ActorUsername, Target
+  | extend timestamp = minTimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = Dvc

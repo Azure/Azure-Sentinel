@@ -9,6 +9,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
 queryFrequency: 1d
 queryPeriod: 8d
 triggerOperator: gt
@@ -26,14 +29,14 @@ query: |
   | where TimeGenerated >= ago(endtime) 
   | where EventID == 4624 and LogonType == 10
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ComputerCountToday = dcount(Computer), ComputerSet = makeset(Computer), ProcessSet = makeset(ProcessName)  
-  by Account, IpAddress, AccountType, Activity, LogonTypeName
-  | join kind=inner (
+  by Account = tolower(Account), IpAddress, AccountType, Activity, LogonTypeName
+  | join kind=leftouter (
   SecurityEvent
   | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) 
   | where EventID == 4624 and LogonType == 10
-  | summarize ComputerCountPrev7Days = dcount(Computer) by Account, IpAddress
+  | summarize ComputerCountPrev7Days = dcount(Computer) by Account = tolower(Account), IpAddress
   ) on Account, IpAddress
-  | extend Ratio = ComputerCountToday/(ComputerCountPrev7Days*1.0)
+  | extend Ratio = iff(isempty(ComputerCountPrev7Days), toreal(ComputerCountToday), ComputerCountToday / (ComputerCountPrev7Days * 1.0))
   // Where the ratio of today to previous 7 days is more than double.
   | where Ratio > threshold
   | project StartTimeUtc, EndTimeUtc, Account, IpAddress, ComputerSet, ComputerCountToday, ComputerCountPrev7Days, Ratio, AccountType, Activity, LogonTypeName, ProcessSet
@@ -47,3 +50,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.1.0
+kind: Scheduled

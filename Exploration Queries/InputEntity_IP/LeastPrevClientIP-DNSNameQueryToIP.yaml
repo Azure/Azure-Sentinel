@@ -14,16 +14,34 @@ Tactics:
   - CommandAndControl
   - Exfiltration
 query: |
-
+ let isimDnsInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imDns| take 0) | getschema | count | project Exists=(Count>1));
   let GetAllIPByClientIP = (v_IP_Address:string){
-  DnsEvents
-  | where SubType == 'LookupQuery'
-  | where IPAddresses has v_IP_Address
-  | extend IP_Aux_IPAddresses = split(IPAddresses,','), IP_Address=ClientIP
-  | summarize IP_Aux_StartTime=min(TimeGenerated), IP_Aux_EndTime=max(TimeGenerated), IP_Aux_DomainNames=makeset(Name), IP_Aux_Count= count() by IP_Address, IPAddresses
-  | project-away IPAddresses
-  | top 10 by IP_Aux_Count asc nulls last
-  };
-  // change <Address> value below
-  GetAllIPByClientIP('<Address>')
+    (datatable(exists:int)[1] | where not(isimDnsInstalled)) // if table is not installed this table is [1]
+    | join (
+      DnsEvents
+      | where SubType == 'LookupQuery'
+      | where IPAddresses has v_IP_Address
+      | extend IP_Aux_IPAddresses = split(IPAddresses,','), IP_Address=ClientIP
+      | summarize IP_Aux_StartTime=min(TimeGenerated), IP_Aux_EndTime=max(TimeGenerated), IP_Aux_DomainNames=make_set(Name), IP_Aux_Count= count() by IP_Address, IPAddresses
+      | project-away IPAddresses
+      | top 10 by IP_Aux_Count asc nulls last | extend exists=int(1)
+      ) on exists
+      | project-away exists* 
+    };
+  let imGetAllIPByClientIP = (v_IP_Address:string){
+    (datatable(exists:int)[1] | where isimDnsInstalled)
+    | join (
+      imDns(response_has_ipv4=v_IP_Address, eventtype='lookup')
+      | extend IP_Address=SrcIpAddr
+      | summarize IP_Aux_StartTime=min(TimeGenerated), IP_Aux_EndTime=max(TimeGenerated), IP_Aux_DomainNames=make_set(Query), IP_Aux_Count= count() by IP_Address
+      | top 10 by IP_Aux_Count asc nulls last | extend exists=int(1)
+      ) on exists
+      | project-away exists* 
+    };
+    let BCExpansion=(ipaddress:string){
+      union isfuzzy=true GetAllIPByClientIP(ipaddress), imGetAllIPByClientIP(ipaddress)
+      };
+    BCExpansion('<Address>')
+
+
 
