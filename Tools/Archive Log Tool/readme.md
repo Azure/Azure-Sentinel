@@ -23,7 +23,7 @@ With the introduction of the new Search, Archive, and Restoration features withi
 2. Go to the Azure Portal.
 3. Go to Microsoft Sentinel.
 4. Go to Workbooks.
-5. Click "Add Workbook".
+5. Click 'Add Workbook'.
 6. Go into edit mode.
 7. Go into the advanced editor.
 8. Paste the content that was copied from the JSON file.
