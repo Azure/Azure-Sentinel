@@ -11,11 +11,8 @@ With the introduction of the new Search, Archive, and Restoration features withi
 
 ## Prerequisites
 1. Join the preview: Sign up for the preview program at https://aka.ms/securityprp.
-
 2. Get onboarded via our sign-up form: https://aka.ms/sentinel/search/private-preview/onboardingform.
-
 3. Have been added to the allow list for the preview (done after the form is filled out and submitted).
-   
 4. Use the feature flag included in the onboarding and preview document.
 
 ## Deployment Process
@@ -34,7 +31,8 @@ With the introduction of the new Search, Archive, and Restoration features withi
 2. Click on a table or search table to gather the retention information.
 3. If the retention of the table needs to be changed, modify the API body JSON.
 - If changing the retention in the workspace, modify retentionInDays
-- If changing the retention in archive, set retentionInDays to 'Null' and change the totalRetentionInDays. 
+- If changing the retention in archive, set retentionInDays to 'Null' and change the totalRetentionInDays.
+4. Click on the corresponding button to modify the retention for the selected table.
 
 ### Note: Archive retention is calculated by using archiveRetention = totalRetentionInDays - retentionInDays.
    
