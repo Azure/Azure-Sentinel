@@ -25,18 +25,16 @@
 //      May 13 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020.
 //
 //
-let RawData = Syslog 
-    | where Computer in ("datasource") and Facility == "local6"
-    | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)
-    | mv-expand todynamic(Parser)
+let RawData = Syslog
+    | where Computer in ("datasource") and Facility_s == "local6"
+    | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
     | extend responseTime = todatetime(Parser[0]),
             Log_Type = tostring(Parser[1]),
             RawData_subString = tostring(Parser[3])
     | project-away Parser;
 let dhcpdiscover = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPDISCOVER"
-    | extend dhcpdiscover = extract_all(@"\w+\s((\S+)(\s\(\S+\))?)\s\w+\s(\S+)\sTransID\s([a-z0-9]+)\:?(\suid\s(\S+))?(\snetwork\s(\S+)\:)?\s?(.*)?", dynamic([1,2,3,4,5,6,7,8,9,10]), RawData_subString)
-    | mv-expand todynamic(dhcpdiscover)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPDISCOVER"
+    | extend dhcpdiscover = extract_all(@"\w+\s((\S+)(\s\(\S+\))?)\s\w+\s(\S+)\sTransID\s([a-z0-9]+)\:?(\suid\s(\S+))?(\snetwork\s(\S+)\:)?\s?(.*)?", dynamic([1,2,3,4,5,6,7,8,9,10]), RawData_subString)[0]
     | extend Client_MAC_Address = tostring(dhcpdiscover[0]), 
         TransID = tostring(dhcpdiscover[4]),
         UID = tostring(dhcpdiscover[6]), 
@@ -44,9 +42,8 @@ let dhcpdiscover = RawData
         Message = tostring(dhcpdiscover[9])
     | project-away RawData_subString, dhcpdiscover;
 let dhcprequest = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPREQUEST"
-    | extend dhcprequest = extract_all(@"for\s((\S+)(\s\(\S+\))?)\sfrom\s((\S+)(\s\(\S+\))?)\svia\s(\S+)(\sTransID\s([a-z0-9]+)\s)?(uid\s([a-z0-9:]+)|uid$|uid)?(\s\(([a-zA-Z]+)\)$)?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)
-    | mv-expand todynamic(dhcprequest)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPREQUEST"
+    | extend dhcprequest = extract_all(@"for\s((\S+)(\s\(\S+\))?)\sfrom\s((\S+)(\s\(\S+\))?)\svia\s(\S+)(\sTransID\s([a-z0-9]+)\s)?(uid\s([a-z0-9:]+)|uid$|uid)?(\s\(([a-zA-Z]+)\)$)?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)[0]
     | extend IPAddress = tostring(dhcprequest[1]), 
         Client_MAC_Address = tostring(dhcprequest[4]),
         Client_Hostname = extract(@"\((\S+)\)",1,tostring(dhcprequest[5])),
@@ -56,9 +53,8 @@ let dhcprequest = RawData
         State = tostring(dhcprequest[11])
     | project-away RawData_subString, dhcprequest;
 let dhcprelease = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPRELEASE"
-    | extend dhcprelease = extract_all(@"of\s(\S+)\sfrom\s((\S+)(\s\(\S+\))?)\svia\s(\S+)(\s\((\w+)\))?(\sTransID\s([a-z0-9]+)\s)?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)
-    | mv-expand todynamic(dhcprelease)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPRELEASE"
+    | extend dhcprelease = extract_all(@"of\s(\S+)\sfrom\s((\S+)(\s\(\S+\))?)\svia\s(\S+)(\s\((\w+)\))?(\sTransID\s([a-z0-9]+)\s)?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)[0]
     | extend IPAddress = tostring(dhcprelease[0]), 
         Client_MAC_Address = tostring(dhcprelease[2]),
         Client_Hostname = extract(@'\((\S+)\)',1,tostring(dhcprelease[3])),
@@ -67,9 +63,8 @@ let dhcprelease = RawData
         State = tostring(dhcprelease[6])
     | project-away RawData_subString, dhcprelease;
 let dhcpack = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPACK"
-    | extend dhcpack = extract_all(@"(\s\w+\s(\S+))\sto\s(\S+)\svia\s(\S+)(\srelay\s(\S+))?(\slease-duration\s(\d+))?(\s\(([a-zA-Z]+)\))?(\suid\s(\S+))?", dynamic([1,2,3,4,5,6,7,8,9,10,11]), RawData_subString)
-    | mv-expand todynamic(dhcpack)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPACK"
+    | extend dhcpack = extract_all(@"(\s\w+\s(\S+))\sto\s(\S+)\svia\s(\S+)(\srelay\s(\S+))?(\slease-duration\s(\d+))?(\s\(([a-zA-Z]+)\))?(\suid\s(\S+))?", dynamic([1,2,3,4,5,6,7,8,9,10,11]), RawData_subString)[0]
     | extend IPAddress = tostring(dhcpack[1]), 
         Client_MAC_Address = tostring(dhcpack[2]),
         Interface = tostring(dhcpack[4]),
@@ -77,24 +72,21 @@ let dhcpack = RawData
         LeaseDuration = tostring(dhcpack[7]),
         Client_Hostname = tostring(dhcpack[3]),
         State = tostring(dhcpack[10])
-    | extend dhcpack2 = extract_all(@"to\s(\S+)\s\((\S+)\)\svia\s(\S+)", dynamic([1,2,3]), RawData_subString)
-    | mv-expand todynamic(dhcpack2)
+    | extend dhcpack2 = extract_all(@"to\s(\S+)\s\((\S+)\)\svia\s(\S+)", dynamic([1,2,3]), RawData_subString)[0]
     | extend IPAddress = iif(isempty(dhcpack),tostring(dhcpack2[0]),IPAddress),
             Client_MAC_Address = iif(isempty(dhcpack),tostring(dhcpack2[1]),Client_MAC_Address),
             Interface = iif(isempty(dhcpack),tostring(dhcpack2[2]),Interface)
     | project-away RawData_subString, dhcpack, dhcpack2;
 let dhcpinform = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPINFORM"
-    | extend dhcpinform = extract_all(@"\w+\s(\S+)\svia\s(\S+)\sTransID\s([a-z0-9]+)", dynamic([1,2,3]), RawData_subString)
-    | mv-expand todynamic(dhcpinform)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPINFORM"
+    | extend dhcpinform = extract_all(@"\w+\s(\S+)\svia\s(\S+)\sTransID\s([a-z0-9]+)", dynamic([1,2,3]), RawData_subString)[0]
     | extend Source_IP = tostring(dhcpinform[0]), 
         Relay = tostring(dhcpinform[1]), 
         TransID = tostring(dhcpinform[2])
     | project-away RawData_subString, dhcpinform;
 let dhcpoffer = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPOFFER"
-    | extend dhcpoffer = extract_all(@"\w+\s(\S+)(\s\w+\s((\S+)(\s\(\S+\))?))?\svia\s(\S+)(\srelay\s(\S+))?(\slease-duration\s(\d+))?(\soffered-duration\s(\d+))?(\sUID\s(\S+))?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14]), RawData_subString)
-    | mv-expand todynamic(dhcpoffer)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPOFFER"
+    | extend dhcpoffer = extract_all(@"\w+\s(\S+)(\s\w+\s((\S+)(\s\(\S+\))?))?\svia\s(\S+)(\srelay\s(\S+))?(\slease-duration\s(\d+))?(\soffered-duration\s(\d+))?(\sUID\s(\S+))?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14]), RawData_subString)[0]
     | extend IPAddress = tostring(dhcpoffer[0]),  
         Client_MAC_Address = tostring(dhcpoffer[3]),
         Interface = tostring(dhcpoffer[5]),
@@ -105,16 +97,14 @@ let dhcpoffer = RawData
         UID = tostring(dhcpoffer[13])
     | project-away RawData_subString, dhcpoffer;
 let dhcpexpire = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "DHCPEXPIRE"
-    | extend dhcpexpire = extract_all(@"\w+\s(\S+)\s\w+\s(\S+)", dynamic([1,2]), RawData_subString)
-    | mv-expand todynamic(dhcpexpire)
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPEXPIRE"
+    | extend dhcpexpire = extract_all(@"\w+\s(\S+)\s\w+\s(\S+)", dynamic([1,2]), RawData_subString)[0]
     | extend Source_IP = tostring(dhcpexpire[0]),  
         Dest_MAC_Address = tostring(dhcpexpire[1])
     | project-away RawData_subString, dhcpexpire;
 let dhcpsession = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "r-l-e"
-    | extend dhcpsession = extract_all(@"\:?([0-9.]+)\,([a-zA-Z]+)\,([a-zA-Z0-9-]+)\,([a-z0-9:]+)\,([0-9]+)\,([0-9]+)\,([0-9]+)?\,([\w$\s]+)\,([0-9.]+)\,([0-9]+)\,([0-9-.]+)", dynamic([1,2,3,4,5,6,7,8,9,10,11]), RawData_subString)
-    | mv-expand todynamic(dhcpsession)
+    | where ProcessName == "dhcpd" and SyslogMessage has "r-l-e"
+    | extend dhcpsession = extract_all(@"\:?([0-9.]+)\,([a-zA-Z]+)\,([a-zA-Z0-9-]+)\,([a-z0-9:]+)\,([0-9]+)\,([0-9]+)\,([0-9]+)?\,([\w$\s]+)\,([0-9.]+)\,([0-9]+)\,([0-9-.]+)", dynamic([1,2,3,4,5,6,7,8,9,10,11]), RawData_subString)[0]
     | extend Dest_IP = tostring(dhcpsession[0]),  
         Signature = tostring(dhcpsession[1]),
         DNS_Hostname = tostring(dhcpsession[2]),  
@@ -125,9 +115,8 @@ let dhcpsession = RawData
         NetworkRange = tostring(dhcpsession[10])
     | project-away RawData_subString, dhcpsession;
 let dhcpbindupdate = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "bind"
-    | extend dhcpbindupdate = extract_all(@"^\s?(\w+)\s\w+\s([0-9.]+)\sfrom\s(\S+)\s(\w+)\:\s(.*)", dynamic([1,2,3,4,5]), RawData_subString)
-    | mv-expand todynamic(dhcpbindupdate)
+    | where ProcessName == "dhcpd" and SyslogMessage has "bind"
+    | extend dhcpbindupdate = extract_all(@"^\s?(\w+)\s\w+\s([0-9.]+)\sfrom\s(\S+)\s(\w+)\:\s(.*)", dynamic([1,2,3,4,5]), RawData_subString)[0]
     | extend Log_Type = strcat(Type," ",tostring(dhcpbindupdate[0])),
         Dest_IP = tostring(dhcpbindupdate[1]),  
         Source = tostring(dhcpbindupdate[2]),
@@ -135,17 +124,15 @@ let dhcpbindupdate = RawData
         Message = tostring(dhcpbindupdate[4])
     | project-away RawData_subString, dhcpbindupdate;
 let dhcpadded = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "Added"
-    | extend dhcpadded = extract_all(@"([\w\s]+)\sfrom\s(\S+)\sto\s(\S+)", dynamic([1,2,3,4,5]), RawData_subString)
-    | mv-expand todynamic(dhcpadded)
+    | where ProcessName == "dhcpd" and SyslogMessage has "Added"
+    | extend dhcpadded = extract_all(@"([\w\s]+)\sfrom\s(\S+)\sto\s(\S+)", dynamic([1,2,3,4,5]), RawData_subString)[0]
     | extend Log_Type = strcat(Type," ",tostring(dhcpadded[0])),
         Source = tostring(dhcpadded[1]),  
         Dest = tostring(dhcpadded[2])
     | project-away RawData_subString, dhcpadded;
 let dhcpoption = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "Option"
-    | extend dhcpoption = extract_all(@'(\d+)\:\s\w+\s\w+\s([A-Z\s]+)\s\w+\sfrom\s\S+\s(\S+)\s[\w\s\-]+\"([a-z0-9:]+)\"\,\s[\w\s\-]+\"([a-z0-9:]+)\"\sfor\s(\S+)\s\((\S+)\)\s([\w\s]+)\.\s\((\S+)\)', dynamic([1,2,3,4,5,6,7,8,9]), RawData_subString)
-    | mv-expand todynamic(dhcpoption)
+    | where ProcessName == "dhcpd" and SyslogMessage has "Option"
+    | extend dhcpoption = extract_all(@'(\d+)\:\s\w+\s\w+\s([A-Z\s]+)\s\w+\sfrom\s\S+\s(\S+)\s[\w\s\-]+\"([a-z0-9:]+)\"\,\s[\w\s\-]+\"([a-z0-9:]+)\"\sfor\s(\S+)\s\((\S+)\)\s([\w\s]+)\.\s\((\S+)\)', dynamic([1,2,3,4,5,6,7,8,9]), RawData_subString)[0]
     | extend Log_Type = strcat(Type," ",tostring(dhcpoption[0])),
         Relay = tostring(dhcpoption[2]),  
         PacketType = tostring(dhcpoption[1]),  
@@ -157,9 +144,8 @@ let dhcpoption = RawData
         State = tostring(dhcpoption[8])
     | project-away RawData_subString, dhcpoption;
 let dhcpremoved = RawData
-    | where ProcessName == "dhcpd" and Log_Type == "Removed"
-    | extend dhcpremoved = extract_all(@"([\w\s]+)(from|on)\s(\S+)(\sto\s(\S+))?", dynamic([1,2,3,4,5]), RawData_subString)
-    | mv-expand todynamic(dhcpremoved)
+    | where ProcessName == "dhcpd" and SyslogMessage has "Removed"
+    | extend dhcpremoved = extract_all(@"([\w\s]+)(from|on)\s(\S+)(\sto\s(\S+))?", dynamic([1,2,3,4,5]), RawData_subString)[0]
     | extend Log_Type = strcat(Type," ",tostring(dhcpremoved[0])),
         Source = tostring(dhcpremoved[2]),  
         Dest = tostring(dhcpremoved[4])
@@ -168,9 +154,8 @@ let dhcpother = RawData
     | where ProcessName == "dhcpd" and Type in ("balanced","balancing","failover")
     | project-rename Message = RawData_subString;
 let dnszone = RawData
-    | where ProcessName == "named" and Log_Type == "zone"
-    | extend dnszone = extract_all(@"([a-z0-9\.\-]+)\/([A-Z]+)\:(\s[A-Z]+)?\s(\w+\s\w+)\s(for\s\'(\S+)?\':)?((\d+)\.?)?(\s(\with\s|(\d+)\sIN\s)([A-Z]+)\s)?(\(?serial\s(\d+)\)?)?(.*)", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)
-    | mv-expand todynamic(dnszone)
+    | where ProcessName == "named" and SyslogMessage has "zone"
+    | extend dnszone = extract_all(@"([a-z0-9\.\-]+)\/([A-Z]+)\:(\s[A-Z]+)?\s(\w+\s\w+)\s(for\s\'(\S+)?\':)?((\d+)\.?)?(\s(\with\s|(\d+)\sIN\s)([A-Z]+)\s)?(\(?serial\s(\d+)\)?)?(.*)", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)[0]
     | extend Zone = tostring(dnszone[0]),
         Action = tostring(dnszone[3]),
         Client_Hostname = tostring(dnszone[5]),
@@ -178,15 +163,13 @@ let dnszone = RawData
         Serial = tostring(dnszone[13]),
         TTL = tostring(dnszone[10]),
         RecordType = tostring(dnszone[11])
-    | extend dnszone_substring = extract_all(@"\s?([a-zA-Z0-9\.\-\_]+)\.\s(.*)", dynamic([1,2]),tostring(dnszone[14]))
-    | mv-expand todynamic(dnszone_substring)
+    | extend dnszone_substring = extract_all(@"\s?([a-zA-Z0-9\.\-\_]+)\.\s(.*)", dynamic([1,2]),tostring(dnszone[14]))[0]
     | extend Host = tostring(dnszone_substring[0]),
         Message = tostring(dnszone_substring[1])
     | project-away RawData_subString, dnszone_substring, dnszone;
 let dnsclient = RawData 
-    | where ProcessName == "named" and Log_Type == "client"
-    | extend dnsclient = extract_all(@"(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\s(?:view\s)?(\S+)?(?:\:\s)?((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)
-    | mv-expand todynamic(dnsclient)
+    | where ProcessName == "named" and SyslogMessage has "client"
+    | extend dnsclient = extract_all(@"(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\s(?:view\s)?(\S+)?(?:\:\s)?((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)[0]
     | extend Client_IP = tostring(dnsclient[1]),
         Port = tostring(dnsclient[2]),
         Protocol = tostring(dnsclient[7]),
@@ -198,9 +181,8 @@ let dnsclient = RawData
         Message = tostring(dnsclient[14])
     | project-away RawData_subString, dnsclient;
 let dnsgss = RawData
-    | where ProcessName == "named" and Log_Type == "gss_accept_sec_context"
-    | extend dnsgss = extract_all(@":\s(.*)", dynamic([1,2]), RawData_subString)
-    | mv-expand todynamic(dnsgss)
+    | where ProcessName == "named" and SyslogMessage has "gss_accept_sec_context"
+    | extend dnsgss = extract_all(@":\s(.*)", dynamic([1,2]), RawData_subString)[0]
     | extend Message = tostring(dnsgss[0])
     | project-away dnsgss, RawData_subString;
 let allotherLogTypes = RawData
