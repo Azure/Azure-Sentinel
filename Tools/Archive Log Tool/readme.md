@@ -10,8 +10,7 @@ With the introduction of the new Search, Archive, and Restoration features withi
 - Update retention for the data in the workspace and archive.
 
 ## Prerequisites
-1. Join the preview.
-	- Sign up for the preview program at https://aka.ms/securityprp.
+1. Join the preview: Sign up for the preview program at https://aka.ms/securityprp.
 
 2. Get onboarded via our sign-up form: https://aka.ms/sentinel/search/private-preview/onboardingform.
 
