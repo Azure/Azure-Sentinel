@@ -10,10 +10,10 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 ![Playbook Designer view](./Okta-PromptUser.PNG)<br>
 
 **This is the adaptive card user will recieve when playbook is triggered:**<br><br>
-![Adaptive Card example](./AdaptivecardtotheEnduser.PNG)<br><br>
+![Adaptive Card example](./images/AdaptivecardtotheEnduser.PNG)<br><br>
 
 **This is the adaptive card SOC will recieve if user confirms they didn't to the malicious activity:**<br><br>
-![Adaptive Card example](./AdaptivecardtoSOCadminon%20teamschannel.PNG)<br><br>
+![Adaptive Card example](./images/AdaptivecardtoSOCadminon%20teamschannel.PNG)<br><br>
 
 
 ### Prerequisites 

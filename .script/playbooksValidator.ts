@@ -5,6 +5,7 @@ import { isValidSchema } from "./utils/jsonSchemaChecker";
 import * as logger from "./utils/logger";
 import { ArmTemplate, ArmTemplateResource } from "./utils/playbookCheckers/Models/armTemplateModels";
 import { PlaybookTemplateMetadata } from "./utils/playbookCheckers/Models/playbookTemplateMetadata";
+import { validateTemplateMetadata } from "./utils/playbookCheckers/playbookArmTemplateMetadataChecker";
 import { validateTemplateParameters } from "./utils/playbookCheckers/playbookArmTemplateParametersChecker";
 import { getTemplatePlaybookResources } from "./utils/playbookCheckers/playbookARMTemplateUtils";
 import { validatePlaybookResource } from "./utils/playbookCheckers/playbookResourceChecker";
@@ -31,6 +32,7 @@ function validateARMTemplateSchema(playbookARMTemplate: ArmTemplate<PlaybookTemp
 
 function validateARMTemplateWithPlaybookResource(filePath: string, playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata>): void {
     validateTemplateParameters(filePath, playbookARMTemplate);
+    validateTemplateMetadata(filePath, playbookARMTemplate);
     validatePlaybookResource(filePath, playbookARMTemplate);
 }
 

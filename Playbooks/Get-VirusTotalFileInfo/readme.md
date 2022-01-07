@@ -28,6 +28,6 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 ## Screenshots
 **Incident Trigger**<br>
-![Incident Trigger](./incident-trigger/images/Get-VirusTotalFileInfo_incident.png)<br>
+![Incident Trigger](./incident-trigger/images/designerLight.png)<br>
 **Alert Trigger**<br>
 ![Alert Trigger](./alert-trigger/images/Get-VirusTotalFileInfo_alert.png)<br>

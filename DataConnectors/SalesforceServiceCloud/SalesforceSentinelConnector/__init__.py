@@ -25,7 +25,7 @@ object =  "EventLogFile"
 interval = "hourly"
 hours_interval = 1
 days_interval = 1
-url = "https://login.salesforce.com/services/oauth2/token"
+url = os.environ['SalesforceTokenUri']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
@@ -123,6 +123,7 @@ def gen_chunks_to_object(file_in_tmp_path, chunksize=100):
     field_names = [x if x != 'type' else 'type_' for x in field_names]
     reader = csv.DictReader(open(file_in_tmp_path), fieldnames=field_names)
     chunk = []
+    next(reader)
     for index, line in enumerate(reader):
         if (index % chunksize == 0 and index > 0):
             yield chunk

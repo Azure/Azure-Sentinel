@@ -3,6 +3,9 @@ name: Known ZINC Comebacker and Klackring malware hashes
 description: |
   'ZINC attacks against security researcher campaign malware hashes.'
 severity: High
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
@@ -57,15 +60,13 @@ query: |
   (DnsEvents
   | extend DNSName = Name
   | where isnotempty(DNSName)
-  | where DNSName  in~ (DomainNames)
-  | extend DataType = "DnsEvents", IPAddress = ClientIP
+  | where DNSName has_any (DomainNames)
+  | extend Type = "DnsEvents", IPAddress = ClientIP
   | project Type, TimeGenerated, Computer, IPAddress, DNSName
   ),
-  (imDns
-  | where isnotempty(Query)
-  | where Query  in~ (DomainNames)
-  | extend DNSName = Query
-  | extend DataType = "imDns", IPAddress = SrcIpAddr, Computer=Dvc
+  (imDns(domain_has_any=DomainNames)
+  | extend DNSName = DnsQuery
+  | extend Type = "imDns", IPAddress = SrcIpAddr, Computer=Dvc
   | project Type, TimeGenerated, Computer, IPAddress, DNSName
   ),
   (VMConnection
@@ -92,13 +93,21 @@ query: |
   | extend Account = RequestAccountName, Computer = DeviceName, IPAddress = RequestSourceIP, CommandLine = InitiatingProcessCommandLine, FileHash = SHA256
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
   ),
+  (imFileEvent
+  | where TargetFileSHA256 in~ (SHA256Hash)
+  | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
+  | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
+  ),
   (DeviceNetworkEvents
   | where RemoteUrl in~ (DomainNames)
   | extend Computer = DeviceName, IPAddress = LocalIP, Account = InitiatingProcessAccountName
   | project Type, TimeGenerated, Computer, Account, IPAddress, RemoteUrl
   ),
   (SecurityAlert
-  | where Entities has_any (SigNames)
+  | where ProductName == "Microsoft Defender Advanced Threat Protection"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | where isnotempty(ThreatName)
+  | where ThreatName has_any (SigNames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName) 
   | project Type, TimeGenerated, Computer
   ),
@@ -145,4 +154,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.4.0
+kind: Scheduled

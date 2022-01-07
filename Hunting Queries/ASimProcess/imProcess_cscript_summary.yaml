@@ -1,0 +1,24 @@
+id: bd89c7a0-76cb-4fa1-bc64-c366687cda9e
+name: Cscript script daily summary breakdown (Normalized Process Events)
+description: |
+  'breakdown of scripts running in the environment'
+requiredDataConnectors: []
+tactics:
+  - Execution
+query: |
+  imProcessCreate
+  | where Process has "cscript.exe"
+  | extend FileName=tostring(split(Process, '\\')[-1])
+  | where FileName =~ "cscript.exe"
+  | extend removeSwitches = replace(@"/+[a-zA-Z0-9:]+", "", CommandLine)
+  | extend CommandLine = trim(@"[a-zA-Z0-9\\:""]*cscript(.exe)?("")?(\s)+", removeSwitches)
+  // handle case where script name is enclosed in " characters or is not enclosed in quotes 
+  | extend ScriptName= iff(CommandLine startswith @"""", 
+  extract(@"([:\\a-zA-Z_\-\s0-9\.()]+)(""?)", 0, CommandLine), 
+  extract(@"([:\\a-zA-Z_\-0-9\.()]+)(""?)", 0, CommandLine))
+  | extend ScriptName=trim(@"""", ScriptName) , ScriptNameLength=strlen(ScriptName)
+  // extract remainder of commandline as script parameters: 
+  | extend ScriptParams = iff(ScriptNameLength < strlen(CommandLine), substring(CommandLine, ScriptNameLength +1), "")
+  | summarize min(TimeGenerated), count() by Dvc, User, ScriptName, ScriptParams, EventVendor, EventProduct
+  | order by count_ asc nulls last 
+  | extend timestamp = min_TimeGenerated, HostCustomEntity = Dvc, AccountCustomEntity = User

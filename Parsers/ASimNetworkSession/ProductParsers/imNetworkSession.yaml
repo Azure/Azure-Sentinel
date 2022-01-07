@@ -1,0 +1,62 @@
+Parser:
+  Title: Source Agnostic Network Session parser
+  Version: '0.3'
+  LastUpdated: Dec 15, 2021
+Product:
+  Name: Source agnostic
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.0'
+References:
+- Title: ASIM NetworkSession Schema
+  Link: https://aka.ms/AzSentinelNetworkSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AzSentinelNormalization
+Description: |
+  ASIM Source Agnostic NetworkSession Parser
+ParserName: imNetworkSession
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: "'*'"
+
+ParserQuery: |
+  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ASimNetworkSession') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser | where isnotempty(SourceSpecificParser));
+  let ASimBuiltInDisabled=toscalar('ASimNetworkSession' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
+  let NetworkSessionsGeneric=(starttime:datetime=datetime(null) , endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), url_has_any:dynamic=dynamic([]), httpuseragent_has_any:dynamic=dynamic([]), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false)
+  {
+  union isfuzzy=true
+    vimNetworkSessionEmpty
+    , vimNetworkSessionLinuxSysmon                     (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult, ASimBuiltInDisabled or ('ASimNetworkSessionLinuxSysmon'      in (DisabledParsers) ))
+    , vimNetworkSessionMicrosoft365Defender            (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult, ASimBuiltInDisabled or ('ASimNetworkSessionMicrosoft365Defender'      in (DisabledParsers) ))
+    , vimNetworkSessionMD4IoT                          (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult, ASimBuiltInDisabled or ('ASimNetworkSessionMD4IoT'      in (DisabledParsers) ))
+    , vimNetworkSessionMicrosoftWindowsEventFirewall   (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult, ASimBuiltInDisabled or ('ASimNetworkSessionMicrosoftWindowsEventFirewall'      in (DisabledParsers) ))
+  };
+  NetworkSessionsGeneric(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult)

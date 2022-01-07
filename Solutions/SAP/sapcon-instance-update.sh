@@ -1,9 +1,9 @@
 #!/bin/bash
 #Copyright (c) Microsoft Corporation. All rights reserved.
 echo 'Microsoft Azure Sentinel SAP Continuous Threat Monitoring.
-SAP ABAP Logs Connector - Limited Private Preview
+SAP ABAP Logs Connector -  Preview
 
-Copyright (c) Microsoft Corporation. This preview software is Microsoft Confidential, and is subject to your Non-Disclosure Agreement with Microsoft. 
+Copyright (c) Microsoft Corporation. 
 You may use this preview software internally and only in accordance with the Azure preview terms, located at https://azure.microsoft.com/support/legal/preview-supplemental-terms/  
 
 Microsoft reserves all other rights
@@ -38,51 +38,57 @@ fi
 pause '
 Image has been downloaded - Press <Enter> key to continue with the Update'
 
-contlist=$(docker container ls -a | grep ".*sentinel.*sapcon" | awk '{print $1}')
+contlist=$(docker container ls -a | awk 'NR!=1 {print $1}')
 
-while IFS= read -r containerid
+while IFS= read -r contid
 do	
-	
-	contname=$(docker ps -a --filter id=$containerid --format '{{.Names}}')
-	echo Updating $contname....
-
-	if [  ! -z $containerid ]
+	contimg=$(docker inspect --format='{{.Config.Image}}' $contid)
+	contname=$(docker ps -a --filter id=$contid --format '{{.Names}}')
+    
+	if [[ "$contimg" = *"$dockerimage"* ]] || [[ "$contimg" = *"$olddockerimage"* ]]
 	then
-		sysfileloc=$(docker inspect -f '{{ .Mounts }}' $containerid | awk 'NR==1 {print $2}')
-		echo ''
-		if [  ! -z $sysfileloc ]
+		echo ' '		
+		echo Updating $contname...
+		if [  ! -z $contid ]
 		then
-			last=${sysfileloc: -1}
-
-			if [ "$last" != "/" ];
+			sysfileloc=$(docker inspect -f '{{ .Mounts }}' $contname | awk 'NR==1 {print $2}')
+			if [  ! -z $sysfileloc ]
 			then
-				sysfileloc="$sysfileloc/"
-			fi
-			
-			contstate=$(docker inspect --format='{{.State.Running}}' $containerid )
+				last=${sysfileloc: -1}
 
-			if [ $contstate == "false" ]
-			then
-					docker cp $containerid:$sdkfileloc $(pwd)
-					docker container rm $containerid >/dev/null
-					docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
-					docker cp "$(pwd)/inst/" $containerid:/sapcon-app/ >/dev/null
+				if [ "$last" != "/" ];
+				then
+					sysfileloc="$sysfileloc/"
+				fi
+				
+				contstate=$(docker inspect --format='{{.State.Running}}' $contname )
+				
+				# pause 'press enter'
+				if [ $contstate == "false" ]
+				then
+						docker cp $contname:$sdkfileloc $(pwd)
+						docker container rm $contname >/dev/null
+						docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage$tagver >/dev/null
+						docker cp "$(pwd)/inst/" $contname:/sapcon-app/ >/dev/null
+						echo 'Container "'"$contname"'" was updated - please start the app by running "docker start '"$contname"'"'
+						echo ''
+				else
+					docker cp $contname:$sdkfileloc $(pwd)
+					docker stop $contname  >/dev/null
+					docker container rm $contname  >/dev/null
+					docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage$tagver  >/dev/null
+					docker cp "$(pwd)/inst/" $contname:/sapcon-app/  >/dev/null
+					docker start $contname >/dev/null
+					echo 'Container "'"$contname"'" was updated'
 					echo ''
-					echo 'Container "'"$contname"'" was updated - please start the app by running "docker start '"$contname"'"'
+				fi
 			else
-				docker cp $containerid:$sdkfileloc $(pwd)
-				docker stop $containerid >/dev/null
-				docker container rm $containerid >/dev/null
-				docker create -v $sysfileloc:/sapcon-app/sapcon/config/system --name $contname $dockerimage >/dev/null
-				docker cp "$(pwd)/inst/" $containerid:/sapcon-app/ >/dev/null
-				docker start $containerid >/dev/null
-				echo ''
-				echo 'Container "'"$contname"'" was updated'
+				echo 'Container "'"$contname"'" cannot be updated - The mount point is empty'
+				echo ' '
 			fi
 		else
-			echo 'Container "'"$contname"'" cannot be updated - The mount point is empty'
+			echo ''
 		fi
-	else
-		echo ''
-	fi 
+		
+	fi 	 
 done <<< "$contlist"

@@ -1,0 +1,58 @@
+id: dc5adcc9-70ab-4fba-8690-f57767e8ca02
+name: SQL Alert Correlation with CommonSecurityLogs and AuditLogs
+description: |
+  'This query combines different SQL alerts with CommonSecurityLogs and AuditLogs helping analysts /investigate any possible SQL related attacks faster
+   thus reducing Mean Time To Respond'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert (ASC)
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - Impact
+relevantTechniques:
+  - T1190
+  - T1078
+query: |
+    SecurityAlert
+    | where AlertName has_any ('Potential SQL Injection', 'A possible vulnerability to SQL Injection')
+    | extend EntitiesDynamicArray = parse_json(Entities)
+    | mv-expand EntitiesDynamicArray
+    | extend EntityType = tostring(parse_json(EntitiesDynamicArray).Type), EntityAddress = tostring(EntitiesDynamicArray.Address)
+    | extend IpAddress = iif(EntityType == 'ip', EntityAddress, '')
+    | where isnotempty(IpAddress) 
+    | join kind=inner (
+    CommonSecurityLog 
+    | where DeviceVendor =~ "Palo Alto Networks" and Activity =~ "TRAFFIC" and DeviceAction != "deny"
+    | summarize count() by DeviceName, SourceIP, DestinationIP, DestinationPort, Protocol, SourcePort
+    )
+    on $left.IpAddress == $right.SourceIP
+    | join kind=inner (
+    AuditLogs
+    | where LoggedByService =~ "Core Directory"
+    | where Category =~ "RoleManagement"
+    | extend IpAddress = case(
+    isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
+    isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),'Not Available')
+    | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))  
+    ) on IpAddress
+    | summarize count () by TimeGenerated,IpAddress,UserRoles,SourcePort,DestinationPort,AccountCustomEntity=InitiatedBy
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+
+    

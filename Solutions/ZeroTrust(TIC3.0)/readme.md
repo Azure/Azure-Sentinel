@@ -1,0 +1,23 @@
+# Overview
+---
+The Microsoft Sentinel Zero Trust (TIC3.0) Solution provides a mechanism for viewing log queries aligned to Zero Trust and Trusted Internet Connections models across the Microsoft portfolio. This solution enables governance and compliance teams to design, build, monitor, and respond to Zero Trust (TIC3.0) requirements across 25+ Microsoft products. The solution includes the new Zero Trust (TIC3.0) Workbook, (11) Analytics Rules, and (1) Playbook. While only Microsoft Sentinel is required to get started, the solution is enhanced with numerous Microsoft offerings. This Solution enables Security Architects, Engineers, SecOps Analysts, Managers, and IT Pros to gain situational awareness visibility for the security posture of cloud workloads. There are also recommendations for selecting, designing, deploying, and configuring Microsoft offerings for alignment with respective security best practice. 
+
+## Try on Portal
+You can deploy the solution by clicking on the buttons below:
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroTrust(TIC3.0)%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroTrust(TIC3.0)%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
+
+![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ZeroTrust(TIC3.0)/Workbooks/Images/Preview/ZeroTrust(TIC3.0)Black1.PNG?raw=true)
+
+# Workbooks
+The Microsoft Sentinel Zero Trust (TIC3.0) Workbook provides a mechanism for viewing log queries aligned to Zero Trust and Trusted Internet Connections models across the Microsoft portfolio including Microsoft security offerings, Office 365 and many more. This workbook enables Security Architects, Engineers, SecOps Analysts, Managers, and IT Pros to gain situational awareness visibility for the security posture of cloud workloads. There are also recommendations for selecting, designing, deploying, and configuring Microsoft offerings for alignment with respective security best practice. 
+
+# Analytics Rules
+The Microsoft Sentinel Zero Trust (TIC3.0) Analytics rules leverage Azure Security Center Regulatory Compliance mappings (Derived from NIST SP 800-53 and Azure Security Benchmark Baselines) to measure Zero Trust posture alignment across (11) TIC3.0 control families. The default configuration is set for scheduled rules running every 7 days to reduce alert overload. The default configuration is to alert when posture compliance is below 70% and this number is configurable per organizational requirements. 
+
+# Playbooks
+The Microsoft Sentinel Zero Trust (TIC3.0) Solution includes a Playbook Automation for Security Orchestration Automation & Response (SOAR). This playbook is triggered when an Microsoft Sentinel incident is generated, resulting in an email and Teams chat to the Security Governance Team including respective details of the event and remediation options. Note, this automation requires configuration for Security Governance Team group email address and Teams channel. There is also a requirement to configure this automation rule to trigger for each Zero Trust (TIC3.0) Analytics Rule to ensure the governance team is notified for remediation accordingly. 
+
+## Disclaimer
+The Microsoft Sentinel Zero Trust (TIC 3.0) Workbook demonstrates best practice guidance, but Microsoft does not guarantee nor imply compliance. All TIC requirements, validations, and controls are governed by the 💡 [Cybersecurity & Infrastructure Security Agency](https://www.cisa.gov/trusted-internet-connections). This workbook provides visibility and situational awareness for control requirements delivered with Microsoft technologies in predominantly cloud-based environments. Customer experience will vary by user and some panels may require additional configurations and query modification for operation. Recommendations do not imply coverage of respective controls as they are often one of several courses of action for approaching requirements which is unique to each customer. Recommendations should be considered a starting point for planning full or partial coverage of respective control requirements.

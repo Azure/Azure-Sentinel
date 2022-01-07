@@ -2,8 +2,8 @@ id: e0c947c3-fe83-46ff-bbda-a43224a785fd
 name: Web Shell Activity
 description: |
   'Web shells are scripts that, when uploaded to a web server, can be used to provide a backdoor to a compromised network.
-  Attackers can use this entry point to leave malicious implants, such as obtaining unauthorized access, escalating privilege, and further compromising the environment. 
-  
+  Attackers can use this entry point to leave malicious implants, such as obtaining unauthorized access, escalating privilege, and further compromising the environment.
+
   This query hunts for web shells by analysing the distribution of commonly-used web shell scripts against regular scripts for those public client IPs which have not observed any W3CIIS activity in a fixed lookback period.
   The results obtained summarise the public client IPs, user agents, and the distribution of the above scripts between the start and end time.'
 requiredDataConnectors:
@@ -14,26 +14,26 @@ tactics:
   - Persistence
   - InitialAccess
 relevantTechniques:
-  - T1100
-query: | 
+  - T1505
+query: |
 
-  let end_time = now();
-  let start_time = end_time - timespan(1d);
-  let lookback_time_from_start_time = timespan(3d);
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - (3d);
   let script_extensions = dynamic([".asp", ".aspx", ".armx", ".asax", ".ashz", ".asmx", ".axd", ".cshtml", ".php", ".phps", ".php3", ".php4", ".php5", ".php7", ".jsp", ".jspx", ".cfm", ".cfml", ".phtml"]);
   let ignore_uristems = dynamic(["/ews/exchange.asmx"]);
   let lookback_period = (
-  W3CIISLog 
-  | where TimeGenerated between ((start_time - lookback_time_from_start_time).. start_time)
+  W3CIISLog
+  | where TimeGenerated between (lookback .. starttime)
   | where not(ipv4_is_private(cIP)) and cIP != "127.0.0.1"
   | summarize count() by cIP, csUserAgent
   | project cIP, csUserAgent
   );
   let potential_webshell_activity = (W3CIISLog
-  | where TimeGenerated between (start_time .. end_time)
+  | where TimeGenerated between (starttime .. endtime)
   | extend csUriStem = tolower(csUriStem)
   | where csUriStem matches regex "\\.[a-zA-Z][a-zA-Z0-9]+$"
-  | where csUriStem !in~ (ignore_uristems) // Remove noisy uri stems in the final results by editing the ignore_uristems variable 
+  | where csUriStem !in~ (ignore_uristems) // Remove noisy uri stems in the final results by editing the ignore_uristems variable
   | extend suffix = strcat(".", split(split(csUriStem, "/")[-1], ".")[-1])
   | extend is_script = iff(suffix in (script_extensions), 1, 0)
   | where not(ipv4_is_private(cIP)) and cIP != "127.0.0.1"

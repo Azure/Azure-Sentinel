@@ -220,10 +220,12 @@ Fields marked with * are mandatory. Others can be left empty.
 * **tags**: (array of strings)<br> 
     Use this field to relate the templates to a specific security scenario. <br>
     Examples: "Network security" for playbook which works on firewalls, "Sentinel utilities" for playbook which serves a simple popular use case such send an email.
-* ***source->kind**: (string) <br>
-    Who contributed this playbook. "Microsoft", "Community" or "Developer" (for ISV or vendor)
+* ***support->tier**: (string) <br>
+    The support expectation for this playbook. "microsoft", "community" or "developer" (for ISV or vendor)
+* **support->link** (string)<br> 
+    The playbooks gallery need this fiels only in case the support->tier is "developer". 
 * ***author**: (string) <br>
-    Name of the person who contributed the playbook. In case of a bug, will be tagged in GitHub issue.
+    Name of the person who contributed the playbook.
 
 **Note**: template id and version are part of the Logic Apps Workflow resource section (see number 8 in ARM template instructions).
 
@@ -235,8 +237,8 @@ Fields marked with * are mandatory. Others can be left empty.
         "lastUpdateTime": "2021-05-18T10:00:15.123Z", 
         "entities": ["Account"], 
         "tags": ["Identity protection", "Teams bot"], 
-        "source": {
-            "kind": "Microsoft" 
+        "support": {
+            "tier": "microsoft"
         },
         "author": {
             "name": "Lior Tamir"

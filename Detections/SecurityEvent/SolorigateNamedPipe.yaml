@@ -1,7 +1,9 @@
 id: 11b4c19d-2a79-4da3-af38-b067e1273dee
 name: Solorigate Named Pipe 
 description: |
-  'Identifies a match across various data feeds for named pipe IOCs related to the Solorigate incident.'
+  'Identifies a match across various data feeds for named pipe IOCs related to the Solorigate incident.
+   For the sysmon events required for this detection, logging for Named Pipe Events needs to be configured in Sysmon config (Event ID 17 and Event ID 18)
+   Reference: https://techcommunity.microsoft.com/t5/azure-sentinel/solarwinds-post-compromise-hunting-with-azure-sentinel/ba-p/1995095'
 severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -15,7 +17,10 @@ queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - LateralMovement
+  - DefenseEvasion
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1055
 tags:
   - Solorigate
   - NOBELIUM
@@ -25,19 +30,21 @@ query: |
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
   | where EventID in (17,18)
-  | extend EvData = parse_xml(EventData)
-  | extend EventDetail = EvData.DataItem.EventData.Data
-  | extend NamedPipe = EventDetail.[5].["#text"]
-  | extend ProcessDetail = EventDetail.[6].["#text"]
-  | where NamedPipe contains '583da945-62af-10e8-4902-a8f205c72b2e'
+  | where EventData has '583da945-62af-10e8-4902-a8f205c72b2e'
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, MG, ManagementGroupName, _ResourceId)
+  | extend PipeName = column_ifexists("PipeName", "")
   | extend Account = UserName
-  | project-away EventDetail, EvData
   ),
   (
    SecurityEvent
   | where EventID == '5145'
-  | where AccessList has '%%4418'     // presence of CreatePipeInstance value 
-  | where RelativeTargetName contains '583da945-62af-10e8-4902-a8f205c72b2e'
+  // %%4418 looks for presence of CreatePipeInstance value 
+  | where AccessList has '%%4418'     
+  | where RelativeTargetName has '583da945-62af-10e8-4902-a8f205c72b2e'
   )
   )
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
@@ -50,4 +57,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
+version: 1.1.0
+kind: Scheduled

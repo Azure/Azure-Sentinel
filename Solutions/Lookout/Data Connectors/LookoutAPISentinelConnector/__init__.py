@@ -20,7 +20,7 @@ keyVaultName = str(os.environ['KeyVaultName'])
 KVUri = "https://" + keyVaultName + ".vault.azure.net/"
 
 #RISK MES API credentials
-lookout_mes_uri = "https://api.lesstage0.flexilis.org"
+lookout_mes_uri = "https://api.lookout.com"
 ent_name = os.environ.get('EnterpriseName')
 api_key = os.environ.get('ApiKey')
 
@@ -65,7 +65,8 @@ def post_data(body):
         'content-type': content_type,
         'Authorization': signature,
         'Log-Type': log_type,
-        'x-ms-date': rfc1123date
+        'x-ms-date': rfc1123date,
+        'time-generated-field' : 'time_collected'
     }
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
@@ -85,7 +86,13 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
     if events and len(events) > 0:
         logging.info("Got events")        
         logging.info("Processing {} events".format(len(events)))
-        post_status_code = post_data(json.dumps(events))
+        processed_events = []
+        for event in events:
+            event['enterprise_name'] = ent_name
+            event['time_collected'] = event["eventTime"] 
+            processed_events.append(event)
+
+        post_status_code = post_data(json.dumps(processed_events))
         if post_status_code is not None:
             logging.info("Events processed to Sentinel successfully")
         else:
@@ -104,3 +111,5 @@ def main(mytimer: func.TimerRequest)  -> None:
         #threading mechanism is not supported in Azure function
         
         single_ent_events(KVUri, ent_name, api_key, lookout_mes_uri, 0)
+    else:
+        logging.info("No API key or Enterprise name found in Key Vault")

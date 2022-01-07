@@ -23,7 +23,9 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 ## Prerequisites
 
-- You will need to authorize the API Connection that is created by this deployment to update Azure Sentinel Incidents.  To do this locate the API connection in the resource group and under **Edit API connection** click **Authorize**
+- After deploying the the playbook you will need to grant the playbook's Managed Identity **Azure Sentinel Responder** (or greater) access to the resource group where Azure Sentinel is installed. This gives the Managed Identity the necessary permissions to add comments, tags, and change incident severity.
                                                                                                                                      
-## Screenshot
-![Designer](./images/designer.jpg)
+## Screenshots
+![Designer](./images/designerLight.jpg)
+
+![Incident Comments](./images/comment-light.jpg)

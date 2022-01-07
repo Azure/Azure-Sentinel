@@ -1,5 +1,5 @@
-# Ingest M365 Security Posture Data
-Author: Matt Lowe, Benjamin Bovacevic
+# Ingest M365 Security Insights Data
+Author: Matt Lowe, Benjamin Kovacevic
 
 The M365 Security Posture connector template will deploy an Azure Logic App that is configured to ingest data from the different M365D products to highlight the statuses of entities within the environment. The connector calls upon HTTP API to gather this data from the different products, with the products being:
 - Microsoft Defender for Endpoint
@@ -19,6 +19,10 @@ The workbook will also be referencing data from Azure Security Center and Micros
 - ASC Recommendations and Regulatory Compliance
 - MCAS ShadowIT
 
+Link to the [Microsoft Defender Security Insights Workbook](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/M365SecurityPosture.json)
+
+You can find all instructions on the blog post on Microsoft Tech Community - [Microsoft Defender Security Insights in Azure Sentinel](https://techcommunity.microsoft.com/t5/azure-sentinel/microsoft-defender-security-insights-in-azure-sentinel/ba-p/2359705)
+
 ## **Pre-requisites**
 
 To deploy, users will need:
@@ -29,25 +33,29 @@ To deploy, users will need:
 
 ## **Set Up**
 First, an application needs to registered in Azure AD and assigned API permissions.
-1.	Go to https://aad.portal.azure.com/ > Azure Active Directory > App registrations > click on +New registration.
-2.	Enter a name (SecureScore API) and click on Register.
-3.	 These two permissions are needed from Microsoft Graph:
-    a.	Click on API permissions from right menu and then on +Add a permission. Select Microsoft Graph and then Application permissions. Search and select SecurityEvents.Read.All and click on Add permission.
-    b.	Click on +Add a permission. Select Microsoft Graph and then Application permissions. Search and select SecurityEvents.ReadWrite.All and click on Add permission.
-4.	Add permissions need to connect to Microsoft Defender for Endpoint
-    a.	Click on +Add a permission and click on APIs my organization use. Search for WindowsDefenderATP and select it. Select Application permissions and then search and select Score.Read.All and click on Add permission.
-    b.	Click on +Add a permission and clicA secret for the application needs to be generated. Click on Certificates & Secrets from right menu and choose +New client secret.
-7.	Enter description (MCAS Frequent Traveller remediation), select Never and click on Add.
-8.	Copy Value of the secret – if the secret is not copied, it cannot be seen once the blade has been left.
-9.	Click on Overview from right menu and copy fields Application (client) ID and Directory (Tenant) ID
-10.	Go to Azure portal and go to Log Analytics Workspaces. Copy the workspace ID and key.k on APIs my organization use. Search for WindowsDefenderATP and select it. Select Application permissions and then search and select SecurityRecommendation.Read.All and click on Add permission.
-    c.	Click on +Add a permission and click on APIs my organization use. Search for WindowsDefenderATP and select it. Select Application permissions and then search and select Vulnerability.Read.All and click on Add permission.
-5.	Click on Grant admin consent for {name of your organization}.
-6.	
+1.	Go to https://aad.portal.azure.com/ <strong>> Azure Active Directory > App registrations > click on +New registration</strong>
+2.	Enter name (M365SecurityPosture API) and click on Register
+3.	First we need to add 2 permission from Microsoft Graph<br>
+- Click on <strong>API permissions</strong> from right menu and then on <strong>+Add a permission</strong>. Select Microsoft Graph and then Application permissions. Search and select following permissions <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i.	SecurityEvents.Read.All<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ii.	SecurityEvents.ReadWrite.All<br>
+- Click on Add permission
+4.	And now we need to add permissions connected to Microsoft Defender for Endpoint<br>
+- Click on <strong>+Add a permission</strong> and click on <strong>APIs my organization use</strong>. Search for <strong>WindowsDefenderATP</strong> and select it. Select Application permissions and then search and select following permissions <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i.	Score.Read.All<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ii.	SecurityRecommendation.Read.All <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;iii.	Vulnerability.Read.All<br>
+- Click on Add permission
+5.	Click on <strong>Grant admin consent for {name of your organization}</strong>
+6.	Next we need to generate Secret. Click on <strong>Certificates & Secrets</strong> from right menu and choose <strong>+New client secret</strong>
+7.	Enter description (M365SecurityPosture API Secret), select Never and click on Add
+8.	Copy <strong>Value</strong> of the secret – if you don’t copy you’ll need to recreate it – you cannot see it once you leave this view
+9.	Now click on Overview from right menu and copy fields <strong>Application (client) ID</strong> and <strong>Directory (Tenant) ID</strong>
 
-Note: The Microsoft Cloud Application Security data connector needs to be on and is ingesting Shadow IT data (Cloud Discovery Logs). If the MCAS data connector isn’t enabled, please follow the public documentation.
 
-Once the application is ready, as well as Workspace ID and Workspace key, the Logic App can be deployed. 
+Note: The Microsoft Cloud Application Security data connector needs to be on and is ingesting Shadow IT data (Cloud Discovery Logs). If the MCAS data connector isn’t enabled, please follow the public documentation - https://docs.microsoft.com/azure/sentinel/connect-cloud-app-security.
+
+Once the application is ready, as well as <strong>Workspace ID and Workspace key</strong>, the Logic App can be deployed. 
 
 ## **Deployment Process**
 ## **Option 1**

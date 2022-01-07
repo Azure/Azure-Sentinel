@@ -32,11 +32,9 @@ namespace Kqlvalidations.Tests
                 }
             }
 
-            var jObj = JObject.Parse(ConvertYamlToJson(yaml));
-
             var exception = Record.Exception(() =>
             {
-                var templateObject = jObj.ToObject<ScheduledTemplateInternalModel>();
+                var templateObject = JsonConvert.DeserializeObject<AnalyticsTemplateInternalModelBase>(ConvertYamlToJson(yaml));
                 var validationContext = new ValidationContext(templateObject);
                 Validator.ValidateObject(templateObject, validationContext, true);
             });
@@ -94,7 +92,7 @@ namespace Kqlvalidations.Tests
                             var validationContext = new ValidationContext(templateObject);
                             Validator.ValidateObject(templateObject, validationContext, true);
                         });
-                        
+
                     }
                     catch (Exception)
                     {
@@ -108,7 +106,7 @@ namespace Kqlvalidations.Tests
                 }
             }
         }
-        
+
         [Fact]
         public void Validate_DetectionTemplates_AllFilesAreYamls()
         {
@@ -118,9 +116,9 @@ namespace Kqlvalidations.Tests
             var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
             AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
-            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  "All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
         }
-        
+
         [Fact]
         public void Validate_DetectionTemplates_NoSameTemplateIdTwice()
         {
@@ -133,7 +131,7 @@ namespace Kqlvalidations.Tests
             var duplicationsById = templatesAsObjects.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
             var duplicatedId = "";
             if (duplicationsById.Count() > 0){
-                
+
                 duplicatedId = duplicationsById.Last().Select(x => x["id"]).First().ToString();
             }
             Assert.True(duplicationsById.Count() == 0, $"There should not be 2 templates with the same ID, but the id {duplicatedId} is duplicated.");
@@ -142,14 +140,18 @@ namespace Kqlvalidations.Tests
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {
             var detectionsYamlFile = "";
-            // Get file present in detection folder or else check in solution analytics rules folder 
+            // Get file present in detection folder or else check in solution analytics rules folder
             try
             {
                 detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
-            catch
+            catch (Exception e) when (e.Message.Contains("Sequence contains no elements"))
             {
                 detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Analytic Rules")).Single();
+            }
+            catch (Exception e) when (e.Message.Contains("Sequence contains more than one element"))
+            {
+                throw new Exception($"Should not have 2 templates with the same name , problematic name is {detectionsYamlFileName}");
             }
 
             return File.ReadAllText(detectionsYamlFile);

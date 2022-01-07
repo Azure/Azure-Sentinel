@@ -1,0 +1,48 @@
+id: fd759ce2-e108-48ef-83c4-a1bb9886a6de
+name: (Preview) ZeroTrust(TIC3.0) Web Control Family Monitoring
+description: |
+  'Zero Trust(TIC3.0) Control Assessments have Deviated from Configured Threshold Baselines'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let ZeroTrustTIC3Mapping = externaldata(RecommendationDisplayName:string,Capability:string,Family:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ZeroTrustTIC3Mapping.csv"] with (format="csv", ignoreFirstRecord=True);
+  SecurityRecommendation
+    | join kind=rightouter ZeroTrustTIC3Mapping on RecommendationDisplayName
+    | where Family == 'Web'
+    | summarize
+        Assessments = count(),
+        Success = countif(RecommendationState == 'Healthy' or RecommendationState == 'NotApplicable' or RecommendationState == 'Removed'),
+        Failed = countif(RecommendationState == 'Unhealthy')
+        by Capability, Family, RecommendationDisplayName
+    | extend SuccessRatePercentage = (Success * 100 / Assessments)
+    | extend FailedRatePercentage = (Failed * 100 / Assessments)
+    | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+    | project
+        Capability,
+        Family,
+        RecommendationDisplayName,
+        Assessments,
+        SuccessRatePercentage,
+        FailedRatePercentage,
+        RemediationLink
+    | where RecommendationDisplayName <> ''
+    // | where RecommendationName <> '' //Filter Out or Suppress Recommendations
+    | where FailedRatePercentage > 30 //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within Organizational Needs
+    | sort by FailedRatePercentage desc
+    | limit 250
+    | extend URLCustomEntity = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

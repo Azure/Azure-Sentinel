@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDnsMicrosoftOMS",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Microsoft DNS",
+            "category": "Security",
+            "FunctionAlias": "ASimDnsMicrosoftOMS",
+            "query": "let EventTypeTable=datatable(EventOriginalType:int,EventType:string,EventSubType:string, EventResult:string)[\n  256, 'Query', 'request', 'NA'\n, 257, 'Query', 'response', 'Success'\n, 258, 'Query', 'response', 'Based on RCODE'\n, 259, 'Query', 'response', 'Based on RCODE'\n, 260, 'Query', 'request', 'NA'\n, 261, 'Query', 'response', 'NA'\n, 262, 'Query', 'response', 'Based on RCODE'\n, 263, 'Update', 'request', 'NA'\n, 264, 'Update', 'response', 'Based on RCODE'\n, 265, 'XFR', 'request', 'NA' \n, 266, 'XFR', 'request', 'NA'\n, 267, 'XFR', 'response', 'Based on RCODE'\n, 268, 'XFR', 'response', 'Based on RCODE'\n, 269, 'XFR', 'request', 'NA'\n, 270, 'XFR', 'request', 'NA'\n, 271, 'XFR', 'response', 'Based on RCODE'\n, 272, 'XFR', 'response', 'Based on RCODE'\n, 273, 'XFR', 'request', 'NA'\n, 274, 'XFR', 'request', 'NA'\n, 275, 'XFR', 'response', 'Success'\n, 276, 'XFR', 'response', 'Success'\n, 277, 'Update', 'request', 'NA'\n, 278, 'Update', 'response', 'Based on RCODE'\n, 279, 'Query', 'NA', 'NA'\n, 280, 'Query', 'NA', 'NA'\n];\nlet RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[\n   0, 'NOERROR'\n , 1, \"FORMERR\"\n , 2,\"SERVFAIL\"\n , 3,'NXDOMAIN'\n , 4,'NOTIMP'\n , 5,'REFUSED'\n , 6,'YXDOMAIN'\n , 7,'YXRRSET'\n , 8,'NXRRSET'\n , 9,'NOTAUTH'\n , 10,'NOTZONE'\n , 11,'DSOTYPENI'\n , 16,'BADVERS'\n , 16,'BADSIG'\n , 17,'BADKEY'\n , 18,'BADTIME'\n , 19,'BADMODE'\n , 20,'BADNAME'\n , 21,'BADALG'\n , 22,'BADTRUNC'\n , 23,'BADCOOKIE'];\nlet DNSQuery_MS=(disabled:bool=false){\n  DnsEvents | where not(disabled)\n| where EventId < 500\n| project-rename\n       Dvc=Computer ,\n       SrcIpAddr = ClientIP,\n       DnsQueryTypeName=QueryType,\n       EventMessage = Message,\n       EventOriginalType = EventId,\n       EventReportUrl = ReportReferenceLink,\n       DnsResponseName = IPAddresses,\n       DnsQuery = Name,\n       DnsResponseCode = ResultCode\n| extend\n       EventCount=int(1),\n       EventStartTime=TimeGenerated,\n       EventVendor = \"Microsoft\",\n       EventProduct = \"Microsoft DNS Server\",\n       EventSchema = \"Dns\",\n       EventSchemaVersion=\"0.1.3\",\n       EventEndTime=TimeGenerated,\n       EventSeverity = tostring(Severity),\n       DvcHostname = Dvc\n  | lookup RCodeTable on DnsResponseCode\n  | lookup EventTypeTable on EventOriginalType\n  | extend EventResultDetails = case (isnotempty(DnsResponseCodeName), DnsResponseCodeName\n                                  , DnsResponseCode between (3841 .. 4095), 'Reserved for Private Use'\n                                  , 'Unassigned'),\n    EventResult = iff (EventResult == \"Based on RCODE\", iff(DnsResponseCode == 0, \"Success\", \"Failure\"),EventResult)\n// **************Aliases\n  | extend\n      DnsResponseCodeName=EventResultDetails,\n      Domain=DnsQuery,\n      IpAddr=SrcIpAddr,\n      Src=SrcIpAddr,\n  // Backward Compatibility\n      Query=DnsQuery,\n      QueryTypeName=DnsQueryTypeName,\n      ResponseName=DnsResponseName,\n      ResponseCode=DnsResponseCode,\n      ResponseCodeName=DnsResponseCodeName\n  | project-away \n      SubType\n      };\nDNSQuery_MS(disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -41,14 +41,14 @@ The access and password must be granted explicitly to you by Microsoft, is perso
 
 - SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
 
-- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/AzureSentinel4SAP/tree/main/CR.
+- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
 
 Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
-- SAP Basis versions 7.5 and higher:  install NPLK900131
-- SAP Basis version 7.4:  install NPLK900132
-- To create your SAP role in any SAP version: install NPLK900114
+- SAP Basis versions 7.5 and higher:  install NPLK900144
+- SAP Basis version 7.4:  install NPLK900146
+- To create your SAP role in any SAP version: install NPLK900140
 
-Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900114 on your SAP system. 
+Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
 
 SAP notes required for versions earlier than SAP Basis 7.5 SP13:
@@ -376,5 +376,4 @@ else
 	exit 1
 fi
 # Docker Configurations
-sudo chown -R  $USER:$USER ~/.docker >/dev/null
 newgrp docker 

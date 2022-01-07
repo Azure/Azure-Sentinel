@@ -1,0 +1,1497 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"comments": "Updates IronDefense alert workflow status and rating via IronAPI when the corresponding Sentinel Incident is updated.",
+		"author": "IronNet"
+	},
+	"parameters": {
+		"IronApiUsername": {
+			"type": "String",
+			"metadata": {
+				"description": "Username used to authenticate to IronAPI"
+			}
+		},
+		"IronApiPassword": {
+			"type": "SecureString",
+			"metadata": {
+				"description": "Password used to authenticate to IronAPI"
+			}
+		},
+		"IronDefenseUrl": {
+			"type": "String",
+			"metadata": {
+				"description": "IronNet URL used to authenticate to IronAPI"
+			}
+		},
+		"ClientId": {
+			"type": "String",
+			"metadata": {
+				"description": "Azure Active Directory ClientId used to connect to the Azure Sentinel API to fetch Incidents"
+			}
+		},
+		"ClientSecret": {
+			"type": "SecureString",
+			"metadata": {
+				"description": "Azure Active Directory ClientSecret used to connect to the Azure Sentinel API to fetch Incidents"
+			}
+		},
+		"TenantId": {
+			"type": "String",
+			"metadata": {
+				"description": "Azure Active Directory TenantId of Azure Sentinel"
+			}
+		},
+		"WorkspaceName": {
+			"type": "String",
+			"metadata": {
+				"description": "Log Analytics Workspace connected to Azure Sentinel"
+			}
+		},
+		"ShareCommentWithIrondome": {
+			"type": "bool",
+			"metadata": {
+				"description": "Check this flag if the comments within the incident should be shared with IronDome"
+			}
+		},
+		"param_recurrence_interval": {
+			"type": "int",
+			"metadata": {
+				"description": "Polling Interval for the Playbook to execute (This must be an Integer value)"
+			}
+		},
+		"param_recurrence_frequency": {
+			"type": "string",
+			"defaultValue": "Minute",
+			"allowedValues": [
+				"Day",
+				"Hour",
+				"Minute",
+				"Month",
+				"Second"
+			],
+			"metadata": {
+				"description": "Polling Interval Frequency"
+			}
+		},
+		"Playbook Name": {
+			"type": "String",
+			"metadata": {
+				"description": "Playbook name to test the IronNet API"
+			}
+		}
+	},
+	"variables": {},
+	"resources": [
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2017-07-01",
+			"name": "[parameters('Playbook Name')]",
+			"location": "eastus",
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						},
+						"IronNetUrl": {
+							"defaultValue": "[parameters('IronDefenseUrl')]",
+							"type": "SecureString"
+						},
+						"Password": {
+							"defaultValue": "[parameters('IronApiPassword')]",
+							"type": "SecureString"
+						},
+						"TenantId": {
+							"defaultValue": "[parameters('TenantId')]",
+							"type": "SecureString"
+						},
+						"Username": {
+							"defaultValue": "[parameters('IronApiUsername')]",
+							"type": "SecureString"
+						},
+						"client_id": {
+							"defaultValue": "[parameters('ClientId')]",
+							"type": "SecureString"
+						},
+						"client_secret": {
+							"defaultValue": "[parameters('ClientSecret')]",
+							"type": "SecureString"
+						},
+						"ResourceGroupId": {
+							"defaultValue": "[resourceGroup().id]",
+							"type": "SecureString"
+						},
+						"ResourceGroup": {
+							"defaultValue": "[resourceGroup().name]",
+							"type": "String"
+						},
+						"SubscriptionId": {
+							"defaultValue": "[subscription().subscriptionId]",
+							"type": "String"
+						},
+						"workspace_name": {
+							"defaultValue": "[parameters('WorkspaceName')]",
+							"type": "SecureString"
+						},
+						"Pollingtime": {
+							"defaultValue": "[parameters('param_recurrence_interval')]",
+							"type": "Int"
+						},
+						"PollingtimeFrequency": {
+							"defaultValue": "[parameters('param_recurrence_frequency')]",
+							"type": "SecureString"
+						},
+						"ShareCommentWithIronDome": {
+							"defaultValue": false,
+							"type": "Bool"
+						}
+					},
+					"triggers": {
+						"Generate_the_token_for_Azure_Sentinel_Incident": {
+							"recurrence": {
+								"frequency": "@{parameters('PollingtimeFrequency')}",
+								"interval": "@{parameters('Pollingtime')}"
+							},
+							"type": "Http",
+							"inputs": {
+								"body": "grant_type=client_credentials&client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&resource=https://management.azure.com",
+								"headers": {
+									"Content-Type": "application/x-www-form-urlencoded"
+								},
+								"method": "POST",
+								"uri": "https://login.microsoftonline.com/@{parameters('TenantId')}/oauth2/token"
+							}
+						}
+					},
+					"actions": {
+						"Check_Result": {
+							"actions": {
+								"Incidents_were_modified": {
+									"runAfter": {},
+									"type": "Compose",
+									"inputs": "Following one or more incidents were modified between @{variables('Interval Frequency')} to @{utcNow()}:\n@{variables('Incidents')}"
+								}
+							},
+							"runAfter": {
+								"Loop_through_All_the_Incident_Pages": [
+									"Succeeded"
+								]
+							},
+							"else": {
+								"actions": {
+									"No_Incidents_modified": {
+										"runAfter": {},
+										"type": "Compose",
+										"inputs": "No Incidents modified between @{variables('Interval Frequency')} to @{utcNow()}"
+									}
+								}
+							},
+							"expression": {
+								"and": [
+									{
+										"equals": [
+											"@variables('Flag')",
+											true
+										]
+									}
+								]
+							},
+							"type": "If"
+						},
+						"Initialize_Analyst_Expectation": {
+							"runAfter": {
+								"Initialize_Analyst_Severity": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Expectation",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_Analyst_Severity": {
+							"runAfter": {
+								"Initialize_Status": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Severity",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_Custom_Details": {
+							"runAfter": {
+								"Initialize_Analyst_Expectation": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Custom Details",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_Incident_Next_Link": {
+							"runAfter": {
+								"Map_Interval_Frequency": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Next Link",
+										"type": "string",
+										"value": "https://management.azure.com@{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents?api-version=2020-01-01&$orderby=properties/lastModifiedTimeUtc desc&$filter=(properties/lastModifiedTimeUtc ne properties/createdTimeUtc) and (properties/lastModifiedTimeUtc le @{utcNow()})  and (properties/lastModifiedTimeUtc gt @{variables('Interval Frequency')})"
+									}
+								]
+							}
+						},
+						"Initialize_Incident_variable": {
+							"runAfter": {
+								"Parse_Token": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Incidents",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_Interval": {
+							"runAfter": {
+								"Initialize_Custom_Details": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Interval",
+										"type": "string",
+										"value": "-@{parameters('Pollingtime')}"
+									}
+								]
+							}
+						},
+						"Initialize_Interval_Frequency": {
+							"runAfter": {
+								"Initialize_Interval": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Interval Frequency",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_Status": {
+							"runAfter": {
+								"Initialize_Success_Flag": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Status",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_Success_Flag": {
+							"runAfter": {
+								"Initialize_Incident_variable": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Flag",
+										"type": "boolean",
+										"value": false
+									}
+								]
+							}
+						},
+						"Loop_through_All_the_Incident_Pages": {
+							"actions": {
+								"Get_All_Updated_Incident": {
+									"runAfter": {},
+									"type": "Http",
+									"inputs": {
+										"headers": {
+											"Authorization": "Bearer @{body('Parse_Token')?['access_token']}",
+											"content-type": "application/json"
+										},
+										"method": "GET",
+										"uri": "@variables('Next Link')"
+									}
+								},
+								"IronNet_Login_to_fetch_the_Token": {
+									"runAfter": {
+										"Parse_Incident_details": [
+											"Succeeded"
+										]
+									},
+									"type": "Http",
+									"inputs": {
+										"authentication": {
+											"password": "@parameters('Password')",
+											"type": "Basic",
+											"username": "@parameters('Username')"
+										},
+										"body": {},
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"method": "POST",
+										"uri": "@{parameters('IronNetUrl')}/IronApi/Login"
+									}
+								},
+								"Loop_through_each_Incident": {
+									"foreach": "@body('Parse_Incident_details')?['value']",
+									"actions": {
+										"Get_Incident_and_System_Alert_relations": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"headers": {
+													"Authorization": "Bearer @{body('Parse_Token')?['access_token']}",
+													"content-type": "application/json"
+												},
+												"method": "GET",
+												"uri": "https://management.azure.com@{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/incidents/@{items('Loop_through_each_Incident')?['name']}/relations?api-version=2019-01-01-preview"
+											}
+										},
+										"Incidents_Updated": {
+											"runAfter": {
+												"Loop_through_Alerts": [
+													"Succeeded"
+												]
+											},
+											"type": "AppendToStringVariable",
+											"inputs": {
+												"name": "Incidents",
+												"value": "@{items('Loop_through_each_Incident')?['properties']?['incidentNumber']},"
+											}
+										},
+										"Loop_through_Alerts": {
+											"foreach": "@body('Parse_System_Alert_Id')?['value']",
+											"actions": {
+												"Check_for_Closed_Incident_and_Update_the_IronDefense_Analyst_Ratings": {
+													"actions": {
+														"Check_for_Comments": {
+															"actions": {
+																"For_each": {
+																	"foreach": "@body('Parse_Incidents_comments')?['value']",
+																	"actions": {
+																		"Update_Incident_Rating": {
+																			"runAfter": {},
+																			"type": "Http",
+																			"inputs": {
+																				"body": {
+																					"alert_id": "@variables('Custom Details')",
+																					"analyst_expectation": "@variables('Expectation')",
+																					"analyst_severity": "@variables('Severity')",
+																					"comment": "@items('For_each')?['properties']?['message']",
+																					"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')"
+																				},
+																				"headers": {
+																					"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
+																					"Content-Type": "application/json"
+																				},
+																				"method": "POST",
+																				"uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+																			}
+																		}
+																	},
+																	"runAfter": {},
+																	"type": "Foreach"
+																}
+															},
+															"runAfter": {
+																"Map_Azure_Sentinel_Expectation_to_IronNet_Analyst_Expectation_": [
+																	"Succeeded"
+																]
+															},
+															"else": {
+																"actions": {
+																	"Update_Incident_Rating_without_comment": {
+																		"runAfter": {},
+																		"type": "Http",
+																		"inputs": {
+																			"body": {
+																				"alert_id": "@variables('Custom Details')",
+																				"analyst_expectation": "@variables('Expectation')",
+																				"analyst_severity": "@variables('Severity')",
+																				"comment": "The Incident has been closed",
+																				"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')"
+																			},
+																			"headers": {
+																				"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
+																				"Content-Type": "application/json"
+																			},
+																			"method": "POST",
+																			"uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+																		}
+																	}
+																}
+															},
+															"expression": {
+																"and": [
+																	{
+																		"greater": [
+																			"@items('Loop_through_each_Incident')?['properties']?['additionalData']?['commentsCount']",
+																			0
+																		]
+																	}
+																]
+															},
+															"type": "If"
+														},
+														"Map_Azure_Sentinel_Expectation_to_IronNet_Analyst_Expectation_": {
+															"runAfter": {
+																"Map_Azure_Sentinel_Severity_to_IronNet_Severity": [
+																	"Succeeded"
+																]
+															},
+															"cases": {
+																"Case": {
+																	"case": "Undetermined",
+																	"actions": {
+																		"Map_Expectation_'Undetermined'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Expectation",
+																				"value": "EXP_UNKNOWN"
+																			}
+																		}
+																	}
+																},
+																"Case_2": {
+																	"case": "FalsePositive",
+																	"actions": {
+																		"Map_Expectation_'FalsePositive'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Expectation",
+																				"value": "EXP_EXPECTED"
+																			}
+																		}
+																	}
+																},
+																"Case_3": {
+																	"case": "BenignPositive",
+																	"actions": {
+																		"Map_Expectation_'BenignPositive'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Expectation",
+																				"value": "EXP_EXPECTED"
+																			}
+																		}
+																	}
+																},
+																"Case_4": {
+																	"case": "TruePositive",
+																	"actions": {
+																		"Map_Expectation_'TruePositive'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Expectation",
+																				"value": "EXP_UNEXPECTED"
+																			}
+																		}
+																	}
+																}
+															},
+															"default": {
+																"actions": {}
+															},
+															"expression": "@items('Loop_through_each_Incident')?['properties']?['classification']",
+															"type": "Switch"
+														},
+														"Map_Azure_Sentinel_Severity_to_IronNet_Severity": {
+															"runAfter": {},
+															"cases": {
+																"Case": {
+																	"case": "Undetermined",
+																	"actions": {
+																		"Map_Severity_'Undetermined'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Severity",
+																				"value": "SEVERITY_UNDECIDED"
+																			}
+																		}
+																	}
+																},
+																"Case_2": {
+																	"case": "FalsePositive",
+																	"actions": {
+																		"Map_Severity_'FalsePositive'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Severity",
+																				"value": "SEVERITY_BENIGN"
+																			}
+																		}
+																	}
+																},
+																"Case_3": {
+																	"case": "BenignPositive",
+																	"actions": {
+																		"Map_Severity_'BenignPositive'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Severity",
+																				"value": "SEVERITY_MALICIOUS"
+																			}
+																		}
+																	}
+																},
+																"Case_4": {
+																	"case": "TruePositive",
+																	"actions": {
+																		"Map_Severity_'TruePositive'": {
+																			"runAfter": {},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "Severity",
+																				"value": "SEVERITY_SUSPICIOUS"
+																			}
+																		}
+																	}
+																}
+															},
+															"default": {
+																"actions": {
+																	"Map_Default_Severity": {
+																		"runAfter": {},
+																		"type": "SetVariable",
+																		"inputs": {
+																			"name": "Severity",
+																			"value": "SEVERITY_UNDECIDED"
+																		}
+																	}
+																}
+															},
+															"expression": "@items('Loop_through_each_Incident')?['properties']?['classification']",
+															"type": "Switch"
+														},
+														"Update_the_Classification_Comment_if_it_exist": {
+															"actions": {
+																"Update_Incident_Rating_with_classification_comment": {
+																	"runAfter": {},
+																	"type": "Http",
+																	"inputs": {
+																		"body": {
+																			"alert_id": "@variables('Custom Details')",
+																			"analyst_expectation": "@variables('Expectation')",
+																			"analyst_severity": "@variables('Severity')",
+																			"comment": "@items('Loop_through_each_Incident')?['properties']?['classificationComment']",
+																			"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')"
+																		},
+																		"headers": {
+																			"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
+																			"Content-Type": "application/json"
+																		},
+																		"method": "POST",
+																		"uri": "@{parameters('IronNetUrl')}/IronApi/RateAlert"
+																	}
+																}
+															},
+															"runAfter": {
+																"Check_for_Comments": [
+																	"Succeeded"
+																]
+															},
+															"expression": {
+																"and": [
+																	{
+																		"not": {
+																			"equals": [
+																				"@items('Loop_through_each_Incident')?['properties']?['classificationComment']",
+																				""
+																			]
+																		}
+																	}
+																]
+															},
+															"type": "If"
+														}
+													},
+													"runAfter": {
+														"Check_for_Comments_and_Update_IronDefense_Alert_Status": [
+															"Succeeded"
+														]
+													},
+													"expression": {
+														"and": [
+															{
+																"equals": [
+																	"@items('Loop_through_each_Incident')?['properties']?['status']",
+																	"Closed"
+																]
+															}
+														]
+													},
+													"type": "If"
+												},
+												"Check_for_Comments_and_Update_IronDefense_Alert_Status": {
+													"actions": {
+														"Loop_through_Comments": {
+															"foreach": "@body('Parse_Incidents_comments')?['value']",
+															"actions": {
+																"Update_Incident_Status": {
+																	"runAfter": {},
+																	"type": "Http",
+																	"inputs": {
+																		"body": {
+																			"alert_id": "@variables('Custom Details')",
+																			"comment": "@items('Loop_through_Comments')?['properties']?['message']",
+																			"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')",
+																			"status": "@variables('Status')"
+																		},
+																		"headers": {
+																			"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
+																			"Content-Type": "application/json"
+																		},
+																		"method": "POST",
+																		"uri": "@{parameters('IronNetUrl')}/IronApi/SetAlertStatus"
+																	}
+																}
+															},
+															"runAfter": {},
+															"type": "Foreach"
+														}
+													},
+													"runAfter": {
+														"Parse_Incidents_comments": [
+															"Succeeded"
+														]
+													},
+													"else": {
+														"actions": {
+															"Update_Incident_Status_without_comment": {
+																"runAfter": {},
+																"type": "Http",
+																"inputs": {
+																	"body": {
+																		"alert_id": "@variables('Custom Details')",
+																		"comment": "The Incident has been changed to status @{items('Loop_through_each_Incident')?['properties']?['status']}",
+																		"share_comment_with_irondome": "@parameters('ShareCommentWithIronDome')",
+																		"status": "@variables('Status')"
+																	},
+																	"headers": {
+																		"Authorization": "Bearer @{body('Parse_IronNet_Token')?['token']}",
+																		"Content-Type": "application/json"
+																	},
+																	"method": "POST",
+																	"uri": "@{parameters('IronNetUrl')}/IronApi/SetAlertStatus"
+																}
+															}
+														}
+													},
+													"expression": {
+														"and": [
+															{
+																"greater": [
+																	"@items('Loop_through_each_Incident')?['properties']?['additionalData']?['commentsCount']",
+																	0
+																]
+															}
+														]
+													},
+													"type": "If"
+												},
+												"Fetch_Custom_Details_value_from_Incident": {
+													"runAfter": {
+														"Map_Azure_Sentinel_Status_to_IronNet_Status_": [
+															"Succeeded"
+														]
+													},
+													"type": "SetVariable",
+													"inputs": {
+														"name": "Custom Details",
+														"value": "@body('Parse_Custom_Details')?['properties']?['additionalData']?['Custom Details']"
+													}
+												},
+												"Fetch_Ironnet_Alert_Id_from_Incident_Custom_Details": {
+													"foreach": "@body('Parse_IronDefense_Alert_Id')?['IronDefenseAlertId']",
+													"actions": {
+														"Set_AlertID": {
+															"runAfter": {},
+															"type": "SetVariable",
+															"inputs": {
+																"name": "Custom Details",
+																"value": "@{items('Fetch_Ironnet_Alert_Id_from_Incident_Custom_Details')}"
+															}
+														}
+													},
+													"runAfter": {
+														"Parse_IronDefense_Alert_Id": [
+															"Succeeded"
+														]
+													},
+													"type": "Foreach"
+												},
+												"Get_Entities": {
+													"runAfter": {},
+													"type": "Http",
+													"inputs": {
+														"headers": {
+															"Authorization": "Bearer @{body('Parse_Token')?['access_token']}",
+															"content-type": "application/json"
+														},
+														"method": "GET",
+														"uri": "https://management.azure.com@{parameters('ResourceGroupId')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('workspace_name')}/providers/Microsoft.SecurityInsights/Entities/@{items('Loop_through_Alerts')?['properties']?['relatedResourceName']}?api-version=2019-01-01-preview"
+													}
+												},
+												"Get_Incident_latest_Comments": {
+													"runAfter": {
+														"Fetch_Ironnet_Alert_Id_from_Incident_Custom_Details": [
+															"Succeeded"
+														]
+													},
+													"type": "Http",
+													"inputs": {
+														"headers": {
+															"Authorization": "Bearer @{body('Parse_Token')?['access_token']}",
+															"content-type": "application/json"
+														},
+														"method": "GET",
+														"uri": "https://management.azure.com@{items('Loop_through_each_Incident')?['id']}/comments?api-version=2020-01-01"
+													}
+												},
+												"Map_Azure_Sentinel_Status_to_IronNet_Status_": {
+													"runAfter": {
+														"Parse_Custom_Details": [
+															"Succeeded"
+														]
+													},
+													"cases": {
+														"Case": {
+															"case": "New",
+															"actions": {
+																"Map_Status_'New'_": {
+																	"runAfter": {},
+																	"type": "SetVariable",
+																	"inputs": {
+																		"name": "Status",
+																		"value": "STATUS_AWAITING_REVIEW"
+																	}
+																}
+															}
+														},
+														"Case_2": {
+															"case": "Active",
+															"actions": {
+																"Map_Status_'Active'": {
+																	"runAfter": {},
+																	"type": "SetVariable",
+																	"inputs": {
+																		"name": "Status",
+																		"value": "STATUS_UNDER_REVIEW"
+																	}
+																}
+															}
+														},
+														"Case_3": {
+															"case": "Closed",
+															"actions": {
+																"Map_Status_'Closed'": {
+																	"runAfter": {},
+																	"type": "SetVariable",
+																	"inputs": {
+																		"name": "Status",
+																		"value": "STATUS_CLOSED"
+																	}
+																}
+															}
+														}
+													},
+													"default": {
+														"actions": {
+															"Map_Default_Status_'New'": {
+																"runAfter": {},
+																"type": "SetVariable",
+																"inputs": {
+																	"name": "Status",
+																	"value": "STATUS_AWAITING_REVIEW"
+																}
+															}
+														}
+													},
+													"expression": "@items('Loop_through_each_Incident')?['properties']?['status']",
+													"type": "Switch"
+												},
+												"Parse_Custom_Details": {
+													"runAfter": {
+														"Get_Entities": [
+															"Succeeded"
+														]
+													},
+													"type": "ParseJson",
+													"inputs": {
+														"content": "@body('Get_Entities')",
+														"schema": {
+															"properties": {
+																"id": {
+																	"type": "string"
+																},
+																"kind": {
+																	"type": "string"
+																},
+																"name": {
+																	"type": "string"
+																},
+																"properties": {
+																	"properties": {
+																		"additionalData": {
+																			"properties": {
+																				"Analytic Rule Ids": {
+																					"type": "string"
+																				},
+																				"Analytic Rule Name": {
+																					"type": "string"
+																				},
+																				"Custom Details": {
+																					"type": "string"
+																				},
+																				"Data Sources": {
+																					"type": "string"
+																				},
+																				"Event Grouping": {
+																					"type": "string"
+																				},
+																				"OriginalQuery": {
+																					"type": "string"
+																				},
+																				"ProcessedBySentinel": {
+																					"type": "string"
+																				},
+																				"Query": {
+																					"type": "string"
+																				},
+																				"Query End Time UTC": {
+																					"type": "string"
+																				},
+																				"Query Period": {
+																					"type": "string"
+																				},
+																				"Query Start Time UTC": {
+																					"type": "string"
+																				},
+																				"Search Query Results Overall Count": {
+																					"type": "string"
+																				},
+																				"Trigger Operator": {
+																					"type": "string"
+																				},
+																				"Trigger Threshold": {
+																					"type": "string"
+																				}
+																			},
+																			"type": "object"
+																		},
+																		"alertDisplayName": {
+																			"type": "string"
+																		},
+																		"alertType": {
+																			"type": "string"
+																		},
+																		"confidenceLevel": {
+																			"type": "string"
+																		},
+																		"endTimeUtc": {
+																			"type": "string"
+																		},
+																		"friendlyName": {
+																			"type": "string"
+																		},
+																		"processingEndTime": {
+																			"type": "string"
+																		},
+																		"productComponentName": {
+																			"type": "string"
+																		},
+																		"productName": {
+																			"type": "string"
+																		},
+																		"providerAlertId": {
+																			"type": "string"
+																		},
+																		"resourceIdentifiers": {
+																			"items": {
+																				"properties": {
+																					"type": {
+																						"type": "string"
+																					},
+																					"workspaceId": {
+																						"type": "string"
+																					}
+																				},
+																				"required": [
+																					"type",
+																					"workspaceId"
+																				],
+																				"type": "object"
+																			},
+																			"type": "array"
+																		},
+																		"severity": {
+																			"type": "string"
+																		},
+																		"startTimeUtc": {
+																			"type": "string"
+																		},
+																		"status": {
+																			"type": "string"
+																		},
+																		"systemAlertId": {
+																			"type": "string"
+																		},
+																		"tactics": {
+																			"type": "array"
+																		},
+																		"timeGenerated": {
+																			"type": "string"
+																		},
+																		"vendorName": {
+																			"type": "string"
+																		}
+																	},
+																	"type": "object"
+																},
+																"type": {
+																	"type": "string"
+																}
+															},
+															"type": "object"
+														}
+													}
+												},
+												"Parse_Incidents_comments": {
+													"runAfter": {
+														"Get_Incident_latest_Comments": [
+															"Succeeded"
+														]
+													},
+													"type": "ParseJson",
+													"inputs": {
+														"content": "@body('Get_Incident_latest_Comments')",
+														"schema": {
+															"properties": {
+																"value": {
+																	"items": {
+																		"properties": {
+																			"id": {
+																				"type": "string"
+																			},
+																			"name": {
+																				"type": "string"
+																			},
+																			"properties": {
+																				"properties": {
+																					"author": {
+																						"properties": {
+																							"email": {},
+																							"name": {
+																								"type": "string"
+																							},
+																							"objectId": {
+																								"type": "string"
+																							},
+																							"userPrincipalName": {
+																								"type": "string"
+																							}
+																						},
+																						"type": "object"
+																					},
+																					"createdTimeUtc": {
+																						"type": "string"
+																					},
+																					"message": {
+																						"type": "string"
+																					}
+																				},
+																				"type": "object"
+																			},
+																			"type": {
+																				"type": "string"
+																			}
+																		},
+																		"required": [
+																			"id",
+																			"name",
+																			"type",
+																			"properties"
+																		],
+																		"type": "object"
+																	},
+																	"type": "array"
+																}
+															},
+															"type": "object"
+														}
+													}
+												},
+												"Parse_IronDefense_Alert_Id": {
+													"runAfter": {
+														"Fetch_Custom_Details_value_from_Incident": [
+															"Succeeded"
+														]
+													},
+													"type": "ParseJson",
+													"inputs": {
+														"content": "@variables('Custom Details')",
+														"schema": {
+															"properties": {
+																"AlertCreatedTime": {
+																	"items": {
+																		"type": "string"
+																	},
+																	"type": "array"
+																},
+																"AnalystRating": {
+																	"items": {
+																		"type": "string"
+																	},
+																	"type": "array"
+																},
+																"IronDefenseAlertId": {
+																	"items": {
+																		"type": "string"
+																	},
+																	"type": "array"
+																},
+																"IronDefenseStatus": {
+																	"items": {
+																		"type": "string"
+																	},
+																	"type": "array"
+																},
+																"IronVueUrl": {
+																	"items": {
+																		"type": "string"
+																	},
+																	"type": "array"
+																}
+															},
+															"type": "object"
+														}
+													}
+												}
+											},
+											"runAfter": {
+												"Parse_System_Alert_Id": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"Parse_System_Alert_Id": {
+											"runAfter": {
+												"Get_Incident_and_System_Alert_relations": [
+													"Succeeded"
+												]
+											},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@body('Get_Incident_and_System_Alert_relations')",
+												"schema": {
+													"properties": {
+														"value": {
+															"items": {
+																"properties": {
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"properties": {
+																		"properties": {
+																			"relatedResourceId": {
+																				"type": "string"
+																			},
+																			"relatedResourceKind": {
+																				"type": "string"
+																			},
+																			"relatedResourceName": {
+																				"type": "string"
+																			},
+																			"relatedResourceType": {
+																				"type": "string"
+																			}
+																		},
+																		"type": "object"
+																	},
+																	"type": {
+																		"type": "string"
+																	}
+																},
+																"required": [
+																	"id",
+																	"name",
+																	"type",
+																	"properties"
+																],
+																"type": "object"
+															},
+															"type": "array"
+														}
+													},
+													"type": "object"
+												}
+											}
+										},
+										"Set_Flag_Succeeded": {
+											"runAfter": {
+												"Incidents_Updated": [
+													"Succeeded"
+												]
+											},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "Flag",
+												"value": true
+											}
+										}
+									},
+									"runAfter": {
+										"Parse_IronNet_Token": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"Parse_Incident_details": {
+									"runAfter": {
+										"Get_All_Updated_Incident": [
+											"Succeeded"
+										]
+									},
+									"type": "ParseJson",
+									"inputs": {
+										"content": "@body('Get_All_Updated_Incident')",
+										"schema": {
+											"properties": {
+												"value": {
+													"items": {
+														"properties": {
+															"etag": {
+																"type": "string"
+															},
+															"id": {
+																"type": "string"
+															},
+															"name": {
+																"type": "string"
+															},
+															"properties": {
+																"properties": {
+																	"additionalData": {
+																		"properties": {
+																			"alertProductNames": {
+																				"items": {
+																					"type": "string"
+																				},
+																				"type": "array"
+																			},
+																			"alertsCount": {
+																				"type": "integer"
+																			},
+																			"bookmarksCount": {
+																				"type": "integer"
+																			},
+																			"commentsCount": {
+																				"type": "integer"
+																			},
+																			"tactics": {
+																				"type": "array"
+																			}
+																		},
+																		"type": "object"
+																	},
+																	"classification": {
+																		"type": "string"
+																	},
+																	"classificationComment": {
+																		"type": "string"
+																	},
+																	"classificationReason": {
+																		"type": "string"
+																	},
+																	"createdTimeUtc": {
+																		"type": "string"
+																	},
+																	"description": {
+																		"type": "string"
+																	},
+																	"firstActivityTimeUtc": {
+																		"type": "string"
+																	},
+																	"incidentNumber": {
+																		"type": "integer"
+																	},
+																	"incidentUrl": {
+																		"type": "string"
+																	},
+																	"labels": {
+																		"type": "array"
+																	},
+																	"lastActivityTimeUtc": {
+																		"type": "string"
+																	},
+																	"lastModifiedTimeUtc": {
+																		"type": "string"
+																	},
+																	"owner": {
+																		"properties": {
+																			"assignedTo": {},
+																			"email": {},
+																			"objectId": {},
+																			"userPrincipalName": {}
+																		},
+																		"type": "object"
+																	},
+																	"relatedAnalyticRuleIds": {
+																		"items": {
+																			"type": "string"
+																		},
+																		"type": "array"
+																	},
+																	"severity": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"type": "string"
+																	},
+																	"title": {
+																		"type": "string"
+																	}
+																},
+																"type": "object"
+															},
+															"type": {
+																"type": "string"
+															}
+														},
+														"required": [
+															"id",
+															"name",
+															"etag",
+															"type",
+															"properties"
+														],
+														"type": "object"
+													},
+													"type": "array"
+												}
+											},
+											"type": "object"
+										}
+									}
+								},
+								"Parse_IronNet_Token": {
+									"runAfter": {
+										"IronNet_Login_to_fetch_the_Token": [
+											"Succeeded"
+										]
+									},
+									"type": "ParseJson",
+									"inputs": {
+										"content": "@body('IronNet_Login_to_fetch_the_Token')",
+										"schema": {
+											"properties": {
+												"token": {
+													"type": "string"
+												}
+											},
+											"type": "object"
+										}
+									}
+								},
+								"Set_Next_Link": {
+									"runAfter": {
+										"Loop_through_each_Incident": [
+											"Succeeded"
+										]
+									},
+									"type": "SetVariable",
+									"inputs": {
+										"name": "Next Link",
+										"value": "@body('Parse_Incident_details')?['nextLink']"
+									}
+								}
+							},
+							"runAfter": {
+								"Initialize_Incident_Next_Link": [
+									"Succeeded"
+								]
+							},
+							"expression": "@not(equals(variables('Next Link'), null))",
+							"limit": {
+								"count": 60,
+								"timeout": "PT1H"
+							},
+							"type": "Until"
+						},
+						"Map_Interval_Frequency": {
+							"runAfter": {
+								"Initialize_Interval_Frequency": [
+									"Succeeded"
+								]
+							},
+							"cases": {
+								"Case": {
+									"case": "Day",
+									"actions": {
+										"Set_Day": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "Interval Frequency",
+												"value": "@{addDays(utcNow(),int(variables('Interval')))}"
+											}
+										}
+									}
+								},
+								"Case_2": {
+									"case": "Hour",
+									"actions": {
+										"Set_Hour": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "Interval Frequency",
+												"value": "@{addHours(utcNow(),int(variables('Interval')))}"
+											}
+										}
+									}
+								},
+								"Case_3": {
+									"case": "Minute",
+									"actions": {
+										"Set_Minutes": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "Interval Frequency",
+												"value": "@{addMinutes(utcNow(),int(variables('Interval')))}"
+											}
+										}
+									}
+								},
+								"Case_4": {
+									"case": "Second",
+									"actions": {
+										"Set_Second": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "Interval Frequency",
+												"value": "@{addSeconds(utcNow(),int(variables('Interval')))}"
+											}
+										}
+									}
+								}
+							},
+							"default": {
+								"actions": {}
+							},
+							"expression": "@parameters('PollingtimeFrequency')",
+							"type": "Switch"
+						},
+						"Parse_Token": {
+							"runAfter": {},
+							"type": "ParseJson",
+							"inputs": {
+								"content": "@triggerBody()",
+								"schema": {
+									"properties": {
+										"access_token": {
+											"type": "string"
+										},
+										"expires_in": {
+											"type": "string"
+										},
+										"expires_on": {
+											"type": "string"
+										},
+										"ext_expires_in": {
+											"type": "string"
+										},
+										"not_before": {
+											"type": "string"
+										},
+										"resource": {
+											"type": "string"
+										},
+										"token_type": {
+											"type": "string"
+										}
+									},
+									"type": "object"
+								}
+							}
+						}
+					},
+					"outputs": {
+						"checkInts": {
+							"type": "bool",
+							"value": "[greater(parameters('param_recurrence_interval'), 0 )]"
+						}
+					}
+				},
+				"parameters": {}
+			}
+		}
+	]
+}

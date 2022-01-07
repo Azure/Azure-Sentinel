@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
 using Xunit.Abstractions;
+using YamlDotNet.Serialization;
 
 namespace NonAsciiValidations.Tests
 {
@@ -41,13 +42,46 @@ namespace NonAsciiValidations.Tests
 			ValidateOnlyAscii(yamlFullPath, detectionsYamlFileName);
 		}
 
-		private void ValidateOnlyAscii(string yamlFilePath, string yamlFileName)
+		private bool ShouldSkipTemplateValidation(string templateId)
 		{
-			var yaml = File.ReadAllText(yamlFilePath);
-			var nonAsciiCharMatch = Regex.Match(yaml, @"[^\u0000-\u007F]+");
-			Assert.False(nonAsciiCharMatch.Success, $"${yamlFileName} includes the non ascii char:{nonAsciiCharMatch.Value} string index:{nonAsciiCharMatch.Index}");
+			return TemplatesToSkipValidationReader.WhiteListTemplates
+				.Where(template => template.id == templateId)
+				.Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))
+				.Where(template => !string.IsNullOrWhiteSpace(template.templateName))
+				.Any();
 		}
-	}
+
+		private void ValidateOnlyAscii(string yamlFilePath, string yamlFileName)
+        {
+            var yaml = File.ReadAllText(yamlFilePath);
+            var extracted = TryExtractTemplateId(yaml,out string id);
+
+            //we ignore specific templates
+            if (extracted && ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+
+            var nonAsciiCharMatch = Regex.Match(yaml, @"[^\u0000-\u007F]+");
+            Assert.False(nonAsciiCharMatch.Success, $"${yamlFileName} includes the non ascii char:{nonAsciiCharMatch.Value} string index:{nonAsciiCharMatch.Index}");
+        }
+
+        private static bool TryExtractTemplateId(string yaml,out string tempateId)
+        {
+			tempateId = null;
+			try
+			{
+				var deserializer = new DeserializerBuilder().Build();
+				var res = deserializer.Deserialize<dynamic>(yaml);
+				tempateId = res["id"];
+			}
+			catch
+            {
+				return false;
+            }
+			return true;
+        }
+    }
 
 }
 

@@ -7,7 +7,7 @@ severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
-      - SecurityEvent
+      - SecurityEvent 
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceFileEvents
@@ -19,6 +19,9 @@ tactics:
   - InitialAccess
 relevantTechniques:
   - T1190
+tags:
+  - Schema: ASIMFileEvent
+    SchemaVersion: 0.1.0
 query: |
   let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
   union isfuzzy=true
@@ -26,12 +29,22 @@ query: |
   | where EventID == 4663
   | where Process has_any ("umworkerprocess.exe", "UMService.exe")
   | where ObjectName has_any (scriptExtensions)
-  | where AccessMask in ('0x2','0x100', '0x10', '0x4')),
+  | where AccessMask in ('0x2','0x100', '0x10', '0x4')
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  ),
+  (imFileEvent
+  | where EventType == "FileCreated"
+  | where ActingProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+    and
+    TargetFileName has_any (scriptExtensions)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname
+  ),
   (DeviceFileEvents
   | where ActionType =~ "FileCreated"
   | where InitiatingProcessFileName has_any ("umworkerprocess.exe", "UMService.exe")
-  | where FileName has_any(scriptExtensions))
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  | where FileName has_any(scriptExtensions)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountUpn, HostCustomEntity = DeviceName, IPCustomEntity = RequestSourceIP)
+
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -53,4 +66,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.1.0
+kind: Scheduled
