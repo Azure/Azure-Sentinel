@@ -1,6 +1,6 @@
-# Microsoft ASIM NetworkSession Normalization Parser
+# Zscaler ZIA ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Microsoft.
+This template deploys the ASIM NetworkSession schema parser for Zscaler ZIA.
 
 The Advanced SIEM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
@@ -13,4 +13,4 @@ For more information, see:
 <br>
  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSession%2FARM%2FvimNetworkSessionEmpty%2FvimNetworkSessionEmpty.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSession%2FARM%2FASimNetworkSessionzScalerZIA%2FASimNetworkSessionzScalerZIA.json)
