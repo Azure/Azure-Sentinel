@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimSchemaTester",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Schema tester",
+            "category": "Security",
+            "FunctionAlias": "ASimSchemaTester",
+            "query": "let ASimFields = externaldata (ColumnName: string, ColumnType: string, Class: string, Schema: string)\r\n  [@\"https:\/\/raw.githubusercontent.com\/Azure\/Azure-Sentinel\/master\/ASIM\/dev\/ASimTester\/ASimTester.csv\"] with (format=\"csv\", IgnoreFirstRecord=true)\r\n  | where Schema =~ selected_schema;\r\n  T \r\n  | join kind=fullouter ASimFields on ColumnName\r\n  | extend Result = case(\r\n      ColumnName == \"\" and Class == \"Mandatory\",  strcat (\"(0) Error: Missing mandatory field [\", ColumnName1, \"]\"),\r\n      ColumnName == \"\" and Class == \"Recommended\", strcat (\"(1) Warning: Missing recommended field [\", ColumnName1, \"]\"),\r\n      ColumnName == \"\" and Class == \"Alias\", strcat (\"(1) Warning: Missing alias [\", ColumnName1, \"]\"),\r\n      ColumnName == \"\" and Class == \"Optional\", strcat (\"(2) Info: Missing optional field [\", ColumnName1, \"]\"),\r\n      ColumnName1 == \"\", strcat (\"(2) Info: extra unnormalized column [\", ColumnName, \"]\"),\r\n      ColumnType != ColumnType1, strcat (\"(0) Error: type mismatch for column [\", ColumnName, \"]. It is currently \", ColumnType, \" and should be \", ColumnType1),\r\n      'None'\r\n    )\r\n  | where Result != \"None\" | sort by Result asc | project Result\r\n",
+            "version": 1,
+            "functionParameters": "T: (ColumnName: string, ColumnType:string), selected_schema:string"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDataTester",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Data tester",
+            "category": "Security",
+            "FunctionAlias": "ASimDataTester",
+            "query": "let MACaddr_regex = @'^[a-fA-F0-9]{2}(:[a-fA-F0-9]{2}){5}$';\r\n  let FQDN_regex = @'^(?:([a-zA-Z0-9-]+)\\.)?([a-zA-Z0-9-]{1,61})\\.([a-zA-Z0-9]{2,7})$';\r\n  let Hostname_regex = @'^[a-zA-Z0-9-]{1,61}$';\r\n  let MD5_regex = @'[a-zA-Z0-0]{32}';\r\n  let SHA1_regex = @'[a-zA-Z0-0]{40}';\r\n  let SHA256_regex = @'[a-zA-Z0-0]{64}';\r\n  let SHA512_regex = @'[a-zA-Z0-0]{128}';\r\n  let DnsQueryTypeName = materialize (externaldata (value: string)\r\n    [@\"https:\/\/www.iana.org\/assignments\/dns-parameters\/dns-parameters-4.csv\"] with (format=\"csv\", IgnoreFirstRecord=true));\r\n  let DnsResponseCodeName = materialize (externaldata (code: string, value: string)\r\n    [@\"https:\/\/www.iana.org\/assignments\/dns-parameters\/dns-parameters-6.csv\"] with (format=\"csv\", IgnoreFirstRecord=true) | project value);\r\n  let DnsQueryClassName = materialize (externaldata (dec: string, dex: string, value: string)\r\n    [@\"https:\/\/www.iana.org\/assignments\/dns-parameters\/dns-parameters-2.csv\"] with (format=\"csv\", IgnoreFirstRecord=true) | project value);\r\n  let ASimFields = materialize (externaldata (ColumnName: string, ColumnType: string, Class: string, Schema: string, LogicalType:string, ListOfValues: string)\r\n    [@\"https:\/\/raw.githubusercontent.com\/Azure\/Azure-Sentinel\/master\/ASIM\/dev\/ASimTester\/ASimTester.csv\"] with (format=\"csv\", IgnoreFirstRecord=true)\r\n    | where Schema =~ selected_schema);\r\n  T \r\n  | extend f=pack_all() \r\n  | mv-expand f\r\n  | project f \r\n  | extend ColumnName = tostring(bag_keys(f)[0])\r\n  | extend value = f[ColumnName]\r\n  | extend type=gettype(value)\r\n  | distinct ColumnName, tostring(value), type\r\n  | lookup ASimFields on ColumnName\r\n  | extend Result = case(      \r\n      ColumnType != \"\" and type != \"null\" and ColumnType != type, strcat (\"(0) Error: type mismatch for column [\", ColumnName, \"]. It is currently [\", type, \"] and should be [\", ColumnType, \"]\"),\r\n      Class == \"Mandatory\" and value == \"\", strcat (\"(0) Error: Missing mandatory field [\", ColumnName, \"]\"),\r\n      Class == \"Recommended\" and value == \"\", strcat (\"(1) Warning: Missing recommended field [\", ColumnName, \"]\"),\r\n      Class == \"Alias\" and value == \"\", strcat (\"(1) Warning: Missing alias [\", ColumnName, \"]\"),\r\n      LogicalType == \"Enumerated\" and ListOfValues != \"\" and ListOfValues !has value, \"Invalid Value\",\r\n      (LogicalType == \"MAC Address\") and (value != \"\") and not (value matches regex MACaddr_regex), \"Invalid Value\", \r\n      (LogicalType == \"IP Address\") and (value != \"\") and not(ipv4_is_match(value, \"0.0.0.0\",0)) and not(ipv6_is_match(value, \"::1\",0)), \"Invalid Value\",\r\n      (LogicalType == \"FQDN\") and (value != \"\") and not (value matches regex FQDN_regex), \"Invalid Value\",\r\n      (LogicalType == \"GUID\") and (value != \"\") and isnull(toguid(value)), \"Invali  d Value\",\r\n      (LogicalType == \"Hostname\") and (value != \"\") and not (value matches regex Hostname_regex), \"Invalid Value\", \r\n      (LogicalType == \"RiskLevel\") and (value != \"\") and (toint(value) < 0 or toint(value) > 100), \"Invalid Value\",\r\n      (LogicalType == \"DnsQueryClassName\") and (value != \"\") and value !in (DnsQueryClassName), \"Invalid Value\",\r\n      (LogicalType == \"DnsResponseCodeName\") and (value != \"\") and value !in (DnsResponseCodeName), \"Invalid Value\",\r\n      (LogicalType == \"DnsQueryTypeName\") and (value != \"\") and value !in (DnsQueryTypeName), \"Invalid Value\",\r\n      (LogicalType == \"MD5\") and (value != \"\") and not (value matches regex MD5_regex), \"Invalid Value\", \r\n      (LogicalType == \"SHA1\") and (value != \"\") and not (value matches regex SHA1_regex), \"Invalid Value\", \r\n      (LogicalType == \"SHA256\") and (value != \"\") and not (value matches regex SHA256_regex), \"Invalid Value\", \r\n      (LogicalType == \"SHA512\") and (value != \"\") and not (value matches regex SHA512_regex), \"Invalid Value\", \r\n      'None'\r\n     )\r\n    | where Result != \"None\"\r\n    | summarize values = make_set(value, 10) by Result, ColumnName\r\n    | extend Result = iif (Result == \"Invalid Value\", strcat (\"(0) Error: Invalid value(s) (up to 10 listed) for field [\", ColumnName, \"]: \", tostring(values)), Result)\r\n    | distinct Result\r\n    | sort by Result asc\r\n",
+            "version": 1,
+            "functionParameters": "T:( TenantId:string ), selected_schema:string"
+          }
+        }
+      ]
+    }
+  ]
+}
