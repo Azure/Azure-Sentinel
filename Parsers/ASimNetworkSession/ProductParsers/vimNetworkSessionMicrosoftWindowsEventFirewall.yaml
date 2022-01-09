@@ -215,6 +215,7 @@ ParserQuery: |
               | project-away EventData;
       union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
       | lookup Directions on DirectionCode
+      | project-rename DvcHostname = Computer
       | extend
             SrcAppName = iff(isOutBound, Application, ""),
             DstAppName = iff(not(isOutBound), Application, ""),
@@ -227,8 +228,10 @@ ParserQuery: |
             SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
             DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
             DstUserId = iff(isOutBound, RemoteUserID, ""),
-            SrcUserId = iff(not(isOutBound), RemoteUserID, "")
-        // *************** Postfilterring *****************************************************************
+            SrcUserId = iff(not(isOutBound), RemoteUserID, ""),
+            DstHostname = iff(isOutBound, "", DvcHostname),
+            SrcHostname = iff(isOutBound, DvcHostname, "")
+            // *************** Postfilterring *****************************************************************
           | where  (isnull(dstportnumber) or DestPort == dstportnumber ) 
               and  (array_length(srcipaddr_has_any_prefix)==0 
                     or has_any_ipv4_prefix(SrcIpAddr ,srcipaddr_has_any_prefix)
@@ -272,6 +275,7 @@ ParserQuery: |
                 Protocol = toint(EventData.Protocol),
                 DirectionCode = iff(EventID in (5154, 5155, 5158, 5159), "%%14609",tostring(EventData.Direction))
             | lookup Directions on DirectionCode 
+            | project-rename DvcHostname = Computer
             | extend  SrcAppName = iff(isOutBound, tostring(EventData.Application), ""),
                       DstAppName = iff(not(isOutBound), tostring(EventData.Application), ""),
                       SrcIpAddr = iff(isOutBound, tostring(EventData.DestAddress), tostring(EventData.SourceAddress)),
@@ -283,7 +287,9 @@ ParserQuery: |
                       SrcProcessId =  iff(isOutBound, tostring(EventData.ProcessId), ""),
                       DstProcessId =  iff(not(isOutBound), tostring(EventData.ProcessId), ""),
                       DstUserId = iff(isOutBound, tostring(EventData.RemoteUserID), ""),
-                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), "")
+                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), ""),
+                      DstHostname = iff(isOutBound, "", DvcHostname),
+                      SrcHostname = iff(isOutBound, DvcHostname, "")
             | project-away EventData
           // *************** Postfilterring *****************************************************************
           | where  (isnull(dstportnumber) or DstPortNumber == dstportnumber ) 
@@ -316,12 +322,13 @@ ParserQuery: |
               EventEndTime = TimeGenerated,
               EventOriginalUid = EventOriginId,
               EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low")
-      | project-rename DvcHostname = Computer
       // -- Aliases
       | extend 
           Dvc = DvcHostname,
           Hostname = DvcHostname,
-          IpAddr = SrcIpAddr
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr
       | lookup LayerCodeTable on LayerCode
       | lookup ProtocolTable on Protocol
       | project-away LayerCode, DirectionCode, Protocol
