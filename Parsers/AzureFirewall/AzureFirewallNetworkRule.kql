@@ -5,8 +5,10 @@
 // using parse-where sometime in conjuction with an addition "where" statement to prevent duplicates
 //
 let AzureFirewallNetworkRuleLogs = AzureDiagnostics
-    | where Category == "AzureFirewallNetworkRule";
-let parseTcpUdpLogs = AzureFirewallNetworkRuleLogs
+    | where Category == "AzureFirewallNetworkRule"
+    | where isnotempty(msg_s);
+let parseLogs = AzureFirewallNetworkRuleLogs
+    | where msg_s has_any("TCP", "UDP")
     | parse-where
         msg_s with           networkProtocol:string 
         " request from "     srcIpAddr:string
@@ -22,7 +24,8 @@ let parseTcpUdpLogs = AzureFirewallNetworkRuleLogs
         ". Priority: "       priority:int
         ". Classification: " classification:string
     | project-away msg_s;
-let parseHttpLogs = AzureFirewallNetworkRuleLogs
+let parseLogsWithUrls = AzureFirewallNetworkRuleLogs
+    | where msg_s has_all ("Url:","ThreatIntel:")
     | parse-where
         msg_s with           networkProtocol:string 
         " request from "     srcIpAddr:string
@@ -31,7 +34,31 @@ let parseHttpLogs = AzureFirewallNetworkRuleLogs
         ". Action: "         dvcAction:string
         ". ThreatIntel: "    threatIntel:string
      | project-away msg_s;
+let parseLogsWithoutUrls = AzureFirewallNetworkRuleLogs
+    | where msg_s !has "Url:" and
+            msg_s  has "ThreatIntel"
+    | parse-where
+        msg_s with           networkProtocol:string 
+        " request from "     srcIpAddr:string
+        " to "               dstIpAddr:string
+        ". Action: "         dvcAction:string
+        ". ThreatIntel: "    threatIntel:string
+     | project-away msg_s;
+let parseLogsIcmp = AzureFirewallNetworkRuleLogs
+    | where msg_s  has "ICMP" and
+            msg_s !has "Type="
+    | parse
+        msg_s with           networkProtocol:string 
+        " request from "     srcIpAddr:string
+        " to "               dstIpAddr:string
+        ". Action: "         dvcAction:string
+        ". Signature: "      signature:string
+        ". IDS: "            idsDetails:string
+        ". Priority: "       priority:int
+        ". Classification: " classification:string
+    | project-away msg_s;
 let parseLogsIcmpType = AzureFirewallNetworkRuleLogs
+    | where msg_s has "ICMP Type="
     | parse-where
         msg_s with           networkProtocol:string 
         " Type="             type:int
@@ -39,9 +66,11 @@ let parseLogsIcmpType = AzureFirewallNetworkRuleLogs
         " to "               dstIpAddr:string
         ". Action: "         dvcAction:string
     | project-away msg_s;
-union 
-    parseTcpUdpLogs,
-    parseHttpLogs,
+union
+    parseLogs,
+    parseLogsWithUrls,
+    parseLogsWithoutUrls,
+    parseLogsIcmp,
     parseLogsIcmpType
 | project TimeGenerated,
           networkProtocol,
