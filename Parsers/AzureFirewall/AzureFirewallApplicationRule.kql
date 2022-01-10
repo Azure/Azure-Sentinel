@@ -7,6 +7,7 @@
 let AzureFirewallApplicationRuleLogs = AzureDiagnostics
     | where OperationName == "AzureFirewallApplicationRuleLog";
 let parseLogsWithUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s has_all ("Url:", "Rule Collection Group:")
     | parse-where
         msg_s with                  networkProtocol:string 
         " request from "            srcIpAddr:string
@@ -20,7 +21,9 @@ let parseLogsWithUrls = AzureFirewallApplicationRuleLogs
         ". Rule Collection: "       ruleCollection:string
         ". Rule: "                  ruleName:string
     | project-away msg_s;
-let parseLogsAllowWithoutUrls = AzureFirewallApplicationRuleLogs
+let parseLogsWithoutUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s !has "Url:" and
+            msg_s  has "Rule Collection Group:"
     | parse-where
         msg_s with                  networkProtocol:string
         " request from "            srcIpAddr:string
@@ -38,7 +41,8 @@ let parseLogsAllowWithoutUrls = AzureFirewallApplicationRuleLogs
     | extend ruleName = tostring(split(rule, " Webcategories. Web Category: ")[0])
     | extend webCategory = tostring(split(rule, " Webcategories. Web Category: ")[1])
     | project-away msg_s;
-let parseLogsDenyNoRuleWithUrls = AzureFirewallApplicationRuleLogs
+let parseLogsNoRuleWithUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s has_all ("Url:", "No rule matched.")
     | parse-where
         msg_s with                  networkProtocol:string
         " request from "            srcIpAddr:string
@@ -51,7 +55,9 @@ let parseLogsDenyNoRuleWithUrls = AzureFirewallApplicationRuleLogs
     | where dvcAction == "Deny"
     | extend ruleName = "No rule matched"
     | project-away msg_s;
-let parseLogsDenyNoRuleWithoutUrls = AzureFirewallApplicationRuleLogs
+let parseLogsNoRuleWithoutUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s !has "Url:" and
+            msg_s  has "No rule matched."
     | parse-where
         msg_s with                  networkProtocol:string
         " request from "            srcIpAddr:string
@@ -65,7 +71,8 @@ let parseLogsDenyNoRuleWithoutUrls = AzureFirewallApplicationRuleLogs
     // This will be put back as ruleName:
     | extend ruleName = "No rule matched"
     | project-away msg_s;
-let parseLogsDenyResolveFail = AzureFirewallApplicationRuleLogs
+let parseLogsResolveFail = AzureFirewallApplicationRuleLogs
+    | where msg_s has "Failed to resolve"
     | parse-where
         msg_s with                  networkProtocol:string
         " request from "            srcIpAddr:string
@@ -78,7 +85,8 @@ let parseLogsDenyResolveFail = AzureFirewallApplicationRuleLogs
     // This will be put back as reason with a concatenate:
     | extend reason = strcat("Failed to resolve ", reason)
     | project-away msg_s;
-let parseLogsDenyNoSni = AzureFirewallApplicationRuleLogs
+let parseLogsNoSni = AzureFirewallApplicationRuleLogs
+    | where msg_s has "Reason:"
     | parse-where
         msg_s with                  networkProtocol:string
         " request from "            srcIpAddr:string
@@ -91,11 +99,11 @@ let parseLogsDenyNoSni = AzureFirewallApplicationRuleLogs
 // Fuzzy = true should not be used here since we need all parts of the data and cannot accept to miss any of it
 union
     parseLogsWithUrls,
-    parseLogsAllowWithoutUrls,
-    parseLogsDenyNoRuleWithUrls,
-    parseLogsDenyNoRuleWithoutUrls,
-    parseLogsDenyResolveFail,
-    parseLogsDenyNoSni
+    parseLogsWithoutUrls,
+    parseLogsNoRuleWithUrls,
+    parseLogsNoRuleWithoutUrls,
+    parseLogsResolveFail,
+    parseLogsNoSni
 | project networkProtocol,
           srcIpAddr,
           srcPortNumber,
