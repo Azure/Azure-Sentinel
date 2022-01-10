@@ -1,4 +1,4 @@
-<#  
+<#
     Title:          VMware Carbon Black Cloud - Endpoint Standard Data Connector
     Language:       PowerShell
     Version:        1.0
@@ -8,7 +8,7 @@
 
     DESCRIPTION
     This Function App calls the VMware Carbon Black Cloud - Endpoint Standard (formerly CB Defense) REST API (https://developer.carbonblack.com/reference/carbon-black-cloud/cb-defense/latest/rest-api/) to pull the Carbon Black
-    Audit, Notification and Event logs. The response from the CarbonBlack API is recieved in JSON format. This function will build the signature and authorization header 
+    Audit, Notification and Event logs. The response from the CarbonBlack API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post each log type to their individual tables in Log Analytics, for example,
     CarbonBlackAuditLogs_CL, CarbonBlackNotifications_CL and CarbonBlackEvents_CL.
 #>
@@ -32,7 +32,7 @@ Function EventsFieldsMapping {
         $events
     )
     Write-Host "Started Field Mapping for event logs"
-    
+
     $fieldMappings = @{
         'shortDescription' = 'event_description'
         'createTime' = 'backend_timestamp'
@@ -59,7 +59,7 @@ Function EventsFieldsMapping {
         'processDetails_parentPid' = 'parent_pid'
         'processDetails_targetCommandLine' = 'target_cmdline'
     }
-    
+
     $fieldMappings.GetEnumerator() | ForEach-Object {
         if (!$events.ContainsKey($_.Name))
         {
@@ -73,7 +73,7 @@ Function AlertsFieldsMapping {
         $alerts
     )
     Write-Host "Started Field Mapping for alert logs"
-    
+
     $fieldMappings = @{
         'threatHunterInfo_summary' = 'reason_code'
         'threatHunterInfo_time' = 'create_time'
@@ -135,7 +135,7 @@ Function AlertsFieldsMapping {
         #"Type": "CarbonBlackNotifications_CL",
         #"_ResourceId": "
     }
-    
+
     $fieldMappings.GetEnumerator() | ForEach-Object {
         if (!$alerts.ContainsKey($_.Name))
         {
@@ -147,20 +147,20 @@ Function AlertsFieldsMapping {
 Function Expand-GZipFile {
     Param(
         $infile,
-        $outfile       
+        $outfile
     )
 	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
-    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)	
-    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)	
-    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)	
-	
-    $buffer = New-Object byte[](1024)	
+    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
+    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
+    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)
+
+    $buffer = New-Object byte[](1024)
     while ($true) {
-        $read = $gzipstream.Read($buffer, 0, 1024)		
-        if ($read -le 0) { break }		
-		$output.Write($buffer, 0, $read)		
+        $read = $gzipstream.Read($buffer, 0, 1024)
+        if ($read -le 0) { break }
+		$output.Write($buffer, 0, $read)
 	}
-	
+
     $gzipStream.Close()
     $output.Close()
     $inputfile.Close()
@@ -173,6 +173,7 @@ function CarbonBlackAPI()
     $workspaceSharedKey = $env:workspaceKey
     $hostName = $env:uri
     $apiSecretKey = $env:apiKey
+    $logType = $env:CarbonBlackLogTypes
     $apiId = $env:apiId
     $SIEMapiKey = $env:SIEMapiKey
     $SIEMapiId = $env:SIEMapiId
@@ -198,20 +199,20 @@ function CarbonBlackAPI()
     {
         $logAnalyticsUri = "https://" + $workspaceId + ".ods.opinsights.azure.com"
     }
-    
+
     # Returning if the Log Analytics Uri is in incorrect format.
     # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
     if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
     {
         throw "VMware Carbon Black: Invalid Log Analytics Uri."
-    }    
+    }
 
     $authHeaders = @{
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
 
     $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-    
+
     if ($auditLogsResult.success -eq $true)
     {
         $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
@@ -233,19 +234,18 @@ function CarbonBlackAPI()
 
     GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
 
-
     if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
-    {   
-        GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
-         Write-Host "No SIEM API ID and/or Key value was defined."   
+    {
+        $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
+        Write-Host "$($alerts) found and pushed."
     }
     else
-    {                
+    {
         $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
         $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
         if ($notifications.success -eq $true)
-        {                
-            $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5       
+        {
+            $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
             if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
             {
                 $responseObj = (ConvertFrom-Json $NotifLogJson)
@@ -261,7 +261,7 @@ function CarbonBlackAPI()
         {
             Write-Host "Notifications API status failed , Please check."
         }
-    }    
+    }
 }
 
 # Create the function to create the authorization signature
@@ -314,12 +314,12 @@ function GetBucketDetails {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix | Read-S3Object -Folder "C:\tmp"
             Write-Host "Files under $keyPrefix are downloaded."
-    
+
             if (Test-Path -Path "/tmp/$keyPrefix") {
-                Get-ChildItem -Path "/tmp" -Recurse -Include *.gz | 
+                Get-ChildItem -Path "/tmp" -Recurse -Include *.gz |
                 Foreach-Object {
                     $filename = $_.FullName
-                    $infile = $_.FullName				
+                    $infile = $_.FullName
                     $outfile = $_.FullName -replace ($_.Extension, '')
                     Expand-GZipFile $infile.Trim() $outfile.Trim()
                     $null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
@@ -329,7 +329,12 @@ function GetBucketDetails {
 
                     foreach ($logEvent in [System.IO.File]::ReadLines($filename))
                     {
-                        $logevents = ConvertFrom-Json $logEvent -AsHashTable
+                        # $logevents = ConvertFrom-Json $logEvent -AsHashTable
+                        $logs = $logEvent | ConvertFrom-Json
+                        $hash = @{}
+                        $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
+                        $logevents = $hash
+
                         if($prefixFolder -eq "carbon-black-events")
                         {
                             EventsFieldsMapping -events $logevents
@@ -342,12 +347,13 @@ function GetBucketDetails {
                     }
 
                     $EventLogsJSON = $AllEvents | ConvertTo-Json -Depth 5
-    
+
                     if (-not([string]::IsNullOrWhiteSpace($EventLogsJSON)))
                     {
                         $responseObj = (ConvertFrom-Json $EventLogsJSON)
                         try {
-                            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $tableName;  
+                            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($EventLogsJSON)) -logType $tableName;
+                            Write-Host "Pushed events to $($tableName)"
                         }
                         catch {
                             Write-Host $_
@@ -356,10 +362,10 @@ function GetBucketDetails {
                     }
                     $null = Remove-Variable -Name AllEvents
                 }
-    
+
                 Remove-Item -LiteralPath "/tmp/$keyPrefix" -Force -Recurse
             }
-    
+
             $startTime = $startTime.AddMinutes(1)
         }
     }
