@@ -31,6 +31,8 @@ data_section['properties']['query'] = query
 data_section['properties']['FunctionAlias'] = alias
 data_section['properties']['displayName'] = title
 for param in params:
+    if param['Type']=='string':
+        param['Default'] = f"\'{param['Default']}\'"
     data_section['properties']['functionParameters'] =  \
                     ', '.join([f'{param["Name"]}:{param["Type"]}={param["Default"]}' for param in params])
 
