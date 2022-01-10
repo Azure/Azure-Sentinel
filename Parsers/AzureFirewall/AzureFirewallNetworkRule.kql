@@ -1,0 +1,64 @@
+//
+// This parser with pars string messages in the "msg_s" colomn provided by Azure Firewall diagnostics logs.
+// Due to the native of these logs it's impossible to parse all data with a single "parse" statement
+// Because there are six different parsers needed all data is deviced into their respective parser type by
+// using parse-where sometime in conjuction with an addition "where" statement to prevent duplicates
+//
+// By Koos Goossens @ Wortell Last updated: January 7th, 2022
+//
+let AzureFirewallNetworkRuleLogs = AzureDiagnostics
+    | where Category == "AzureFirewallNetworkRule";
+let parseTcpUdpLogs = AzureFirewallNetworkRuleLogs
+    | parse-where
+        msg_s with           networkProtocol:string 
+        " request from "     srcIpAddr:string
+        ":"                  srcPortNumber:int
+        " to "               dstIpAddr:string
+        ":"                  dstPortNumber:int
+        ". Action: "         dvcAction:string
+        "."                  other:string
+    | parse
+        other with           signature:string
+        ". IDS: "            idsDetails:string
+        ". Priority: "       priority_
+        ". Classification: " classification:string
+    | project-away msg_s;
+let parseHttpLogs = AzureFirewallNetworkRuleLogs
+    | parse-where
+        msg_s with           networkProtocol:string 
+        " request from "     srcIpAddr:string
+        " to "               dstIpAddr:string
+        ". Url: "            url:string
+        ". Action: "         dvcAction:string
+        ". ThreatIntel: "    threatIntel:string
+     | project-away msg_s;
+let parseLogsIcmpType = AzureFirewallNetworkRuleLogs
+    | parse-where
+        msg_s with           networkProtocol:string 
+        " Type="             type:int
+        " request from "     srcIpAddr:string
+        " to "               dstIpAddr:string
+        ". Action: "         dvcAction:string
+        "."                  other:string
+    | parse
+        other with           signature:string
+        ". IDS: "            idsDetails:string
+        ". Priority: "       priority:int
+        ". Classification: " classification:string
+    | project-away msg_s;
+union 
+    parseTcpUdpLogs,
+    parseHttpLogs,
+    parseLogsIcmpType
+| project TimeGenerated,
+          networkProtocol,
+          type,
+          srcIpAddr,
+          srcPortNumber,
+          dstIpAddr,
+          dstPortNumber,
+          dvcAction,
+          signature,
+          idsDetails,
+          priority,
+          classification
