@@ -23,12 +23,19 @@ alias = parserYaml["ParserName"]
 query = parserYaml["ParserQuery"]
 product = parserYaml["Product"]["Name"]
 schema = parserYaml["Normalization"]["Schema"]
+params=parserYaml.get('ParserParams')
 
 data_section=arm_template['resources'][0]['resources'][0]
 data_section['name'] = alias
 data_section['properties']['query'] = query
 data_section['properties']['FunctionAlias'] = alias
 data_section['properties']['displayName'] = title
+for param in params:
+    if param['Type']=='string':
+        param['Default'] = f"\'{param['Default']}\'"
+    data_section['properties']['functionParameters'] =  \
+                    ', '.join([f'{param["Name"]}:{param["Type"]}={param["Default"]}' for param in params])
+
 
 with open(os.path.join(folder, f'{fname}'), 'w') as jf:
     json.dump(arm_template, jf, indent=2)
