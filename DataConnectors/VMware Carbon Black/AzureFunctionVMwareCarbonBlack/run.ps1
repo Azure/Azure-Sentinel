@@ -178,9 +178,9 @@ function CarbonBlackAPI()
     $SIEMapiKey = $env:SIEMapiKey
     $SIEMapiId = $env:SIEMapiId
     $time = $env:timeInterval
-    $AuditLogTable = "CarbonBlackAuditLogsTest"
-    $EventLogTable = "CarbonBlackEventsTest"
-    $NotificationTable  = "CarbonBlackNotificationsTest"
+    $AuditLogTable = "CarbonBlackAuditLogs"
+    $EventLogTable = "CarbonBlackEvents"
+    $NotificationTable  = "CarbonBlackNotifications"
     $OrgKey = $env:CarbonBlackOrgKey
     $s3BucketName = $env:s3BucketName
     #$prefixFolder = $env:s3BucketPrefixFolder
