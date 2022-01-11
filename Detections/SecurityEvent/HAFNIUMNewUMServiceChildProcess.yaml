@@ -11,9 +11,9 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
-  - connectorId: WindowsEvent
+  - connectorId: WindowsEvents
     dataTypes:
-      - WindowsEvent
+      - WindowsEvents
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -40,20 +40,20 @@ query: |
   (WindowsEvent
   | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
   | where EventID == 4688
+   | where tostring(EventData.ParentProcessName) has_any ("umworkerprocess.exe", "UMService.exe")
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
   | extend NewProcessName = tostring(EventData.NewProcessName)
   | extend Account = strcat(tostring(EventData.SubjectDomainName),"/", tostring(EventData.SubjectUserName))
   | extend IpAddress = tostring(EventData.IpAddress)
-  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
   | join kind=rightanti (
   WindowsEvent
   | where TimeGenerated > ago(timeframe)
+  | where tostring(EventData.ParentProcessName) has_any ("umworkerprocess.exe", "UMService.exe")
+  | where EventID == 4688
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
   | extend NewProcessName = tostring(EventData.NewProcessName)
-  | extend Account = strcat(tostring(EventData.SubjectDomainName),"/", tostring(EventData.SubjectUserName))
-  | extend IpAddress = tostring(EventData.IpAddress)
-  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
-  | where EventID == 4688) on NewProcessName
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend IpAddress = tostring(EventData.IpAddress)) on NewProcessName
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   ))  
 entityMappings:
