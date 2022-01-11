@@ -39,7 +39,8 @@ I've also added sample datasets for `ApplicationRule` and `NetworkRule` events. 
 
 Queries can be stored inside a Log Analytics Workspace (savedQueries) but this is considered _"legacy"_ since [Microsoft introduced Query Packs @ Build 2021](https://techcommunity.microsoft.com/t5/azure-monitor-blog/what-s-new-in-azure-monitor-build-2021/ba-p/2366286).
 
-Query Packs are a new type of Azure resource which can contains KQL queries and can be shared across multiple workspaces. If you save a query from the portal it will now default by creating a new blank Query Pack called `DefaultQueryPack` in a resource group `loganalyticsdefaultresources` in your subscription.
+Query Packs are a new type of Azure resource in where you can store KQL queries. Query Packs can be shared across multiple workspaces and even across multiple subscriptions.
+If you now save a query from the portal it will default to creating a new blank Query Pack called `DefaultQueryPack` in a resource group `loganalyticsdefaultresources` in your subscription.
 
 <sup>**More information on Query Pack deployments:**</sup> <sup>https://docs.microsoft.com/en-us/azure/azure-monitor/logs/query-packs</sup>
 
@@ -62,6 +63,8 @@ The template deploys the following:
 Within Microsoft Sentinel you can select which Query Pack(s) you want to load into the interface:
 
 ![](images/querypack-select.png)
+
+Additionally you can save queries as `functions`. See details below.
 
 ### Manual deployment
 
