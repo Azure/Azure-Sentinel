@@ -211,57 +211,98 @@ function CarbonBlackAPI()
         "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
     }
 
-    $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
+    #Converting LogType to array
+    $LogTypeArr = $LogType -split ','
 
-    if ($auditLogsResult.success -eq $true)
+    if(-not([string]::IsNullOrWhiteSpace($apiId)) -and -not([string]::IsNullOrWhiteSpace($apiSecretKey)) -and -not([string]::IsNullOrWhiteSpace($hostName)))
     {
-        $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
-        if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
+        if($LogTypeArr -contains "audit")
         {
-            $responseObj = (ConvertFrom-Json $AuditLogsJSON)
-            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
-            Write-Host("$($responseObj.count) new Carbon Black Audit Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-        }
-        else
-        {
-            Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
-        }
-    }
-    else
-    {
-        Write-Host "AuditLogsResult API status failed , Please check."
-    }
+            $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
 
-    GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
-
-    if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
-    {
-        $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
-        Write-Host "$($alerts) found and pushed."
-    }
-    else
-    {
-        $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-        $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
-        if ($notifications.success -eq $true)
-        {
-            $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
-            if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
+            if ($auditLogsResult.success -eq $true)
             {
-                $responseObj = (ConvertFrom-Json $NotifLogJson)
-                $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-                Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+                $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
+                if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
+                {
+                    $responseObj = (ConvertFrom-Json $AuditLogsJSON)
+                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
+                    Write-Host("$($responseObj.count) new Carbon Black Audit Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+                }
+                else
+                {
+                    Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
+                }
             }
             else
             {
-                    Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
+                Write-Host "AuditLogsResult API status failed , Please check."
             }
         }
         else
         {
-            Write-Host "Notifications API status failed , Please check."
+            Write-Warning "'Audit' was not selected as a LogType, therefore audit logs will not be ingested to the workspace."
         }
     }
+    else
+    {
+        Write-Warning "API credentials were not defined, therefore audit logs will not be ingested to workspace."
+    }
+
+    if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
+    {
+        if($LogTypeArr -contains "event")
+        {
+            GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
+        }
+        else{
+            Write-Warning "'Event' was not selected as a LogType, therefore event logs will not be ingested to the workspace."
+        }
+    }
+    else
+    {
+        Write-Warning "S3Bucket credentials were not defined, therefore event logs will not be ingested to workspace."
+    }
+
+
+    if($LogTypeArr -contains "alert")
+    {
+        if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
+        {
+            $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
+            Write-Host "$($alerts) found and pushed."
+        }
+        elseif(-not([string]::IsNullOrWhiteSpace($SIEMapiKey)) -and -not([string]::IsNullOrWhiteSpace($SIEMapiId)))
+        {
+            $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
+            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
+            if ($notifications.success -eq $true)
+            {
+                $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
+                if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
+                {
+                    $responseObj = (ConvertFrom-Json $NotifLogJson)
+                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+                    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+                }
+                else
+                {
+                        Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
+                }
+            }
+            else
+            {
+                Write-Host "Notifications API status failed , Please check."
+            }
+        }
+        else
+        {
+            Write-Warning "No SIEM API ID and/or Key or S3Bucket value was defined, therefore alert logs will not to ingested to workspace."
+        }
+    }
+    else{
+        Write-Warning "'Alert' was not selected as a LogType, therefore alert logs will not be ingested to the workspace."
+    } 
 }
 
 # Create the function to create the authorization signature
