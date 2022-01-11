@@ -41,6 +41,8 @@ Queries can be stored inside a Log Analytics Workspace (savedQueries) but this i
 
 Query Packs are a new type of Azure resource which can contains KQL queries and can be shared across multiple workspaces. If you save a query from the portal it will now default by creating a new blank Query Pack called `DefaultQueryPack` in a resource group `loganalyticsdefaultresources` in your subscription.
 
+<sup>**More information on Query Pack deployments:**</sup> <sup>https://docs.microsoft.com/en-us/azure/azure-monitor/logs/query-packs</sup>
+
 If you already make use of Query Packs you can add these queries to your existing pack(s) or you can deploy a new additional pack with the button below:
 
 <br>
@@ -50,17 +52,24 @@ If you already make use of Query Packs you can add these queries to your existin
 <br>
 
 The template deploys the following:
+
+<img src="images/querypack-icon.png" width="300"/>
+
 | Name | Type |
 | --- | --- |
 | AzureFirewallParsers | Log Analytics query pack |
 
-<br>
+Within Microsoft Sentinel you can select which Query Pack(s) you want to load into the interface:
+
+![](images/querypack-select.png)
 
 ### Manual deployment
 
 1. Load up the query interface of Log Analytics / Azure Sentinel and paste the code of a parser in the UI.
 2. Click on `Save` --> `Save as function` and give it a name.
 3. Repeat the process for each of the three functions.
+
+![](images/function-save.png)
 
 Once a function is saved it might take a minute or two before they can be used. Once active you should be able to run a function by entering the name you gave it in step 2.
 
@@ -72,3 +81,4 @@ AzureFirewallNetworkRules
         action == "Allow" and
         port_destination == 3389
 ```
+![](images/function-use.png)
