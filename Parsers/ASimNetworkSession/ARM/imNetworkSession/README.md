@@ -1,13 +1,14 @@
-# Source agnostic ASIM Network Sessions Normalization Parser
+# Source agnostic ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Source agnostic. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM NetworkSession schema parser for Source agnostic.
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel NetworkSession normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
 
 <br>
  

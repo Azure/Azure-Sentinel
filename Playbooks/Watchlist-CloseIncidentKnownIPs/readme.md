@@ -13,6 +13,8 @@ For each Ip address included in the alert (entities of type IP):
 
 ## Configurations
 * Configure the step "Run query and list results" with the identifiers of the Sentinel workspace where the watchlist is stored.
+* Configure the identity used in the "Run query and list results" step with the Log Analytics Reader RBAC role on the Azure Sentinel resource group.
+* Configure the Managed Idenitty of the Logic App with the Azure Sentinel Responder RBAC role on the Azure Sentinel resource group.
 * The watchlist used in this example has at list one column named **ipaddress** which stores the safe address. See the csv file attached in this folder as an example.
 <br><br>
 

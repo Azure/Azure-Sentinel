@@ -1,21 +1,21 @@
-# Welcome to Azure Sentinel Training Lab
+# Welcome to Microsoft Sentinel Training Lab
 
 <p align="center">
 <img src="./Images/sentinel-labs-logo.png?raw=true">
 </p>
 
 ## Introduction
-These labs help you get ramped up with Azure Sentinel and provide hands-on practical experience for product features, capabilities, and scenarios. 
+These labs help you get ramped up with Microsoft Sentinel and provide hands-on practical experience for product features, capabilities, and scenarios. 
 
-The lab deploys an Azure Sentinel workspace and ingests pre-recorded data to simulate scenarios that showcase various Azure Sentinel features. You should expect very little or no cost at all due to the size of the data (~10 MBs) and the fact that Azure Sentinel offers a 30-day free trial.
+The lab deploys an Microsoft Sentinel workspace and ingests pre-recorded data to simulate scenarios that showcase various Microsoft Sentinel features. You should expect very little or no cost at all due to the size of the data (~10 MBs) and the fact that Microsoft Sentinel offers a 30-day free trial.
 
 ## Prerequisites
 
-To deploy Azure Sentinel Trainig Lab, **you must have a Microsoft Azure subscription**. If you do not have an existing Azure subscription, you can sign up for a free trial [here](https://azure.microsoft.com/free/).
+To deploy Microsoft Sentinel Trainig Lab, **you must have a Microsoft Azure subscription**. If you do not have an existing Azure subscription, you can sign up for a free trial [here](https://azure.microsoft.com/free/).
 
 ## Last release notes
 
-* Version 1.0 - Azure Sentinel Training Lab 
+* Version 1.0 - Microsoft Sentinel Training Lab 
 
 ## Getting started
 
@@ -24,9 +24,9 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 ## Modules
 
 [**Module 1 – Setting up the environment**](./Modules/Module-1-Setting-up-the-environment.md)
-- [The Azure Sentinel workspace](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-the-azure-sentinel-workspace)
-- [Deploy the Azure Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-azure-sentinel-training-lab-solution)
-- [Configure Azure Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-3-configure-azure-sentinel-playbook)
+- [The Microsoft Sentinel workspace](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-the-azure-sentinel-workspace)
+- [Deploy the Microsoft Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-the-azure-sentinel-training-lab-solution)
+- [Configure Microsoft Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-3-configure-azure-sentinel-playbook)
  
 [**Module 2 – Data Connectors**](./Modules/Module-2-Data-Connectors.md)
 - [Enable Azure Activity data connector](./Modules/Module-2-Data-Connectors.md#exercise-1-enable-azure-activity-data-connector)
@@ -41,7 +41,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 - [Review resulting security incident](./Modules/Module-3-Analytics-Rules.md#exercise-5-review-resulting-security-incident)
 
 [**Module 4 – Incident Management**](./Modules/Module-4-Incident-Management.md)
-- [Review Azure Sentinel incident tools and capabilities](./Modules/Module-4-Incident-Management.md#exercise-1-review-azure-sentinel-incident-tools-and-capabilities)
+- [Review Microsoft Sentinel incident tools and capabilities](./Modules/Module-4-Incident-Management.md#exercise-1-review-azure-sentinel-incident-tools-and-capabilities)
 - [Handling Incident "Sign-ins from IPs that attempt sign-ins to disabled accounts"](./Modules/Module-4-Incident-Management.md#exercise-2-handling-incident-sign-ins-from-ips-that-attempt-sign-ins-to-disabled-accounts)
 - [Handling "Solorigate Network Beacon" incident](./Modules/Module-4-Incident-Management.md#exercise-3-Handling-solorigate-network-beacon-incident)
 - [Hunting for more evidence](./Modules/Module-4-Incident-Management.md#exercise-4-Hunting-for-more-evidence)
@@ -63,7 +63,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 - [Analytics Rules based on Threat Intelligence data](./Modules/Module-7-Threat-Intelligence.md#exercise-3-analytics-rules-based-on-threat-intelligence-data)
 - [Threat Intelligence Workbook](./Modules/Module-7-Threat-Intelligence.md#exercise-5-threat-intelligence-workbook)
 
-[**Module 8 - Azure Sentinel Solutions**](./Modules/Module-8-Azure-Sentinel-Solutions.md)
-- [Explore Azure Sentinel Solutions gallery](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-1-explore-azure-sentinel-solutions-gallery)
+[**Module 8 - Microsoft Sentinel Content hub**](./Modules/Module-8-Azure-Sentinel-Solutions.md)
+- [Explore Microsoft Sentinel Content hub](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-1-explore-azure-sentinel-content-hub)
 - [Deploy a new solution](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-2-deploy-a-new-solution)
 - [Review and enable deployed artifacts](./Modules/Module-8-Azure-Sentinel-Solutions.md#exercise-3-review-and-enable-deployed-artifacts)
