@@ -1,0 +1,70 @@
+id: a7d3f642-15d8-4e83-99ee-83ca3352525d
+name: PLC Stop Command (Microsoft Defender for IoT)
+description: |
+  'This alert leverages Defender for IoT to detect PLC stop commands which could indicate improper configuration or malicious activity on the network such as a threat manipulating PLC programming to affect the function of the network.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T0881
+query: |
+  SecurityAlert
+  | where ProductName == "Azure Security Center for IoT"
+  | where AlertName == "An S7 Stop PLC Command was Sent"
+  or AlertName == "Controller Reset"
+  or AlertName == "Controller Stop"
+  or AlertName == "Excessive Restart Rate of an Outstation"
+  or AlertName == "GE SRTP Stop PLC Command was Sent"
+  or AlertName == "Outstation Restarted"
+  or AlertName == "Outstation Restarts Frequently"
+  or AlertName == "Profinet Device Factory Reset"
+  or AlertName == "Slave Device Unrecoverable Failure"
+  or AlertName == "Suspicion of Hardware Problems in Outstation"
+  | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
+  | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductName,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
+version: 1.0.0
+kind: Scheduled

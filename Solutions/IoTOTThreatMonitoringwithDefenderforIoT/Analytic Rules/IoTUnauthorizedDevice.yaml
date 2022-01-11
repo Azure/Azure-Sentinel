@@ -1,0 +1,64 @@
+id: f4c71e55-6192-47ca-92e2-0856ae502a46
+name: Unauthorized device in the network (Microsoft Defender for IoT)
+description: |
+  'This alert leverages Defender for IoT to detect a new device indicating a legitimate device recently installed on the network or an indication of malicious activity such as a cyber threat attempting to manipulate the SCADA network.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T0858
+query: |
+  SecurityAlert
+  | where ProductName == "Azure Security Center for IoT"
+  | where AlertName == "Field Device Discovered Unexpectedly" 
+  or AlertName == "New Asset Detected" 
+  or AlertName == "Abnormal usage of MAC Addresses" 
+  or AlertName == "New LLDP Device Configuration"
+  | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
+  | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductName,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
+version: 1.0.0
+kind: Scheduled

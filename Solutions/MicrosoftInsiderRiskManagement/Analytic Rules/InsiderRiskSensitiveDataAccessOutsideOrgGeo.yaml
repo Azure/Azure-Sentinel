@@ -1,0 +1,43 @@
+id: b81ed294-28cf-48c3-bac8-ac60dcef293b
+name: (Preview) Insider Risk - Sensitive Data Access Outside Organizational Geo-location
+description: |
+  'This alert joins Azure Information Protection Logs (InformationProtectionLogs_CL) with Azure Active Directory Sign in Logs (SigninLogs) to provide a correlation of sensitive data access by geo-location. Results include User Principal Name, Label Name, Activity, City, State, Country/Region, and Time Generated. Recommended configuration is to include (or exclude) Sign in geo-locations (City, State, Country and/or Region) for trusted organizational locations. There is an option for configuration of correlations against Azure Sentinel watchlists. Accessing sensitive data from a new or unauthorized geo-location warrants further review. For more information see [Sign-in logs in Azure Active Directory: Location Filtering](https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins)'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureInformationProtection
+    dataTypes:
+      - InformationProtectionLogs_CL 
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs 
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  InformationProtectionLogs_CL
+  | extend UserPrincipalName = UserId_s
+  | where LabelName_s <> ""
+  | join kind=inner (SigninLogs) on UserPrincipalName
+  | extend City = tostring(LocationDetails.city)
+  // | where City <> "New York" // Configure Location Details within Organizational Requirements
+  | extend State = tostring(LocationDetails.state)
+  // | where State <> "Texas" // Configure Location Details within Organizational Requirements
+  | extend Country_Region = tostring(LocationDetails.countryOrRegion)
+  // | where Country_Region <> "US" // Configure Location Details within Organizational Requirements
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | summarize count() by UserPrincipalName, LabelName_s, Activity_s, City, State, Country_Region, TimeGenerated
+  | sort by count_ desc
+  | limit 25
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled
