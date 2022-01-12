@@ -2,7 +2,7 @@ id: acc4c247-aaf7-494b-b5da-17f18863878a
 name: External guest invitations by default guest followed by Azure AD powershell signin
 description: |
   'By default guests have capability to invite more external guest user, who can do suspicious Azure AD enumeration. This detection will first look at guests 
-  inviting external guests users who are then logging via Azure AD powershell after accpeting invitation.
+  inviting external guests users who are then logging via various powershell CLI after accepting invitation.
   Ref : 'https://danielchronlund.com/2021/11/18/scary-azure-ad-tenant-enumeration-using-regular-b2b-guest-accounts/'
 severity: Medium
 requiredDataConnectors:
@@ -29,14 +29,28 @@ query: |
   | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)","Invite external user with reset invitation status")
   | extend InitiatedByUser = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
     tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
-  | where  InitiatedByUser has_any ("live.com#", "#EXT#")
-  | extend parsedUser = iff(InitiatedByUser has "live.com#", tostring(split(InitiatedByUser, "#")[1]),tostring(split(InitiatedByUser, "#EXT#")[1])) ,  InvitationTime = TimeGenerated
-  | join ( 
-  SigninLogs 
-  | where UserType == "Guest" and AppDisplayName == "Microsoft Azure PowerShell"
-  | extend SigninTime = TimeGenerated
+  | where InitiatedByUser has_any ("live.com#", "#EXT#")
+  | extend
+      parsedUser = iff(InitiatedByUser has "live.com#", tostring(split(InitiatedByUser, "#")[1]),tostring(split(InitiatedByUser, "#EXT#")[1])),
+      InvitationTime = TimeGenerated
+  | join (
+      SigninLogs
+      | where UserType == "Guest"
+      | where AppId has_any
+          ("1b730954-1685-4b74-9bfd-dac224a7b894",// Azure Active Directory PowerShell
+           "04b07795-8ddb-461a-bbee-02f9e1bf7b46",// Microsoft Azure CLI
+           "1950a258-227b-4e31-a9cf-717495945fc2",// Microsoft Azure PowerShell
+           "a0c73c16-a7e3-4564-9a95-2bdf47383716",// Microsoft Exchange Online Remote PowerShell
+           "fb78d390-0c51-40cd-8e17-fdbfab77341b",// Microsoft Exchange REST API Based Powershell
+           "d1ddf0e4-d672-4dae-b554-9d5bdfd93547",// Microsoft Intune PowerShell
+           "9bc3ab49-b65d-410a-85ad-de819febfddc",// Microsoft SharePoint Online Management Shell
+           "12128f48-ec9e-42f0-b203-ea49fb6af367",// MS Teams Powershell Cmdlets
+           "89bee1f7-5e6e-4d8a-9f3d-ecd601259da7",// Office365 Shell WCSS-Client
+           "23d8f6bd-1eb0-4cc2-a08c-7bf525c67bcd" // Power BI PowerShell
+          )
+      | extend SigninTime = TimeGenerated
   ) on $left.parsedUser == $right.UserPrincipalName
-  | project InvitationTime, SigninTime, InitiatedByUser, OperationName, AppDisplayName , IPAddress, UserType
+  | project InvitationTime, SigninTime, InitiatedByUser, OperationName, AppDisplayName, IPAddress, UserType
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -46,5 +60,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.0
-kind: scheduled
+version: 1.0.1
+kind: Scheduled
