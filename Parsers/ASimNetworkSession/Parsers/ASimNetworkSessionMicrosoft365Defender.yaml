@@ -3,67 +3,25 @@ Parser:
   Version: '0.1'
   LastUpdated: Aug 4, 2021
 Product:
-  Name: M365 Defender
+  Name: M365 Defender for Endpoint
 Normalization:
   Schema: NetworkSession
   Version: '0.2.0'
 References:
 - Title: ASIM Network Session Schema
-  Link: https://aka.ms/ASimNetworkSessionDoc
+  Link: https://aka.ms/AzSentinelNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/MsASIM
+  Link: https:/aka.ms/AzSentinelNormalization
 Description: |
   This Query Parser maps M365 Defender network events to the Advanced SIEM Information Model Network Session schema.
-ParserName: vimNetworkSessionMicrosoft365Defender
-EquivalentBuiltInParser: _Im_NetworkSession_Microsoft365Defender
+ParserName: ASimNetworkSessionMicrosoft365Defender
+EquivalentBuiltInParser: _ASim_NetworSession_Microsoft365Defender
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: srcipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: dstipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: dstportnumber
-    Type: int
-    Default: int(null)
-  - Name: url_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: httpuseragent_has_any
-    Type: dynamic 
-    Default: dynamic([])
-  - Name: hostname_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: dvcaction
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresult
-    Type: string
-    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let M365Defender=
-    (starttime:datetime=datetime(null)
-    , endtime:datetime=datetime(null)
-    , srcipaddr_has_any_prefix:dynamic=dynamic([])
-    , dstipaddr_has_any_prefix:dynamic=dynamic([])
-    , dstportnumber:int=int(null)
-    , url_has_any:dynamic=dynamic([])
-    , httpuseragent_has_any:dynamic=dynamic([])
-    , hostname_has_any:dynamic=dynamic([])
-    , dvcaction:dynamic=dynamic([])
-    , eventresult:string='*'
-    , disabled:bool=false
-   ){
+ let M365Defender=(disabled:bool=false){
   let DirectionLookup=datatable(ActionType:string,NetworkDirection:string,Outbound:boolean)[
     'ConnectionSuccess','Outbound', true
     ,'ConnectionFailed', 'Outbound', true
@@ -75,27 +33,6 @@ ParserQuery: |
   // -- Common preprocessing to both input and outbound events
   let RawNetworkEvents =
     DeviceNetworkEvents | where not(disabled)
-    // ***************  Prefilterring *****************************************************************
-    |where (isnull(starttime) or TimeGenerated>=starttime) 
-           and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
-           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
-           and (isnull(endtime) or TimeGenerated<=endtime) 
-           and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
-           and (array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) 
-           and (array_length(srcipaddr_has_any_prefix)==0 
-                or has_any_ipv4_prefix(RemoteIP,srcipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(LocalIP ,srcipaddr_has_any_prefix)
-                )
-           and (array_length(dstipaddr_has_any_prefix)==0 
-                or has_any_ipv4_prefix(RemoteIP,dstipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(LocalIP ,dstipaddr_has_any_prefix)
-                )
-           and (array_length(hostname_has_any)==0 
-              or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
-              ) 
-    | extend EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
-    | where (eventresult=='*' or EventResult==eventresult)
-    // *************** / Prefilterring *****************************************************************
     | extend
       // Event
       EventOriginalUid = tostring(ReportId),
@@ -107,6 +44,7 @@ ParserQuery: |
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
       EventType = 'NetworkSession',
+      EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
     | project-rename
@@ -118,9 +56,9 @@ ParserQuery: |
       SplitHostname = split(DvcFQDN,"."),
       SplitUrl = split(RemoteUrl,".")
     | extend  
-      DvcHostname = tostring(SplitHostname[0]),
+      DvcHostname = SplitHostname[0],
       DvcDomain = strcat_array(array_slice(SplitHostname, 1, -1), '.'),
-      UrlHostname = tostring(SplitUrl[0]),
+      UrlHostname = SplitUrl[0],
       UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1), '.'),
       SrcDomainType = "FQDN",
       DvcDomainType = "FQDN",
@@ -134,10 +72,6 @@ ParserQuery: |
   ;
   let OutboundNetworkEvents = 
     RawNetworkEvents
-    // *************** Postfilterring *****************************************************************
-    | where (isnull(dstportnumber) or dstportnumber==RemotePort)
-        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any))
-    // *************** /Postfilterring *****************************************************************
     | lookup DirectionLookup on ActionType
     | where Outbound
     | project-rename
@@ -155,7 +89,7 @@ ParserQuery: |
        SrcDvcId = DvcId,
        SrcDvcIdType = 'MDEid',
        SrcUserIdType = "SID",
-      DstHostname = UrlHostname
+      DstHostname = tostring(UrlHostname)
     | project-rename
        DstDomain = UrlDomain,
        DstFQDN = RemoteUrl
@@ -190,10 +124,6 @@ ParserQuery: |
   ;
   let InboundNetworkEvents = 
     RawNetworkEvents
-    // *************** Postfilterring *****************************************************************
-    | where (isnull(dstportnumber) or dstportnumber==LocalPort)
-        and (array_length(hostname_has_any)==0 or DvcHostname has_any (hostname_has_any))
-    // *************** /Postfilterring *****************************************************************
     | lookup DirectionLookup on ActionType
     | where not(Outbound)
     | project-rename
@@ -216,7 +146,7 @@ ParserQuery: |
        SrcDomain = UrlDomain,
        SrcFQDN = RemoteUrl
     | extend  
-       DstHostname = DvcHostname,
+       DstHostname = tostring(DvcHostname),
        DstDomain = DvcDomain,
        DstFQDN = DvcFQDN
     // Processes
@@ -249,6 +179,7 @@ ParserQuery: |
      Hostname = DstHostname,
      IpAddr = SrcIpAddr,
      Src = SrcIpAddr,
-     Dst = DstIpAddr 
+     Dst = DstIpAddr
   };
-  M365Defender(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult, disabled)
+  M365Defender(disabled)
+
