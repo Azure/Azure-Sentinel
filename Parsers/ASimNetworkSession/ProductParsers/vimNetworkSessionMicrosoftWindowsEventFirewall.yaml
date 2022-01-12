@@ -142,7 +142,7 @@ ParserQuery: |
                               '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
                               '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
                               '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-                              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
+                              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
                               '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
                               '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
         ;
@@ -172,7 +172,7 @@ ParserQuery: |
                               '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress:string'</Data>'
                               '\x0d\x0a  <Data Name="SourcePort">'SourcePort:int'</Data>'
                               '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-                              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
+                              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
                               '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
                               '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
           | extend DirectionCode = "%%14609"
@@ -208,7 +208,7 @@ ParserQuery: |
               '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
               '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
               '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber'</Data>'
+              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
               '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
               '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
               '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
@@ -216,6 +216,7 @@ ParserQuery: |
               | project-away EventData;
       union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
       | lookup Directions on DirectionCode
+      | project-rename DvcHostname = Computer
       | extend
             SrcAppName = iff(isOutBound, Application, ""),
             DstAppName = iff(not(isOutBound), Application, ""),
@@ -228,8 +229,10 @@ ParserQuery: |
             SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
             DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
             DstUserId = iff(isOutBound, RemoteUserID, ""),
-            SrcUserId = iff(not(isOutBound), RemoteUserID, "")
-        // *************** Postfilterring *****************************************************************
+            SrcUserId = iff(not(isOutBound), RemoteUserID, ""),
+            DstHostname = iff(isOutBound, "", DvcHostname),
+            SrcHostname = iff(isOutBound, DvcHostname, "")
+            // *************** Postfilterring *****************************************************************
           | where  (isnull(dstportnumber) or DestPort == dstportnumber ) 
               and  (array_length(srcipaddr_has_any_prefix)==0 
                     or has_any_ipv4_prefix(SrcIpAddr ,srcipaddr_has_any_prefix)
@@ -269,10 +272,11 @@ ParserQuery: |
             | extend 
                 EventSeverity=tostring(EventData.Severity),
                 LayerCode = tostring(EventData.LayerName),
-                NetworkRuleNumber = tostring(EventData.FilterRTID),
+                NetworkRuleNumber = toint(EventData.FilterRTID),
                 Protocol = toint(EventData.Protocol),
                 DirectionCode = iff(EventID in (5154, 5155, 5158, 5159), "%%14609",tostring(EventData.Direction))
             | lookup Directions on DirectionCode 
+            | project-rename DvcHostname = Computer
             | extend  SrcAppName = iff(isOutBound, tostring(EventData.Application), ""),
                       DstAppName = iff(not(isOutBound), tostring(EventData.Application), ""),
                       SrcIpAddr = iff(isOutBound, tostring(EventData.DestAddress), tostring(EventData.SourceAddress)),
@@ -284,7 +288,9 @@ ParserQuery: |
                       SrcProcessId =  iff(isOutBound, tostring(EventData.ProcessId), ""),
                       DstProcessId =  iff(not(isOutBound), tostring(EventData.ProcessId), ""),
                       DstUserId = iff(isOutBound, tostring(EventData.RemoteUserID), ""),
-                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), "")
+                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), ""),
+                      DstHostname = iff(isOutBound, "", DvcHostname),
+                      SrcHostname = iff(isOutBound, DvcHostname, "")
             | project-away EventData
           // *************** Postfilterring *****************************************************************
           | where  (isnull(dstportnumber) or DstPortNumber == dstportnumber ) 
@@ -312,12 +318,18 @@ ParserQuery: |
               EventSchemaVersion="0.2.0",
               EventCount=toint(1),
               EventVendor = "Microsoft",
-              EventProduct = "WindowsFirewall",
+              EventProduct = "Windows Firewall",
               EventStartTime = TimeGenerated,
               EventEndTime = TimeGenerated,
               EventOriginalUid = EventOriginId,
               EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low")
-      | project-rename DvcHostname = Computer
+      // -- Aliases
+      | extend 
+          Dvc = DvcHostname,
+          Hostname = DvcHostname,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr
       | lookup LayerCodeTable on LayerCode
       | lookup ProtocolTable on Protocol
       | project-away LayerCode, DirectionCode, Protocol
