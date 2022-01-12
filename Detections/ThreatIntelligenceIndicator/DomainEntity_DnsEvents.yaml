@@ -1,5 +1,5 @@
 id: 85aca4d1-5d15-4001-abd9-acb86ca1786a
-name: (Preview) TI map Domain entity to DnsEvent
+name: TI map Domain entity to DnsEvent
 description: |
   'Identifies a match in DnsEvent table from any Domain IOC from TI'
 severity: Medium
@@ -33,10 +33,12 @@ query: |
     | summarize make_list(tld);
     ThreatIntelligenceIndicator
     | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | where Active == true
     // Picking up only IOC's that contain the entities we want
     | where isnotempty(DomainName)
-    | join (
+    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+    | join kind=innerunique (
          DnsEvents
         | where TimeGenerated > ago(dt_lookBack)
         //Extract domain patterns from syslog message
@@ -48,8 +50,9 @@ query: |
         | where tld in~ (list_tlds)
         | extend DNS_TimeGenerated = TimeGenerated
     ) on $left.DomainName==$right.Name
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Computer, ClientIP, Name, QueryType
+    | where DNS_TimeGenerated < ExpirationDateTime
+    | summarize DNS_TimeGenerated  = arg_max(DNS_TimeGenerated , *) by IndicatorId, Name
+    | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, Computer, ClientIP, Name, QueryType
     | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = ClientIP, URLCustomEntity = Url
 entityMappings:
   - entityType: Host
@@ -64,3 +67,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.1
+kind: Scheduled

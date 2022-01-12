@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDnsGcp",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "GCP DNS Query Parser",
+            "category": "Security",
+            "FunctionAlias": "ASimDnsGcp",
+            "query": "let DNSQuery_GcpDns=(disabled:bool=false){\n  GCP_DNS_CL | where not(disabled)\n  | where resource_type_s == \"dns_query\"\n  | project-rename\n      DnsQuery=payload_queryName_s, \n      DnsQueryTypeName=payload_queryType_s,\n      DnsResponseName=payload_rdata_s, \n      EventResultDetails=payload_responseCode_s,\n      NetworkProtocol=payload_protocol_s, \n      SrcIpAddr=payload_sourceIP_s,\n      EventOriginalUid=insert_id_s,\n      EventSeverity=severity_s    \n  | extend\n      EventCount=int(1),\n      EventProduct='Cloud DNS',\n      EventVendor='GCP',\n      EventSchema = 'Dns',\n      EventSchemaVersion=\"0.1.3\",\n      Dvc=\"GCPDNS\" ,\n      EventType = iif (resource_type_s == \"dns_query\", \"Query\", resource_type_s),\n      EventResult=iff(EventResultDetails=~'NOERROR','Success','Failure'),\n      EventSubType='response',\n      EventEndTime=todatetime(timestamp_t)\n  | extend\n      EventStartTime = EventEndTime,\n      EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure')\n // -- Aliases\n  | extend \n      DnsResponseCodeName=EventResultDetails, \n      Domain=DnsQuery,\n      IpAddr=SrcIpAddr,\n      Src=SrcIpAddr\n // Backward Computability\n  | extend\n      Query=DnsQuery,\n      ResponseCodeName=DnsResponseCodeName,\n      QueryTypeName=DnsQueryTypeName\n  };\n  DNSQuery_GcpDns(disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

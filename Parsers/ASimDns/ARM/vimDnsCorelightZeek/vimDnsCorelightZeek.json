@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimDnsCorelightZeek",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Corelight Zeek DNS Parametrized Parser",
+            "category": "Security",
+            "FunctionAlias": "vimDnsCorelightZeek",
+            "query": "let DNSQuery_CorelightZeek=(\n  starttime:datetime=datetime(null), endtime:datetime=datetime(null)\n  , srcipaddr:string='*'\n  , domain_has_any:dynamic=dynamic([]) \n  , responsecodename:string='*', response_has_ipv4:string='*'\n  , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'\n  , disabled:bool=false\n  ){\n  Corelight_CL | where not(disabled)\n  | where log_file_s has \"dns\"\n  //  Pre-parsing filtering:\n  | where\n    (eventtype in~ ('lookup', 'Query'))\n    and (isnull(starttime) or TimeGenerated >= starttime)\n    and (isnull(endtime) or TimeGenerated <= endtime)\n    and (srcipaddr=='*' or has_ipv4(Message, srcipaddr))\n    and (array_length(domain_has_any) ==0 or Message has_any (domain_has_any))\n    and (responsecodename=='*' or Message has responsecodename)\n    and (response_has_ipv4=='*' or has_ipv4(Message,response_has_ipv4) )\n    and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(Message, response_has_any_prefix))\n  // *****************************************************************\n  | extend data = todynamic(Message)\n  // Post-filtering accurately now that message is parsed\n  | where\n       (srcipaddr==\"*\" or srcipaddr==data.[\"id.orig_h\"])\n        and (array_length(domain_has_any) ==0 or data.query has_any (domain_has_any))\n        and (responsecodename==\"*\" or data.rcode_name has responsecodename)\n        and (response_has_ipv4=='*' or has_ipv4(data.answers,response_has_ipv4) )\n        and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(data.answers, response_has_any_prefix))\n  | extend \n      EventCount=int(1),\n      EventProduct=\"Zeek\",\n      EventVendor=\"Corelight\",\n      EventSchema = \"Dns\",\n      EventSchemaVersion=\"0.1.3\",\n      Dvc=\"Zeek\",\n      EventType=\"Query\",\n      EventSubType='response', // ?? rejected?\n      EventEndTime= todatetime(data.ts),\n      EventOriginalUid = tostring(data.uid),\n      SrcIpAddr = tostring (data.[\"id.orig_h\"]),\n      SrcPortNumber = toint (data.[\"id.orig_p\"]),\n      DstIpAddr = tostring (data.[\"id.dest_h\"]),\n      DstPortNumber = toint (data.[\"id.dest_p\"]),\n      NetworkProtocol = tostring(data.proto),\n      TransactionIdHex = tohex(toint(data.trans_id)), \n      DnsQuery = tostring(data.query),\n      DnsResponseCode = toint(data.rcode),\n      EventResultDetails = tostring (data.rcode_name),\n      DnsFlagsAuthoritative = tobool(data.AA),\n      DnsFlagsTruncated = tobool(data.TC),\n      DnsFlagsRecursionDesired = tobool(data.RD),\n      DnsFlagsZ = tobool(data.Z),\n      DnsQueryClassName =tostring(data.qclass_name), \n      DnsQueryClass = toint(data.qclass),\n      DnsQueryTypeName =tostring(data.qtype_name), \n      DnsQueryType = toint(data.qtype),\n      DnsNetworkDuration = toint(data.rtt),\n      DnsResponseName = tostring(pack ('answers', data.answers, 'ttls', data.TTLs, 'authoritative ', data.auth, 'additional', data.addl))    | extend\n      EventStartTime = EventEndTime,\n      EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure')\n  // Aliases\n  | extend \n      DnsResponseCodeName=EventResultDetails, \n      Domain=DnsQuery,\n      IpAddr=SrcIpAddr,\n      Src=SrcIpAddr,\n      Dst=DstIpAddr,\n      Duration=DnsNetworkDuration\n  // Backward Compatibility\n  | extend\n      Query=DnsQuery,\n      QueryType=DnsQueryType,\n      ResponseCodeName=DnsResponseCodeName,\n      QueryTypeName=DnsQueryTypeName\n  };\n  DNSQuery_CorelightZeek (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr:string='*', domain_has_any:dynamic=dynamic([]), responsecodename:string='*', response_has_ipv4:string='*', response_has_any_prefix:dynamic=dynamic([]), eventtype:string='Query', disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

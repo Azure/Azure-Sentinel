@@ -191,6 +191,7 @@ export interface InstructionStep {
 export enum ConnectorCategory {
   CEF="CEF",
   SysLog="Syslog",
+  Event="Event",
   RestAPI="REST_API",
   AzureFunction="Azure_Function",
 }

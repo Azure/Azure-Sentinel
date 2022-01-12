@@ -1,0 +1,89 @@
+$LogAnalyticsWorkspaceId = "#Insert your WorkspaceID"
+
+$LogAnalyticsPrimaryKey = "#Insert your LogAnalyticsPrimaryKey=="
+
+$TenantId = "#Insert your tenantID" 
+
+$LOGNAME_Table = "InformationProtectionLogs_CL"
+
+
+Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource) {
+    # ---------------------------------------------------------------   
+    #    Name           : Build-Signature
+    #    Value          : Creates the authorization signature used in the REST API call to Log Analytics
+    # ---------------------------------------------------------------
+
+    $xHeaders = "x-ms-date:" + $date
+    $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
+
+    $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash)
+    $keyBytes = [Convert]::FromBase64String($sharedKey)
+
+    $sha256 = New-Object System.Security.Cryptography.HMACSHA256
+    $sha256.Key = $keyBytes
+    $calculatedHash = $sha256.ComputeHash($bytesToHash)
+    $encodedHash = [Convert]::ToBase64String($calculatedHash)
+    $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
+    return $authorization
+}
+
+
+Function Post-LogAnalyticsData($body, $LogAnalyticsTableName) {
+    # ---------------------------------------------------------------   
+    #    Name           : Post-LogAnalyticsData
+    #    Value          : Writes the data to Log Analytics using a REST API
+    #    Input          : 1) PSObject with the data
+    #                     2) Table name in Log Analytics
+    #    Output         : None
+    # ---------------------------------------------------------------
+    
+    #Step 0: sanity checks
+    if($body -isnot [array]) {return}
+    if($body.Count -eq 0) {return}
+
+    #Step 1: convert the PSObject to JSON
+    $bodyJson = $body | ConvertTo-Json
+
+    #Step 2: get the UTF8 bytestream for the JSON
+    $bodyJsonUTF8 = ([System.Text.Encoding]::UTF8.GetBytes($bodyJson))
+
+    #Step 3: build the signature        
+    $method = "POST"
+    $contentType = "application/json"
+    $resource = "/api/logs"
+    $rfc1123date = [DateTime]::UtcNow.ToString("r")
+    $contentLength = $bodyJsonUTF8.Length    
+    $signature = Build-Signature -customerId $LogAnalyticsWorkspaceId -sharedKey $LogAnalyticsPrimaryKey -date $rfc1123date -contentLength $contentLength -method $method -contentType $contentType -resource $resource
+    
+    #Step 4: create the header
+    $headers = @{
+        "Authorization" = $signature;
+        "Log-Type" = $LogAnalyticsTableName;
+        "x-ms-date" = $rfc1123date;
+        #"time-generated-field" = $TimeStampField;
+    };
+
+    #Step 5: REST API call
+    $uri = "https://" + $LogAnalyticsWorkspaceId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+    $response = Invoke-WebRequest -Uri $uri -Method Post -Headers $headers -ContentType $contentType -Body $bodyJsonUTF8 -UseBasicParsing
+	
+	Write-Output $response
+}
+
+
+
+function Run-MainScript {
+
+    # Checks Tenant - If not logged into the configured tenant script will establish az-context to appropate tenant
+    $ChckTenantID = Get-AzContext
+    if(($ChckTenantID.Tenant.Id) -eq $TenantId) { } else { Clear-AzContext -Force
+    Connect-AzAccount -Tenant $TenantId }
+	
+	$ImportData = Import-Csv -Path .\AIPMassDowngradeTestData_v4.csv
+	
+	Post-LogAnalyticsData -LogAnalyticsTableName $LOGNAME_Table -body $ImportData
+
+}
+
+Run-MainScript
+

@@ -30,24 +30,32 @@ query: |
   | extend modProps = parse_json(TargetResources).modifiedProperties
   | mv-expand bagexpansion=array modProps
   | evaluate bag_unpack(modProps)
+  | extend displayName = column_ifexists("displayName", "NotAvailable"), newValue = column_ifexists("newValue", "NotAvailable")
   | where displayName =~ "Role.WellKnownObjectName"
   | extend DisplayName = displayName, GroupName = replace('"','',newValue)
   | extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user
   | extend AppId = initByApp.appId, 
   InitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, "not available"),
-  ServicePrincipalId = initByApp.servicePrincipalId,
-  ServicePrincipalName = initByApp.servicePrincipalName,
+  ServicePrincipalId = tostring(initByApp.servicePrincipalId),
+  ServicePrincipalName = tostring(initByApp.servicePrincipalName),
   UserId = initByUser.id,
   UserIPAddress = initByUser.ipAddress,
   UserRoles = initByUser.roles,
-  UserPrincipalName = initByUser.userPrincipalName
-  //| where GroupName in~ (PrivilegedGroups)
-  // If you want to still alert for operations from PIM, remove below filtering for MS-PIM.
+  UserPrincipalName = tostring(initByUser.userPrincipalName),
+  TargetUserPrincipalName = tostring(TargetResources.userPrincipalName)
+  | where GroupName in~ (PrivilegedGroups)
+  // If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.
   //| where InitiatedByDisplayName != "MS-PIM"
-  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName
+  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName
   | extend timestamp = TimeGenerated, AccountCustomEntity = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, "not available")
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: AccountCustomEntity  
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName
+version: 1.0.1
+kind: Scheduled

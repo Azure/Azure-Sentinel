@@ -1,0 +1,84 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as ClarotyEvent and specifying Legacy Category.
+// This function maps Claroty events to Azure Sentinel Information Model (ASIM) (https://docs.microsoft.com/azure/sentinel/normalization).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. ClarotyEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+CommonSecurityLog
+| where DeviceVendor =~ 'Claroty'
+| extend EventVendor = 'Claroty'
+| extend EventProduct = 'Claroty'
+| extend EventSchemaVersion = 0.2
+| extend EventCount = 1
+| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1
+                     , DeviceCustomNumber2Label, DeviceCustomNumber2
+                     , DeviceCustomNumber3Label, DeviceCustomNumber3
+                     , DeviceCustomString1Label, DeviceCustomString1
+                     , DeviceCustomString2Label, DeviceCustomString2
+                     , DeviceCustomString3Label, DeviceCustomString3
+                     , DeviceCustomString4Label, DeviceCustomString4
+                     , DeviceCustomString5Label, DeviceCustomString5
+                     , DeviceCustomString6Label, DeviceCustomString6
+                     , DeviceCustomDate1Label, DeviceCustomDate1
+                     , DeviceCustomDate2Label, DeviceCustomDate2)
+| evaluate bag_unpack(packed)
+| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><" ]+)', dynamic(["key","value"]), AdditionalExtensions) on (
+    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
+    | summarize bag = make_bag(packed1)
+)
+| evaluate bag_unpack(bag)
+| extend packed2 = pack(cs7Label, cs7
+                     , cs8Label, cs8
+                     , cs9Label, cs9
+                     , cs10Label, cs10)
+| evaluate bag_unpack(packed2)
+| extend EventEndTime = todatetime(ReceiptTime)
+| project-rename EventProductVersion=DeviceVersion
+                , EventSubType=cat
+                , EventOriginalType=DeviceEventClassID
+                , EventSeverity=LogSeverity
+                , EventMessage=Message
+                , DstPortNumber=DestinationPort
+                , DstIpAddr=DestinationIP
+                , DstDvcHostname=DestinationHostName
+                , DstUserName=DestinationUserName
+                , DvcIpAddr=DeviceAddress
+                , DvcHostname=DeviceName
+                , DstMacAddr=DestinationMACAddress
+                , NetworkApplicationProtocol=Protocol
+                , SrcPortNumber=SourcePort
+                , SrcIpAddr=SourceIP
+                , SrcMacAddr=SourceMACAddress
+                , EventId=ExternalID
+                , SrcDvcHostname=SourceHostName
+| extend EventType=Activity
+| project-away AdditionalExtensions
+            , Activity
+            , ReceiptTime
+            , DeviceVendor
+            , DeviceProduct
+            , DeviceCustomNumber1
+            , DeviceCustomNumber1Label
+            , DeviceCustomNumber2
+            , DeviceCustomNumber2Label
+            , DeviceCustomNumber3
+            , DeviceCustomNumber3Label
+            , DeviceCustomString1
+            , DeviceCustomString1Label
+            , DeviceCustomString2
+            , DeviceCustomString2Label
+            , DeviceCustomString3
+            , DeviceCustomString3Label
+            , DeviceCustomString4
+            , DeviceCustomString4Label
+            , DeviceCustomString5
+            , DeviceCustomString5Label
+            , DeviceCustomString6
+            , DeviceCustomString6Label
+            , cs7Label
+            , cs7
+            , cs8Label
+            , cs8
+            , cs9Label
+            , cs9
+            , cs10Label
+            , cs10

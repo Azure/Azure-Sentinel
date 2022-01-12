@@ -1,5 +1,5 @@
 id: f30a47c1-65fb-42b1-a7f4-00941c12550b
-name: (Preview) TI map URL entity to SecurityAlert data
+name: TI map URL entity to SecurityAlert data
 description: |
   'Identifies a match in SecurityAlert data from any URL IOC from TI'
 severity: Medium
@@ -28,12 +28,16 @@ query: |
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(Url)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
     SecurityAlert
     | where TimeGenerated >= ago(dt_lookBack)
+    | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
+    | where MSTI == false
     // Extract URL from JSON data
     | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,Entities)
     // We only want alerts that actually contain URL data
@@ -42,9 +46,9 @@ query: |
     | extend Compromised_Host = tostring(parse_json(ExtendedProperties).["Compromised Host"])
     | extend Alert_TimeGenerated = TimeGenerated
   ) on Url
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Alert_TimeGenerated,
-  AlertName, AlertSeverity, Description, Url, Compromised_Host
+  | where Alert_TimeGenerated < ExpirationDateTime
+  | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName
+  | project Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host
   | extend timestamp = Alert_TimeGenerated, HostCustomEntity = Compromised_Host, URLCustomEntity = Url
 entityMappings:
   - entityType: Host
@@ -55,3 +59,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.2
+kind: Scheduled

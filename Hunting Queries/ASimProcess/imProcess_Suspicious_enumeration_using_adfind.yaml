@@ -1,0 +1,39 @@
+id: 1eacb645-9354-49cd-8872-8d68a4fd3f59
+name: Suspicious enumeration using Adfind tool (Normalized Process Events)
+description: |
+  Attackers can use Adfind which is administrative tool to gather information about Domain controllers, ADFS Servers. They may also rename executables with other benign tools on the system.
+  Below query will look for adfind usage in commandline arguments irrespective of executable name in short span of time. You can limit query this to your DC and ADFS servers.
+  Below references talk about suspicious use of adfind by adversaries.
+  - https://thedfirreport.com/2020/05/08/adfind-recon/
+  - https://www.fireeye.com/blog/threat-research/2020/05/tactics-techniques-procedures-associated-with-maze-ransomware-incidents.html
+  - https://www.microsoft.com/security/blog/2020/12/18/analyzing-solorigate-the-compromised-dll-file-that-started-a-sophisticated-cyberattack-and-how-microsoft-defender-helps-protect/
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - Discovery
+  - Collection
+relevantTechniques:
+  - T1059
+  - T1087
+  - T1482
+  - T1201
+  - T1069
+  - T1074
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let lookupwindow = 2m;
+  let threshold = 3; //number of commandlines in the set below
+  let DCADFSServersList = dynamic (["DCServer01", "DCServer02", "ADFSServer01"]); // Enter a reference list of hostnames for your DC/ADFS servers
+  let tokens = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*"]);
+  imProcessCreate
+  //| where Computer in (DCADFSServersList) // Uncomment to limit it to your DC/ADFS servers list if specified above or any pattern in hostnames (startswith, matches regex, etc).
+  | where CommandLine has_any (tokens)
+  | where CommandLine contains ">"
+  | summarize Commandlines = make_set(CommandLine), LastObserved=max(TimeGenerated) by bin(TimeGenerated, lookupwindow), User, Dvc, ActingProcessName, TargetProcessName, EventVendor, EventProduct
+    | extend Count = array_length(Commandlines)
+    | where Count > threshold
