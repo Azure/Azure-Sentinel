@@ -26,6 +26,11 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser=(disabled:bool=false){
+  let DvcActionLookup = datatable (DeviceAction:string, DvcAction: string) 
+  [
+    'Allowed', 'Allow',
+    'Blocked', 'Deny'
+  ]; 
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor == "Zscaler"
   | where DeviceProduct == "NSSWeblog"
@@ -40,7 +45,6 @@ ParserQuery: |
     EventType = 'HTTPsession',
     EventEndTime=TimeGenerated
   | project-rename
-    DvcAction = DeviceAction,
     EventProductVersion = DeviceVersion,
     NetworkApplicationProtocol = ApplicationProtocol,
     HttpContentType = FileType,
@@ -60,13 +64,14 @@ ParserQuery: |
   // -- Parse
   | parse AdditionalExtensions with 
       "reason=" EventResultOriginalDetails:string ";"
-      "outcome=" EventResultDetails:int ";"
+      "outcome=" EventResultDetails:string ";"
       "cat=" * ";"
       "rulelabel=" RuleName:string ";"
       "ruletype=" ruletype:string ";"
       "urlclass=" urlclass:string ";"
       "devicemodel=" * 
   // -- Calculated fields
+  | lookup DvcActionLookup on DeviceAction
   | extend
     DvcHostname = tostring(Computer),
     SrcBytes = toint(SentBytes),
@@ -78,16 +83,18 @@ ParserQuery: |
     FileMD5 = iff (FileMD5 == "None", "", FileMD5),
     HttpReferrer = iff (RequestContext == "None", "", url_decode(RequestContext)),
     DstAppName = iff (DstAppName == "General Browsing", "", DstAppName),
-    DstFQDNparts = split (DstFQDN, ".")
+    DstFQDNparts = split (DstFQDN, "."),
+    DstHostnameNotAddr = DstIpAddr != DstFQDN
   | extend
-    DstHostname = tostring(DstFQDNparts[0]),
-    DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),".")
+    DstHostname = iff (DstHostnameNotAddr, tostring(DstFQDNparts[0]), DstFQDN),
+    DstDomain = iff (DstHostnameNotAddr, strcat_array(array_slice(DstFQDNparts,1,-1),"."), ""),
+    DstFQDN = iff (DstHostnameNotAddr, DstFQDN, "") 
   // -- Enrichment
   | extend
     EventResult = iff (EventResultDetails == "NA" or toint(EventResultDetails) >= 400, "Failure", "Success"),
     EventSeverity = case (ThreatRiskLevel > 90, "High", ThreatRiskLevel > 60, "Medium", ThreatRiskLevel > 10, "Low",  "Informational"),
     DstAppType = "SaaS application",
-    DstDomainType = "FQDN",
+    DstDomainType = iff (DstHostnameNotAddr, "FQDN", ""),
     SrcUsernameType = "UPN"
   // -- Aliases
   | extend
