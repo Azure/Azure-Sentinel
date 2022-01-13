@@ -20,10 +20,10 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 12/6/2021
+        LASTEDIT: 1/12/2022
 
     .EXAMPLE
-        .\Configure-Long-Term-Retention.ps1 -TenantId xxxx `       
+        .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
 #>
 
 #region UserInputs
@@ -35,8 +35,6 @@ param(
 
 #endregion UserInputs
       
-
-
 #region HelperFunctions
 
 function Write-Log {
@@ -93,7 +91,8 @@ function Get-RequiredModules {
     )
     
     try {
-        $installedModule = Get-InstalledModule -Name $Module -ErrorAction SilentlyContinue
+        $installedModule = Get-InstalledModule -Name $Module -ErrorAction SilentlyContinue       
+
         if ($null -eq $installedModule) {
             Write-Log -Message "The $Module PowerShell module was not found" -LogFileName $LogFileName -Severity Warning
             #check for Admin Privleges
@@ -114,6 +113,35 @@ function Get-RequiredModules {
                 Import-Module -Name $Module -Force
             }
         }
+        else {
+            Write-Log -Message "Checking updates for module $Module" -LogFileName $LogFileName -Severity Information
+            $versions = Find-Module $Module -AllVersions
+            $latestVersions = ($versions | Measure-Object -Property Version -Maximum).Maximum.ToString()
+            $currentVersion = (Get-InstalledModule | Where-Object {$_.Name -eq $Module}).Version.ToString()
+            if ($currentVersion -ne $latestVersions) {
+                #check for Admin Privleges
+                $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+
+                if (-not ($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
+                    #Not an Admin, install to current user            
+                    Write-Log -Message "Can not update the $Module module. You are not running as Administrator" -LogFileName $LogFileName -Severity Warning
+                    Write-Log -Message "Updating $Module module to current user Scope" -LogFileName $LogFileName -Severity Warning
+                    
+                    Install-Module -Name $Module -Scope CurrentUser -Repository PSGallery -Force -AllowClobber
+                    Import-Module -Name $Module -Force
+                }
+                else {
+                    #Admin, install to all users																		   
+                    Write-Log -Message "Updating the $Module module to all users" -LogFileName $LogFileName -Severity Warning
+                    Install-Module -Name $Module -Repository PSGallery -Force -AllowClobber
+                    Import-Module -Name $Module -Force
+                }
+            }
+            else {
+                Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
+                Import-Module -Name $Module -Force
+            }
+        }
         # Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
         # Import-Module will bring the module and its functions into your current powershell session, if the module is installed.  
     }
@@ -127,7 +155,7 @@ function Get-RequiredModules {
 
 #region MainFunctions
 
-function Configure-AzureMonitorTables {
+function Get-LATables {
 	[CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $RetentionMethod                
@@ -137,13 +165,17 @@ function Configure-AzureMonitorTables {
 	
 	try {       
         Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-        $QueryAllTables = 'search *| distinct $table| sort by $table asc nulls last'
-        $ResultsAllTables = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $QueryAllTables).Results | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
-        
-        foreach ($table in $ResultsAllTables) {
-            $TableName = $table.'$table'
-            $TablesArray.Add($TableName.ToString().Trim())
+        $WSTables = Get-AzOperationalInsightsTable -ResourceGroupName $LogAnalyticsResourceGroup -WorkspaceName $LogAnalyticsWorkspaceName
+                                         
+        if ($RetentionMethod -eq "Analytics") {        
+            $searchPattern = '(_CL|_SRCH|ContainerLog^|ContainerLogV2|AppTraces)'        
+            $TablesArray = $WSTables.Name -notmatch $searchPattern | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
+        else {
+            $searchPattern = '(_CL|ContainerLog^|ContainerLogV2|AppTraces)'        
+            $TablesArray = $WSTables.Name -match $searchPattern | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+        }            
+       
     }
     catch {
         Write-Log $_ -LogFileName $LogFileName -Severity Error
@@ -174,11 +206,11 @@ function Get-TableConfiguration {
 
 		If ($TablesApiResult) {        
             Write-Log -Message "$LaTable configuration : $($TablesApiResult.properties)" -LogFileName $LogFileName -Severity Information   
-            $QualifiedTables += @{$LaTable = $TablesApiResult.properties.retentionInDays}
+            $QualifiedTables.Add($LaTable, $TablesApiResult.properties.retentionInDays)
 		}
 	}
 	
-	return $QualifiedTables	
+	return $QualifiedTables
 }
 
 
@@ -189,32 +221,31 @@ function Set-TableConfiguration {
 		[parameter(Mandatory = $true)] $RetentionType
     )
 	
-	$SuccessTables = New-Object System.Collections.Generic.List[System.Object]
+	$SuccessTables = @{}
 	
-	foreach ($Qtable in $QualifiedTables) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$Qtable" + "?api-version=2021-07-01-privatepreview"								
+    $QualifiedTables.GetEnumerator() | ForEach-Object {	
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($_.Key)" + "?api-version=2021-07-01-privatepreview"								
 		
 		$TablesApiBody = @"
 			{
 				"properties": {
-					"plan": $RetentionType
+					"plan": "$RetentionType"
 				}
 			}
 "@
 		
 		try {        
-			$TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "PUT" -Headers $LaAPIHeaders -Body $TablesApiBody           
-			Write-Log -Message $TablesApiResult -LogFileName $LogFileName -Severity Information
+			$TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "PUT" -Headers $LaAPIHeaders -Body $TablesApiBody           			
 		} 
 		catch {                    
 			Write-Log -Message "Set-TableConfiguration $($_)" -LogFileName $LogFileName -Severity Error		                
 		}
 
 		If ($TablesApiResult.StatusCode -ne 200) {
-			$SuccessTables.Add($Qtable)
+            $SuccessTables.Add($($_.Key), $($_.Value))		
 		}
 	}
-
+    return $SuccessTables
 }
 
 
@@ -227,7 +258,7 @@ function Update-TablesRetention {
 		
 	$TablesForRetention.GetEnumerator() | ForEach-Object {
 		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($_.Key)" + "?api-version=2021-07-01-privatepreview"						
-					
+		
 		$TablesApiBody = @"
 			{
 				"properties": {
@@ -238,8 +269,7 @@ function Update-TablesRetention {
 "@
 		
 		try {        
-			$TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "PUT" -Headers $LaAPIHeaders -Body $TablesApiBody           
-			
+			$TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "PUT" -Headers $LaAPIHeaders -Body $TablesApiBody			
 		} 
 		catch {                    
 			Write-Log -Message "Update-TablesRetention $($_)" -LogFileName $LogFileName -Severity Error		                
@@ -247,8 +277,7 @@ function Update-TablesRetention {
 
         if($TablesApiResult) {
             Write-Log -Message "Table : $($_.Key) retention updated successfully from $($_.Value) days to $TotalRetentionInDays" -LogFileName $LogFileName -Severity Information
-        }
-		
+        }		
 	}
 }
 
@@ -257,8 +286,8 @@ function Collect-Input {
     Add-Type -AssemblyName System.Drawing
 
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'Data Entry Form'
-    $form.Size = New-Object System.Drawing.Size(300,200)
+    $form.Text = 'Table Plan:Analytics'
+    $form.Size = New-Object System.Drawing.Size(400,300)
     $form.StartPosition = 'CenterScreen'
 
     $okButton = New-Object System.Windows.Forms.Button
@@ -268,9 +297,10 @@ function Collect-Input {
     $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
     $form.AcceptButton = $okButton
     $form.Controls.Add($okButton)
+    $okButton.Enabled = $false    
 
     $cancelButton = New-Object System.Windows.Forms.Button
-    $cancelButton.Location = New-Object System.Drawing.Point(150,120)
+    $cancelButton.Location = New-Object System.Drawing.Point(170,120)
     $cancelButton.Size = New-Object System.Drawing.Size(75,23)
     $cancelButton.Text = 'Cancel'
     $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
@@ -279,30 +309,69 @@ function Collect-Input {
 
     $label = New-Object System.Windows.Forms.Label
     $label.Location = New-Object System.Drawing.Point(10,20)
-    $label.Size = New-Object System.Drawing.Size(300,60)
-    $label.Text = 'Enter value for total Retention In Days (between 7 and 730)*'
+    $label.Size = New-Object System.Drawing.Size(400,60)
+    $label.Text = 'Enter value for total Retention In Days (between 7 and 2555)*'
     $form.Controls.Add($label)
 
     $textBox = New-Object System.Windows.Forms.TextBox
     $textBox.Location = New-Object System.Drawing.Point(10,80)
     $textBox.Size = New-Object System.Drawing.Size(260,20)
-    $form.Controls.Add($textBox)
+    $textBox.TabIndex = 1
+    $form.Controls.Add($textBox)  
+    
+    $textBox.Add_TextChanged({
+        $days = [int]$textBox.Text.Trim()
+        if ($days -gt 7 -and $days -lt 2556) {         
+            $okButton.Enabled = $true
+            $ErrorProvider.Clear()
+        }
+        else {
+            $ErrorProvider.SetError($textBox, "Field must be between 7 and 2555 days")  
+            $okButton.Enabled = $false            
+        } 
+    }) 
 
-    $form.Topmost = $true
-
+    $ErrorProvider = New-Object System.Windows.Forms.ErrorProvider
+    $form.Add_Shown({$form.Activate()})
     $form.Add_Shown({$textBox.Select()})
+    $form.Topmost = $true    
     $result = $form.ShowDialog()
 
     if ($result -eq [System.Windows.Forms.DialogResult]::OK)
     {
-        $x = $textBox.Text.Trim()        
-    }
+        $days = [int]$textBox.Text.Trim()        
+        return $days  
+    }    
+}
 
-    if ($null -ne $x) {
-        return $x
+function Select-Plan {    
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    $logselectform = New-Object System.Windows.Forms.Form
+    $logselectform.Text = 'Table Plan'
+    $logselectform.Size = New-Object System.Drawing.Size(300,300)
+    $logselectform.StartPosition = 'CenterScreen'
+    $okb = New-Object System.Windows.Forms.Button
+    $okb.Location = New-Object System.Drawing.Point(45,130)
+    $okb.Size = New-Object System.Drawing.Size(75,25)
+    $okb.Text = 'Basic Logs'
+    $okb.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $logselectform.AcceptButton = $okb
+    $logselectform.Controls.Add($okb)
+    $cb = New-Object System.Windows.Forms.Button
+    $cb.Location = New-Object System.Drawing.Point(150,130)
+    $cb.Size = New-Object System.Drawing.Size(105,25)
+    $cb.Text = 'Analytics Logs'
+    $cb.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $logselectform.CancelButton = $cb
+    $logselectform.Controls.Add($cb)    
+    $rs = $logselectform.ShowDialog()
+    if ($rs -eq [System.Windows.Forms.DialogResult]::OK)
+    {
+        return "Basic"
     }
     else {
-        Write-Log "Total Retention Days is required" -LogFileName $LogFileName -Severity -Error
+        return "Analytics"
     }
 }
 
@@ -311,6 +380,7 @@ function Collect-Input {
 #region DriverProgram
 Get-RequiredModules("Az")
 Get-RequiredModules("Az.SecurityInsights")
+Get-RequiredModules("Az.OperationalInsights")
 
 $TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
 $LogFileName = '{0}_{1}.csv' -f "Sentinel_Long_Term_Retention", $TimeStamp
@@ -368,15 +438,27 @@ foreach($CurrentSubscription in $GetSubscriptions)
             foreach($LAW in $LAWs) {
                 
                 $LogAnalyticsWorkspaceName = $LAW.Name
-                $LogAnalyticsResourceGroup = $LAW.ResourceGroupName
-                $LogAnalyticsWorkspaceId = $LAW.CustomerId              
+                $LogAnalyticsResourceGroup = $LAW.ResourceGroupName                            
                 
-                #Get all the tables from the selected Azure Log Analytics Workspace
-                $WorkspaceTables = Configure-AzureMonitorTables -RetentionMethod "Analytics"
-                $TotalRetentionInDays = Collect-Input 
-                $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
-                #$ConfiguredTables = Set-TableConfiguration -QualifiedTables $QualifiedTables -RetentionType "Analytics"
-                Update-TablesRetention -TablesForRetention $QualifiedTables -TotalRetentionInDays $TotalRetentionInDays                
+                $tablePlan = Select-Plan
+                if ($tablePlan.Trim() -eq "Analytics") {
+                    #Get all the tables from the selected Azure Log Analytics Workspace
+                    $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()
+                    $TotalRetentionInDays = Collect-Input 
+                    $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
+                    $ConfiguredTables = Set-TableConfiguration -QualifiedTables $QualifiedTables -RetentionType $tablePlan.Trim()
+                    Update-TablesRetention -TablesForRetention $ConfiguredTables -TotalRetentionInDays $TotalRetentionInDays
+                    $UpdatedConfigs = $ConfiguredTables.Keys.ForEach('ToString')
+                    Get-TableConfiguration -LaTables $UpdatedConfigs
+                }
+                else {
+                    $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()
+                    $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
+                    $ConfiguredTables = Set-TableConfiguration -QualifiedTables $QualifiedTables -RetentionType $tablePlan.Trim()
+                    Write-Log -Message "Basic plan updated successfully" -LogFileName $LogFileName -Severity Information
+                    $UpdatedConfigs = $ConfiguredTables.Keys.ForEach('ToString')
+                    Get-TableConfiguration -LaTables $UpdatedConfigs
+                }
             }                  
 
         } 	
