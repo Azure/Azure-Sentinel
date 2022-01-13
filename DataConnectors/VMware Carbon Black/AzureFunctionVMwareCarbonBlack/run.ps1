@@ -183,9 +183,8 @@ function CarbonBlackAPI()
     $NotificationTable  = "CarbonBlackNotifications"
     $OrgKey = $env:CarbonBlackOrgKey
     $s3BucketName = $env:s3BucketName
-    #$prefixFolder = $env:s3BucketPrefixFolder
-    $EventprefixFolder = "carbon-black-events"
-    $AlertprefixFolder = "carbon-black-alerts"
+    $EventprefixFolder = $env:EventPrefixFolderName
+    $AlertprefixFolder = $env:AlertPrefixFolderName
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
 
@@ -216,10 +215,10 @@ function CarbonBlackAPI()
     {
         if ($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
         {
-            $LogTypeArr = @("event","audit","alert")
+            $LogTypeArr = @("event","audit")
         }
         else{
-            $LogTypeArr = @("event","audit")
+            $LogTypeArr = @("event","audit","alertSIEMAPI")
         }
     }else {
         $logType = $LogType.Substring(1,$LogType.Length-2)
@@ -267,7 +266,7 @@ function CarbonBlackAPI()
     {
         if($LogTypeArr -contains "event")
         {
-            GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable
+            GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $EventprefixFolder -tableName $EventLogTable -logtype "event"
         }
         else{
             Write-Warning "'Event' was not selected as a LogType, therefore event logs will not be ingested to the workspace."
@@ -279,13 +278,13 @@ function CarbonBlackAPI()
     }
 
 
-    if($LogTypeArr -contains "alert")
+    if($LogTypeArr -contains "alertSIEMAPI" -or $LogTypeArr -contains "alertAWSS3")
     {
         if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
         {
             if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
             {
-                $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable
+                $alerts = GetBucketDetails -s3BucketName $s3BucketName -prefixFolder $AlertprefixFolder -tableName $NotificationTable -logtype "alert"
                 Write-Host "$($alerts.count) new Carbon Black Alerts as of $([DateTime]::UtcNow)were found and pushed."
             }
         }
@@ -362,7 +361,8 @@ function GetBucketDetails {
     param (
         $s3BucketName,
         $prefixFolder,
-        $tableName
+        $tableName,
+        $logtype
     )
 
     IF ($Null -ne $s3BucketName) {
@@ -387,17 +387,16 @@ function GetBucketDetails {
 
                     foreach ($logEvent in [System.IO.File]::ReadLines($filename))
                     {
-                        # $logevents = ConvertFrom-Json $logEvent -AsHashTable
                         $logs = $logEvent | ConvertFrom-Json
                         $hash = @{}
                         $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
                         $logevents = $hash
 
-                        if($prefixFolder -eq "carbon-black-events")
+                        if($logtype -eq "event")
                         {
                             EventsFieldsMapping -events $logevents
                         }
-                        if($prefixFolder -eq "carbon-black-alerts")
+                        if($logtype -eq "alert")
                         {
                             AlertsFieldsMapping -alerts $logevents
                         }
