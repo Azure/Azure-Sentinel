@@ -41,7 +41,6 @@ ParserQuery: |
     EventEndTime=TimeGenerated
   | project-rename
     DvcAction = DeviceAction,
-    DvcHostname = Computer,
     EventProductVersion = DeviceVersion,
     NetworkApplicationProtocol = ApplicationProtocol,
     HttpContentType = FileType,
@@ -50,12 +49,10 @@ ParserQuery: |
     DstAppName = DestinationServiceName,
     DstIpAddr = DestinationIP,
     DstFQDN = DestinationHostName,
-    DstBytes = ReceivedBytes,
     SrcIpAddr = SourceIP,
     SrcUsername = SourceUserName,
     SrcNatIpAddr= SourceTranslatedAddress,
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
-    SrcBytes = SentBytes,
     ThreatRiskLevel = DeviceCustomNumber1,
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
@@ -71,6 +68,9 @@ ParserQuery: |
       "devicemodel=" * 
   // -- Calculated fields
   | extend
+    DvcHostname = tostring(Computer),
+    SrcBytes = toint(SentBytes),
+    DstBytes = toint(ReceivedBytes),
     Url = iff (RequestURL == "", "", strcat (tolower(NetworkApplicationProtocol), "://", url_decode(RequestURL))),
     UrlCategory = strcat (urlclass, "/", UrlCategory),
     ThreatCategory = iff(DeviceCustomString4 == "None", "", strcat (DeviceCustomString3, "/", DeviceCustomString4)),
@@ -85,8 +85,9 @@ ParserQuery: |
   // -- Enrichment
   | extend
     EventResult = iff (EventResultDetails == "NA" or toint(EventResultDetails) >= 400, "Failure", "Success"),
+    EventSeverity = case (ThreatRiskLevel > 90, "High", ThreatRiskLevel > 60, "Medium", ThreatRiskLevel > 10, "Low",  "Informational"),
     DstAppType = "SaaS application",
-    DstFQDN = "FQDN",
+    DstDomainType = "FQDN",
     SrcUsernameType = "UPN"
   // -- Aliases
   | extend

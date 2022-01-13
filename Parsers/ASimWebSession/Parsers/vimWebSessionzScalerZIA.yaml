@@ -104,7 +104,6 @@ ParserQuery: |
   // -- Field mapping
   | project-rename
     DvcAction = DeviceAction,
-    DvcHostname = Computer,
     EventProductVersion = DeviceVersion,
     NetworkApplicationProtocol = ApplicationProtocol,
     HttpContentType = FileType,
@@ -113,12 +112,10 @@ ParserQuery: |
     DstAppName = DestinationServiceName,
     DstIpAddr = DestinationIP,
     DstFQDN = DestinationHostName,
-    DstBytes = ReceivedBytes,
     SrcIpAddr = SourceIP,
     SrcUsername = SourceUserName,
     SrcNatIpAddr= SourceTranslatedAddress,
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
-    SrcBytes = SentBytes,
     ThreatRiskLevel = DeviceCustomNumber1,
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
@@ -132,15 +129,19 @@ ParserQuery: |
     FileMD5 = iff (FileMD5 == "None", "", FileMD5),
     HttpReferrer = iff (RequestContext == "None", "", url_decode(RequestContext)),
     DstAppName = iff (DstAppName == "General Browsing", "", DstAppName),
-    DstFQDNparts = split (DstFQDN, ".")
+    DstFQDNparts = split (DstFQDN, "."),
+    DstBytes = toint(ReceivedBytes),
+    SrcBytes = toint(SentBytes),
+    DvcHostname = tostring(Computer)
   | extend
     DstHostname = DstFQDNparts[0],
     DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),".")
   // -- Enrichment
   | extend
     EventResult = iff (EventResultDetails == "NA" or toint(EventResultDetails) >= 400, "Failure", "Success"),
+    EventSeverity = case (ThreatRiskLevel > 90, "High", ThreatRiskLevel > 60, "Medium", ThreatRiskLevel > 10, "Low",  "Informational"),
     DstAppType = "SaaS application",
-    DstFQDN = "FQDN",
+    DstDomainType = "FQDN",
     SrcUsernameType = "UPN"
   // -- Aliases
   | extend
@@ -149,7 +150,10 @@ ParserQuery: |
     User = SrcUsername,
     HttpStatusCode = EventResultDetails,
     IpAddr = SrcNatIpAddr,
+    Src = SrcNatIpAddr,
+    Dst = DstFQDN,
     Hash = FileMD5,
+    Hostname = DstHostname,
     FileHashType = iff(FileMD5 == "", "", "MD5")
   | project-away 
     DstFQDNparts, AdditionalExtensions, DeviceCustom*
