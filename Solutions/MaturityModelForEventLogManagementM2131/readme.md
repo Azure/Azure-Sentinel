@@ -14,15 +14,26 @@ You can deploy the solution by clicking on the buttons below:
 # Getting Started
 The Microsoft Sentinel: Maturity Model for Event Log Management (M-21-31) Solution leverages Azure Policy, Azure Resource Graph, and Azure Log Analytics to align directly with the requirements outlined in the Executive Office of the President: Office of Management & Budget Memorandum (M-21-31): Improving the Federal Government's Investigative and Remediation Capabilities Related to Cybersecurity Incidents. This solution provides the capability to design, build, monitor, and remediate event log management. The Solution includes (1) Workbook for reporting, (8) Analytics Rules for monitoring, (4) Hunting Queries for assessment, and (3) Playbooks for response/remediation. The documentation below provides getting started recommendations for centralizing log analytics data and enabling Microsoft Defender for Cloud Continuous Export. This offering includes telemetry from 25+ Microsoft and Third Party products. Common use cases include conducting M-21-31 assessments via custom reporting, time filtering, subscription filtering, workspace filtering, and guides. The report is exportable for print or PDF with the Print Workbook feature. The workbook is organized by Event Logging Tiers (1-3) which highlight maturity from basic to advanced levels. There are multiple requirements within each Event Logging Tier, each covered by a Control Card. Control Cards include requirements summary, reference documentation links, recommendations for build/design, technology mapping, telemetry over time, and product/portal pages.<br> For more information, see 💡[Improving the Federal Government’s Investigative and Remediation Capabilities Related to Cybersecurity Incidents (M-21-31)](https://www.whitehouse.gov/wp-content/uploads/2021/08/M-21-31-Improving-the-Federal-Governments-Investigative-and-Remediation-Capabilities-Related-to-Cybersecurity-Incidents.pdf)<br>
 
+# [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
+| <strong> Roles </strong> | <strong> Rights </strong> | 
+|:--|:--|
+|Microsoft Sentinel: Security Reader | View Workbooks, Analytics, Hunting, Resources |
+|Security Reader| View Security Recommendations |
+|Microsoft Sentinel: Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries |
+|Security Contributor| Apply Security Recommendations |
+|Microsoft Sentinel: Automation Contributor| Deploy/Modify Playbooks & Automation Rules |
+|Owner| Assign Regulatory Compliance Initiatives|
+
+### Onboarding Prerequisites 
 1️⃣ [Design Log Management Architecture](https://docs.microsoft.com/azure/azure-monitor/logs/design-logs-deployment)<br>
 2️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
 3️⃣ [Connect & Ingest Data Sources](https://docs.microsoft.com/azure/sentinel/connect-data-sources)<br>
-4️⃣ [Extend Microsoft Sentinel Across Workspaces and Tenants](https://docs.microsoft.com/azure/sentinel/extend-sentinel-across-workspaces-tenants)<br>
+4️⃣ [Extend Microsft Sentinel Across Workspaces and Tenants](https://docs.microsoft.com/azure/sentinel/extend-sentinel-across-workspaces-tenants)<br>
 5️⃣ [Configure 12 Months Active Storage with Data Retention](https://docs.microsoft.com/azure/azure-monitor/logs/manage-cost-storage#change-the-data-retention-period)<br>
 6️⃣ [Configure 18 Months Cold Data Storage with Azure Data Explorer](https://docs.microsoft.com/azure/sentinel/store-logs-in-azure-data-explorer?tabs=adx-event-hub)<br>
 7️⃣ [Onboard Microsoft Defender for Cloud](https://docs.microsoft.com/azure/security-center/security-center-get-started)<br>
-8️⃣ [Add the Azure Security Benchmark Assessment to Your Dashboard](https://docs.microsoft.com/azure/security-center/update-regulatory-compliance-packages#add-a-regulatory-standard-to-your-dashboard)<br>
-9️⃣ [Continuously Export Security Center Data](https://docs.microsoft.com/azure/security-center/continuous-export)<br>
+8️⃣ [Add the Azure Security Benchmark and NIST SP 800-53 R4 Assessments to Your Dashboard](https://docs.microsoft.com/azure/security-center/update-regulatory-compliance-packages#add-a-regulatory-standard-to-your-dashboard)<br>
+9️⃣ [Continuously Export Microsoft Defender for Cloud Security Recommendations to Microsoft Sentinel](https://docs.microsoft.com/azure/security-center/continuous-export)<br>
 
 # Workbook
 The Microsoft Sentinel: Maturity Model for Event Log Management (M-21-31) workbook provides a dashboard for viewing log queries, azure resource graph, metrics, and policies aligned to logging requirements across the Microsoft portfolio including Azure, Microsoft 365, Multi-Cloud, Hybrid, and On-Premises workloads. This workbook enables Security Architects, Engineers, SecOps Analysts, Managers, and IT Pros to gain situational awareness visibility for the security posture of cloud workloads. There are also recommendations for selecting, designing, deploying, and configuring Microsoft offerings for alignment with respective M-21-31 requirements and practices.
