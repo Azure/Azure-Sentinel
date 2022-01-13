@@ -10,7 +10,17 @@ You can deploy the solution by clicking on the buttons below:
 
 ![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CybersecurityMaturityModelCertification(CMMC)2.0/Workbooks/Images/CybersecurityMaturityModelCertification(CMMC)Black1.png?raw=true)
 
-# Getting Started
+# [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
+| <strong> Roles </strong> | <strong> Rights </strong> | 
+|:--|:--|
+|Microsoft Sentinel: Security Reader | View Workbooks, Analytics, Hunting, Resources |
+|Security Reader| View Security Recommendations |
+|Microsoft Sentinel: Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries |
+|Security Contributor| Apply Security Recommendations |
+|Microsoft Sentinel: Automation Contributor| Deploy/Modify Playbooks & Automation Rules |
+|Owner| Assign Regulatory Compliance Initiatives|
+
+# Prerequisites
 This Solution is designed to augment staffing through automation, artificial intelligence, machine learning, query/alerting generation, and visualizations. This workbook leverages Azure Policy, Azure Resource Graph, and Azure Log Analytics to align with Cybersecurity Maturity Model Certification 2.0 control requirements. A filter set is available for custom reporting by guides, subscriptions, workspaces, time-filtering, control family, and level. This offering telemetry from 50+ Microsoft Security products, while only Microsoft Sentinel/Microsoft Defender for Cloud are required to get started, each offering provides additional enrichment for aligning with control requirements. Each CMMC control includes a Control Card detailing an overiew of requirements, primary/secondary controls, deep-links to referenced product pages/portals, recommendations, implementation guides, compliance cross-walks and tooling telemetry for building situational awareness of cloud workloads. 
 💡 [Planning: Review Microsoft Product Placemat for CMMC 2.0](https://aka.ms/cmmc/productplacemat)<br>
 💡 [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
