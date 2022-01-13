@@ -864,14 +864,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $huntingQueryObj.properties.tags += $tacticsObj
                             }
-                            function getQueryResourceLocation () {
-                                for($i = 0; $i -lt $baseMainTemplate.resources.Length; $i++){
-                                    if ($baseMainTemplate.resources[$i].type -eq "Microsoft.OperationalInsights/workspaces") {
-                                        return $i
-                                    }
-                                }
-                            }
-                            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
+                            $baseMainTemplate.resources[$baseMainTemplate.resources.Length - 1].resources += $huntingQueryObj
 
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
