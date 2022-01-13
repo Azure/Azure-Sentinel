@@ -33,7 +33,7 @@ ParserQuery: |
       NetworkDuration = toint(AccessRawLog[1]), 
       SrcIpAddr = tostring(AccessRawLog[2]), 
       EventOriginalResultDetails = strcat (tostring(AccessRawLog[3]), ";", PeerStatus = tostring(AccessRawLog[9])), 
-      EventResultDetails = toint(AccessRawLog[4]), 
+      EventResultDetails = tostring(AccessRawLog[4]), 
       DstBytes = toint(AccessRawLog[5]), 
       HttpRequestMethod = tostring(AccessRawLog[6]), 
       Url = tostring(AccessRawLog[7]), 
@@ -53,14 +53,20 @@ ParserQuery: |
       UsernameType = "Unknown",
       SrcUsername = iff (SrcUsername == "-", "", SrcUsername), 
       HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType), 
-      EventResult = iff (EventResultOriginalDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or EventResultDetails >= 400, "Failure", "Success")
+      EventResult = iff (EventOriginalResultDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or toint(EventResultDetails) >= 400, "Failure", "Success"),
+      DstHostname = tostring(parse_url(Url)["Host"])
+    | extend 
+      EventSeverity = iff(EventResult == "Success", "Informational", "Low")
     // -- aliases
     | extend 
       EventStartTime = EventEndTime,
       Duration = NetworkDuration,
       HttpStatusCode = EventResultDetails,
       User = SrcUsername,
-      IpAddr = SrcIpAddr
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr,
+      Dst = DstHostname,
+      Hostname = DstHostname
     | project-away AccessRawLog, RawData
   };
   parser (disabled)
