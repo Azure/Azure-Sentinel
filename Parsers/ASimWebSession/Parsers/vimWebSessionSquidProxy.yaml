@@ -100,9 +100,17 @@ ParserQuery: |
       UsernameType = "Unknown",
       SrcUsername = iff (SrcUsername == "-", "", SrcUsername), 
       HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType), 
-      DstHostname = tostring(parse_url(Url)["Host"])
+      DstIpAddrIsHost = DstIpAddr matches regex "[a-zA-Z]$"
     | extend 
-      EventSeverity = iff(EventResult == "Success", "Informational", "Low")
+      DstFQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
+      DstIpAddr = iif (DstIpAddr == "-" or DstIpAddrIsHost, "", DstIpAddr)
+    | extend 
+      EventSeverity = iff(EventResult == "Success", "Informational", "Low"),
+      DstFQDNparts = split (DstFQDN, ".")
+    | extend    
+      DstHostname = tostring(DstFQDNparts[0]),
+      DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),"."),
+      DstDOmainType = "FQDN"
     // -- aliases
     | extend 
       EventStartTime = EventEndTime,
