@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 1/12/2022
+        LASTEDIT: 1/14/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -146,8 +146,7 @@ function Get-RequiredModules {
         # Import-Module will bring the module and its functions into your current powershell session, if the module is installed.  
     }
     catch {
-        Write-Log -Message "An error occurred in Get-RequiredModules() method" -LogFileName $LogFileName -Severity Error																			
-        exit
+        Write-Log -Message "An error occurred in Get-RequiredModules() method - $($_)" -LogFileName $LogFileName -Severity Error        
     }
 }
 
