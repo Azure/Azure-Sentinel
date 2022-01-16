@@ -30,7 +30,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         public List<AttackTactic> Tactics { get; set; }
 
         [JsonProperty("relevantTechniques")]
-        public List<AttackTechniques> RelevantTechniques { get; set; }
+        public List<string> RelevantTechniques { get; set; }
 
         [JsonProperty("requiredDataConnectors", NullValueHandling = NullValueHandling.Ignore)]
         public virtual List<DataConnectorInternalModel> RequiredDataConnectors { get; set; } = new List<DataConnectorInternalModel>();
