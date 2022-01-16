@@ -16,7 +16,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         public Guid Id { get; set; }
 
         [JsonProperty("kind", Required = Required.Always)]
-        public abstract AlertRuleKind Kind { get;}
+        public abstract AlertRuleKind Kind { get; }
 
         [JsonProperty("name", Required = Required.Always)]
         [StringLength(256)]

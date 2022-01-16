@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
     [PeriodGreaterThanOrEqualFrequency]
+    [NoTechniquesWithoutMatchingTactics]
     [FrequencyLimitationForLongPeriodQuery]
     [NewEntityMappings]
     public class ScheduledTemplateInternalModel : QueryBasedTemplateInternalModel
