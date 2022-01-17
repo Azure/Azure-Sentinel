@@ -1,5 +1,6 @@
 ﻿using DetectionTemplateSchemaValidation.Tests;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model;
+using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -8,6 +9,7 @@ using System.Runtime.Serialization;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
+    [NoTechniquesWithoutMatchingTactics]
     [KnownType("DerivedTypes")]
     [JsonConverter(typeof(AnalyticsTemplateConverter))]
     public abstract class AnalyticsTemplateInternalModelBase

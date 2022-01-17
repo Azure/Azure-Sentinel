@@ -65,72 +65,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
 
             return result;
         }
-        /// <summary>
-        /// Validates a list of sub-techniques ids based on 2 checks:
-        /// 1. Each sub-technique id is represented in the expected format ("T####.yyy")
-        /// 2. Each sub-technique is either new and doesn't have any matching intent in our current mapping
-        /// or it has at least one matching intent in the given <see cref="KillChainIntent"/>
-        /// Throws <see cref="ArgumentException"/> if any of the above checks is not satisfied.
-        /// </summary>
-        /// <param name="subTechniques">The list of sub-techniques to validate.</param>
-        /// <param name="inputIntent">The <see cref="KillChainIntent"/> to check the list of techniques against.</param>
-        public static void ValidateSubTechniques(IReadOnlyList<string> subTechniques, KillChainIntent inputIntent)
-        {
-            if (subTechniques == null) return;
-
-            var regex = new Regex(_expectedSubTechniqueFormat);
-            var invalidSubTechnique = subTechniques.FirstOrDefault(subTechnique => !regex.IsMatch(subTechnique));
-
-            if (invalidSubTechnique != null)
-            {
-                throw new ArgumentException(
-                    $"Given input sub-technique {invalidSubTechnique} does not have the expected format 'T####.yyy', where '#' and 'y' represent a digit.");
-            }
-
-            var techniques = subTechniques.Select(ExtractTechnique).ToList();
-            ValidateTechniques(techniques, inputIntent);
-        }
-
-        /// <summary>
-        /// Validates a list of techniques ids based on 2 checks:
-        /// 1. Each technique id is represented in the expected format ("T####")
-        /// 2. Each technique is either new and doesn't have any matching intent in our current mapping
-        /// or it has at least one matching intent in the given <see cref="KillChainIntent"/>
-        /// Throws <see cref="ArgumentException"/> if any of the above checks is not satisfied.
-        /// </summary>
-        /// <param name="techniques">The list of techniques to validate.</param>
-        /// <param name="inputIntent">The <see cref="KillChainIntent"/> to check the list of techniques against.</param>
-        public static void ValidateTechniques(List<string> techniques, KillChainIntent inputIntent)
-        {
-            if (techniques == null) return;
-
-            var regex = new Regex(_expectedTechniqueFormat);
-            foreach (var technique in techniques)
-            {
-                // first we check if the current technique has the expected format
-                if (!regex.IsMatch(technique))
-                {
-                    throw new ArgumentException($"Given input technique {technique} does not have the expected format 'T####', where '#' represents a digit.");
-                }
-
-                // and the rest of the checks only if the provided intent is not Unknown
-                if (inputIntent != KillChainIntent.Unknown)
-                {
-                    // we get its corresponding intent
-                    var correspondingIntent = GetCorrespondingKillChainIntent(technique);
-
-                    // if we didn't find any corresponding Intents in our mapping, then we consider this as valid
-                    // since this might be a new technique
-                    if (correspondingIntent.Equals(KillChainIntent.Unknown))
-                    {
-                        continue;
-                    }
-
-                    // otherwise we consider the schema as invalid
-                    throw new ArgumentException($"No valid intent corresponding to the technique {technique} was provided in the KillChainIntent field.");
-                }
-            }
-        }
+        
         public static string ExtractTechnique(this string subTechnique)
         {
             return subTechnique.Split('.').First();
