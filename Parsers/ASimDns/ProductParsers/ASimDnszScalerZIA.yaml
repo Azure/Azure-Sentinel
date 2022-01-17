@@ -1,7 +1,7 @@
 Parser:
-  Title: zScaler ZIA DNS
-  Version: '0.2'
-  LastUpdated: Nov 11 2021
+  Title: DNS activity ASIM parser for zScaler ZIA
+  Version: '0.3'
+  LastUpdated: Nov 23 2021
 Product:
   Name: zScaler ZIA DNS
 Normalization:
@@ -9,12 +9,13 @@ Normalization:
   Version: '0.1.3'
 References:
 - Title: ASIM DNS Schema
-  Link: https://aka.ms/AzSentinelDnsDoc
+  Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This is a Query Parser that is used to map zScaler ZIA DNS events to the Advanced SIEM Information Model DNS schema.  
+    Normalize zScaler ZIA DNS logs to the ASIM DNS activity normalized schema.
 ParserName: ASimDnszScalerZIA
+EquivalentBuiltInParser: _ASim_Dns_zScalerZIA
 ParserParams:
   - Name: disabled
     Type: bool
@@ -23,35 +24,39 @@ ParserQuery: |
   let zScalerDNSevents=(disabled:bool=false){
     CommonSecurityLog 
     | where not(disabled)
-    | where DeviceProduct == "NSSDNSlog"
+    | where DeviceProduct == "NSSDNSlog" 
     | project-rename
         Dvc=Computer , 
         SrcIpAddr = SourceIP, 
-        SrcUsername = SourceUserName,
+        SrcUsername = SourceUserName, 
         DstIpAddr = DestinationIP, 
-        DstPortNumber = DestinationPort, 
+        DstPortNumber = DestinationPort,  
         EventProductVersion = DeviceVersion, 
-        DnsQueryTypeName = DeviceCustomString4, 
+        DnsQueryTypeName = DeviceCustomString4,  
         DnsQuery = DeviceCustomString5, 
-        DnsNetworkDuration = DeviceCustomNumber1, 
-        Department = DeviceCustomString1, // Not part of the schema
+        DnsNetworkDuration = DeviceCustomNumber1,  
+        SrcUserDepartment = DeviceCustomString1, // Not part of the standard schema
         reqaction = DeviceCustomString2, 
-        resaction = DeviceCustomString3 
+        resaction = DeviceCustomString3, 
+        DvcUsername = SourceUserID,
+        DvcZone = SourceUserPrivileges,
+        SrcHostname = DeviceName
     | extend
         EventCount=int(1), 
-        EventStartTime=TimeGenerated, 
-        EventVendor = "zScaler", 
+        EventStartTime=TimeGenerated,  
+        EventVendor = "Zscaler", 
         EventProduct = "ZIA DNS", 
-        EventSchema = "Dns",
+        EventSchema = "Dns", 
         EventSchemaVersion="0.1.3", 
         EventEndTime=TimeGenerated, 
-        SrcUsernameType = "Upn",
-        EventSubType = iff(resaction == 'None', 'request', 'response'), 
+        SrcUsernameType = "Upn", 
+        SrcHostnameType = "Simple",
+        EventSubType = iff(resaction == 'None', 'request', 'response'),  
         DvcAction = iff(resaction == 'None', reqaction, resaction), 
-        EventResultDetails = iff (DeviceCustomString6 matches regex '^\\d', 'NOERROR', DeviceCustomString6), 
+        EventResultDetails = iff (DeviceCustomString6 matches regex '^\\d', 'NOERROR', DeviceCustomString6),  
         EventType = 'Query', 
-        UrlCategory = extract("cat=(.*)", 1, AdditionalExtensions), 
-        DnsRuleName = strcat (FlexString1, " / ", FlexString2)
+        UrlCategory = extract("cat=(.*)", 1, AdditionalExtensions),  
+        DnsRuleName = strcat (FlexString1, " / ", FlexString2) 
       | extend 
         EventResult = case (
           EventSubType == 'request', 'NA', 
