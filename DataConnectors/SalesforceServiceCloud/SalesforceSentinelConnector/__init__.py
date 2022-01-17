@@ -123,6 +123,7 @@ def gen_chunks_to_object(file_in_tmp_path, chunksize=100):
     field_names = [x if x != 'type' else 'type_' for x in field_names]
     reader = csv.DictReader(open(file_in_tmp_path), fieldnames=field_names)
     chunk = []
+    next(reader)
     for index, line in enumerate(reader):
         if (index % chunksize == 0 and index > 0):
             yield chunk
