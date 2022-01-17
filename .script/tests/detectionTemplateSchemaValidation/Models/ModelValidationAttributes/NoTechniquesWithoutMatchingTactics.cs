@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation
 {
@@ -14,9 +13,10 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
             var ruleProperties = value as ScheduledTemplateInternalModel;
             if (ruleProperties?.RelevantTechniques != null)
             {
+
                 foreach (string technique in ruleProperties?.RelevantTechniques)
                 {
-                    var correspondingTactics = KillChainTechniquesHelper.GetCorrespondingKillChainIntent(technique).AsAttackTactics();
+                    var correspondingTactics = KillChainTechniquesHelper.GetCorrespondingKillChainIntent(technique.ExtractTechnique()).AsAttackTactics();
                     bool isTacticExists = correspondingTactics.Any((AttackTactic tactic) => ruleProperties?.Tactics?.Contains(tactic) ?? false);
 
                     if (!isTacticExists || correspondingTactics.Count == 0)
