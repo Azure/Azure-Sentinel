@@ -38,6 +38,7 @@ Few Microsoft Sentinel solutions are selectively enabled for CSP Program (Cloud 
 6. Palo Alto Prisma
 7. Imperva WAF Cloud
 8. Cybersecurity Maturity Model Certification CMMC
+9. Sophos Endpoint Protection
 
 * If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription for those solutions not yet enabled for CSP Program (not from the list above), you'll encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers'. 
 
