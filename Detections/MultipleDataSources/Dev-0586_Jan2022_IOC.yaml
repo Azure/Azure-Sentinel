@@ -38,14 +38,15 @@ query:  |
   let Command_Line = (iocs | where Type =~ "CommandLine" | project IoC);
   (union isfuzzy=true
   (DeviceProcessEvents
-  | where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or ( InitiatingProcessCommandLine has ('127.0.0.1\\ADMIN$') and InitiatingProcessCommandLine has_any (Command_Line))
+  | where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or ( InitiatingProcessCommandLine has ('127.0.0.1\\ADMIN$') and InitiatingProcessCommandLine has_any (Command_Line)) or 
+   (InitiatingProcessParentFileName =~ "wscript.exe" and ProcessCommandLine has_all("advancedrun.exe", "stop defender"))
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256
   | extend Account = AccountName, Computer = DeviceName,  CommandLine = InitiatingProcessCommandLine, FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), "InitiatingProcessSHA256", SHA256 in (sha256Hashes), "SHA256", "No Match")
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match")
   ),
   ( SecurityEvent
   | where EventID == 4688
-  | where ( CommandLine has (@'127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line))
+  | where ( CommandLine has (@'127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line)) or (ParentProcessName has "wscript.exe" and CommandLine has_all ("advancedrun.exe", "stop defender"))
   | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
   ),
@@ -55,7 +56,7 @@ query:  |
   | extend timestamp = TimeGenerated, FileHashCustomEntity = 'SHA256', Account = SourceUserID
   ),
   ( imFileEvent
-  | where Hash in~ (sha256Hashes) or  ( ActingProcessCommandLine has ('127.0.0.1\\ADMIN$') and ActingProcessCommandLine has_any (Command_Line))
+  | where Hash in~ (sha256Hashes) or  ( ActingProcessCommandLine has ('127.0.0.1\\ADMIN$') and ActingProcessCommandLine has_any (Command_Line)) or ( ActingProcessParentFileName =~ "wscript.exe" and ActingProcessCommandLine has_all("advancedrun.exe", "stop defender"))
   | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
@@ -65,13 +66,19 @@ query:  |
   | where EventID == 1
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
-  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
+  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"]), ParentImage = tostring(EventDetail.[20].["#text"])
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
   | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
-  | where (Hashes has_any (sha256Hashes) ) or ( CommandLine has ('127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line)) 
+  | where (Hashes has_any (sha256Hashes) ) or ( CommandLine has ('127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line)) or (ParentImage has "wscript.exe" and CommandLine has_all ("advancedrun.exe", "stop defender"))
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes
+  ),
+  (DeviceNetworkEvents
+  | where InitiatingProcessFileName =~ "wscript.exe"
+  | where RemoteUrl has "cdn.discordapp.com/attachments" and RemoteUrl endswith ".jpg" or RemoteUrl endswith "jpeg" or RemoteUrl endswith "bin" or RemoteUrl endswith "png" or RemoteUrl endswith "pif" or RemoteUrl endswith "exe"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by ActionType, DestinationIP = RemoteIP, RemoteUrl, DestinationPort = RemotePort, SourceIP = LocalIP, Type, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath,  InitiatingProcessParentFileName, ProcessName = InitiatingProcessFileName, Computer = DeviceName
+  | extend timestamp = StartTime, IPCustomEntity = DestinationIP, HostCustomEntity = Computer
   )
   )
 entityMappings:
@@ -87,6 +94,10 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
