@@ -92,7 +92,8 @@ The following steps reference the Partner Center's more detailed documentation.
 2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
 
 3.	Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-listing), including the title, description, pictures, videos, support information, and so on. As one of your search keywords, add `f1de974b-f438-4719-b423-8bf704ba2aef` to have your solution appear in the Microsoft Sentinel content hub.
-**Note**: If you want to start your solution in Preview (Public Preview), you can do so by appending "(Preview)" in the solution / offer title. This will ensure your offer gets tagged with Preview tag in Microsoft Sentinel Content hub. 
+
+   **Note**: If you want to start your solution in Preview (Public Preview), you can do so by appending "(Preview)" in the solution / offer title. This will ensure your offer  gets tagged with Preview tag in Microsoft Sentinel Content hub. 
 
 4.	[Create a plan](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-plans) and select **Solution Template** as the plan type.
 
