@@ -1,8 +1,5 @@
 import subprocess
 
-results_status_dict = {}
-recommended_fixes_dict = {"check_if_agent_is_running": "install the agent and try again"}
-general_warning_array = []
 FAILED_TESTS_COUNT = 0
 commands_dict = {
     "verify_ama_agent_service_is_running": ["netstat -lnpvt | grep mdsd", ["mdsd"]],
@@ -100,7 +97,7 @@ def verify_agent_installation():
             "Could not detect AMA running on the machine. Please install AMA using the following guide and try again")
 
 
-def verify_DCR_configuration():
+def verify_dcr_configuration():
     command_name1 = "Verify_DCR_exists"
     command_object1 = HandleCommand(command_name1, commands_dict[command_name1][0], commands_dict[command_name1][1])
     command_object1.run_test()
@@ -119,7 +116,7 @@ def main():
     print_notice("Note this script should be run in elevated privileges")
     print_notice("Please validate you are sending CEF messages to agent machine.")
     verify_agent_installation()
-    verify_DCR_configuration()
+    verify_dcr_configuration()
     print("The total number of failed requests is: %s" % FAILED_TESTS_COUNT)
     if FAILED_TESTS_COUNT == 0:
         print_ok("No errors were detected. Installation is successful")
