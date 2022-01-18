@@ -46,6 +46,7 @@ class HandleCommand:
                     global FAILED_TESTS_COUNT
                     FAILED_TESTS_COUNT += 1
                     return False
+            self.is_successful = True
             print(self.command_name + "-----> Success")
             return True
         print(self.command_name + "-----> Could not run this test")
@@ -55,18 +56,73 @@ class HandleCommand:
         self.is_test_successful()
 
 
+def print_error(input_str):
+    '''
+    Print given text in red color for Error text
+    :param input_str:
+    '''
+    print("\033[1;31;40m" + input_str + "\033[0m")
+
+
+def print_ok(input_str):
+    '''
+    Print given text in green color for Ok text
+    :param input_str:
+    '''
+    print("\033[1;32;40m" + input_str + "\033[0m")
+
+
+def print_warning(input_str):
+    '''
+    Print given text in yellow color for warning text
+    :param input_str:
+    '''
+    print("\033[1;33;40m" + input_str + "\033[0m")
+
+
+def print_notice(input_str):
+    '''
+    Print given text in white background
+    :param input_str:
+    '''
+    print("\033[0;30;47m" + input_str + "\033[0m")
+
+
 def verify_agent_installation():
-    command_name = "verify_ama_agent_service_is_running"
-    command_object = HandleCommand(command_name, commands_dict[command_name][0], commands_dict[command_name][1])
-    command_object.run_test()
-    command_name = "verify_ama_agent_process_is_running"
-    command_object = HandleCommand(command_name, commands_dict[command_name][0], commands_dict[command_name][1])
-    command_object.run_test()
+    command_name1 = "verify_ama_agent_service_is_running"
+    command_object1 = HandleCommand(command_name1, commands_dict[command_name1][0], commands_dict[command_name1][1])
+    command_object1.run_test()
+    command_name2 = "verify_ama_agent_process_is_running"
+    command_object2 = HandleCommand(command_name2, commands_dict[command_name2][0], commands_dict[command_name2][1])
+    command_object2.run_test()
+    if not command_object1.is_successful or not command_object2.is_successful:
+        print_error(
+            "Could not detect AMA running on the machine. Please install AMA using the following guide and try again")
+
+
+def verify_DCR_configuration():
+    command_name1 = "Verify_DCR_exists"
+    command_object1 = HandleCommand(command_name1, commands_dict[command_name1][0], commands_dict[command_name1][1])
+    command_object1.run_test()
+    if not command_object1.is_successful:
+        print_error(
+            "Could not detect any DCR running on the machine. Please create one using the following steps and try again:")
+    command_name2 = "Verify_DCR_content_has_CEF_Stream"
+    command_object2 = HandleCommand(command_name2, commands_dict[command_name2][0], commands_dict[command_name2][1])
+    command_object2.run_test()
+    if not command_object2.is_successful:
+        print_error(
+            "Could not detect the CEF stream in any of the running DCR's on this machine. Please create a DCR with the CEF stream using the following guide and try again:")
 
 
 def main():
+    print_notice("Note this script should be run in elevated privileges")
+    print_notice("Please validate you are sending CEF messages to agent machine.")
     verify_agent_installation()
+    verify_DCR_configuration()
     print("The total number of failed requests is: %s" % FAILED_TESTS_COUNT)
+    if FAILED_TESTS_COUNT == 0:
+        print_ok("No errors were detected. Installation is successful")
 
 
 if __name__ == '__main__':
