@@ -1,18 +1,12 @@
-﻿using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text.RegularExpressions;
+﻿using System;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation
 {
-    public enum KillChainIntent
+    public enum Tactic
     {
         /// <summary>
-        /// Unknown alert intent is the default value for the <see cref="KillChainIntent"/> enumeration. 
+        /// Unknown alert intent is the default value for the <see cref="Tactic"/> enumeration. 
         /// Some alert providers won't tag alerts at first stage with intents, so having a default unknown values helps make this field optional in the 
-        /// <see cref="SecurityAlert"/> schema.
         /// </summary>
         Unknown = 0,
 
