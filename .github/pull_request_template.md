@@ -17,6 +17,8 @@ Thank you for your contribution to the Microsoft Sentinel Github repo.
    Testing Completed:
    - Yes/No/Need Help
 
+_Note: If updating a detection, you must update the version field._
+
 > After the submission has been made, please look at the Validation Checks.
 
    Checked that the validations are passing and have addressed any issues that are present:
