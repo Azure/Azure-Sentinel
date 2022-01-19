@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 1/14/2022
+        LASTEDIT: 1/18/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -254,14 +254,14 @@ function Update-TablesRetention {
         [parameter(Mandatory = $true)] $TablesForRetention,		
 		[parameter(Mandatory = $true)] $TotalRetentionInDays
     )
-		
+	$UpdatedTablesRetention = @{}	
 	$TablesForRetention.GetEnumerator() | ForEach-Object {
 		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($_.Key)" + "?api-version=2021-07-01-privatepreview"						
 		
 		$TablesApiBody = @"
 			{
 				"properties": {
-					"retentionInDays": $($_.Value),
+					"retentionInDays": 90,
 					"totalRetentionInDays":$TotalRetentionInDays
 				}
 			}
@@ -275,9 +275,11 @@ function Update-TablesRetention {
 		}
 
         if($TablesApiResult) {
+            $UpdatedTablesRetention.Add($($_.Key), $TotalRetentionInDays)
             Write-Log -Message "Table : $($_.Key) retention updated successfully from $($_.Value) days to $TotalRetentionInDays" -LogFileName $LogFileName -Severity Information
         }		
 	}
+    return $UpdatedTablesRetention
 }
 
 function Collect-Input {
@@ -340,7 +342,10 @@ function Collect-Input {
     {
         $days = [int]$textBox.Text.Trim()        
         return $days  
-    }    
+    }
+    else {
+        exit
+    }
 }
 
 function Select-Plan {    
@@ -427,7 +432,7 @@ foreach($CurrentSubscription in $GetSubscriptions)
         $SubscriptionId = $CurrentSubscription.id
         Write-Log "Working in Subscription: $($CurrentSubscription.Name)" -LogFileName $LogFileName -Severity Information
 
-        $LAWs = Get-AzOperationalInsightsWorkspace | Where-Object { $_.ProvisioningState -eq "Succeeded" } | Out-GridView -Title "Select Log Analytics workspace" -PassThru 
+        $LAWs = Get-AzOperationalInsightsWorkspace | Where-Object { $_.ProvisioningState -eq "Succeeded" } | Select-Object -Property Name, ResourceGroupName, Location | Out-GridView -Title "Select Log Analytics workspace" -PassThru 
         if($null -eq $LAWs) {
             Write-Log "No Log Analytics workspace found..." -LogFileName $LogFileName -Severity Error 
         }
@@ -442,13 +447,14 @@ foreach($CurrentSubscription in $GetSubscriptions)
                 $tablePlan = Select-Plan
                 if ($tablePlan.Trim() -eq "Analytics") {
                     #Get all the tables from the selected Azure Log Analytics Workspace
-                    $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()
-                    $TotalRetentionInDays = Collect-Input 
+                    $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
                     $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
+                    $QualifiedTables | Out-GridView -Title "Current Retention Values" -PassThru
+                    $TotalRetentionInDays = Collect-Input 
                     $ConfiguredTables = Set-TableConfiguration -QualifiedTables $QualifiedTables -RetentionType $tablePlan.Trim()
-                    Update-TablesRetention -TablesForRetention $ConfiguredTables -TotalRetentionInDays $TotalRetentionInDays
-                    $UpdatedConfigs = $ConfiguredTables.Keys.ForEach('ToString')
-                    Get-TableConfiguration -LaTables $UpdatedConfigs
+                    $UpdatedTables = Update-TablesRetention -TablesForRetention $ConfiguredTables -TotalRetentionInDays $TotalRetentionInDays                    
+                    $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
+                    $UpdatedTables | Out-GridView -Title "Updated Retention Values" -PassThru
                 }
                 else {
                     $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()
