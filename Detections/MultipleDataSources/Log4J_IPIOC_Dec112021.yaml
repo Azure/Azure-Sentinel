@@ -70,8 +70,8 @@ query:  |
   let CSlogDestIP = CommonSecurityLog | summarize by IPAddress = DestinationIP, Type;
   let CSlogMsgIP = CommonSecurityLog | extend MessageIP = extract(IPRegex, 0, Message) | summarize by IPAddress = MessageIP, Type;
   let DnsIP = DnsEvents | summarize by IPAddress = IPAddresses, Type;
-  // If you have enabled the _Im_Dns and/or imNetworkSession normalization in your workspace, you can uncomment one or both below.  Reference - https://docs.microsoft.com/azure/sentinel/normalization
-  //let imDnsIP = _Im_Dns (response_has_any_prefix=IPList) | summarize by IPAddress = ResponseName, Type;
+  let imDnsIP = _Im_Dns (response_has_any_prefix=IPList) | summarize by IPAddress = ResponseName, Type;
+  // If you have enabled the imNetworkSession normalization in your workspace, you can uncomment the line below.  Reference - https://docs.microsoft.com/azure/sentinel/normalization
   //let imNetSessIP = imNetworkSession (dstipaddr_has_any_prefix=IPList) | summarize by IPAddress = DstIpAddr, Type;
   //Cloud service logs
   let officeIP = OfficeActivity | summarize by IPAddress = ClientIP, Type;
@@ -91,10 +91,8 @@ query:  |
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"])
   | where SourceIP in (IPList) or DestinationIP in (IPList) | extend IPAddress = iff(SourceIP in (IPList), SourceIP, DestinationIP) | summarize by IPAddress, Type;
-  // If you have enabled the _Im_Dns and/or imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
-  //let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP, imDnsIP, imNetSessIP
-  // If you uncomment above, then comment out the line below
-  let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP
+  // If you have enabled the imNetworkSession normalization in your workdspace, you can uncomment imNetSessIP element below. Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  let ipsort =   union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP, imDnsIP //, imNetSessIP
   | summarize by IPAddress
   | where isnotempty(IPAddress) | where not(ipv4_is_private(IPAddress)) and IPAddress !in ('0.0.0.0','127.0.0.1');
   let ipMatch = ipsort | where IPAddress in (IPList);
@@ -178,13 +176,13 @@ query:  |
   | where DestinationIP has_any (ipMatch)
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP
   )
-  // If you have enabled the _Im_Dns and/or imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  ,(_Im_Dns (response_has_any_prefix=IPList)
+  | project TimeGenerated, ResponseName, SrcIpAddr, Type
+  | extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
+  )
+  // If you have enabled the _ imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
   //,
-  //(_Im_Dns (response_has_any_prefix=IPList)
-  //| project TimeGenerated, ResponseName, SrcIpAddr, Type
-  //| extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr
-  //| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
-  //),
   //(imNetworkSession (dstipaddr_has_any_prefix=IPList)
   //| project TimeGenerated, DstIpAddr, SrcIpAddr, Type
   //| extend timestamp = TimeGenerated, IPCustomEntity = DstIpAddr, HostCustomEntity = SrcIpAddr
