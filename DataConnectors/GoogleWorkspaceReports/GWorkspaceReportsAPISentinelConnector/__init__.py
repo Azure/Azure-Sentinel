@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import requests
+from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import azure.functions as func
@@ -55,17 +56,24 @@ if(not match):
 
 def get_credentials():
     creds = None
-    if pickle_string:
-        try:
-            creds = pickle.loads(pickle_string)
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    creds.refresh(Request())
-                    logging.info("Token refreshed!!")
-        except Exception as pickle_read_exception:
-            logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
-    else:
-        raise Exception("Google Workspace Reports: Pickle_string is empty. Exit.")
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            logging.info("Token refreshed!!")
+        else:
+            if pickle_string:
+                try:
+                    creds = pickle.loads(pickle_string)
+                except Exception as pickle_read_exception:
+                    logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
+            else:
+                raise Exception("Google Workspace Reports: Pickle_string is empty. Exit.")
+
+        # Save the credentials for the next run
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
     return creds
 
 def generate_date():
