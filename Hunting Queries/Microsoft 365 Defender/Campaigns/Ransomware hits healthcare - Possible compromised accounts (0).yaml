@@ -1,0 +1,34 @@
+id: aa6dcfae-ad20-4643-a72d-1b4a12b7503e
+name: Ransomware hits healthcare - Possible compromised accounts (0)
+description: |-
+  Identify accounts that have logged on to affected endpoints.
+  Check for specific alerts.
+requiredDataConnectors:
+- connectorId: Microsoft365Defender
+  dataTypes:
+  - AlertInfo
+  - AlertEvidence
+  - DeviceLogonEvents
+query: |-
+  AlertInfo 
+  | where Timestamp > ago(7d)
+  // Attempts to clear security event logs.
+  | where Title in("Event log was cleared", 
+  // List alerts flagging attempts to delete backup files.
+  "File backups were deleted", 
+  // Potential Cobalt Strike activity - Note that other threat activity can also 
+  // trigger alerts for suspicious decoded content
+  "Suspicious decoded content", 
+  // Cobalt Strike activity
+  "'Atosev' malware was detected", 
+  "'Ploty' malware was detected", 
+  "'Bynoco' malware was detected")
+  | extend AlertTime = Timestamp
+  | join AlertEvidence on AlertId 
+  | distinct DeviceName, AlertTime, AlertId, Title
+  | join DeviceLogonEvents on DeviceName
+  // Creating 10 day Window surrounding alert activity
+  | where Timestamp < AlertTime +5d and Timestamp > AlertTime - 5d 
+  // Projecting specific columns
+  | project Title, DeviceName, DeviceId, Timestamp, LogonType, AccountDomain, 
+  AccountName, AccountSid, AlertTime, AlertId, RemoteIP, RemoteDeviceName

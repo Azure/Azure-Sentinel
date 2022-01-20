@@ -1,0 +1,13 @@
+id: 6a94142f-e685-49d1-8e64-09ccb4343403
+name: OAuth Apps reading mail via GraphAPI anomaly [Nobelium]
+description: |-
+  Use this query to review OAuth applications whose behaviour has changed as compared to a prior baseline period. The following query returns OAuth Applications accessing user mail via Graph that did not do so in the preceding week.
+requiredDataConnectors:
+- connectorId: Microsoft365Defender
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Exfiltration
+tags:
+- Nobelium
+query: "//Look for OAuth App reading mail via GraphAPI -- that did not read mail via graph API in prior week \r\nlet appMailReadActivity = (timeframeStart:datetime, timeframeEnd:datetime) { \r\nCloudAppEvents \r\n| where Timestamp between (timeframeStart .. timeframeEnd) \r\n| where ActionType == \"MailItemsAccessed\" \r\n| where RawEventData has \"00000003-0000-0000-c000-000000000000\" // performance check \r\n| extend rawData = parse_json(RawEventData) \r\n| extend AppId = tostring(parse_json(rawData.AppId)) \r\n| extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId \r\n| summarize by OAuthAppId \r\n}; \r\nappMailReadActivity(ago(1d),now())                           // detection period \r\n| join kind = leftanti appMailReadActivity(ago(7d),ago(2d))  // baseline period \r\non OAuthAppId "

@@ -1,0 +1,15 @@
+id: b57c1612-3bdc-492f-8e76-44dc53bc1819
+name: ImpersonatedUserFootprint
+description: |-
+  Azure ATP raises alert on suspicious Kerberos ticket, pointing to a potential overpass-the-hash attack.
+  Once attackers gain credentials for a user with higher privileges, they will use the stolen credentials to sign into other devices and move laterally.
+  This query finds related sign-in events following overpass-the-hash attack to trace the footprint of the impersonated user.
+requiredDataConnectors:
+- connectorId: Microsoft365Defender
+  dataTypes:
+  - AlertInfo
+  - AlertEvidence
+  - DeviceLogonEvents
+tactics:
+- Lateral movement
+query: "AlertInfo\r\n| where ServiceSource == \"Azure ATP\"\r\n| where Title == \"Suspected overpass-the-hash attack (Kerberos)\"\r\n| extend AlertTime = Timestamp \r\n| join \r\n    (\r\n        AlertEvidence \r\n            | where EntityType == \"User\"\r\n    ) \r\n    on AlertId \r\n| distinct AlertTime,AccountSid \r\n| join kind=leftouter  \r\n    (\r\n        DeviceLogonEvents\r\n        | where LogonType == \"Network\" and ActionType == \"LogonSuccess\"\r\n        | extend LogonTime = Timestamp \r\n    )\r\n    on AccountSid \r\n| where LogonTime between (AlertTime .. (AlertTime + 2h))\r\n| project DeviceId , AlertTime , AccountName , AccountSid "

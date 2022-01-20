@@ -1,0 +1,15 @@
+id: 5b820106-6b7d-46bc-b8d0-83065aaa2343
+name: OAuth Apps reading mail both via GraphAPI and directly [Nobelium]
+description: |-
+  As described in previous guidance, Nobelium may re-purpose legitimate existing OAuth Applications in the environment to their own ends. However, malicious activity patterns may be discernable from  legitimate ones.
+  The following query returns OAuth Applications that access mail both directly and via Graph, allowing review of whether such dual access methods follow expected use patterns.
+  Reference - https://msrc-blog.microsoft.com/2020/12/13/customer-guidance-on-recent-nation-state-cyber-attacks/
+requiredDataConnectors:
+- connectorId: Microsoft365Defender
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Exfiltration
+tags:
+- Nobelium
+query: "// Look for OAuth apps reading mail both via GraphAPI, and directly (not via GraphAPI) \r\n// (one method may be legitimate and one suspect?) \r\nlet appsReadingMailDirectly = CloudAppEvents \r\n| where Timestamp >= ago(1h) \r\n| where ActionType == \"MailItemsAccessed\" \r\n| where RawEventData has \"AppId\" \r\n| extend rawData = parse_json(RawEventData) \r\n| extend AppId = tostring(parse_json(rawData.AppId)) \r\n| where AppId != \"00000003-0000-0000-c000-000000000000\" \r\n| summarize by AppId \r\n| project-rename OAuthAppId = AppId; \r\nlet appsReadingMailViaGraphAPI = CloudAppEvents \r\n| where Timestamp >= ago(1h) \r\n| where ActionType == \"MailItemsAccessed\" \r\n| where RawEventData has \"ClientAppId\" \r\n| where RawEventData has \"00000003-0000-0000-c000-000000000000\" // performance check \r\n| extend rawData = parse_json(RawEventData) \r\n| extend AppId = tostring(parse_json(rawData.AppId)) \r\n| extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId \r\n| where AppId == \"00000003-0000-0000-c000-000000000000\" \r\n| summarize by OAuthAppId; \r\n// Applications reading mail both directly and via GraphAPI  \r\n// (one method may be legitimate and one suspect?) \r\nappsReadingMailDirectly \r\n| join kind = inner appsReadingMailViaGraphAPI \r\non OAuthAppId \r\n| project OAuthAppId "

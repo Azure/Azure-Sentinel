@@ -1,0 +1,16 @@
+id: 1ebfd2f9-dcd0-406d-96f4-6033473dffc6
+name: SuspiciousUrlClicked
+description: |-
+  This query correlates Office 365 Advanced Threat Protection (ATP) signals and Azure Active Directory (Azure AD) identity data to find the relevant endpoint event BrowerLaunchedToOpen in Microsoft Defender ATP.
+  This event reflects relevant clicks on the malicious URL in the spear-phishing email recognized by Office 365 ATP.
+requiredDataConnectors:
+- connectorId: Microsoft365Defender
+  dataTypes:
+  - AlertInfo
+  - AlertEvidence
+  - EmailEvents
+  - IdentityInfo
+  - DeviceEvents
+tactics:
+- Initial access
+query: "// Some URL are wrapped with a safelink\r\n// Let's get the the unwrapped url and clicks \r\nAlertInfo\r\n| where ServiceSource == \"Office 365 ATP\"\r\n| join (\r\n        AlertEvidence\r\n        | where EntityType ==\"Url\"\r\n        | project AlertId, RemoteUrl \r\n    )\r\n    on AlertId\r\n| join (\r\n        AlertEvidence\r\n        | where EntityType ==\"MailMessage\"\r\n        | project AlertId, NetworkMessageId \r\n    )\r\n    on AlertId\r\n// Get the unique NetworkMessageId for the email containing the Url\r\n| distinct RemoteUrl, NetworkMessageId\r\n| join EmailEvents on NetworkMessageId\r\n// Get the email RecipientEmailAddress and ObjectId from the email \r\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId\r\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId \r\n// get the UserSid of the Recipient\r\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, OnPremSid \r\n// Get the Url click event on the recipient device.\r\n| join kind = inner  \r\n    (DeviceEvents \r\n    | where ActionType == \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl) \r\n    | project UrlDeviceClickTime = Timestamp , UrlClickedByUserSid = RemoteUrl, \r\n                InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName\r\n    ) \r\n   on $left.OnPremSid == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\r\n| distinct UrlDeviceClickTime, RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId, \r\n    OnPremSid, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName \r\n| sort by UrlDeviceClickTime desc "

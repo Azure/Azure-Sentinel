@@ -1,0 +1,26 @@
+id: 1c834e2e-ecc7-4803-9803-0ab22caca820
+name: Map external devices (1)
+description: |-
+  Action "PnpDeviceConnected" reports the connection of any plug and play device.
+  Read more online on event 6416: https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-6416.
+  Query #1: look for rare one-time devices connected to a specific machine.
+requiredDataConnectors:
+- connectorId: Microsoft365Defender
+  dataTypes:
+  - DeviceEvents
+query: |-
+  // Query #2: map uncommon storage devices across the org
+  // This is a noisy query - but it can serve as reference for working with this event
+  DeviceEvents
+  | where ActionType == "PnpDeviceConnected"
+  | extend parsed=parse_json(AdditionalFields)
+  | extend
+      DeviceDescription=tostring(parsed.DeviceDescription),
+      ClassName=tostring(parsed.ClassName)
+  | where
+      ClassName in ("DiskDrive", "CDROM")
+      or ClassName contains "nas"
+      or ClassName contains "SCSI"
+      or (ClassName == "USB" and DeviceDescription contains "storage")
+  | summarize ComputerCount=dcount(DeviceName) by ClassName, DeviceDescription
+  | where ComputerCount < 5
