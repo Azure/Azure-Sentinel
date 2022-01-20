@@ -17,11 +17,9 @@ The Microsoft Sentinel: Maturity Model for Event Log Management (M-21-31) Soluti
 ### [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
 | <strong> Roles </strong> | <strong> Rights </strong> | 
 |:--|:--|
-|Microsoft Sentinel: Security Reader | View Workbooks, Analytics, Hunting, Resources |
-|Security Reader| View Security Recommendations |
-|Microsoft Sentinel: Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries |
-|Security Contributor| Apply Security Recommendations |
-|Microsoft Sentinel: Automation Contributor| Deploy/Modify Playbooks & Automation Rules |
+|Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
+|Security Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries, Apply Security Recommendations |
+|Automation Contributor| Deploy/Modify Playbooks & Automation Rules |
 |Owner| Assign Regulatory Compliance Initiatives|
 
 ### Onboarding Prerequisites 
