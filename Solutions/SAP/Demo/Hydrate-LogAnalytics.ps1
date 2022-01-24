@@ -106,7 +106,7 @@
         [ValidateNotNull()]
         [ValidateNotNullOrEmpty()]
         [string]
-        $ConfigURI="https://raw.githubusercontent.com/MSFTandrelom/Azure-Sentinel/andrelom/Solutions/SAP/Demo/settings.json"
+        $ConfigURI="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SAP/Demo/settings.json"
     )
 
 #https://docs.microsoft.com/ru-ru/azure/azure-monitor/logs/data-collector-api#powershell-sample
@@ -161,7 +161,7 @@ Function Get-SampleMetadata {
         [string]
         $location)
     process {
-            $metadata = Get-WebContent -URI $_,"metadata.json" -join "/" | ConvertFrom-Json
+            $metadata = Get-WebContent -URI ($location,"metadata.json" -join "/") | ConvertFrom-Json
             return $metadata
     }
 }
@@ -249,24 +249,29 @@ Function Get-WebContent
     )
     begin
     {
-        $response = Invoke-WebRequest -Uri $URI -UseBasicParsing
-        if ($response.StatusCode -eq 200)
+        try
         {
-            return $response.Content
+            $response = Invoke-WebRequest -Uri $URI -UseBasicParsing -ErrorAction SilentlyContinue -Headers @{"Cache-Control"="no-cache"}
+            if ($response.StatusCode -eq 200)
+            {
+                return $response.Content
+            }
+            else {
+                throw "Received invalid status code while retreiving content from URL $URI. Code $($response.StatusCode)"
+            }
         }
-        if ($response.StatusCode -eq 404)
+        catch [System.Net.WebException]
         {
-            return $false
-        }
-        else {
-            throw "Received invalid status code while retreiving content from URL $URI. Code $($response.StatusCode)"
+            if ($_.Exception.Response.StatusCode.value__ -eq 404)
+            {
+                return $false
+            }
         }
     }
-
 }
 $Config = Get-WebContent $ConfigURI | ConvertFrom-Json
 
-$globalReplacementsarr = Get-WebContent -Path ($config.Base,"replacements.json" -join "/") -Raw | ConvertFrom-Json
+$globalReplacementsarr = Get-WebContent -Uri ($config.Base,"replacements.json" -join "/") -Raw | ConvertFrom-Json
 $globalReplacements = @{}
 foreach ($gr in $globalReplacementsarr) {
     $globalReplacements.Add($gr.ReplacementName, @{ReplacementValueScriptBlock = ($gr.ReplacementValueScriptBlock); ReplacementValue = ($gr.ReplacementValue) })
@@ -274,10 +279,10 @@ foreach ($gr in $globalReplacementsarr) {
 Init-Replacements -Replacements $globalReplacements
 
 foreach ($scenario in $config.Scenarios) {
-    if (Get-WebContent ($Config.Base,"Scenarios",$scenario,".processed" -join "/")) {
+    if (Get-WebContent ($Config.Base,"scenarios",$scenario,".processed" -join "/")) {
         continue
     }
-    $metadata = Get-SampleMetadata -location ($Config.Base,"Scenarios",$scenario -join "/")
+    $metadata = Get-SampleMetadata -location ($Config.Base,"scenarios",$scenario -join "/")
     if ($null -ne $metadata.RunCount) { $RunCount = $metadata.RunCount }
     else { $RunCount = 1 }
     if ($null -ne $metadata.Replacements) { $localReplacementsarr = $metadata.Replacements }
@@ -292,8 +297,12 @@ foreach ($scenario in $config.Scenarios) {
     $inLines = New-Object 'system.collections.generic.dictionary[string,PSCustomObject]'
 
     foreach ($samplefile in $metadata.Files) {
-        $tablename = $samplefile.Name
-        $data = Get-WebContent -Uri $config.Base,"scenarios",$scenario,$samplefile -join "/"
+        $tablename = $samplefile.Split('.')[0]
+        $data = (Get-WebContent -Uri ($config.Base,"scenarios",$scenario,$samplefile -join "/")).Split("`r")
+        if (-not $data)
+        {
+            throw "Invalid data received for scenario $scenario sample file $samplefile"
+        }
         if ($data[0].Contains("_s`"")) {
             $data[0] = $data[0].Replace("_s`"", "`"")
         }
@@ -301,7 +310,7 @@ foreach ($scenario in $config.Scenarios) {
         foreach ($line in $currentCSV) {
             Cleanup-Line -line $line
         }
-        $inLines.Add($tablename, $currentCSV)
+        $inLines.Add($samplefile, $currentCSV)
     }
 
     for ($i = 0; $i -lt $metadata.RunCount; $i++) {
@@ -319,7 +328,7 @@ foreach ($scenario in $config.Scenarios) {
                     $runparams = @{
                         LogAnalyticsWorkspaceID = $LogAnalyticsWorkspaceID
                         LogAnalyticsWorkspaceKey= $LogAnalyticsWorkspaceKey
-                        logTableName            = $file.Split('.')[0]
+                        logTableName            = $tablename
                         object                  = $outlines[$file]
                         TimeStampField          = "RecordTime"
                     }
@@ -341,7 +350,7 @@ foreach ($scenario in $config.Scenarios) {
                 TimeStampField          = "RecordTime"
             }
             Post-LogAnalyticsData @runparams
-            $outlines[$tablename].Clear()
+            $outlines[$logfile].Clear()
         }
     }
 }
