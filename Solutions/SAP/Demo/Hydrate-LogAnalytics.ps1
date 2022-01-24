@@ -94,7 +94,19 @@
                         }                    
                     })]
         [string]
-        $LogAnalyticsWorkspaceKey
+        $LogAnalyticsWorkspaceKey,
+
+        [Parameter(Mandatory=$false, 
+                   HelpMessage="URI location of the settings.json file",
+                   ValueFromPipeline=$true,
+                   ValueFromPipelineByPropertyName=$true, 
+                   ValueFromRemainingArguments=$false, 
+                   Position=2)
+                   ]
+        [ValidateNotNull()]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $ConfigURI="https://raw.githubusercontent.com/MSFTandrelom/Azure-Sentinel/andrelom/Solutions/SAP/Demo/settings.json"
     )
 
 #https://docs.microsoft.com/ru-ru/azure/azure-monitor/logs/data-collector-api#powershell-sample
@@ -146,17 +158,14 @@ Function Post-LogAnalyticsData($LogAnalyticsWorkspaceID, $LogAnalyticsWorkspaceK
 Function Get-SampleMetadata {
     param (
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)]
-        [ValidateScript({ Test-Path $_ })] 
         [string]
         $location)
     process {
-        $metadatafile = Get-ChildItem -Path $location -Filter "metadata.json"
-        if ($metadatafile) {
-            $metadata = Get-Content -Path $metadatafile.FullName -Raw | ConvertFrom-Json
+            $metadata = Get-WebContent -URI $_,"metadata.json" -join "/" | ConvertFrom-Json
             return $metadata
-        }
     }
 }
+
 Function Cleanup-Line {
     param ($line)
     process {
@@ -233,21 +242,42 @@ Function Make-LineReplacements {
         return $line
     }
 }
+Function Get-WebContent
+{
+    param(
+        $URI
+    )
+    begin
+    {
+        $response = Invoke-WebRequest -Uri $URI -UseBasicParsing
+        if ($response.StatusCode -eq 200)
+        {
+            return $response.Content
+        }
+        if ($response.StatusCode -eq 404)
+        {
+            return $false
+        }
+        else {
+            throw "Received invalid status code while retreiving content from URL $URI. Code $($response.StatusCode)"
+        }
+    }
 
-$ScriptLoc = split-path -parent $MyInvocation.MyCommand.Definition
-$SamplesPath = Join-Path -Path $ScriptLoc "Scenarios"
-$globalReplacementsarr = Get-Content -Path (Join-Path -Path $ScriptLoc "replacements.json") -Raw | ConvertFrom-Json
+}
+$Config = Get-WebContent $ConfigURI | ConvertFrom-Json
+
+$globalReplacementsarr = Get-WebContent -Path ($config.Base,"replacements.json" -join "/") -Raw | ConvertFrom-Json
 $globalReplacements = @{}
 foreach ($gr in $globalReplacementsarr) {
     $globalReplacements.Add($gr.ReplacementName, @{ReplacementValueScriptBlock = ($gr.ReplacementValueScriptBlock); ReplacementValue = ($gr.ReplacementValue) })
 }
 Init-Replacements -Replacements $globalReplacements
 
-foreach ($subfolder in Get-ChildItem -Path $SamplesPath -Directory) {
-    if (Test-Path (Join-Path -Path $subfolder.FullName ".processed")) {
+foreach ($scenario in $config.Scenarios) {
+    if (Get-WebContent ($Config.Base,"Scenarios",$scenario,".processed" -join "/")) {
         continue
     }
-    $metadata = Get-SampleMetadata -location $subfolder.FullName
+    $metadata = Get-SampleMetadata -location ($Config.Base,"Scenarios",$scenario -join "/")
     if ($null -ne $metadata.RunCount) { $RunCount = $metadata.RunCount }
     else { $RunCount = 1 }
     if ($null -ne $metadata.Replacements) { $localReplacementsarr = $metadata.Replacements }
@@ -261,14 +291,13 @@ foreach ($subfolder in Get-ChildItem -Path $SamplesPath -Directory) {
     $outLines = New-Object 'system.collections.generic.dictionary[string,System.Collections.ArrayList]'
     $inLines = New-Object 'system.collections.generic.dictionary[string,PSCustomObject]'
 
-    foreach ($samplefile in Get-ChildItem -Path $subfolder.FullName -Exclude @("*.json", "*.processed")) {
+    foreach ($samplefile in $metadata.Files) {
         $tablename = $samplefile.Name
-        $data = Get-Content -Path $samplefile
+        $data = Get-WebContent -Uri $config.Base,"scenarios",$scenario,$samplefile -join "/"
         if ($data[0].Contains("_s`"")) {
             $data[0] = $data[0].Replace("_s`"", "`"")
-            $data | Out-File -FilePath $samplefile -Force
         }
-        $currentCSV = Import-Csv -Path $samplefile.FullName
+        $currentCSV = ConvertFrom-Csv $data
         foreach ($line in $currentCSV) {
             Cleanup-Line -line $line
         }
