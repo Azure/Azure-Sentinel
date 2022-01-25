@@ -211,7 +211,7 @@ function CarbonBlackAPI()
     }
 
     #Converting LogType to array
-    if([string]::IsNullOrWhiteSpace($LogType))
+    if([string]::IsNullOrWhiteSpace($logType))
     {
         if ($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
         {
@@ -221,9 +221,12 @@ function CarbonBlackAPI()
             $LogTypeArr = @("event","audit","alertSIEMAPI")
         }
     }else {
-        $logType = $LogType.Substring(1,$LogType.Length-2)
+        if($logType -like "``[*``]")
+        {
+            $logType = $logType.Substring(1,$logType.Length-2)
+        }
         $logType = $logType -replace """",""
-        $LogTypeArr = $LogType -split ','
+        $LogTypeArr = $logType -split ','
     }
     
 
