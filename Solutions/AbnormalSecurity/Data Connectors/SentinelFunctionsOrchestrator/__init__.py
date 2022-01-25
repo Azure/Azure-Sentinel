@@ -30,7 +30,7 @@ if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
-    logging.info(f"Executing orchestrator function")
+    logging.info(f"Executing orchestrator function version 1.1")
     datetimeEntityId = df.EntityId("SoarDatetimeEntity", "latestDatetime")
     stored_datetime = yield context.call_entity(datetimeEntityId, "get")
     logging.info(f"retrieved stored datetime: {stored_datetime}")
