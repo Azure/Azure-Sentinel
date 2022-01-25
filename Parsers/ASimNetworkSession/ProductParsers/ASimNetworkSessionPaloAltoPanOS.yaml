@@ -17,7 +17,7 @@ References:
 - Title: Palo Alto Common Event Format Integration Guide [pdf]
   Link: https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/cef/pan-os-90-cef-configuration-guide.pdf
 Description: |
-  This ASIM parser supports filtering and normalizing traffic logs produced by the Palo Alto Networks Connector to the ASIM Web Session normalized schema.
+  This Query Parser maps Palo Alto Networks network events to the Advanced SIEM Information Model Network Session schema
 ParserName: ASimNetworkSessionPaloAltoCEF
 ParserParams:
   - Name: disabled
@@ -39,7 +39,7 @@ ParserQuery: |
   | project-rename 
         EventProduct=DeviceProduct // Not Documented
       , EventProductVersion=DeviceVersion // Not Documented
-      , DvcHostname=DeviceName   
+      , Dvc=DeviceName   
       , NetworkApplicationProtocol=ApplicationProtocol
       , SrcZone=DeviceCustomString4 
       , DstZone=DeviceCustomString5 
@@ -56,7 +56,7 @@ ParserQuery: |
       , PaloAltoFlags=FlexString1 // Flags
   | extend
     EventVendor="Palo Alto Networks"
-      ,  NetworkBytes=tolong(FlexNumber1)
+      , NetworkBytes=tolong(FlexNumber1)
       , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
       , DstUsernameType=case(isempty(DstUsername), "", DstUsername contains "@", "UPN", "Simple")
       , EventType="NetworkSession"
@@ -67,7 +67,12 @@ ParserQuery: |
       , EventSchemaVersion="0.2.1"
       , EventSchema="NetworkSession"
       ,EventSeverity = "Informational"
-      , DvcHostnameType = "Simple"
+    | extend hostelements=split(Dvc,'.')
+    | extend DvcHostname=tostring(hostelements[0])
+           , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
+    | extend DvcFQDN = iff(Dvc contains ".",Dvc,"" )
+          , DvcDomainType=iff(Dvc contains ".","FQDN","" )
+  | project-away hostelements
   | lookup Actions on DeviceAction
   | project-rename
       , DstMacAddr=DestinationMACAddress
@@ -84,7 +89,6 @@ ParserQuery: |
      , DvcOriginalAction=DeviceAction
   // -- Aliases
   | extend
-    Dvc = DvcHostname,
     IpAddr = SrcIpAddr,
     Rule=NetworkRuleName
     Dst=DstIpAddr,
