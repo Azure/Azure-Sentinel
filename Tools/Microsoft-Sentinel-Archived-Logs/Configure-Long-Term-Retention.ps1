@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 1/18/2022
+        LASTEDIT: 1/24/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -164,16 +164,19 @@ function Get-LATables {
 	
 	try {       
         Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-        $WSTables = Get-AzOperationalInsightsTable -ResourceGroupName $LogAnalyticsResourceGroup -WorkspaceName $LogAnalyticsWorkspaceName
+        $WSTables = Get-AllTables
                                          
         if ($RetentionMethod -eq "Analytics") {        
             $searchPattern = '(_CL|_SRCH|ContainerLog^|ContainerLogV2|AppTraces)'        
-            $TablesArray = $WSTables.Name -notmatch $searchPattern | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+            $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalRetentionInDays, ArchiveRetentionInDays, RetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
-        else {
+        elseif ($RetentionMethod -eq "Basic") {
             $searchPattern = '(_CL|ContainerLog^|ContainerLogV2|AppTraces)'        
-            $TablesArray = $WSTables.Name -match $searchPattern | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
-        }            
+            $TablesArray = $WSTables | Where-Object {($_.TableName -match $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalRetentionInDays, ArchiveRetentionInDays, RetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+        }
+        else {            
+            $TablesArray = $WSTables | Where-Object {($_.PlanName -eq "Basic") } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalRetentionInDays, ArchiveRetentionInDays, RetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+        }          
        
     }
     catch {
@@ -191,7 +194,7 @@ function Get-TableConfiguration {
     param (        
         [parameter(Mandatory = $true)] $LaTables        
     )
-	$QualifiedTables = @{}
+	$TableConfigs = @()
 	
 	foreach ($LaTable in $LaTables) {
 		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$LaTable" + "?api-version=2021-07-01-privatepreview"
@@ -203,13 +206,16 @@ function Get-TableConfiguration {
 			Write-Log -Message "Get-TableConfiguration $($_)" -LogFileName $LogFileName -Severity Error		                
 		}
 
-		If ($TablesApiResult) {        
-            Write-Log -Message "$LaTable configuration : $($TablesApiResult.properties)" -LogFileName $LogFileName -Severity Information   
-            $QualifiedTables.Add($LaTable, $TablesApiResult.properties.retentionInDays)
+		If ($TablesApiResult) {                                
+            $TableConfigs += [pscustomobject]@{TableName=$TablesApiResult.name.Trim();
+                                PlanName=$TablesApiResult.properties.Plan.Trim();
+                                TotalRetentionInDays=$TablesApiResult.properties.totalRetentionInDays.ToString().Trim();
+                                ArchiveRetentionInDays=$TablesApiResult.properties.archiveRetentionInDays.ToString().Trim();
+                                RetentionInDays=$TablesApiResult.properties.retentionInDays.ToString().Trim()}
 		}
 	}
 	
-	return $QualifiedTables
+	return $TableConfigs
 }
 
 
@@ -220,10 +226,10 @@ function Set-TableConfiguration {
 		[parameter(Mandatory = $true)] $RetentionType
     )
 	
-	$SuccessTables = @{}
-	
-    $QualifiedTables.GetEnumerator() | ForEach-Object {	
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($_.Key)" + "?api-version=2021-07-01-privatepreview"								
+	$SuccessTables = @()
+    
+    foreach($QTable in $QualifiedTables) {	
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-07-01-privatepreview"								
 		
 		$TablesApiBody = @"
 			{
@@ -241,12 +247,39 @@ function Set-TableConfiguration {
 		}
 
 		If ($TablesApiResult.StatusCode -ne 200) {
-            $SuccessTables.Add($($_.Key), $($_.Value))		
+            $SuccessTables += $($QTable.TableName)
 		}
 	}
     return $SuccessTables
 }
 
+
+function Get-AllTables {
+		
+	$AllTables = @()
+	
+    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-07-01-privatepreview"								
+	    		
+    try {        
+        $TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "GET" -Headers $LaAPIHeaders           			
+    } 
+    catch {                    
+        Write-Log -Message "Get-AllTables $($_)" -LogFileName $LogFileName -Severity Error		                
+    }
+
+    If ($TablesApiResult.StatusCode -ne 200) {
+        foreach ($ta in $TablesApiResult.value) { 
+            $AllTables += [pscustomobject]@{TableName=$ta.name.Trim();
+                              PlanName=$ta.properties.Plan.Trim();
+                              TotalRetentionInDays=$ta.properties.totalRetentionInDays.ToString().Trim();
+                              ArchiveRetentionInDays=$ta.properties.archiveRetentionInDays.ToString().Trim();
+                              RetentionInDays=$ta.properties.retentionInDays.ToString().Trim()}
+            	
+        }
+    }
+	
+    return $AllTables
+}
 
 function Update-TablesRetention {
 	[CmdletBinding()]
@@ -254,9 +287,9 @@ function Update-TablesRetention {
         [parameter(Mandatory = $true)] $TablesForRetention,		
 		[parameter(Mandatory = $true)] $TotalRetentionInDays
     )
-	$UpdatedTablesRetention = @{}	
-	$TablesForRetention.GetEnumerator() | ForEach-Object {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($_.Key)" + "?api-version=2021-07-01-privatepreview"						
+	$UpdatedTablesRetention = @()
+    foreach($tbl in $TablesForRetention) {
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$tbl" + "?api-version=2021-07-01-privatepreview"						
 		
 		$TablesApiBody = @"
 			{
@@ -275,24 +308,24 @@ function Update-TablesRetention {
 		}
 
         if($TablesApiResult) {
-            $UpdatedTablesRetention.Add($($_.Key), $TotalRetentionInDays)
-            Write-Log -Message "Table : $($_.Key) retention updated successfully from $($_.Value) days to $TotalRetentionInDays" -LogFileName $LogFileName -Severity Information
+            $UpdatedTablesRetention += $($tbl)
+            Write-Log -Message "Table : $($tbl) retention updated successfully to $TotalRetentionInDays" -LogFileName $LogFileName -Severity Information
         }		
 	}
     return $UpdatedTablesRetention
 }
 
-function Collect-Input {
+function Collect-AnalyticsPlanRetentionDays {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
 
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Table Plan:Analytics'
-    $form.Size = New-Object System.Drawing.Size(400,300)
+    $form.Size = New-Object System.Drawing.Size(380,150)
     $form.StartPosition = 'CenterScreen'
 
     $okButton = New-Object System.Windows.Forms.Button
-    $okButton.Location = New-Object System.Drawing.Point(75,120)
+    $okButton.Location = New-Object System.Drawing.Point(90,80)
     $okButton.Size = New-Object System.Drawing.Size(75,23)
     $okButton.Text = 'OK'
     $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
@@ -301,7 +334,7 @@ function Collect-Input {
     $okButton.Enabled = $false    
 
     $cancelButton = New-Object System.Windows.Forms.Button
-    $cancelButton.Location = New-Object System.Drawing.Point(170,120)
+    $cancelButton.Location = New-Object System.Drawing.Point(170,80)
     $cancelButton.Size = New-Object System.Drawing.Size(75,23)
     $cancelButton.Text = 'Cancel'
     $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
@@ -310,12 +343,12 @@ function Collect-Input {
 
     $label = New-Object System.Windows.Forms.Label
     $label.Location = New-Object System.Drawing.Point(10,20)
-    $label.Size = New-Object System.Drawing.Size(400,60)
+    $label.Size = New-Object System.Drawing.Size(350,20)
     $label.Text = 'Enter value for total Retention In Days (between 7 and 2555)*'
     $form.Controls.Add($label)
 
     $textBox = New-Object System.Windows.Forms.TextBox
-    $textBox.Location = New-Object System.Drawing.Point(10,80)
+    $textBox.Location = New-Object System.Drawing.Point(10,50)
     $textBox.Size = New-Object System.Drawing.Size(260,20)
     $textBox.TabIndex = 1
     $form.Controls.Add($textBox)  
@@ -353,37 +386,87 @@ function Select-Plan {
     Add-Type -AssemblyName System.Drawing
     $logselectform = New-Object System.Windows.Forms.Form
     $logselectform.Text = 'Table Plan'
-    $logselectform.Size = New-Object System.Drawing.Size(300,300)
+    $logselectform.Size = New-Object System.Drawing.Size(440,180)
     $logselectform.StartPosition = 'CenterScreen'
     $okb = New-Object System.Windows.Forms.Button
-    $okb.Location = New-Object System.Drawing.Point(45,130)
+    $okb.Location = New-Object System.Drawing.Point(45,50)
     $okb.Size = New-Object System.Drawing.Size(75,25)
     $okb.Text = 'Basic Logs'
     $okb.DialogResult = [System.Windows.Forms.DialogResult]::OK
     $logselectform.AcceptButton = $okb
     $logselectform.Controls.Add($okb)
     $cb = New-Object System.Windows.Forms.Button
-    $cb.Location = New-Object System.Drawing.Point(150,130)
+    $cb.Location = New-Object System.Drawing.Point(135,50)
     $cb.Size = New-Object System.Drawing.Size(105,25)
     $cb.Text = 'Analytics Logs'
     $cb.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     $logselectform.CancelButton = $cb
     $logselectform.Controls.Add($cb)    
+
+    $btoa = New-Object System.Windows.Forms.Button
+    $btoa.Location = New-Object System.Drawing.Point(250,50)
+    $btoa.Size = New-Object System.Drawing.Size(135,25)
+    $btoa.Text = 'Basic2Analytics'
+    $btoa.DialogResult = [System.Windows.Forms.DialogResult]::Retry
+    $logselectform.AcceptButton = $btoa
+    $logselectform.Controls.Add($btoa)
+
     $rs = $logselectform.ShowDialog()
-    if ($rs -eq [System.Windows.Forms.DialogResult]::OK)
-    {
+    if ($rs -eq [System.Windows.Forms.DialogResult]::OK) {
         return "Basic"
     }
-    else {
+    elseif ($rs -eq [System.Windows.Forms.DialogResult]::Cancel) {
         return "Analytics"
+    }
+    else {
+        return "Basic2Analytics"
     }
 }
 
+
+function Get-Confirmation {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    $logselectform = New-Object System.Windows.Forms.Form
+    $logselectform.Text = 'Confirmation'
+    $logselectform.Size = New-Object System.Drawing.Size(250,160)
+    $logselectform.StartPosition = 'CenterScreen'
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Location = New-Object System.Drawing.Point(10,20)
+    $label.Size = New-Object System.Drawing.Size(250,20)
+    $label.Text = 'Do you want to continue?'
+    $logselectform.Controls.Add($label)
+
+    $okb = New-Object System.Windows.Forms.Button
+    $okb.Location = New-Object System.Drawing.Point(45,75)
+    $okb.Size = New-Object System.Drawing.Size(75,25)
+    $okb.Text = 'Continue'
+    $okb.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $logselectform.AcceptButton = $okb
+    $logselectform.Controls.Add($okb)
+
+    $cb = New-Object System.Windows.Forms.Button
+    $cb.Location = New-Object System.Drawing.Point(135,75)
+    $cb.Size = New-Object System.Drawing.Size(75,25)
+    $cb.Text = 'Exit'
+    $cb.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $logselectform.CancelButton = $cb
+    $logselectform.Controls.Add($cb)    
+
+    
+    $rs = $logselectform.ShowDialog()
+    if ($rs -eq [System.Windows.Forms.DialogResult]::OK) {
+        return $true
+    }
+    elseif ($rs -eq [System.Windows.Forms.DialogResult]::Cancel) {
+        return $false
+    }
+}
 #endregion
 
 #region DriverProgram
-Get-RequiredModules("Az")
-Get-RequiredModules("Az.SecurityInsights")
+Get-RequiredModules("Az.Accounts")
 Get-RequiredModules("Az.OperationalInsights")
 
 $TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
@@ -443,27 +526,26 @@ foreach($CurrentSubscription in $GetSubscriptions)
                 
                 $LogAnalyticsWorkspaceName = $LAW.Name
                 $LogAnalyticsResourceGroup = $LAW.ResourceGroupName                            
-                
-                $tablePlan = Select-Plan
-                if ($tablePlan.Trim() -eq "Analytics") {
-                    #Get all the tables from the selected Azure Log Analytics Workspace
-                    $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
-                    $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
-                    $QualifiedTables | Out-GridView -Title "Current Retention Values" -PassThru
-                    $TotalRetentionInDays = Collect-Input 
-                    $ConfiguredTables = Set-TableConfiguration -QualifiedTables $QualifiedTables -RetentionType $tablePlan.Trim()
-                    $UpdatedTables = Update-TablesRetention -TablesForRetention $ConfiguredTables -TotalRetentionInDays $TotalRetentionInDays                    
-                    $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
-                    $UpdatedTables | Out-GridView -Title "Updated Retention Values" -PassThru
-                }
-                else {
-                    $WorkspaceTables = Get-LATables -RetentionMethod $tablePlan.Trim()
-                    $QualifiedTables = Get-TableConfiguration -LaTables $WorkspaceTables
-                    $ConfiguredTables = Set-TableConfiguration -QualifiedTables $QualifiedTables -RetentionType $tablePlan.Trim()
-                    Write-Log -Message "Basic plan updated successfully" -LogFileName $LogFileName -Severity Information
-                    $UpdatedConfigs = $ConfiguredTables.Keys.ForEach('ToString')
-                    Get-TableConfiguration -LaTables $UpdatedConfigs
-                }
+                DO {
+                    $tablePlan = Select-Plan
+                    if ($tablePlan.Trim() -eq "Analytics" -or $tablePlan.Trim() -eq "Basic2Analytics") {
+                        #Get all the tables from the selected Azure Log Analytics Workspace
+                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
+                        $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays 
+                        $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType "Analytics"
+                        $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays                    
+                        $UpdatedTableConfigs = Get-TableConfiguration -LaTables $UpdatedTables
+                        $UpdatedTableConfigs | Sort-Object -Property TableName | Select-Object -Property TableName, PlanName, TotalRetentionInDays, ArchiveRetentionInDays, RetentionInDays | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
+                    }
+                    elseif ($tablePlan.Trim() -eq "Basic") {
+                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
+                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()                    
+                        $UpdatedTableConfigs = Get-TableConfiguration -LaTables $BasicPlanTables
+                        $UpdatedTableConfigs | Sort-Object -Property TableName | Select-Object -Property TableName, PlanName, TotalRetentionInDays, ArchiveRetentionInDays, RetentionInDays | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
+                    }
+                    
+                    $GetConfirmation = Get-Confirmation
+                } While ($GetConfirmation -eq $true)
             }                  
 
         } 	
