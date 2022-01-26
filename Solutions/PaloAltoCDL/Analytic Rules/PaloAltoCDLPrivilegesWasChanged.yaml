@@ -1,0 +1,36 @@
+id: 38f9e010-51ca-11ec-bf63-0242ac130002
+name: PaloAlto - User privileges was changed
+description: |
+  'Detects changing of user privileges.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: PaloAltoCDL
+    dataTypes:
+      - PaloAltoCDLEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let p = PaloAltoCDLEvent
+  | where TimeGenerated between (ago(1d)..ago(14d))
+  | summarize OldPrivileges = make_set(DestinationUserPrivileges) by DstUsername;
+  let dt_lookBack = 24h;
+  PaloAltoCDLEvent
+  | where TimeGenerated > ago(dt_lookBack)
+  | summarize NewPrivileges = make_set(DestinationUserPrivileges) by DstUsername
+  | join kind=innerunique (p) on DstUsername
+  | where tostring(OldPrivileges) != tostring(NewPrivileges)
+  | extend AccountCustomEntity = DstUsername
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

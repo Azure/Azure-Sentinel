@@ -15,7 +15,7 @@ Permissions to create a resource group in your Azure subscription.
 
 ### Exercise 1: The Microsoft Sentinel workspace
 
-In this exercise we will show you how to create a brand new Microsoft Sentinel workspace. If you already have a pre-existing one that you would like to use, you can skip to [Exercise 2](Module-1-Setting-up-the-environment.md#exercise-2-deploy-azure-sentinel-training-lab-arm-template).
+In this exercise we will show you how to create a brand new Microsoft Sentinel workspace. If you already have a pre-existing one that you would like to use, you can skip to [Exercise 2](Module-1-Setting-up-the-environment.md#exercise-2-deploy-the-microsoft-sentinel-training-lab-solution).
 
 1. Navigate to the [Azure Portal](http://portal.azure.com) and log in with your account.
 
@@ -49,7 +49,7 @@ Click **Review + create** and then **Create** after the validation completes. Th
 
 ### Exercise 2: Deploy the Microsoft Sentinel Training Lab Solution
 
-In this exercise you will deploy the Trainig Lab solution into your existing workspace. This will ingest pre-recorded data (~20 MBs) and create several other artifacts that will be used during the exercises.
+In this exercise you will deploy the Training Lab solution into your existing workspace. This will ingest pre-recorded data (~20 MBs) and create several other artifacts that will be used during the exercises.
 
 1. In the Azure Portal, go to the top search bar and type *Microsoft Sentinel Training*. Select the **Microsoft Sentinel Training Lab Solution (Preview)** marketplace item on the right.
 

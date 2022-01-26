@@ -1,0 +1,29 @@
+id: 56500e23-4e64-45a5-a444-98a1acb2f700
+name: Sentinel One - Users by alert count
+description: |
+  'Query shows users by alert count.'
+severity: High
+requiredDataConnectors:
+  - connectorId: SentinelOne
+    dataTypes:
+      - SentinelOne
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1204
+query: |
+  SentinelOne
+  | where TimeGenerated > ago(24h)
+  | where ActivityType == 3608
+  | extend DstHostname = extract(@'detected on\s(\S+)\.', 1, EventOriginalMessage)
+  | join (SentinelOne 
+        | where EventType =~ 'Agents.'
+        | where isnotempty(LastLoggedInUserName)
+        | project DstHostname=ComputerName, LastLoggedInUserName) on DstHostname
+  | summarize count() by LastLoggedInUserName
+  | extend AccountCustomEntity = LastLoggedInUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
