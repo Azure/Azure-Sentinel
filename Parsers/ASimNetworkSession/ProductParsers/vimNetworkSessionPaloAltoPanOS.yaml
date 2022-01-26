@@ -1,5 +1,5 @@
 Parser:
-  Title: Palo Alto Network Sessions
+  Title: Network Session ASIM filtering parser for Palo Alto Networks
   Version: '0.1'
   LastUpdated: Dec 20, 2021
 Product:
@@ -8,12 +8,17 @@ Normalization:
   Schema: NetworkSessions
   Version: '0.2.1'
 References:
-- Title: ASIM Network Session Schema
-  Link: https://aka.ms/ASimNetworkSessionDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: traffic log fields
+    Link: https://docs.paloaltonetworks.com/pan-os/10-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions/traffic-log-fields.html
+  - Title: Palo Alto Common Event Format Integration Guide [pdf]
+    Link: https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/cef/pan-os-90-cef-configuration-guide.pdf
 Description: |
   This ASIM parser supports filtering and normalizing Palo Alto Networks logs produced by the Microsoft Sentinel Palo Alto Networks connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionPaloAltoCEF                                  
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -43,6 +48,14 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let Actions=datatable(DeviceAction:string,DvcAction:string)
+    [ "reset client","Reset Source"
+    , "reset server","Reset Destination"
+    , "reset both", "Reset"
+    , "allow","Allow"
+    , "deny","Deny"
+    , "drop", "Drop"
+    , "drop ICMP", "Drop ICMP"];
   let NWParser=(disabled:bool=false){
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor=="Palo Alto Networks" and (Activity=="TRAFFIC")
@@ -62,49 +75,46 @@ ParserQuery: |
       and (eventresult="*" or (DeviceAction=="allow" and eventresult=="Success") or (eventresult=="Failure"))
   | parse AdditionalExtensions with "PanOSDstPackets="DstPackets:long";PanOSsrc_packets="SrcPackets:long";start="EventStartTime:datetime";reason="*
   | project-rename 
-        EventVendor=DeviceVendor // Not documented
-      , EventProduct=DeviceProduct // Not Documented
+        EventProduct=DeviceProduct // Not Documented
       , EventProductVersion=DeviceVersion // Not Documented
-      , DvcHostname=DeviceName   
+      , Dvc=DeviceName   
       , NetworkApplicationProtocol=ApplicationProtocol
       , SrcZone=DeviceCustomString4 
       , DstZone=DeviceCustomString5
       , NetworkRuleName=DeviceCustomString1
-      , NetworkProtocol=Protocol
+      , NetworkProtocol=toupper(Protocol)
       , SrcBytes=SentBytes
       , DstBytes=ReceivedBytes 
-      , SrcUsername=SourceUserID 
-      , DstUsername=DestinationUserID 
-      , EventSeverity=LogSeverity // not documented
+      , SrcUsername=SourceUserName 
+      , DstUsername=DestinationUserName 
+      , EventOriginalSeverity=LogSeverity // not documented
       , NetworkPackets=DeviceCustomNumber2 
       , SrcNatIpAddr=SourceTranslatedAddress
       , DstNatIpAddr=DestinationTranslatedAddress
-      , NetworkConnectionHistory=FlexString1 // Flags
-      // , UrlCategory=DeviceCustomString2 -- websessions
-      // , LogProfile=DeviceCustomString6  
-      //, VirtualSystem=DeviceCustomString3
-    // Proxy
-    // , UrlOriginal=RequestURL
-    // , HttpUserAgentOriginal=RequestClientApplication
-    // , HttpContentType=RequestContext
-    // , HttpRequestMethod=RequestMethod
+      , PaloAltoFlags=FlexString1 // Flags
   | extend
-      NetworkBytes=tolong(FlexNumber1)
-      , SrcUsernameType="UPN"
-      , DstUsernameType="UPN"
-      , TimeGenerated  
-      , EventType="NetworkSession" // it is not clear from doc when NWConnection and when NWSession
+    EventVendor="Palo Alto Networks"
+      , NetworkBytes=tolong(FlexNumber1)
+      , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
+      , DstUsernameType=case(isempty(DstUsername), "", DstUsername contains "@", "UPN", "Simple")
+      , EventType="NetworkSession"
       , EventCount=toint(1)
       , EventResult=case(DeviceAction=="allow","Success","Failure")
       , NetworkSessionId=tostring(DeviceCustomNumber1)
-      , NetworkDuration=DeviceCustomNumber3
-      , EventSchemaVersion="0.2.0"
-      , EventSchema="imNetworkSession"
-      , DvcAction=case(DeviceAction=="reset client", "Reset Source",  DeviceAction=="reset server", "Reset Destination",  DeviceAction=="reset both", "Reset",  DeviceAction)
+      , NetworkDuration=1000*DeviceCustomNumber3
+      , EventSchemaVersion="0.2.1"
+      , EventSchema="NetworkSession"
+      , EventSeverity = "Informational"
+    | extend hostelements=split(Dvc,'.')
+    | extend DvcHostname=tostring(hostelements[0])
+           , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
+    | extend DvcFQDN = iff(Dvc contains ".",Dvc,"" )
+          , DvcDomainType=iff(Dvc contains ".","FQDN","" )
+  | project-away hostelements
+  | lookup Actions on DeviceAction
+  // Action post filtering
   | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
   | project-rename
-        // DvcMacAddr=DeviceMacAddress 
-      , DstHostname=DestinationHostName
       , DstMacAddr=DestinationMACAddress
     , SrcMacAddr=SourceMACAddress
       , DstIpAddr=DestinationIP
@@ -112,34 +122,11 @@ ParserQuery: |
       , DstNatPortNumber=DestinationTranslatedPort
     , SrcPortNumber=SourcePort
       , SrcIpAddr=SourceIP
-    , DstUserName=DestinationUserName
     , SrcNatPortNumber=SourceTranslatedPort
     , DvcOutboundInterface=DeviceOutboundInterface
     , DvcInboundInterface=DeviceInboundInterface
-    // Trivial renames to mitigate Autocomplete
-    /// , NetworkDirection: no such data 
-    //  , EventEndTime=EndTime
-    // , EventMessage=Message
-    // parsed from additional extensions:
-        // | parse AdditionalExtensions with unparsedURL "PanOSActionFlags="ActionFlags
-        //   ";cat="Category //https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClmHCAS
-        // ";PanOSXForwarderfor="HttpXff
-        // ";PanOSReferer="Referer 
-        //    ";"temp"l1="temp2"Gl4="temp3
-        //";PanOSVsysName="VirtualSystem
-        //";PanOSSrcUUID="SrcUUID
-        //";PanOSDstUUID="DstUUID
-        //";PanOSTunnelID="TunnelId
-        //";PanOSMonitorTag="MonitorTag
-        //";PanOSParentSessionID="ParentSessionId
-        //";PanOSParentStartTime="ParentStartTime
-        //";PanOSTunnelType="TunnelType
-        //   ";PanOSThreatCategory="ThreatCategory
-        //   ";PanOSContentVer="ContentVer
-        // for EventClassIds=="url" it parses theses additional fields  
-        //| parse temp with "PanOSXForwarderfor="HttpRequestXff";PanOSReferer="HttpReferrerOriginal	";" *
-        //| extend UrlOriginal=coalesce(UrlOriginal, unparsedURL)
-        //| project-away temp, temp2, temp3, unparsedURL
+    , EventMessage=Message
+    , DvcOriginalAction=DeviceAction
   // -- Aliases
   | extend
     Dvc = DvcHostname,
