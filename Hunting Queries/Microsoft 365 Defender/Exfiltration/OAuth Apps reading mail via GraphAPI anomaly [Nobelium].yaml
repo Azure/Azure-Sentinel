@@ -10,4 +10,18 @@ tactics:
 - Exfiltration
 tags:
 - Nobelium
-query: "//Look for OAuth App reading mail via GraphAPI -- that did not read mail via graph API in prior week \r\nlet appMailReadActivity = (timeframeStart:datetime, timeframeEnd:datetime) { \r\nCloudAppEvents \r\n| where Timestamp between (timeframeStart .. timeframeEnd) \r\n| where ActionType == \"MailItemsAccessed\" \r\n| where RawEventData has \"00000003-0000-0000-c000-000000000000\" // performance check \r\n| extend rawData = parse_json(RawEventData) \r\n| extend AppId = tostring(parse_json(rawData.AppId)) \r\n| extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId \r\n| summarize by OAuthAppId \r\n}; \r\nappMailReadActivity(ago(1d),now())                           // detection period \r\n| join kind = leftanti appMailReadActivity(ago(7d),ago(2d))  // baseline period \r\non OAuthAppId "
+query: |
+  //Look for OAuth App reading mail via GraphAPI -- that did not read mail via graph API in prior week 
+  let appMailReadActivity = (timeframeStart:datetime, timeframeEnd:datetime) { 
+  CloudAppEvents 
+  | where Timestamp between (timeframeStart .. timeframeEnd) 
+  | where ActionType == "MailItemsAccessed" 
+  | where RawEventData has "00000003-0000-0000-c000-000000000000" // performance check 
+  | extend rawData = parse_json(RawEventData) 
+  | extend AppId = tostring(parse_json(rawData.AppId)) 
+  | extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId 
+  | summarize by OAuthAppId 
+  }; 
+  appMailReadActivity(ago(1d),now())                           // detection period 
+  | join kind = leftanti appMailReadActivity(ago(7d),ago(2d))  // baseline period 
+  on OAuthAppId 

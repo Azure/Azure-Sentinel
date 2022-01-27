@@ -9,4 +9,62 @@ requiredDataConnectors:
 - connectorId: Microsoft365Defender
   dataTypes:
   - DeviceProcessEvents
-query: "let weights = dynamic({\"Low\":1, \"Medium\":3, \"High\":5}); //Assign weights to the risk levels\r\n//Low risk events\r\nlet lowRiskEvents =\r\n    DeviceProcessEvents \r\n    | where\r\n        (FileName =~ \"powershell.exe\" and ProcessCommandLine has \"-command\") //T1086 PowerShell\r\n        or\r\n        (FileName =~ \"powershell.exe\" and ProcessCommandLine contains \"-nop\") //T1086 PowerShell\r\n        or\r\n        (FileName =~ \"schtasks.exe\" and ProcessCommandLine has \"create\") //T1053 Scheduled Task\r\n        or\r\n        (FileName =~ \"installutil.exe\") //T1118 InstallUtil\r\n        or\r\n        (FileName =~ \"msbuild.exe\") //T1127 Trusted Developer Utilities\r\n        or\r\n        (FileName =~ \"nbtstat.exe\") //T1016 System Network Configuration Discovery\r\n        or\r\n        (FileName == \"mshta.exe\") //T1170 Mshta\r\n        or\r\n        (FileName =~ \"netsh.exe\") //T1089 Disabling Security Tools, T1063 Security Software Discovery\r\n        or\r\n        (FileName == \"net.exe\" and ProcessCommandLine has \" start \") //T1007 System Service Discovery\r\n    | extend Weight = toint((weights[\"Low\"]));\r\n//Medium risk events\r\nlet mediumRiskEvents =\r\n    DeviceProcessEvents \r\n    | where\r\n        (FileName =~ \"regsvcs.exe\") //T1121 Regsvcs/Regasm\r\n        or\r\n        (FileName =~ \"arp.exe\" and ProcessCommandLine has \"-a\") //T1016 System Network Configuration Discovery\r\n        or\r\n        (FileName =~ \"ipconfig.exe\" and ProcessCommandLine has \"all\") //T1016 System Network Configuration Discovery\r\n        or\r\n        (FileName startswith \"psexe\") //T1035 Service Execution\r\n        or\r\n        (FileName == \"net.exe\" and ProcessCommandLine has \" share \") //T1135 Network Share Discovery\r\n        or\r\n        (FileName =~ \"netsh.exe\" and ProcessCommandLine has \"interface show\") //T1016 System Network Configuration Discovery\r\n    | extend Weight = toint((weights[\"Medium\"]));\r\n//Higher risk events\r\nlet highRiskEvents =\r\n    DeviceProcessEvents \r\n    | where\r\n        (FileName =~ \"net.exe\" and ProcessCommandLine has \"config\") //T1016 System Network Configuration Discovery\r\n        or\r\n        (FileName =~ \"net.exe\" and ProcessCommandLine has \"time\") //T1124 System Time Discovery\r\n        or \r\n        (FileName =~ \"w32tm.exe\" and ProcessCommandLine has \"/tz\") //T1124 System Time Discovery\r\n        or\r\n        (FileName == \"cmstp.exe\") //T1191 CMSTP\r\n        or\r\n        (FileName =~ \"netsh.exe\" and (ProcessCommandLine has \"portproxy\" or ProcessCommandLine has \"p\")) //T1090 Connection Proxy\r\n    | extend Weight = toint((weights[\"High\"]));\r\nunion kind=outer lowRiskEvents, mediumRiskEvents, highRiskEvents\r\n| project Timestamp, DeviceName, FileName, ProcessCommandLine, InitiatingProcessCommandLine, Weight\r\n| summarize Start_Time=min(Timestamp), End_Time=max(Timestamp), Weight_Sum=sum(Weight), Processes=makeset(FileName), Commands=makeset(ProcessCommandLine) by DeviceName\r\n| where Weight_Sum > 30\r\n| sort by Weight_Sum desc "
+query: |
+  let weights = dynamic({"Low":1, "Medium":3, "High":5}); //Assign weights to the risk levels
+  //Low risk events
+  let lowRiskEvents =
+      DeviceProcessEvents 
+      | where
+          (FileName =~ "powershell.exe" and ProcessCommandLine has "-command") //T1086 PowerShell
+          or
+          (FileName =~ "powershell.exe" and ProcessCommandLine contains "-nop") //T1086 PowerShell
+          or
+          (FileName =~ "schtasks.exe" and ProcessCommandLine has "create") //T1053 Scheduled Task
+          or
+          (FileName =~ "installutil.exe") //T1118 InstallUtil
+          or
+          (FileName =~ "msbuild.exe") //T1127 Trusted Developer Utilities
+          or
+          (FileName =~ "nbtstat.exe") //T1016 System Network Configuration Discovery
+          or
+          (FileName == "mshta.exe") //T1170 Mshta
+          or
+          (FileName =~ "netsh.exe") //T1089 Disabling Security Tools, T1063 Security Software Discovery
+          or
+          (FileName == "net.exe" and ProcessCommandLine has " start ") //T1007 System Service Discovery
+      | extend Weight = toint((weights["Low"]));
+  //Medium risk events
+  let mediumRiskEvents =
+      DeviceProcessEvents 
+      | where
+          (FileName =~ "regsvcs.exe") //T1121 Regsvcs/Regasm
+          or
+          (FileName =~ "arp.exe" and ProcessCommandLine has "-a") //T1016 System Network Configuration Discovery
+          or
+          (FileName =~ "ipconfig.exe" and ProcessCommandLine has "all") //T1016 System Network Configuration Discovery
+          or
+          (FileName startswith "psexe") //T1035 Service Execution
+          or
+          (FileName == "net.exe" and ProcessCommandLine has " share ") //T1135 Network Share Discovery
+          or
+          (FileName =~ "netsh.exe" and ProcessCommandLine has "interface show") //T1016 System Network Configuration Discovery
+      | extend Weight = toint((weights["Medium"]));
+  //Higher risk events
+  let highRiskEvents =
+      DeviceProcessEvents 
+      | where
+          (FileName =~ "net.exe" and ProcessCommandLine has "config") //T1016 System Network Configuration Discovery
+          or
+          (FileName =~ "net.exe" and ProcessCommandLine has "time") //T1124 System Time Discovery
+          or 
+          (FileName =~ "w32tm.exe" and ProcessCommandLine has "/tz") //T1124 System Time Discovery
+          or
+          (FileName == "cmstp.exe") //T1191 CMSTP
+          or
+          (FileName =~ "netsh.exe" and (ProcessCommandLine has "portproxy" or ProcessCommandLine has "p")) //T1090 Connection Proxy
+      | extend Weight = toint((weights["High"]));
+  union kind=outer lowRiskEvents, mediumRiskEvents, highRiskEvents
+  | project Timestamp, DeviceName, FileName, ProcessCommandLine, InitiatingProcessCommandLine, Weight
+  | summarize Start_Time=min(Timestamp), End_Time=max(Timestamp), Weight_Sum=sum(Weight), Processes=makeset(FileName), Commands=makeset(ProcessCommandLine) by DeviceName
+  | where Weight_Sum > 30
+  | sort by Weight_Sum desc 

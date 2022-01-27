@@ -12,4 +12,31 @@ tactics:
 - Exfiltration
 tags:
 - Nobelium
-query: "// Look for OAuth apps reading mail both via GraphAPI, and directly (not via GraphAPI) \r\n// (one method may be legitimate and one suspect?) \r\nlet appsReadingMailDirectly = CloudAppEvents \r\n| where Timestamp >= ago(1h) \r\n| where ActionType == \"MailItemsAccessed\" \r\n| where RawEventData has \"AppId\" \r\n| extend rawData = parse_json(RawEventData) \r\n| extend AppId = tostring(parse_json(rawData.AppId)) \r\n| where AppId != \"00000003-0000-0000-c000-000000000000\" \r\n| summarize by AppId \r\n| project-rename OAuthAppId = AppId; \r\nlet appsReadingMailViaGraphAPI = CloudAppEvents \r\n| where Timestamp >= ago(1h) \r\n| where ActionType == \"MailItemsAccessed\" \r\n| where RawEventData has \"ClientAppId\" \r\n| where RawEventData has \"00000003-0000-0000-c000-000000000000\" // performance check \r\n| extend rawData = parse_json(RawEventData) \r\n| extend AppId = tostring(parse_json(rawData.AppId)) \r\n| extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId \r\n| where AppId == \"00000003-0000-0000-c000-000000000000\" \r\n| summarize by OAuthAppId; \r\n// Applications reading mail both directly and via GraphAPI  \r\n// (one method may be legitimate and one suspect?) \r\nappsReadingMailDirectly \r\n| join kind = inner appsReadingMailViaGraphAPI \r\non OAuthAppId \r\n| project OAuthAppId "
+query: |
+  // Look for OAuth apps reading mail both via GraphAPI, and directly (not via GraphAPI) 
+  // (one method may be legitimate and one suspect?) 
+  let appsReadingMailDirectly = CloudAppEvents 
+  | where Timestamp >= ago(1h) 
+  | where ActionType == "MailItemsAccessed" 
+  | where RawEventData has "AppId" 
+  | extend rawData = parse_json(RawEventData) 
+  | extend AppId = tostring(parse_json(rawData.AppId)) 
+  | where AppId != "00000003-0000-0000-c000-000000000000" 
+  | summarize by AppId 
+  | project-rename OAuthAppId = AppId; 
+  let appsReadingMailViaGraphAPI = CloudAppEvents 
+  | where Timestamp >= ago(1h) 
+  | where ActionType == "MailItemsAccessed" 
+  | where RawEventData has "ClientAppId" 
+  | where RawEventData has "00000003-0000-0000-c000-000000000000" // performance check 
+  | extend rawData = parse_json(RawEventData) 
+  | extend AppId = tostring(parse_json(rawData.AppId)) 
+  | extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId 
+  | where AppId == "00000003-0000-0000-c000-000000000000" 
+  | summarize by OAuthAppId; 
+  // Applications reading mail both directly and via GraphAPI  
+  // (one method may be legitimate and one suspect?) 
+  appsReadingMailDirectly 
+  | join kind = inner appsReadingMailViaGraphAPI 
+  on OAuthAppId 
+  | project OAuthAppId 

@@ -8,4 +8,31 @@ requiredDataConnectors:
   - DeviceProcessEvents
 tactics:
 - Ransomware
-query: "DeviceProcessEvents \r\n// Pivot on specific commands \r\n| where ProcessCommandLine has_any(\"-ExclusionPath\", \"Set-MpPreference\", \"advfirewall\", \"-ExclusionExtension\", \r\n\"-EnableControlledFolderAccess\", \"windefend\", \"onstart\", \"bcdedit\", \"Startup\") \r\n// Making list of found commands \r\n| summarize ProcessCommandLine = make_set(ProcessCommandLine) by DeviceId, bin(Timestamp, 6h) \r\n// Extending columns for later aggregration, based on TTP \r\n| extend StartUpExclusionPath = iff(ProcessCommandLine has_all(\"-ExclusionPath\", \"Startup\"), 1, 0) \r\n| extend DefenderTamp = iff(ProcessCommandLine has \"Set-MpPreference\" \r\nand ProcessCommandLine has_any( \r\n\"-SevereThreatDefaultAction 6\" \r\n\"-HighThreatDefaultAction 6\", \r\n\"-ModerateThreatDefaultAction 6\", \r\n\"-LowThreatDefaultAction 6\" \r\n\"-ScanScheduleDay 8\"), 1, 0) \r\n| extend NetshFirewallTampering = iff(ProcessCommandLine has_all( \"netsh\", \"advfirewall\", \"allprofiles state off\"), 1, 0) \r\n| extend BatExclusion = iff(ProcessCommandLine has_all(\"-ExclusionExtension\", \".bat\"), 1, 0) \r\n| extend ExeExclusion = iff(ProcessCommandLine has_all(\"-ExclusionExtension\", \".exe\"), 1, 0) \r\n| extend DisableControlledFolderAccess = iff(ProcessCommandLine has_all(\"-EnableControlledFolderAccess\", \"Disabled\"), 1, 0) \r\n| extend ScDeleteDefend = iff(ProcessCommandLine has_all(\"sc\", \"delete\", \"windefend\"), 1, 0) \r\n| extend BootTampering = iff(ProcessCommandLine has_all(\"bcdedit\", \"default\") and ProcessCommandLine has_any (\"recoveryenabled No\", \"bootstatuspolicy ignoreallfailures\"), 1, 0) \r\n| extend SchTasks = iff(ProcessCommandLine has_all(\"/sc\", \"onstart\", \"system\", \"/create\", \"/delay\"), 1, 0) \r\n// Summarizing found commands \r\n| summarize by NetshFirewallTampering ,BatExclusion, ExeExclusion, DisableControlledFolderAccess, ScDeleteDefend, SchTasks, BootTampering, DefenderTamp, StartUpExclusionPath, DeviceId, Timestamp \r\n// Adding up each piece of evidence \r\n| extend EvidenceCount = NetshFirewallTampering + BatExclusion + ExeExclusion + DisableControlledFolderAccess + ScDeleteDefend + SchTasks + BootTampering + DefenderTamp + StartUpExclusionPath \r\n| where EvidenceCount > 4 "
+query: |
+  DeviceProcessEvents 
+  // Pivot on specific commands 
+  | where ProcessCommandLine has_any("-ExclusionPath", "Set-MpPreference", "advfirewall", "-ExclusionExtension", 
+  "-EnableControlledFolderAccess", "windefend", "onstart", "bcdedit", "Startup") 
+  // Making list of found commands 
+  | summarize ProcessCommandLine = make_set(ProcessCommandLine) by DeviceId, bin(Timestamp, 6h) 
+  // Extending columns for later aggregration, based on TTP 
+  | extend StartUpExclusionPath = iff(ProcessCommandLine has_all("-ExclusionPath", "Startup"), 1, 0) 
+  | extend DefenderTamp = iff(ProcessCommandLine has "Set-MpPreference" 
+  and ProcessCommandLine has_any( 
+  "-SevereThreatDefaultAction 6" 
+  "-HighThreatDefaultAction 6", 
+  "-ModerateThreatDefaultAction 6", 
+  "-LowThreatDefaultAction 6" 
+  "-ScanScheduleDay 8"), 1, 0) 
+  | extend NetshFirewallTampering = iff(ProcessCommandLine has_all( "netsh", "advfirewall", "allprofiles state off"), 1, 0) 
+  | extend BatExclusion = iff(ProcessCommandLine has_all("-ExclusionExtension", ".bat"), 1, 0) 
+  | extend ExeExclusion = iff(ProcessCommandLine has_all("-ExclusionExtension", ".exe"), 1, 0) 
+  | extend DisableControlledFolderAccess = iff(ProcessCommandLine has_all("-EnableControlledFolderAccess", "Disabled"), 1, 0) 
+  | extend ScDeleteDefend = iff(ProcessCommandLine has_all("sc", "delete", "windefend"), 1, 0) 
+  | extend BootTampering = iff(ProcessCommandLine has_all("bcdedit", "default") and ProcessCommandLine has_any ("recoveryenabled No", "bootstatuspolicy ignoreallfailures"), 1, 0) 
+  | extend SchTasks = iff(ProcessCommandLine has_all("/sc", "onstart", "system", "/create", "/delay"), 1, 0) 
+  // Summarizing found commands 
+  | summarize by NetshFirewallTampering ,BatExclusion, ExeExclusion, DisableControlledFolderAccess, ScDeleteDefend, SchTasks, BootTampering, DefenderTamp, StartUpExclusionPath, DeviceId, Timestamp 
+  // Adding up each piece of evidence 
+  | extend EvidenceCount = NetshFirewallTampering + BatExclusion + ExeExclusion + DisableControlledFolderAccess + ScDeleteDefend + SchTasks + BootTampering + DefenderTamp + StartUpExclusionPath 
+  | where EvidenceCount > 4 

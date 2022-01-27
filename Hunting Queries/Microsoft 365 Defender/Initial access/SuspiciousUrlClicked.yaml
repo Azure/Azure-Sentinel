@@ -13,4 +13,39 @@ requiredDataConnectors:
   - DeviceEvents
 tactics:
 - Initial access
-query: "// Some URL are wrapped with a safelink\r\n// Let's get the the unwrapped url and clicks \r\nAlertInfo\r\n| where ServiceSource == \"Office 365 ATP\"\r\n| join (\r\n        AlertEvidence\r\n        | where EntityType ==\"Url\"\r\n        | project AlertId, RemoteUrl \r\n    )\r\n    on AlertId\r\n| join (\r\n        AlertEvidence\r\n        | where EntityType ==\"MailMessage\"\r\n        | project AlertId, NetworkMessageId \r\n    )\r\n    on AlertId\r\n// Get the unique NetworkMessageId for the email containing the Url\r\n| distinct RemoteUrl, NetworkMessageId\r\n| join EmailEvents on NetworkMessageId\r\n// Get the email RecipientEmailAddress and ObjectId from the email \r\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId\r\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId \r\n// get the UserSid of the Recipient\r\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, OnPremSid \r\n// Get the Url click event on the recipient device.\r\n| join kind = inner  \r\n    (DeviceEvents \r\n    | where ActionType == \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl) \r\n    | project UrlDeviceClickTime = Timestamp , UrlClickedByUserSid = RemoteUrl, \r\n                InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName\r\n    ) \r\n   on $left.OnPremSid == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\r\n| distinct UrlDeviceClickTime, RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId, \r\n    OnPremSid, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName \r\n| sort by UrlDeviceClickTime desc "
+query: |
+  // Some URL are wrapped with a safelink
+  // Let's get the the unwrapped url and clicks 
+  AlertInfo
+  | where ServiceSource == "Office 365 ATP"
+  | join (
+          AlertEvidence
+          | where EntityType =="Url"
+          | project AlertId, RemoteUrl 
+      )
+      on AlertId
+  | join (
+          AlertEvidence
+          | where EntityType =="MailMessage"
+          | project AlertId, NetworkMessageId 
+      )
+      on AlertId
+  // Get the unique NetworkMessageId for the email containing the Url
+  | distinct RemoteUrl, NetworkMessageId
+  | join EmailEvents on NetworkMessageId
+  // Get the email RecipientEmailAddress and ObjectId from the email 
+  | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId
+  | join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId 
+  // get the UserSid of the Recipient
+  | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, OnPremSid 
+  // Get the Url click event on the recipient device.
+  | join kind = inner  
+      (DeviceEvents 
+      | where ActionType == "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl) 
+      | project UrlDeviceClickTime = Timestamp , UrlClickedByUserSid = RemoteUrl, 
+                  InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName
+      ) 
+     on $left.OnPremSid == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid
+  | distinct UrlDeviceClickTime, RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId, 
+      OnPremSid, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName 
+  | sort by UrlDeviceClickTime desc 

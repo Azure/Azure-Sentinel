@@ -12,4 +12,21 @@ tactics:
 - Exfiltration
 tags:
 - Nobelium
-query: "let starttime = 30d;\r\nlet STDThreshold = 2.5;\r\nlet allMailAccsessByGraphAPI = CloudAppEvents\r\n| where   ActionType == \"MailItemsAccessed\"\r\n| where Timestamp between (startofday(ago(starttime))..now())\r\n| where isnotempty(RawEventData['ClientAppId'] ) and RawEventData['AppId'] has \"00000003-0000-0000-c000-000000000000\"\r\n| extend ClientAppId = tostring(RawEventData['ClientAppId'])\r\n| extend OperationCount = toint(RawEventData['OperationCount'])\r\n| project Timestamp,OperationCount , ClientAppId;\r\nlet calculateNumberOfMailPerDay = allMailAccsessByGraphAPI\r\n| summarize NumberOfMailPerDay =sum(toint(OperationCount)) by ClientAppId,format_datetime(Timestamp, 'y-M-d');\r\nlet calculteAvgAndStdev=calculateNumberOfMailPerDay\r\n| summarize avg=avg(NumberOfMailPerDay),stev=stdev(NumberOfMailPerDay) by ClientAppId;\r\ncalculteAvgAndStdev  | join calculateNumberOfMailPerDay on ClientAppId\r\n| sort by ClientAppId\r\n|  where NumberOfMailPerDay > avg + STDThreshold * stev\r\n| project ClientAppId,Timestamp,NumberOfMailPerDay,avg,stev "
+query: |
+  let starttime = 30d;
+  let STDThreshold = 2.5;
+  let allMailAccsessByGraphAPI = CloudAppEvents
+  | where   ActionType == "MailItemsAccessed"
+  | where Timestamp between (startofday(ago(starttime))..now())
+  | where isnotempty(RawEventData['ClientAppId'] ) and RawEventData['AppId'] has "00000003-0000-0000-c000-000000000000"
+  | extend ClientAppId = tostring(RawEventData['ClientAppId'])
+  | extend OperationCount = toint(RawEventData['OperationCount'])
+  | project Timestamp,OperationCount , ClientAppId;
+  let calculateNumberOfMailPerDay = allMailAccsessByGraphAPI
+  | summarize NumberOfMailPerDay =sum(toint(OperationCount)) by ClientAppId,format_datetime(Timestamp, 'y-M-d');
+  let calculteAvgAndStdev=calculateNumberOfMailPerDay
+  | summarize avg=avg(NumberOfMailPerDay),stev=stdev(NumberOfMailPerDay) by ClientAppId;
+  calculteAvgAndStdev  | join calculateNumberOfMailPerDay on ClientAppId
+  | sort by ClientAppId
+  |  where NumberOfMailPerDay > avg + STDThreshold * stev
+  | project ClientAppId,Timestamp,NumberOfMailPerDay,avg,stev 
