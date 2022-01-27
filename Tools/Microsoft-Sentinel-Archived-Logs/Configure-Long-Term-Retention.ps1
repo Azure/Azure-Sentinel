@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 1/24/2022
+        LASTEDIT: 1/26/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -167,7 +167,7 @@ function Get-LATables {
         $WSTables = Get-AllTables
                                          
         if ($RetentionMethod -eq "Analytics") {        
-            $searchPattern = '(_CL|_SRCH|ContainerLog^|ContainerLogV2|AppTraces)'        
+            $searchPattern = '(_CL|ContainerLog^|ContainerLogV2|AppTraces)'        
             $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalRetentionInDays, ArchiveRetentionInDays, RetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
         elseif ($RetentionMethod -eq "Basic") {
@@ -268,12 +268,20 @@ function Get-AllTables {
     }
 
     If ($TablesApiResult.StatusCode -ne 200) {
+        $searchPattern = '(_SRCH|_RST)'                
         foreach ($ta in $TablesApiResult.value) { 
-            $AllTables += [pscustomobject]@{TableName=$ta.name.Trim();
-                              PlanName=$ta.properties.Plan.Trim();
-                              TotalRetentionInDays=$ta.properties.totalRetentionInDays.ToString().Trim();
-                              ArchiveRetentionInDays=$ta.properties.archiveRetentionInDays.ToString().Trim();
-                              RetentionInDays=$ta.properties.retentionInDays.ToString().Trim()}
+            try {
+                if($ta.name.Trim() -notmatch $searchPattern) {
+                    $AllTables += [pscustomobject]@{TableName=$ta.name.Trim();
+                                PlanName=$ta.properties.Plan.Trim();
+                                TotalRetentionInDays=$ta.properties.totalRetentionInDays.ToString().Trim();
+                                ArchiveRetentionInDays=$ta.properties.archiveRetentionInDays.ToString().Trim();
+                                RetentionInDays=$ta.properties.retentionInDays.ToString().Trim()}  
+                }
+            }
+            catch {
+                Write-Log -Message "Error adding $ta to collection" -LogFileName $LogFileName -Severity Error
+            }
             	
         }
     }
