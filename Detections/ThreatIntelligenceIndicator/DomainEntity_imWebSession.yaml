@@ -1,0 +1,58 @@
+id: b1832f60-6c3d-4722-a0a5-3d564ee61a63
+name: TI map Domain entity to _Im_WebSession
+description: |
+  'Identifies a match in _Im_WebSession from any Domain IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+    let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    //Create a list of TLDs in our threat feed for later validation
+    let list_tlds = ThreatIntelligenceIndicator
+    | where TimeGenerated > ago(ioc_lookBack)
+    | where isnotempty(DomainName)
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | summarize count() by tostring(tld)
+    | summarize make_list(tld);
+    ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true
+    // Picking up only IOC's that contain the entities we want
+    | where isnotempty(DomainName)
+    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+    | join kind=innerunique (
+        _Im_WebSession(starttime=ago(dt_lookBack))
+        //Extract domain patterns from syslog message
+        | extend domain = tostring(parse_url(Url)["Host"])
+        | where isnotempty(domain)
+        | extend tld = tostring(split(domain, '.')[-1])
+        //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
+        | where tld in~ (list_tlds)
+        | extend Event_TimeGenerated = TimeGenerated
+    ) on $left.DomainName==$right.domain
+    | where Event_TimeGenerated < ExpirationDateTime
+    | summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain
+    | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, domain, SrcIpAddr, Url
+    
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
+kind: Scheduled
