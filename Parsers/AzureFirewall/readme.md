@@ -37,34 +37,18 @@ I've also added sample datasets for `ApplicationRule` and `NetworkRule` events. 
 
 ### Automatic deployment
 
-Queries can be stored inside a Log Analytics Workspace (savedQueries) but this is considered _"legacy"_ since [Microsoft introduced Query Packs @ Build 2021](https://techcommunity.microsoft.com/t5/azure-monitor-blog/what-s-new-in-azure-monitor-build-2021/ba-p/2366286).
-
+There's currently some confusion about the proper way to deploy "saved queries" to you Sentinel/Log Analytics workspaces. These can be stored directly inside the workspace (savedQueries) but apparantly this is considered _"legacy"_ now since [Microsoft introduced Query Packs @ Build 2021](https://techcommunity.microsoft.com/t5/azure-monitor-blog/what-s-new-in-azure-monitor-build-2021/ba-p/2366286).
 Query Packs are a new type of Azure resource in where you can store KQL queries. Query Packs can be shared across multiple workspaces and even across multiple subscriptions.
-If you now save a query from the portal it will default to creating a new blank Query Pack called `DefaultQueryPack` in a resource group `loganalyticsdefaultresources` in your subscription.
 
-<sup>**More information on Query Pack deployments:**</sup> <sup>https://docs.microsoft.com/en-us/azure/azure-monitor/logs/query-packs</sup>
+BUT! Query Packs **cannot** facilitate the automated deployments of functions! So for this use (like with parsers) the _tried-and-true_ method is this advised. 
 
-If you already make use of Query Packs you can add these queries to your existing pack(s) or you can deploy a new additional pack with the button below:
-
-<br>
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FTheCloudScout%2FAzure-Sentinel%2Fmaster%2FParsers%2FAzureFirewall%2FARM%2FAzureFirewallParser-QueryPack-template.json)
+To deploy these parsers as functions automatically, click the button below:
 
 <br>
 
-The template deploys the following:
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FTheCloudScout%2FAzure-Sentinel%2Fmaster%2FParsers%2FAzureFirewall%2FARM%2FAzureFirewallParser-template.json)
 
-<img src="images/querypack-icon.png" width="300"/>
-
-| Name | Type |
-| --- | --- |
-| AzureFirewallParsers | Log Analytics query pack |
-
-Within Microsoft Sentinel you can select which Query Pack(s) you want to load into the interface:
-
-![](images/querypack-select.png)
-
-Additionally you can save queries as `functions`. See details below.
+<br>
 
 ### Manual deployment
 
