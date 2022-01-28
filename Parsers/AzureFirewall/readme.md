@@ -56,8 +56,6 @@ To deploy these parsers as functions automatically, click the button below:
 2. Click on `Save` --> `Save as function` and give it a name.
 3. Repeat the process for each of the three functions.
 
-![](images/function-save.png)
-
 Once a function is saved it might take a minute or two before they can be used. Once active you should be able to run a function by entering the name you gave it in step 2.
 
 For example:
@@ -68,4 +66,3 @@ AzureFirewallNetworkRules
         action == "Allow" and
         port_destination == 3389
 ```
-![](images/function-use.png)
