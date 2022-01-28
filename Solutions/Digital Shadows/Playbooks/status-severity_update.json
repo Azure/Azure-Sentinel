@@ -1,0 +1,661 @@
+{
+    "properties": {
+        "provisioningState": "Succeeded",
+        "createdTime": "2022-01-13T07:03:58.1157581Z",
+        "changedTime": "2022-01-13T07:23:47.1644125Z",
+        "state": "Enabled",
+        "version": "08585595482583261206",
+        "accessEndpoint": "https://prod-22.uksouth.logic.azure.com:443/workflows/fec7e5af04f94910a9ec500e1d5c3d59",
+        "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                    "type": "ApiConnectionWebhook",
+                    "inputs": {
+                        "body": {
+                            "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                        },
+                        "path": "/subscribe"
+                    }
+                }
+            },
+            "actions": {
+                "Alert_-_Get_incident": {
+                    "runAfter": {
+                        "Delay": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                            }
+                        },
+                        "method": "get",
+                        "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                    }
+                },
+                "Condition": {
+                    "actions": {
+                        "Set_variable_5": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "severity",
+                                "value": "High"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "For_each_4": [
+                            "Succeeded"
+                        ]
+                    },
+                    "else": {
+                        "actions": {
+                            "Condition_2": {
+                                "actions": {
+                                    "Set_variable_6": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "severity",
+                                            "value": "Low"
+                                        }
+                                    }
+                                },
+                                "runAfter": {},
+                                "else": {
+                                    "actions": {
+                                        "Condition_3": {
+                                            "actions": {
+                                                "Set_variable_7": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "severity",
+                                                        "value": "Medium"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Set_variable_8": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "severity",
+                                                            "value": "Informational"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@variables('severity')",
+                                                            "medium"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    }
+                                },
+                                "expression": {
+                                    "or": [
+                                        {
+                                            "contains": [
+                                                "@variables('severity')",
+                                                "low"
+                                            ]
+                                        },
+                                        {
+                                            "contains": [
+                                                "@variables('severity')",
+                                                "very-low"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "type": "If"
+                            }
+                        }
+                    },
+                    "expression": {
+                        "or": [
+                            {
+                                "contains": [
+                                    "@variables('severity')",
+                                    "high"
+                                ]
+                            },
+                            {
+                                "contains": [
+                                    "@variables('severity')",
+                                    "very-high"
+                                ]
+                            }
+                        ]
+                    },
+                    "type": "If"
+                },
+                "Condition_4": {
+                    "actions": {
+                        "Update_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "classification": {
+                                        "ClassificationAndReason": "Undetermined",
+                                        "ClassificationReasonText": "Sync in Sentinel-DS playbook"
+                                    },
+                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                    "severity": "@variables('severity')",
+                                    "status": "Closed"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Incidents"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Condition": [
+                            "Succeeded"
+                        ]
+                    },
+                    "else": {
+                        "actions": {
+                            "Condition_5": {
+                                "actions": {
+                                    "Update_incident_2": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                "severity": "@variables('severity')",
+                                                "status": "Active"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Incidents"
+                                        }
+                                    }
+                                },
+                                "runAfter": {},
+                                "else": {
+                                    "actions": {
+                                        "Update_incident_3": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "severity": "@variables('severity')",
+                                                    "status": "New"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            }
+                                        }
+                                    }
+                                },
+                                "expression": {
+                                    "and": [
+                                        {
+                                            "contains": [
+                                                "@variables('status')",
+                                                "open"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "type": "If"
+                            }
+                        }
+                    },
+                    "expression": {
+                        "or": [
+                            {
+                                "contains": [
+                                    "@variables('status')",
+                                    "closed"
+                                ]
+                            },
+                            {
+                                "contains": [
+                                    "@variables('status')",
+                                    "resolved"
+                                ]
+                            },
+                            {
+                                "contains": [
+                                    "@variables('status')",
+                                    "rejected"
+                                ]
+                            }
+                        ]
+                    },
+                    "type": "If"
+                },
+                "Delay": {
+                    "runAfter": {},
+                    "type": "Wait",
+                    "inputs": {
+                        "interval": {
+                            "count": 5,
+                            "unit": "Second"
+                        }
+                    }
+                },
+                "For_each_4": {
+                    "foreach": "@variables('state')",
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@variables('severity_incident')",
+                            "actions": {
+                                "Set_variable_2": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "s_incident",
+                                        "value": "@string(item())"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_6": {
+                            "foreach": "@variables('severity_alert')",
+                            "actions": {
+                                "Set_variable_3": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "s_alert",
+                                        "value": "@string(item())"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Set_variable": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "severity",
+                                "value": "@{variables('s_alert')}@{variables('s_incident')}"
+                            }
+                        },
+                        "Set_variable_4": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "status",
+                                "value": "@string(item())"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable_5": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "Initialize_variable": {
+                    "runAfter": {
+                        "Initialize_variable_2": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "severity_incident",
+                                "type": "array",
+                                "value": "@body('Parse_JSON_2')?['risk_incident']"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_2": {
+                    "runAfter": {
+                        "Initialize_variable_3": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "severity",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_3": {
+                    "runAfter": {
+                        "Initialize_variable_7": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "state",
+                                "type": "array",
+                                "value": "@body('Parse_JSON_2')?['status']"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_4": {
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "severity_alert",
+                                "type": "array",
+                                "value": "@body('Parse_JSON_2')?['risk_alert']"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_5": {
+                    "runAfter": {
+                        "Initialize_variable_4": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "status",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_6": {
+                    "runAfter": {
+                        "Parse_JSON_2": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "s_alert",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_7": {
+                    "runAfter": {
+                        "Initialize_variable_6": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "s_incident",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Parse_JSON": {
+                    "runAfter": {
+                        "Alert_-_Get_incident": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ParseJson",
+                    "inputs": {
+                        "content": "@triggerBody()?['ExtendedProperties']",
+                        "schema": {
+                            "properties": {
+                                "Custom Details": {
+                                    "type": "string"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "Parse_JSON_2": {
+                    "runAfter": {
+                        "Parse_JSON": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "ParseJson",
+                    "inputs": {
+                        "content": "@body('Parse_JSON')?['Custom Details']",
+                        "schema": {
+                            "properties": {
+                                "alert_id": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "description": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "impact_description": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "incident_id": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "mitigation": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "risk_alert": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "risk_incident": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "status": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                },
+                                "triage_id": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "outputs": {}
+        },
+        "parameters": {
+            "$connections": {
+                "value": {
+                    "azuresentinel": {
+                        "connectionId": "/subscriptions/9ecebafb-a962-4e36-9e10-0cfbbc18b52f/resourceGroups/DigitalShadows/providers/Microsoft.Web/connections/azuresentinel-test",
+                        "connectionName": "azuresentinel-test",
+                        "connectionProperties": {
+                            "authentication": {
+                                "type": "ManagedServiceIdentity"
+                            }
+                        },
+                        "id": "/subscriptions/9ecebafb-a962-4e36-9e10-0cfbbc18b52f/providers/Microsoft.Web/locations/uksouth/managedApis/azuresentinel"
+                    },
+                    "azuresentinel_1": {
+                        "connectionId": "/subscriptions/9ecebafb-a962-4e36-9e10-0cfbbc18b52f/resourceGroups/DigitalShadows/providers/Microsoft.Web/connections/azuresentinel-1",
+                        "connectionName": "azuresentinel-1",
+                        "id": "/subscriptions/9ecebafb-a962-4e36-9e10-0cfbbc18b52f/providers/Microsoft.Web/locations/uksouth/managedApis/azuresentinel"
+                    }
+                }
+            }
+        },
+        "endpointsConfiguration": {
+            "workflow": {
+                "outgoingIpAddresses": [
+                    {
+                        "address": "51.140.74.14"
+                    },
+                    {
+                        "address": "51.140.73.85"
+                    },
+                    {
+                        "address": "51.140.78.44"
+                    },
+                    {
+                        "address": "51.140.137.190"
+                    },
+                    {
+                        "address": "51.140.153.135"
+                    },
+                    {
+                        "address": "51.140.28.225"
+                    },
+                    {
+                        "address": "51.140.142.28"
+                    },
+                    {
+                        "address": "51.140.158.24"
+                    }
+                ],
+                "accessEndpointIpAddresses": [
+                    {
+                        "address": "51.140.79.109"
+                    },
+                    {
+                        "address": "51.140.78.71"
+                    },
+                    {
+                        "address": "51.140.84.39"
+                    },
+                    {
+                        "address": "51.140.155.81"
+                    }
+                ]
+            },
+            "connector": {
+                "outgoingIpAddresses": [
+                    {
+                        "address": "51.140.74.150"
+                    },
+                    {
+                        "address": "51.140.80.51"
+                    },
+                    {
+                        "address": "51.140.61.124"
+                    },
+                    {
+                        "address": "51.105.77.96/27"
+                    },
+                    {
+                        "address": "51.140.148.0/28"
+                    },
+                    {
+                        "address": "20.90.129.0/27"
+                    },
+                    {
+                        "address": "20.90.129.32/28"
+                    }
+                ]
+            }
+        }
+    },
+    "id": "/subscriptions/9ecebafb-a962-4e36-9e10-0cfbbc18b52f/resourceGroups/DigitalShadows/providers/Microsoft.Logic/workflows/status-severity_update",
+    "name": "status-severity_update",
+    "type": "Microsoft.Logic/workflows",
+    "location": "uksouth",
+    "tags": {},
+    "identity": {
+        "type": "SystemAssigned",
+        "principalId": "2a2d56b1-e8f8-422b-9a0e-f76eabf007b3",
+        "tenantId": "f0ba8c6d-6425-4589-80ff-ad4884971dad"
+    }
+}
