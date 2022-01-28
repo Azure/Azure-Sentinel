@@ -30,7 +30,7 @@ if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
-    logging.info(f"Executing orchestrator function")
+    logging.info(f"Executing orchestrator function version 1.1")
     datetimeEntityId = df.EntityId("SoarDatetimeEntity", "latestDatetime")
     stored_datetime = yield context.call_entity(datetimeEntityId, "get")
     logging.info(f"retrieved stored datetime: {stored_datetime}")
@@ -43,11 +43,12 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
 
 
 async def transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime):
+    context = {"gte_datetime": stored_datetime, "lte_datetime": current_datetime}
     queue = asyncio.Queue()
     api_connector = AbnormalSoarConnectorAsync(API_TOKEN)
     sentinel_connector = AzureSentinelConnectorAsync(LOG_ANALYTICS_URI,SENTINEL_WORKSPACE_ID, SENTINEL_SHARED_KEY)
-    threat_message_producer = asyncio.create_task(api_connector.get_all_threat_messages(stored_datetime, current_datetime, queue))
-    cases_producer = asyncio.create_task(api_connector.get_all_cases(stored_datetime, current_datetime, queue))
+    threat_message_producer = asyncio.create_task(api_connector.get_all_threat_messages(context, queue))
+    cases_producer = asyncio.create_task(api_connector.get_all_cases(context, queue))
     consumers = [asyncio.create_task(consume(sentinel_connector, queue)) for _ in range(3)]
     await asyncio.gather(threat_message_producer, cases_producer)
     await queue.join()  # Implicitly awaits consumers, too
