@@ -88,7 +88,11 @@
                                 "method": "get",
                                 "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                             },
-                            "runAfter": {},
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection"
                         },
                         "Entities_-_Get_Hosts": {
@@ -113,6 +117,76 @@
                             "actions": {
                                 "Condition": {
                                     "actions": {
+                                        "Machines_-_Get_single_machine": {
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        },
+                                        "Set_variable": {
+                                            "inputs": {
+                                                "name": "MDEDeviceId",
+                                                "value": "@body('Machines_-_Get_single_machine')?['id']"
+                                            },
+                                            "runAfter": {
+                                                "Machines_-_Get_single_machine": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Machines_-_Get_single_machine_2": {
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/api/machines/@{encodeURIComponent(items('For_each')?['MdatpDeviceId'])}"
+                                                },
+                                                "runAfter": {},
+                                                "type": "ApiConnection"
+                                            },
+                                            "Set_variable_2": {
+                                                "inputs": {
+                                                    "name": "MDEDeviceId",
+                                                    "value": "@body('Machines_-_Get_single_machine_2')?['id']"
+                                                },
+                                                "runAfter": {
+                                                    "Machines_-_Get_single_machine_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each')?['MdatpDeviceId']",
+                                                    "@null"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                },
+                                "Condition_2": {
+                                    "actions": {
                                         "Actions_-_Run_antivirus_scan": {
                                             "inputs": {
                                                 "body": {
@@ -125,7 +199,7 @@
                                                     }
                                                 },
                                                 "method": "post",
-                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['MdatpDeviceId'])}/runAntiVirusScan"
+                                                "path": "/api/machines/@{encodeURIComponent(variables('MDEDeviceId'))}/runAntiVirusScan"
                                             },
                                             "runAfter": {},
                                             "type": "ApiConnection"
@@ -134,7 +208,7 @@
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                                    "message": "<p>@{items('For_each')?['HostName']} had a full AV scan triggered and the status was @{body('Actions_-_Run_antivirus_scan')?['status']}</p>"
+                                                    "message": "<p>@{items('For_each')?['HostName']} (MDE Device ID: @{body('Machines_-_Get_single_machine')?['id']}) had a full AV scan triggered and the status was @{body('Actions_-_Run_antivirus_scan')?['status']}</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -158,7 +232,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
-                                                        "message": "<p>@{items('For_each')?['HostName']} does not have MDEDeviceID in the Entities list, so no AV scan was run.</p>"
+                                                        "message": "<p>@{items('For_each')?['HostName']} could not be found in MDE, so no AV scan was run.</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -178,14 +252,18 @@
                                             {
                                                 "not": {
                                                     "equals": [
-                                                        "",
+                                                        "@variables('MDEDeviceId')",
                                                         "@null"
                                                     ]
                                                 }
                                             }
                                         ]
                                     },
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Condition": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "If"
                                 }
                             },
@@ -196,6 +274,18 @@
                                 ]
                             },
                             "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MDEDeviceId",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
                         }
                     },
                     "contentVersion": "1.0.0.0",
