@@ -11,6 +11,6 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fdev%2F%Norm%2FDnsFixes_deployment%2FParsers%2FASimDns%2FFullDeploymentDns.json)
 
 <br>
