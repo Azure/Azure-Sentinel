@@ -28,12 +28,12 @@ query: |
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
   // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
   // Taking the first non-empty value based on potential IOC match availability
-  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
-      _Im_NetworkSession | where TimeGenerated >= ago(dt_lookBack)
+      _Im_NetworkSession (starttime=ago(dt_lookBack))
       | where isnotempty(DstIpAddr)
       // renaming time column so it is clear the log this came from
       | extend imNWS_TimeGenerated = TimeGenerated
