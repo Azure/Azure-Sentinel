@@ -62,10 +62,9 @@ query: |
   (WindowsEvent
   | where TimeGenerated > ago(timeframe)
   // Look for build process starts
-  | where EventID == 4688
+  | where EventID == 4688 and EventData has_any (build_processes)
   | extend NewProcessName = tostring(EventData.NewProcessName)
-  | extend ProcessPathSegments=tostring(split(NewProcessName, '\\')[-1])
-  | extend Process=tostring(ProcessPathSegments[arraylength(ProcessPathSegments)-1])
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
   | where Process has_any (build_processes)
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
   | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
@@ -75,10 +74,9 @@ query: |
   WindowsEvent
   | where TimeGenerated > ago(timeframe)
   // Look for file modifications to code file
-  | where EventID == 4663
+  | where EventID == 4663 and EventData has_any ("0x6", "0x4", "0X100") and EventData has_any ("*.cs$", "*.cpp$")
   | extend NewProcessName = tostring(EventData.NewProcessName)
-  | extend ProcessPathSegments=tostring(split(NewProcessName, '\\')[-1])
-  | extend Process=tostring(ProcessPathSegments[arraylength(ProcessPathSegments)-1])
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
   | where Process !in (allow_list)
   // Look for code files, edit this to include file extensions used in build.
   | extend ObjectName = tostring(EventData.ObjectName)
@@ -87,7 +85,7 @@ query: |
   | extend AccessMask = tostring(EventData.AccessMask)  
   | where AccessMask == "0x6"  or AccessMask == "0x4" or AccessMask == "0X100"
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
-  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"/", tostring(EventData.SubjectUserName))
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend ProcessName = tostring(EventData.ProcessName)
   | summarize by FileEditParentProcess=ParentProcessName, FileEditAccount = Account, Computer, FileEdited=ObjectName, FileEditProcess=ProcessName, timekey= bin(TimeGenerated, time_window), FileEditTime=TimeGenerated)
   // join where build processes and file modifications seen at same time on same host
