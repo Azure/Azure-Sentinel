@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsEvent
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 12h
 queryPeriod: 12h
 triggerOperator: gt
@@ -39,7 +42,8 @@ query: |
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
   (WindowsEvent
-  | where EventID == 4688
+  | where EventID == 4688 and not(EventData has_any ('gc_worker.exe', 'gc_service.exe'))
+  | where EventData has_any ("-encodedCommand", "powershell.exe","powershell_ise.exe","pwsh.exe")
   //consider filtering on filename if perf issues occur
   //where FileName in~ ("powershell.exe","powershell_ise.exe","pwsh.exe")
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
@@ -55,8 +59,7 @@ query: |
   | extend SubjectUserName = tostring(EventData.SubjectUserName)
   | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
   | extend NewProcessName = tostring(EventData.NewProcessName)
-  | extend ProcessPathSegments=split(iff(NewProcessName endswith @"\", substring(NewProcessName, 0, strlen(NewProcessName) - 1), NewProcessName), @"\")
-  | extend Process=tostring(ProcessPathSegments[arraylength(ProcessPathSegments)-1])
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
   | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, EfectiveCommand, decodedCommand, encodedCommand, CommandLine, ParentProcessName
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ))
