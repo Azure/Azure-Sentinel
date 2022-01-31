@@ -23,6 +23,7 @@ pickle_str = os.environ['GooglePickleString']
 pickle_string = base64.b64decode(pickle_str)
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
+tokenFilePath = '/tmp/token.json'
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = [
             "access_transparency",
@@ -56,8 +57,8 @@ if(not match):
 
 def get_credentials():
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if os.path.exists(tokenFilePath):
+        creds = Credentials.from_authorized_user_file(tokenFilePath, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -72,7 +73,7 @@ def get_credentials():
                 raise Exception("Google Workspace Reports: Pickle_string is empty. Exit.")
 
         # Save the credentials for the next run
-        with open('token.json', 'w') as token:
+        with open(tokenFilePath, 'w') as token:
             token.write(creds.to_json())
     return creds
 
