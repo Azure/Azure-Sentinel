@@ -46,7 +46,10 @@ requiredDataConnectors:
       - AzureDiagnostics
   - connectorId: WindowsFirewall
     dataTypes:
-      - WindowsFirewall      
+      - WindowsFirewall
+  - connectorId: WindowsEvents
+    dataTypes:
+      - WindowsEvent            
 queryFrequency: 6h 
 queryPeriod: 6h 
 triggerOperator: gt 
@@ -154,6 +157,19 @@ query:  |
   | where ( CommandLine has_any (file_path1)) or ( CommandLine has_any (file_path3)) or ( CommandLine has 'reg add' and CommandLine has_any (reg_key) and CommandLine has_any (file_path2)) or (NewProcessName has_any (file_path1)) or (NewProcessName has_any (file_path3)) or (ParentProcessName has_any (file_path1)) or (ParentProcessName has_any (file_path3))
   | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName, Alert = 'SOURGUM IOC detected'
+  ),
+  ( WindowsEvent
+  | where EventID == 4688 and EventData has_any (file_path1, file_path3, 'reg add',file_path3 )
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | where CommandLine has_any (file_path1)) or CommandLine has_any (file_path3)) or CommandLine has 'reg add' and CommandLine has_any (reg_key) and tostring(EventData.ParentProcessName) has_any (file_path3))
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend Account = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend NewProcessId = tostring(EventData.NewProcessId)
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName, Alert = 'SOURGUM IOC detected', , IPCustomEntity = IpAddress
   )
   )
 entityMappings:
@@ -179,5 +195,5 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
