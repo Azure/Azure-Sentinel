@@ -20,5 +20,6 @@ interface SolutionAutomationInput {
   "Hunting Queries"?: string[];
   "Data Connectors"?: string[];
   Watchlists?: string[];
+  TemplateSpecs?: string[];
   BasePath?: string; //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
 }

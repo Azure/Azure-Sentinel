@@ -51,6 +51,40 @@ function removePropertiesRecursively ($resourceObj) {
     $resourceObj
 }
 
+function findStepNum ($stepName) {
+    $workbookStepNum = 0
+    $stepCount = $baseCreateUiDefinition.parameters.steps.Count
+    for ($stepNum = 0; $stepNum -lt $stepCount; $stepNum++) {
+        if ($baseCreateUiDefinition.parameters.steps[$stepNum].name -eq $stepName) {
+            return $workbookStepNum
+        }
+        $workbookStepNum++
+    }
+    return -1;
+}
+
+function getConnectorDataTypes($dataTypesArray) {
+    $syslog = "Syslog"
+    $commonSecurityLog = "CommonSecurityLog"
+    $typeResult = "custom log"
+    foreach ($dataType in $dataTypesArray) {
+        if ($dataType.name.IndexOf($syslog) -ne -1) {
+            $typeResult = $syslog
+        }
+        elseif ($dataType.name.IndexOf($commonSecurityLog) -ne -1) {
+            $typeResult = $commonSecurityLog
+        }
+    }
+    return $typeResult
+}
+function getAllDataTypeNames($dataTypesArray) {
+    $typeResult = @()
+    foreach ($dataType in $dataTypesArray) {
+        $typeResult += $dataType.name
+    }
+    return $typeResult
+}
+
 foreach ($inputFile in $(Get-ChildItem $path)) {
     $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
 
@@ -600,25 +634,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $syslog = "Syslog"
                         $commonSecurityLog = "CommonSecurityLog"
-                        function getConnectorDataTypes($dataTypesArray) {
-                            $typeResult = "custom log"
-                            foreach ($dataType in $dataTypesArray) {
-                                if ($dataType.name.IndexOf($syslog) -ne -1) {
-                                    $typeResult = $syslog
-                                }
-                                elseif ($dataType.name.IndexOf($commonSecurityLog) -ne -1) {
-                                    $typeResult = $commonSecurityLog
-                                }
-                            }
-                            return $typeResult
-                        }
-                        function getAllDataTypeNames($dataTypesArray) {
-                            $typeResult = @()
-                            foreach ($dataType in $dataTypesArray) {
-                                $typeResult += $dataType.name
-                            }
-                            return $typeResult
-                        }
                         $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
                         $isParserAvailable = $($contentToImport.Parsers -and ($contentToImport.Parsers.Count -gt 0))
                         $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Azure Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
@@ -755,6 +770,363 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Update Watchlist Counter
                         $watchlistCounter += 1
+                    }
+                    elseif ($objectKeyLowercase -eq "templatespecs") {
+                        # Note: This method assumes the template is passing arm-ttk validation
+                        # Add non-default Parameters
+                        $templateParams = $json.parameters
+                        $defaultParams = ("location", "workspace-location", "workspace") # These exist in the base templating
+                        foreach ($templateParam in $templateParams.PSObject.Properties) {
+                            if ($defaultParams -notcontains $templateParam.name) {
+                                $baseMainTemplate.parameters | Add-Member -NotePropertyName $templateParam.name -NotePropertyValue $templateParam.value
+                            }
+                        }
+                        # Add Variables
+                        $templateVariables = $json.variables
+                        foreach ($templateVariable in $templateVariables.PSObject.Properties) {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $templateVariable.name -NotePropertyValue $templateVariable.value
+                        }
+                        # Add Resources
+                        $baseMainTemplate.resources = $json.resources
+                        # Add UI Steps for each supported resource type
+                        $rawResources = $json.resources | Where-Object { $_.type -eq "Microsoft.Resources/templateSpecs/versions" }
+                        foreach ($rawResource in $rawResources) {
+                            $contentType = $rawResource.tags."hidden-sentinelContentType"
+                            if ($contentType -eq "Workbook") {
+                                # Add base UI step if not available
+                                if ($workbookCounter -eq 1) {
+                                    $baseWorkbookStep = [PSCustomObject] @{
+                                        name       = "workbooks";
+                                        label      = "Workbooks";
+                                        bladeTitle = "Workbooks";
+                                        subLabel   = [PSCustomObject] @{
+                                            preValidation  = "Configure the workbooks";
+                                            postValidation = "Done";
+                                        };
+                                        elements   = @(
+                                            [PSCustomObject] @{
+                                                name    = "workbooks-text";
+                                                type    = "Microsoft.Common.TextBlock";
+                                                options = [PSCustomObject] @{
+                                                    text = "This Azure Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Azure Sentinel and combine them into unified interactive experiences.";
+                                                    link = [PSCustomObject] @{
+                                                        label = "Learn more";
+                                                        uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data";
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
+                                }
+                                # Create Workbook element
+                                $workbookDescriptionText = $rawResource.properties.description #Could also fill from Input File
+                                $workbookLabel = $($rawResource.properties.mainTemplate.resources | Where-Object { $_.type -eq "Microsoft.Insights/workbooks" }).properties.displayName
+                                $workbookUiParameter = [PSCustomObject] @{
+                                    name     = "workbook$workbookCounter";
+                                    type     = "Microsoft.Common.Section";
+                                    label    = $workbookLabel;
+                                    elements = @(
+                                        [PSCustomObject] @{
+                                            name    = "workbook$workbookCounter-text";
+                                            type    = "Microsoft.Common.TextBlock";
+                                            options = [PSCustomObject] @{ text = $workbookDescriptionText; }
+                                        }
+                                    )
+                                }
+                                # Add Workbook element
+                                $stepNum = findStepNum "workbooks"
+                                $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $workbookUiParameter
+                                $workbookCounter++
+                            }
+                            if ($contentType -eq "Playbook") {
+                                # Add base UI step if not available
+                                if ($playbookCounter -eq 1) {
+                                    $playbookStep = [PSCustomObject] @{
+                                        name       = "playbooks";
+                                        label      = "Playbooks";
+                                        bladeTitle = "Playbooks";
+                                        subLabel   = [PSCustomObject] @{
+                                            preValidation  = "Configure the playbooks";
+                                            postValidation = "Done";
+                                        };
+                                        elements   = @(
+                                            [PSCustomObject] @{
+                                                name    = "playbooks-text";
+                                                type    = "Microsoft.Common.TextBlock";
+                                                options = [PSCustomObject] @{
+                                                    text = "This solution installs playbook resources.  A security playbook is a collection of procedures that can be run from Azure Sentinel in response to an alert. A security playbook can help automate and orchestrate your response, and can be run manually or set to run automatically when specific alerts are triggered. Security playbooks in Azure Sentinel are based on Azure Logic Apps, which means that you get all the power, customizability, and built-in templates of Logic Apps. Each playbook is created for the specific subscription you choose, but when you look at the Playbooks page, you will see all the playbooks across any selected subscriptions.";
+                                                    link = [PSCustomObject] @{
+                                                        label = "Learn more";
+                                                        uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+                                                    };
+                                                };
+                                            }
+                                        )
+                                    }
+                                    $baseCreateUiDefinition.parameters.steps += $playbookStep
+                                }
+                                # Create Playbook element
+                                $playbookName = $rawResource.properties.mainTemplate.metadata.title
+                                $playbookDescription = $rawResource.properties.mainTemplate.metadata.description
+                                $playbookElement = [PSCustomObject] @{
+                                    name     = "playbook$playbookCounter";
+                                    type     = "Microsoft.Common.Section";
+                                    label    = $playbookName;
+                                    elements = @(
+                                        [PSCustomObject] @{
+                                            name    = "playbook$playbookCounter-text";
+                                            type    = "Microsoft.Common.TextBlock";
+                                            options = [PSCustomObject] @{ text = $playbookDescription }
+                                        }
+                                    )
+                                }
+                                # Add Playbook element
+                                $stepNum = findStepNum "playbooks"
+                                $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $playbookElement
+                                $playbookCounter++
+                            }
+                            if ($contentType -eq "AnalyticsRule") {
+                                # Add base UI step if not available
+                                if ($analyticRuleCounter -eq 1) {
+                                    $baseAnalyticRuleStep = [PSCustomObject] @{
+                                        name       = "analytics";
+                                        label      = "Analytics";
+                                        bladeTitle = "Analytics";
+                                        subLabel   = [PSCustomObject] @{
+                                            preValidation  = "Configure the Analytics";
+                                            postValidation = "Done";
+                                        };
+                                        elements   = @(
+                                            [PSCustomObject] @{
+                                                name    = "analytics-text";
+                                                type    = "Microsoft.Common.TextBlock";
+                                                options = [PSCustomObject] @{
+                                                    text = "This Azure Sentinel Solution installs analytic rules for $solutionName that you can enable for custom alert generation in Azure Sentinel. These analytic rules will be deployed in disabled mode in the analytics rules gallery of your Azure Sentinel workspace. Configure and enable these rules in the analytic rules gallery after this Solution deploys.";
+                                                    link = [PSCustomObject] @{
+                                                        label = "Learn more";
+                                                        uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef";
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    $baseCreateUiDefinition.parameters.steps += $baseAnalyticRuleStep
+                                }
+                                # Create Analytic Rule element
+                                $alertRuleDescription = $rawResource.properties.description 
+                                $alertRuleDisplayName = $rawResource.properties.mainTemplate.resources[0].properties.displayName
+                                $alertRuleElement = [PSCustomObject] @{ 
+                                    name = "analytic$analyticRuleCounter"; 
+                                    type = "Microsoft.Common.Section"; 
+                                    label = $alertRuleDisplayName; 
+                                    elements = @( 
+                                        [PSCustomObject] @{ 
+                                            name = "analytic$analyticRuleCounter-text"; 
+                                            type = "Microsoft.Common.TextBlock"; 
+                                            options = @{ text = $alertRuleDescription; } 
+                                        } 
+                                    ) 
+                                }
+                                # Add Analytic Rule element
+                                $stepNum = findStepNum "analytics"
+                                $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $alertRuleElement
+                                $analyticRuleCounter++
+                            }
+                            if ($contentType -eq "DataConnector") {
+                                # Add base UI step if not available
+                                if ($connectorCounter -eq 1) {
+                                    $baseDataConnectorStep = [PSCustomObject] @{
+                                        name       = "dataconnectors";
+                                        label      = "Data Connectors";
+                                        bladeTitle = "Data Connectors";
+                                        subLabel   = [PSCustomObject] @{
+                                            preValidation  = "Configure the Data Connectors";
+                                            postValidation = "Done";
+                                        };
+                                        elements   = @();
+                                    }
+                                    $baseCreateUiDefinition.parameters.steps += $baseDataConnectorStep
+                                }
+                                # Create Data Connector element
+                                $connectorConfigData = $rawResource.properties.mainTemplate.resources[0].properties.connectorUiConfig
+                                $connectorDataType = $(getConnectorDataTypes $connectorConfigData.dataTypes)
+                                $connectorTableName = $connectorConfigData.graphQueriesTableName
+                                $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Azure Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
+                                $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $connectorTableName in your Azure Sentinel / Azure Log Analytics workspace."
+                                $syslogText = "$baseDescriptionText The logs will be received in the Syslog table in your Azure Sentinel / Azure Log Analytics workspace."
+                                $commonSecurityLogText = "$baseDescriptionText The logs will be received in the CommonSecurityLog table in your Azure Sentinel / Azure Log Analytics workspace."
+                                $connectorDescriptionText = $(if ($connectorDataType -eq $commonSecurityLog) { $commonSecurityLogText } elseif ($connectorDataType -eq $syslog) { $syslogText } else { $customLogsText })
+                                $baseDataConnectorTextElement = [PSCustomObject] @{
+                                    name    = "dataconnectors$connectorCounter-text";
+                                    type    = "Microsoft.Common.TextBlock";
+                                    options = [PSCustomObject] @{
+                                        text = $connectorDescriptionText;
+                                    }
+                                }
+                                # Add Data Connector element                   
+                                $stepNum = findStepNum "dataconnectors"
+                                $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $baseDataConnectorTextElement
+                                $connectorCounter++
+                            }
+                            if ($contentType -eq "HuntingQuery") {
+                                # Add base UI step if not available
+                                if ($huntingQueryCounter -eq 1) {
+                                    $huntingQueryBaseStep = [PSCustomObject] @{
+                                        name       = "huntingqueries";
+                                        label      = "Hunting Queries";
+                                        bladeTitle = "Hunting Queries";
+                                        subLabel   = [PSCustomObject] @{
+                                            preValidation  = "Configure the Hunting Queries";
+                                            postValidation = "Done";
+                                        };
+                                        elements   = @(
+                                            [PSCustomObject] @{
+                                                name    = "huntingqueries-text";
+                                                type    = "Microsoft.Common.TextBlock";
+                                                options = [PSCustomObject] @{
+                                                    text = "This Azure Sentinel Solution installs hunting queries for $solutionName that you can run in Azure Sentinel. These hunting queries will be deployed in the Hunting gallery of your Azure Sentinel workspace. Run these hunting queries to hunt for threats in the Hunting gallery after this Solution deploys.";
+                                                    link = [PSCustomObject] @{
+                                                        label = "Learn more";
+                                                        uri   = "https://docs.microsoft.com/azure/sentinel/hunting"
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    $baseCreateUiDefinition.parameters.steps += $huntingQueryBaseStep
+                                }
+                                # Create Hunting Query element
+                                $huntingQueryName = $rawResource.properties.mainTemplate.resources[0].properties.displayName
+                                $huntingQueryDescription = $rawResource.properties.description
+                                $huntingQueryElement = [PSCustomObject]@{
+                                    name     = "huntingquery$huntingQueryCounter";
+                                    type     = "Microsoft.Common.Section";
+                                    label    = $huntingQueryName;
+                                    elements = @(
+                                        [PSCustomObject]@{
+                                            name    = "huntingquery$huntingQueryCounter-text";
+                                            type    = "Microsoft.Common.TextBlock";
+                                            options = [PSCustomObject]@{
+                                                text = $huntingQueryDescription;
+                                            }
+                                        }
+                                    )
+                                }
+                                # Add Hunting Query element
+                                $stepNum = findStepNum "huntingqueries"
+                                $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $huntingQueryElement
+                                $huntingQueryCounter++
+                            }
+                            if ($contentType -eq "Watchlist") {
+                                # Add base UI step if not available
+                                if ($watchlistCounter -eq 1) {
+                                    $baseWatchlistStep = [PSCustomObject]@{
+                                        name       = "watchlists";
+                                        label      = "Watchlists";
+                                        bladeTitle = "Watchlists";
+                                        subLabel   = [PSCustomObject] @{
+                                            preValidation  = "Configure the Watchlists";
+                                            postValidation = "Done";
+                                        };
+                                        elements   = @(
+                                            [PSCustomObject]@{
+                                                name    = "watchlists-text";
+                                                type    = "Microsoft.Common.TextBlock";
+                                                options = [PSCustomObject]@{
+                                                    text = "Azure Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Azure Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Azure Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.";
+                                                    link = [PSCustomObject]@{
+                                                        label = "Learn more";
+                                                        uri   = "https://aka.ms/sentinelwatchlists";
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    $baseCreateUiDefinition.parameters.steps += $baseWatchlistStep
+                                }
+                                # Create Watchlist element
+                                $watchlistDisplayName = $rawResource.properties.mainTemplate.resources[0].properties.displayName
+                                $watchlistDescription = $rawResource.properties.mainTemplate.resources[0].properties.description
+                                $watchlistStepElement = [PSCustomObject]@{
+                                    name     = "watchlist$watchlistCounter";
+                                    type     = "Microsoft.Common.Section";
+                                    label    = $watchlistDisplayName;
+                                    elements = @(
+                                        [PSCustomObject]@{
+                                            name    = "watchlist$watchlistCounter-text";
+                                            type    = "Microsoft.Common.TextBlock";
+                                            options = [PSCustomObject]@{
+                                                text = $watchlistDescription
+                                            }
+                                        }
+                                    )
+                                }
+                                # Add Watchlist element
+                                $stepNum = findStepNum "watchlists"
+                                $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $watchlistStepElement
+                                $watchlistCounter++
+                            }
+                        }
+                        # Check for Parsers, and update Data Connectors tab if any available
+                        $parserResources = $($json.resources | Where-Object { ($_.type -eq "Microsoft.Resources/templateSpecs/versions") -and ($_.tags."hidden-sentinelContentType" -eq "Parser") })
+                        if($parserResources -and $parserResources.Count -gt 0) {
+                            # Add base Data Connector step if not available
+                            if ($connectorCounter -eq 1) {
+                                $baseDataConnectorStep = [PSCustomObject] @{
+                                    name       = "dataconnectors";
+                                    label      = "Data Connectors";
+                                    bladeTitle = "Data Connectors";
+                                    subLabel   = [PSCustomObject] @{
+                                        preValidation  = "Configure the Data Connectors";
+                                        postValidation = "Done";
+                                    };
+                                    elements   = @();
+                                }
+                                $baseCreateUiDefinition.parameters.steps += $baseDataConnectorStep
+                            }
+                            # Create Parser text element
+                            $parserText = "The Solution installs a parser that transforms the ingested data into Azure Sentinel normalized format. The normalized format enables better correlation of different types of data from different data sources to drive end-to-end outcomes seamlessly in security monitoring, hunting, incident investigation and response scenarios in Azure Sentinel."
+                            $parserTextElement = [PSCustomObject] @{
+                                name    = "dataconnectors-parser-text";
+                                type    = "Microsoft.Common.TextBlock";
+                                options = [PSCustomObject] @{
+                                    text = $parserText;
+                                }
+                            }
+                            # Add Parser text element
+                            $stepNum = findStepNum "dataconnectors"
+                            $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $parserTextElement
+                            $parserCounter += $parserResources.Count
+                        }
+                        # Add Data Connector tab links if necessary
+                        if(($connectorCounter -gt 1) -or ($parserCounter -gt 1)) {
+                            # Create Link elements
+                            $normalizedFormatLink = [PSCustomObject] @{
+                                name    = "dataconnectors-link1";
+                                type    = "Microsoft.Common.TextBlock";
+                                options = [PSCustomObject] @{
+                                    link = [PSCustomObject] @{
+                                        label = "Learn more about normalized format";
+                                        uri   = "https://docs.microsoft.com/azure/sentinel/normalization-schema";
+                                    }
+                                }
+                            }
+                            $connectDataSourcesLink = [PSCustomObject] @{
+                                name    = "dataconnectors-link2";
+                                type    = "Microsoft.Common.TextBlock";
+                                options = [PSCustomObject] @{
+                                    link = [PSCustomObject] @{
+                                        label = "Learn more about connecting data sources";
+                                        uri   = "https://docs.microsoft.com/azure/sentinel/connect-data-sources";
+                                    }
+                                }
+                            }                            
+                            # Add Link elements
+                            $stepNum = findStepNum "dataconnectors"
+                            $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $normalizedFormatLink
+                            $baseCreateUiDefinition.parameters.steps[$stepNum].elements += $connectDataSourcesLink
+                        }
                     }
                 }
                 else {

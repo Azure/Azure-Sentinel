@@ -50,6 +50,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
  * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
  * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
+ * TemplateSpecs: Newly added content type for pre-built templates, the packaging script assumes that this content already passes arm-ttk validation
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
@@ -67,6 +68,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Hunting Queries": [],
   "Data Connectors": [],
   "Watchlists": [],
+  "TemplateSpecs": [],
   "BasePath": "{Path to Solution Content}",
   "Version": "1.0.0",
   "Metadata": "{Name of Solution Metadata file}",
@@ -135,14 +137,14 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
     "lastPublishDate": {Solution recent Published Date},
     "providers": {Solution provider list},
     "categories": {
-	"domains" : {Solution category domain list},
-	"verticals": {Solution category vertical list},
-     },
-     "support": {
-	"name": {Publisher ID},
-	"email": {Email for Solution Support},
-	"tier": {Support Tier},
-	"link": {Link of Support contacts for Solution},
+      "domains" : {Solution category domain list},
+      "verticals": {Solution category vertical list},
+    },
+    "support": {
+      "name": {Publisher ID},
+      "email": {Email for Solution Support},
+      "tier": {Support Tier},
+      "link": {Link of Support contacts for Solution},
     }
 }
 
@@ -156,7 +158,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 	"offerId": "azure-sentinel-solution-mcafeeepo",
 	"firstPublishDate": "2021-03-26",
 	"lastPublishDate": "2021-08-09",
-	"providers": ["Cisco"],
+	"providers": ["McAfee"],
 	"categories": {
 		"domains" : ["Security - Network"],
 		"verticals": []
@@ -167,7 +169,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 	  "tier": "Microsoft",
 	  "link": "https://support.microsoft.com"
 	}
-} 
+}
 ```
 
 ### Generate Solution Package
