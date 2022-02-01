@@ -341,7 +341,7 @@ foreach ($scenario in $config.Scenarios) {
 
     foreach ($logfile in $outLines.Keys) {
         if ($outLines[$logfile].Count -gt 0) {
-            Write-Host "Processing $($samplefile.Name); Importing $($metadata.Message), Iteration $i of $RunCount"
+            Write-Host "Processing $($samplefile); Importing $($metadata.Message), Iteration $i of $RunCount"
             $runparams = @{
                 LogAnalyticsWorkspaceID = $LogAnalyticsWorkspaceID
                 LogAnalyticsWorkspaceKey= $LogAnalyticsWorkspaceKey
