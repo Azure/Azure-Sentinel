@@ -2,7 +2,7 @@
 
 This template deploys the ASIM WebSession schema parser for Source agnostic.
 
-The Advanced SEIM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
