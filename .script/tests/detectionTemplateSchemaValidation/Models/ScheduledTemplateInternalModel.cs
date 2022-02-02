@@ -36,7 +36,6 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         public int TriggerThreshold { get; set; }
         
         [JsonProperty("eventGroupingSettings", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
-        //[ValidEventGroupingAttribute]
         public EventGroupingSettings EventGroupingSettings { get; set; }
 
         [JsonProperty("kind", Required = Required.Always)]
