@@ -129,6 +129,41 @@ function Netskope () {
         Do {
             $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
             $netskopeevents = $response.data
+			$netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty app_sessionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
+			$netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
+			
+			if($null -ne $netskopeevents)
+            {
+				$netskopeevents | ForEach-Object{
+					if($_.dlp_incident_id -ne $NULL){
+							   $_.dlp_incidentid = [string]$_.dlp_incident_id
+					}
+					if($_.dlp_parent_id -ne $NULL){
+							   $_.dlp_parentid = [string]$_.dlp_parent_id
+					}
+					if($_.connection_id -ne $NULL){
+							   $_.connectionid = [string]$_.connection_id
+					}
+					if($_.app_session_id -ne $NULL){
+							   $_.app_sessionid = [string]$_.app_session_id
+					}
+					if($_.transaction_id -ne $NULL){
+							   $_.transactionid = [string]$_.transaction_id
+					}
+					if($_.browser_session_id -ne $NULL){
+							   $_.browser_sessionid = [string]$_.browser_session_id
+					}
+					if($_.request_id -ne $NULL){
+							   $_.requestid = [string]$_.request_id
+					}
+                }
+            }
+			
             $dataLength = $response.data.Length
             $alleventobjs += $netskopeevents
     

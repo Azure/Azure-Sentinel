@@ -1,0 +1,81 @@
+id: 39e48890-2c02-487e-aa9e-3ba494061798
+name: Vectra AI Detect - Detections with High Severity 
+description: |
+  'Create an incident for high severity malicious behavior detected by Vectra AI (Threat score superior to 7.0). 
+  The Severity is a mapping with the Threat score assigned to a detection. It ranges between 0 and 10. 
+  The severity_threshold variable can be adjusted as desired.' 
+severity: High
+requiredDataConnectors:
+  - connectorId: AIVectraDetect
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Discovery
+  - LateralMovement
+  - Collection
+  - CommandAndControl
+  - Exfiltration
+  - Impact
+relevantTechniques:
+query: |
+  // Edit this variable to only keep the tactics where an incident needs to be created (Defaults are: "COMMAND & CONTROL", "BOTNET ACTIVITY", "EXFILTRATION", "LATERAL MOVEMENT", "RECONNAISSANCE")   
+  let configured_tactics = dynamic(["COMMAND & CONTROL", "BOTNET ACTIVITY", "EXFILTRATION", "LATERAL MOVEMENT", "RECONNAISSANCE"]);
+  //default threshold is 7 (meaning a threat score of 70)
+  let severity_threshold = 7.0;
+  //Map by default to High Severity in Sentinel
+  let Severity = "High";
+  CommonSecurityLog
+  | where DeviceVendor == "Vectra Networks"
+  | where DeviceProduct == "X Series"
+  | where DeviceEventClassID != "campaigns" and DeviceEventClassID != "hsc" and DeviceEventClassID != "audit" and DeviceEventClassID != "health" and DeviceEventClassID != "asc"
+  | extend Category = extract("cat=(.+?);", 1, AdditionalExtensions) 
+  | project-rename threat_score = FlexNumber1
+  | project-rename certainty_score = FlexNumber2
+  | project-rename vectra_URL = DeviceCustomString4
+  | project-rename detection_name = DeviceEventClassID
+  | where todecimal(LogSeverity) >= severity_threshold
+  | extend Tactic = case( Category == "COMMAND & CONTROL", "CommandAndControl",
+                          Category == "BOTNET ACTIVITY" , "Impact",
+                          Category == "EXFILTRATION", "Exfiltration",
+                          Category == "LATERAL MOVEMENT", "LateralMovement",
+                          Category == "RECONNAISSANCE", "Discovery",
+                          "UNKNOWN")
+  | extend account = extract("account=(.+?);", 1, AdditionalExtensions)
+  | extend upn = iff(account matches regex ":", tostring(split(account,":")[1]) ,tostring(split(account,":")[0])) 
+  | extend source_entity = case( isnotempty(upn), upn,
+                                 isnotempty(SourceHostName), SourceHostName,
+                                 "UNKNWON") 
+  | where Category in (configured_tactics) 
+  | summarize arg_max(threat_score, *) by source_entity, Activity
+  | sort by TimeGenerated
+  | project TimeGenerated, source_entity, SourceHostName, SourceIP, upn, Tactic, Activity, LogSeverity, Severity, vectra_URL
+  | extend AccountCustomEntity = upn, HostCustomEntity = SourceHostName, IPCustomEntity = SourceIP, URLCustomEntity = vectra_URL, timestamp = TimeGenerated
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity 
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+alertDetailsOverride:
+  alertDisplayNameFormat: Vectra AI Detect - High Severity behavior for {{ source_entity }}
+  alertDescriptionFormat: Malicious behavior {{ Activity }} has been detected for entity {{ source_entity }}. Pivot to Detect UI with {{ vectra_URL }}
+  alertTacticsColumnName: Tactic
+  alertSeverityColumnName: Severity
+version: 1.0.0
+kind: scheduled
