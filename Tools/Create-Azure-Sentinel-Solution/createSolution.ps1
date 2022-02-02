@@ -407,7 +407,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
+                            if (($solutionName.ToLower() -eq "ciscomeraki") -and ($variableName.ToLower().contains("apikey")))
+                            {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
+                            }
+                            else
+                            {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
+                            }                           
                         }
 
                         $azureManagementUrlExists = $false
@@ -494,11 +501,20 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
                                         $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
+                                        if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
+                                        {
+                                            $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
+                                        }
                                     }
                                     else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
                                         $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
+                                        if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
+                                        {
+                                            $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
+                                        }
+                
                                     }
                                 }
                             }
