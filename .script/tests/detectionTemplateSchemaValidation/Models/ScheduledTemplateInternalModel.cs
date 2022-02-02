@@ -5,6 +5,7 @@ using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contract
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.ModelValidations;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
@@ -35,6 +36,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         public int TriggerThreshold { get; set; }
         
         [JsonProperty("eventGroupingSettings", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
+        //[ValidEventGroupingAttribute]
         public EventGroupingSettings EventGroupingSettings { get; set; }
 
         [JsonProperty("kind", Required = Required.Always)]
