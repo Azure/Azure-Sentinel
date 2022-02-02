@@ -1,0 +1,186 @@
+print Series = 'Tracking the Adversary with MTP Advanced Hunting', EpisodeNumber = 3, Topic = 'Summarizing, Pivoting, and Visualizing Data', Presenters = 'Michael Melone, Tali Ash', Company = 'Microsoft'
+
+// summarize
+// The summarize operator enables you to perform 
+// a variety of calculations on data.
+
+// The output of summarize will be a table with one
+// column for each row value you pivoted on as well
+// as one column for each pivot you performed.
+
+// In the following example, we will calculate the number of e-mails based on whether
+// Office ATP identified them as being malware.
+
+// SQL Equivalent: SELECT MalwareFilterVerdict, Count(*) FROM EmailAttachmentInfo GROUP BY MalwareFilterVerdict
+
+EmailAttachmentInfo 
+| summarize count() by ThreatTypes  
+
+// --------------------------------------------
+
+// Summarize can also be used to create 2 column pivots by simply adding another
+// column name after the "by" clause.  For example, we will now count the number
+// of e-mails received by sender and recipient combo
+
+// You will also notice in this example that the count_ has been renamed to Emails
+// to make the query easier to understand.
+
+// SQL Equivalent: SELECT TOP 100 SenderFromAddress, RecipientEmailAddress, Emails = Count(*) FROM EmailEvents GROUP BY SenderFromAddress, RecipientEmailAddress ORDER BY Emails DESC
+
+EmailEvents 
+| summarize Emails = count() by SenderFromAddress, RecipientEmailAddress 
+| top 100 by Emails desc
+
+// --------------------------------------------
+
+// min() - obtains the minimim value from the set
+// max() - obtains the maximum value from the set
+
+// SQL Equivalent: 
+// SELECT 
+//  Earliest = min(Timestamp)
+//  , Latest = max(Timestamp)
+//  , Count = count()
+//  , AccountName
+// FROM AlertEvidence
+// WHERE AccountName LIKE '%'
+// GROUP BY AccountName 
+// ORDER BY Count desc
+
+AlertEvidence 
+| where isnotempty(AccountName)
+| summarize Earliest = min(Timestamp), Latest = max(Timestamp), Count = count() by AccountName 
+| order by Count desc 
+
+// AlertEvidence
+// Contains information on entities and evidence involved in an alert, such as devices, accounts, and emails
+//--------------------------
+
+// Now let's get a bit more advanced.  Using the bin() function you can group events by a period of time.
+// Let's take a look at some logon statistics on a daily basis
+
+// Using render we can automatically create a chart.  Let's look at account logon activity over time on a
+// daily basis by UPN.
+
+IdentityLogonEvents 
+| where isnotempty(AccountUpn)
+| summarize NumberOfLogons = count() by AccountUpn, bin(Timestamp, 1d)
+| render timechart 
+
+// render - creates a chart
+
+// We can also use this bin'ed data to determine min, max, and average daily logons
+
+IdentityLogonEvents 
+| where isnotempty(AccountUpn)
+| summarize NumberOfLogons = count() 
+    by AccountUpn
+    , bin(Timestamp, 1d)
+| summarize TotalLogons = sum(NumberOfLogons)
+    , AverageDailyLogons = avg(NumberOfLogons)
+    , FewestLogonsInADay = min(NumberOfLogons)
+    , MostLogonsInADay = max(NumberOfLogons) 
+    by AccountUpn 
+| top 10 by TotalLogons desc 
+| render columnchart 
+
+--------------------------
+
+// You can also use summarize to get the latest event from each category.
+// For example, let's say you want to get the latest check-in information 
+// for each device in your instance
+
+// the arg_max() function will maximize the specified argument in the column
+// set based on the "by" parameter.  You can either specify the columns you 
+// want back as parameters, or just use * to get the entire row.
+
+DeviceInfo
+| where isnotempty(OSPlatform) // checkins can be partial or full - this filters out partials
+| summarize arg_max(Timestamp, *) by DeviceId 
+
+// Let's say you now wanted to use this summarized list to create a report of devices
+// by operating system - but you didn't want to lose the individual device names.
+// Good news - we can also use summarize to build arrays!
+
+DeviceInfo
+| where isnotempty(OSPlatform) // checkins can be partial or full - this filters out partials
+| summarize arg_max(Timestamp, *) by DeviceId 
+| summarize Devices = count(), DeviceList = make_set(DeviceName) by OSPlatform
+
+// -----------------------------
+
+// Another way to perform aggregations is using make-series.  The make-series
+// command is similar to summarize except it is designed to calculate on
+// a periodic basis, providing zeros for empty datasets for consistency.  
+
+EmailEvents
+| make-series count() on Timestamp from ago(30d) to now() step 1d by SenderFromDomain
+
+// With this we can identify outlier programmatically.  Let's see if we can find
+// any sudden increases or decreases in activity relating to mail from a specific
+// domain using one of our time series analysis capabilities.
+
+// geek stuff warning
+
+EmailEvents
+| make-series MailCount = count() on Timestamp from ago(30d) to now() step 1d by SenderFromDomain
+| extend (flag, score, baseline) = series_decompose_anomalies(MailCount)
+| project-reorder flag, score, baseline
+
+// series_decompose_anomalies adds three new columns
+// - flag: is the datapoint normal, an abnormal increase (1), or an abnormal decrease (-1)
+// - score: how anomalous is this data point?
+// - baseline: the forecaseted value the algorithm expected
+
+// Let's look for spikes in e-mail traffic from a domain.  To do this, we need to expand
+// the flag column.  Expanding takes an array and creates one row for each value in it.
+// For SQL people, this is like using CROSS APPLY
+
+EmailEvents
+| make-series MailCount = count() on Timestamp from ago(30d) to now() step 1d by SenderFromDomain
+| extend (flag, score, baseline) = series_decompose_anomalies(MailCount)
+| project-reorder flag, score, baseline
+| mv-expand flag
+
+// now we can filter to only 1's.  Note that our lists of values all look like strings.  We need
+// to tell KQL that we want these to be int's for accurate comparison.
+
+EmailEvents
+| make-series MailCount = count() on Timestamp from ago(30d) to now() step 1d by SenderFromDomain
+| extend (flag, score, baseline) = series_decompose_anomalies(MailCount)
+| mv-expand flag to typeof(int) // expand flag and tell KQL it needs to be an int
+| where flag == 1 // filter to only rows that have a 1
+| project-reorder flag, score, baseline
+
+// Next, we'll look for the top 5 most anomalous domain spikes and graph the result
+
+let interval = 12h;
+EmailEvents
+| make-series MailCount = count() on Timestamp from ago(30d) to now() step interval by SenderFromDomain
+| extend (flag, score, baseline) = series_decompose_anomalies(MailCount)
+| mv-expand flag to typeof(int)
+| where flag == 1 // filter to only incremental anomalies
+| mv-expand score to typeof(double) // expand the score array to a double
+| summarize MaxScore = max(score) by SenderFromDomain  // get the max score value from each domain
+| top 5 by MaxScore desc // Get the top 5 highest scoring domains
+| join kind=rightsemi EmailEvents on SenderFromDomain // Filter EmailEvents to only these domains
+| summarize count() by SenderFromDomain, bin(Timestamp, interval) // build a new summarization for the graph
+| render timechart // graph it!
+
+// Aha!  I know someone out there sees my bug.  Technically, one of these datasets can have both a spike and 
+// a valley and the valley score could be what we're keying off of. Let's try again using logons, but this time
+// we'll get the specific score associated with the spike instead of just assuming that they're the same.
+
+let interval = 12h;
+IdentityLogonEvents
+| where isnotempty(AccountUpn)
+| make-series LogonCount = count() on Timestamp from ago(30d) to now() step interval by AccountUpn
+| extend (flag, score, baseline) = series_decompose_anomalies(LogonCount)
+| mv-expand with_itemindex = FlagIndex flag to typeof(int) // Expand, but this time include the index in the array as FlagIndex
+| where flag == 1  // Once again, filter only to spikes
+| extend SpikeScore = todouble(score[FlagIndex]) // This will get the specific score associated with the detected spike
+| summarize MaxScore = max(SpikeScore) by AccountUpn
+| top 5 by MaxScore desc
+| join kind=rightsemi IdentityLogonEvents on AccountUpn
+| summarize count() by AccountUpn, bin(Timestamp, interval)
+| render timechart
