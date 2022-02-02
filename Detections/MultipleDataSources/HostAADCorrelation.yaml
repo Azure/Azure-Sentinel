@@ -17,6 +17,9 @@ requiredDataConnectors:
   - connectorId: Syslog
     dataTypes:
       - Syslog 
+  - connectorId: WindowsEvents
+    dataTypes:
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -34,13 +37,25 @@ query: |
   let signin_threshold = 5; 
   //Make a list of IPs with failed Windows host logins above threshold
   let win_fails = 
-  SecurityEvent
+  (union isfuzzy=true
+  (SecurityEvent
   | where EventID == 4625
   | where LogonType in (10, 7, 3)
   | where IpAddress != "-"
   | summarize count() by IpAddress
   | where count_ > signin_threshold
-  | summarize make_list(IpAddress);
+  | summarize make_list(IpAddress)),
+  (
+  WindowsEvent
+  | where EventID == 4625
+  | extend LogonType = tostring(EventData.IpAddress)
+  | where LogonType in (10, 7, 3)
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | where IpAddress != "-"
+  | summarize count() by IpAddress
+  | where count_ > signin_threshold
+  | summarize make_list(IpAddress)  
+  ));
   //Make a list of IPs with failed *nix host logins above threshold
   let nix_fails = 
   Syslog
@@ -70,5 +85,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
