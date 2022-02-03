@@ -1,0 +1,122 @@
+id: 6d263abb-6445-45cc-93e9-c593d3d77b89
+kind: Scheduled
+name: Red Canary Threat Detection
+description: Triggers Incidents using detection data assembled by Red Canary.
+severity: High
+requiredDataConnectors:
+  - connectorId: RedCanaryDataConnector
+    dataTypes:
+      - RedCanaryDetections_CL
+queryPeriod: 5m
+queryFrequency: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - CommandAndControl
+  - CredentialAccess
+  - DefenseEvasion
+  - Discovery
+  - Execution
+  - Exfiltration
+  - Impact
+  - InitialAccess
+  - LateralMovement
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques: []
+query: |
+  RedCanaryDetections_CL
+  | extend    process_ioc_array = todynamic(process_iocs_s),
+              child_process_ioc_array = todynamic(child_process_iocs_s),
+              cross_process_ioc_array = todynamic(cross_process_iocs_s),
+              file_mod_ioc_array = todynamic(file_modification_iocs_s),
+              identities_array = todynamic(identities_s)
+  | extend    entities = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array, identities_array)
+  | mv-expand entities
+  | evaluate  bag_unpack(entities)
+  | extend    file_hash_array = todynamic(column_ifexists('file_hashes', '[]'))
+  | mv-expand file_hash_array
+  | evaluate  bag_unpack(file_hash_array, 'file_hash_')
+  | project   detection_id_s = column_ifexists('detection_id_s', ''),
+              detection_url_s = column_ifexists('detection_url_s', ''),
+              detection_headline_s = column_ifexists('detection_headline_s', ''),
+              detection_details_s = column_ifexists('detection_details_s', ''),
+              detection_severity_s = column_ifexists('detection_severity_s', ''),
+              host_name_s = column_ifexists('host_name_s', ''),
+              host_full_name_s = column_ifexists('host_full_name_s', ''),
+              host_os_family_s = column_ifexists('host_os_family_s', ''),
+              host_os_version_s = column_ifexists('host_os_version_s', ''),
+              tactics_s = column_ifexists('tactics_s', ''),
+              process_id = column_ifexists('process_id', ''),
+              process_command_line = column_ifexists('process_command_line', ''),
+              process_creation_time_utc = column_ifexists('process_creation_time_utc', ''),
+              file_hash_algorithm = column_ifexists('file_hash_algorithm', ''),
+              file_hash_value = column_ifexists('file_hash_value', ''),
+              file_directory = column_ifexists('file_directory', ''),
+              file_name = column_ifexists('file_name', ''),
+              user_name = column_ifexists('user_name', ''),
+              user_uid = column_ifexists('user_uid', '')
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: process_id
+      - identifier: CommandLine
+        columnName: process_command_line
+      - identifier: CreationTimeUtc
+        columnName: process_creation_time_utc
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: user_name
+      - identifier: Sid
+        columnName: user_uid
+      - identifier: Name
+        columnName: user_name
+  - entityType: File
+    fieldMappings:
+      - identifier: Directory
+        columnName: file_directory
+      - identifier: Name
+        columnName: file_name
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: host_name_s
+      - identifier: FullName
+        columnName: host_full_name_s
+      - identifier: OSFamily
+        columnName: host_os_family_s
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: file_hash_algorithm
+      - identifier: Value
+        columnName: file_hash_value
+customDetails:
+  detection_id: detection_id_s
+alertDetailsOverride:
+  alertDisplayNameFormat: Red Canary has published Detection-{{detection_id_s}}
+  alertDescriptionFormat: |
+    Red Canary has published a {{detection_severity_s}} severity detection with details:
+
+    {{detection_details_s}}
+
+    View the Detection at: {{detection_url_s}}
+  alertTacticsColumnName: tactics_s
+  alertSeverityColumnName: detection_severity_s
+version: 1.0.0
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - detection_id

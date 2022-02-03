@@ -5,8 +5,8 @@ Microsoft Sentinel solutions deploy resources for Microsoft Sentinel scenarios. 
 
 ![Microsoft Sentinel solutions resource group selection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_resource_group.png)
 
-## Known Issue #2 – Solution Re-deployment
-Redeploying or Reinstalling the same Solution creates duplicate content items in the respective feature galleries. The Solutions package includes content like analytic rules, workbooks etc. that gets saved in the Active rules gallery, saved workbooks gallery etc., respectively. Overwriting the content would mean loss in customizations if any to any content post Solution deployment. Hence, duplicate content items are created so that you can decide and delete the extraneous content as needed.
+## Known Issue #2 – Solution Re-deployment or update
+Updating or Redeploying or Reinstalling the Solution creates duplicate content items in the respective feature galleries. The Solutions package includes content like analytic rules, workbooks etc. that gets saved in the Active rules gallery, saved workbooks gallery etc., respectively. Overwriting the content would mean loss in customizations if any to any content post Solution deployment. Hence, duplicate content items are created so that you can decide and delete the extraneous content as needed.
 Refer to following screenshots as examples.
 ![Microsoft Sentinel solutions re-deployment analytics](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions-reinstall-analytics.png)
 
