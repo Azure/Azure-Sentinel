@@ -165,12 +165,16 @@ class SyslogDaemonVerifications:
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         if self.SYSLOG_DAEMON is not "":
             command_object.run_test()
+            command_object.command_name = "verify_Syslog_daemon_listening_on_default_port"
+            command_object.result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
+            command_object.run_test()
+            if not command_object.is_successful:
+                command_object.print_warning("Warning: the syslog daemon on the machine is listening to a non-default port")
         else:
             command_object.is_successful = False
             command_object.print_result_to_prompt()
             command_object.print_error("No syslog daemon running on the machine. Please start one and re-run the script.")
             command_object.log_result_to_file()
-
 
 
 # print the output file path
