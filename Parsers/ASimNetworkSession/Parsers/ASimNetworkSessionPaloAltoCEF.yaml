@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Palo Alto Networks
-  Version: '0.2'
-  LastUpdated: Dec 20, 2021
+  Version: '0.3'
+  LastUpdated: Feb 04, 2021
 Product:
   Name: PaloAlto
 Normalization:
@@ -25,7 +25,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let Actions=datatable(DeviceAction:string,DvcAction:string)
+    let Actions=datatable(DeviceAction:string,DvcAction:string)
     [ "reset client","Reset Source"
     , "reset server","Reset Destination"
     , "reset both", "Reset"
@@ -33,21 +33,17 @@ ParserQuery: |
     , "deny","Deny"
     , "drop", "Drop"
     , "drop ICMP", "Drop ICMP"];
-  let NWParser=(disabled:bool=false){
-  CommonSecurityLog | where not(disabled)
-  | where DeviceVendor=="Palo Alto Networks" and (Activity=="TRAFFIC")
-  | parse AdditionalExtensions with "PanOSDstPackets="DstPackets:long";PanOSsrc_packets="SrcPackets:long";start="EventStartTime:datetime";reason="*
-  | project-rename 
-        EventProduct="PanOS" // Not Documented
-      , EventProductVersion=DeviceVersion // Not Documented
+    let NWParser=(disabled:bool=false){
+    CommonSecurityLog | where not(disabled)
+    | where DeviceVendor=="Palo Alto Networks" and (Activity=="TRAFFIC")
+    | parse AdditionalExtensions with "PanOSDstPackets="DstPackets:int";PanOSsrc_packets="SrcPackets:int";start="EventStartTime:datetime";reason="*
+    | project-rename 
+        EventProductVersion=DeviceVersion // Not Documented
       , Dvc=DeviceName   
       , NetworkApplicationProtocol=ApplicationProtocol
       , SrcZone=DeviceCustomString4 
       , DstZone=DeviceCustomString5
       , NetworkRuleName=DeviceCustomString1
-      , NetworkProtocol=toupper(Protocol)
-      , SrcBytes=SentBytes
-      , DstBytes=ReceivedBytes 
       , SrcUsername=SourceUserName 
       , DstUsername=DestinationUserName 
       , EventOriginalSeverity=LogSeverity // not documented
@@ -55,16 +51,20 @@ ParserQuery: |
       , SrcNatIpAddr=SourceTranslatedAddress
       , DstNatIpAddr=DestinationTranslatedAddress
       , PaloAltoFlags=FlexString1 // Flags
-  | extend
+    | extend
     EventVendor="Palo Alto"
-      , NetworkBytes=tolong(FlexNumber1)
+      ,EventProduct="PanOS" // Not Documented
+      , SrcBytes=toint(SentBytes)
+      , DstBytes=toint(ReceivedBytes) 
+      , NetworkProtocol=toupper(Protocol)
+      , NetworkBytes=toint(FlexNumber1)
       , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
       , DstUsernameType=case(isempty(DstUsername), "", DstUsername contains "@", "UPN", "Simple")
       , EventType="NetworkSession"
       , EventCount=toint(1)
       , EventResult=case(DeviceAction=="allow","Success","Failure")
       , NetworkSessionId=tostring(DeviceCustomNumber1)
-      , NetworkDuration=1000*DeviceCustomNumber3
+      , NetworkDuration=toint(1000*DeviceCustomNumber3)
       , EventSchemaVersion="0.2.1"
       , EventSchema="NetworkSession"
       , EventSeverity = "Informational"
@@ -73,30 +73,31 @@ ParserQuery: |
            , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
     | extend DvcFQDN = iff(Dvc contains ".",Dvc,"" )
           , DvcDomainType=iff(Dvc contains ".","FQDN","" )
-  | project-away hostelements
-  | lookup Actions on DeviceAction
-  | project-rename
-      , DstMacAddr=DestinationMACAddress
-    , SrcMacAddr=SourceMACAddress
+    | project-away hostelements
+    | lookup Actions on DeviceAction
+    | project-rename
+      DstMacAddr=DestinationMACAddress
+      , SrcMacAddr=SourceMACAddress
       , DstIpAddr=DestinationIP
       , DstPortNumber=DestinationPort
       , DstNatPortNumber=DestinationTranslatedPort
-    , SrcPortNumber=SourcePort
+      , SrcPortNumber=SourcePort
       , SrcIpAddr=SourceIP
-    , SrcNatPortNumber=SourceTranslatedPort
-    , DvcOutboundInterface=DeviceOutboundInterface
-    , DvcInboundInterface=DeviceInboundInterface
-    , EventMessage=Message
-    , DvcOriginalAction=DeviceAction
-  // -- Aliases
-  | extend
+      , SrcNatPortNumber=SourceTranslatedPort
+      , DvcOutboundInterface=DeviceOutboundInterface
+      , DvcInboundInterface=DeviceInboundInterface
+      , EventMessage=Message
+      , DvcOriginalAction=DeviceAction
+    // -- Aliases
+    | extend
     IpAddr = SrcIpAddr,
-    Rule=NetworkRuleName
+    Rule=NetworkRuleName,
     Dst=DstIpAddr,
     // Host=DstHostname, 
     User=DstUsername,
     Duration=NetworkDuration,
     SessionId=NetworkSessionId,
-    EventEndTime =EventStartTime
-  };
-  NWParser(disabled)
+    EventEndTime =EventStartTime,
+    Src=SrcIpAddr
+    };
+    NWParser(disabled)
