@@ -1,0 +1,28 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+Reference: https://github.com/Azure/Azure-Sentinel/blob/vm_insights/Insights/Azure-Resource/CSE-activity.yaml
+DataTypes: 
+- DataType: AzureActivity
+RequiredInputFieldsSets:
+- - AzureResource_ResourceId
+BaseQuery: |- 
+  AzureActivity
+  | where OperationNameValue =~ "MICROSOFT.COMPUTE/VIRTUALMACHINES/EXTENSIONS/WRITE"
+  | where _ResourceId =~ '{{AzureResource_ResourceId}}'
+  | extend resBody = parse_json(Properties).responseBody
+  | where resBody != ""
+  | extend resBody = parse_json(tostring(resBody))
+  | extend extName = resBody.name, extType = resBody.properties.type
+  | where extType in ("CustomScriptExtension", "CustomScript", "CustomScriptForLinux")
+  | project TimeGenerated, Caller, _ResourceId, OperationNameValue, Resource, extType, extName
+
+Activities:
+     EnabledByDefault: true
+     Title: "Custom Script Extension execution"
+     Content: "The account {{Caller}} ran the custom script extension {{extName}} {{Count}} time(s)"
+     Items: 
+        - Id: 3d1da62d-0ca7-40b2-bb54-ab448b9daf71
+          Description: This activity indicated Custom Script Extension execution
+          QueryDefinitions:
+            SummarizeBy: Caller, _ResourceId, extName
