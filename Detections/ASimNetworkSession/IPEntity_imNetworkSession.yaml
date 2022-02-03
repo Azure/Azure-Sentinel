@@ -30,24 +30,33 @@ query: |
   | where TI_ipEntity != "NO_IP";
   let IP_TI_list=toscalar(IP_TI | summarize make_set( TI_ipEntity));
   IP_TI
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-      _Im_NetworkSession (starttime=ago(dt_lookBack), dstipaddr_has_any_prefix=IP_TI_list)
-      | where isnotempty(DstIpAddr)
-      // renaming time column so it is clear the log this came from
-      | extend imNWS_TimeGenerated = TimeGenerated
-  )
-  on $left.TI_ipEntity == $right.DstIpAddr
+    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+    | join kind=innerunique 
+    (
+        union 
+            (
+            _Im_NetworkSession (starttime=ago(dt_lookBack), dstipaddr_has_any_prefix=IP_TI_list)
+            | where isnotempty(DstIpAddr)
+            // renaming time column so it is clear the log this came from
+            | extend imNWS_TimeGenerated = TimeGenerated, IoCIP=DstIpAddr, IoCIPDirection='Destination'
+            ),
+            (
+            _Im_NetworkSession (starttime=ago(dt_lookBack), srcipaddr_has_any_prefix=IP_TI_list)
+            | where isnotempty(DstIpAddr)
+            // renaming time column so it is clear the log this came from
+            | extend imNWS_TimeGenerated = TimeGenerated, IoCIP=SrcIpAddr, IoCIPDirection='Source'
+            )
+  )on $left.TI_ipEntity == $right.IoCIP
   | where imNWS_TimeGenerated < ExpirationDateTime
-  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated , *) by IndicatorId, DstIpAddr
+  | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated , *) by IndicatorId, IoCIP, IoCIPDirection
   | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr
+  TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, IoCIPDirection
 
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: DstIpAddr
+        columnName: IoCIP
 
 customDetails:
   EventTime: imNWS_TimeGenerated
@@ -57,6 +66,7 @@ customDetails:
   ThreatType: ThreatType
   IoCExpirationTime: ExpirationDateTime
   IoCConfidenceScore: ConfidenceScore
+  IoCIPDirection: IoCIPDirection
 
 version: 1.0.0
 kind: Scheduled
