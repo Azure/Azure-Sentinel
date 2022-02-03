@@ -1,0 +1,28 @@
+SchemaVersion: 1.0
+Provider: Sentinel
+Type: KQL
+Reference: https://github.com/Azure/Azure-Sentinel/blob/vm_insights/Insights/Azure-Resource/VmAccess.yaml
+DataTypes: 
+- DataType: AzureActivity
+RequiredInputFieldsSets:
+- - AzureResource_ResourceId
+BaseQuery: |- 
+  AzureActivity
+  | where OperationNameValue =~ "MICROSOFT.COMPUTE/VIRTUALMACHINES/EXTENSIONS/WRITE"
+  | where _ResourceId =~ '{{AzureResource_ResourceId}}'
+  | extend resBody = parse_json(Properties).responseBody
+  | where resBody != ""
+  | extend resBody = parse_json(tostring(resBody))
+  | extend extName = resBody.name, extType = resBody.properties.type
+  | where extType in ("VMAccessAgent", "VMAccessForLinux")
+  | project TimeGenerated, Caller, _ResourceId, OperationNameValue, Resource
+
+Activities:
+     EnabledByDefault: true
+     Title: "VM access extension execution"
+     Content: "The account {{Caller}} ran VM Access extension on the VM {{Count}} time(s)"
+     Items: 
+        - Id: a8cefe99-820e-4813-9499-cf401ae1425c
+          Description: This activity indicated VM access extension execution
+          QueryDefinitions:
+            SummarizeBy: Caller, _ResourceId
