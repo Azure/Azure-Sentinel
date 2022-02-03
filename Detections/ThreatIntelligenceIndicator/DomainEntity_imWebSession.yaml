@@ -17,13 +17,6 @@ query: |
     let dt_lookBack = 1h;
     let ioc_lookBack = 14d;
     //Create a list of TLDs in our threat feed for later validation
-    let list_tlds = ThreatIntelligenceIndicator
-    | where TimeGenerated > ago(ioc_lookBack)
-    | where isnotempty(DomainName)
-    | extend parts = split(DomainName, '.')
-    | extend tld = parts[(array_length(parts)-1)]
-    | summarize count() by tostring(tld)
-    | summarize make_list(tld);
     let DOMAIN_TI=ThreatIntelligenceIndicator
     | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
@@ -39,8 +32,6 @@ query: |
         | extend domain = tostring(parse_url(Url)["Host"])
         | where isnotempty(domain)
         | extend tld = tostring(split(domain, '.')[-1])
-        //Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed
-        | where tld in~ (list_tlds)
         | extend Event_TimeGenerated = TimeGenerated
     ) on $left.DomainName==$right.domain
     | where Event_TimeGenerated < ExpirationDateTime
@@ -58,12 +49,12 @@ entityMappings:
         columnName: Url
 customDetails:
   EventTime: Event_TimeGenerated
-  Description: Description
+  IoCDescription: Description
   ActivityGroupNames: ActivityGroupNames
   IndicatorId: IndicatorId
   ThreatType: ThreatType
-  TIExpirationTime: ExpirationDateTime
-  TIConfidenceScore: ConfidenceScore
+  IoCExpirationTime: ExpirationDateTime
+  IoCConfidenceScore: ConfidenceScore
 
 
 version: 1.0.0
