@@ -1,0 +1,45 @@
+SchemaVersion: '1.0'
+DataTypes:
+- DataType: AzureActivity
+Provider: Sentinel
+Type: KQL
+Reference: https://github.com/Azure/Azure-Sentinel/blob/vm_insights/Insights/Azure-Resource/Top_Users_Actions_on_Resource.yaml
+EntitiesFilter: {}
+BaseQuery: |
+  let totalEvents = AzureActivity 
+  | extend Azure_Resource_Id = tolower(ResourceId)
+  | where Azure_Resource_Id =~ '{{AzureResource_ResourceId}}' 
+  | summarize total=count() by Azure_Resource_Id 
+  | project total, Azure_Resource_Id; AzureActivity 
+  | extend Azure_Resource_Id = tolower(ResourceId) 
+  | where Azure_Resource_Id =~ '{{AzureResource_ResourceId}}'
+  | join kind=fullouter totalEvents on Azure_Resource_Id
+RequiredInputFieldsSets:
+- - AzureResource_ResourceId
+Insights:
+  Id: 90a86231-2dcc-4c59-97ab-d10dcb688f16
+  DisplayName: Top Users Activity on Resource
+  Description: "### Top User Activity on Resource\n ___ \n This insight shows you the users that took the most actions on this Azure Resource."
+  DefaultTimeRange:
+    BeforeRange: 14d
+    AfterRange: 2d
+  SingleValuesQuery: {}
+  TableQuery:
+    ColumnsDefinitions:
+    - Header: User
+      OutputType: string
+      SupportDeepLink: false
+    - Header: Number of Events
+      OutputType: number
+      SupportDeepLink: false
+    - Header: Percentage
+      OutputType: number
+      SupportDeepLink: false
+    QueriesDefinitions:
+    - Filter: 'where 1==1'
+      Summarize: "summarize count() by Caller, total, Azure_Resource_Id | extend percentage = round((todouble(count_) * 100 / todouble(total)), 2) | sort by percentage desc"
+      Project: "project  Caller, itemCount = count_, percentage | take 10"
+      LinkColumnsDefinitions: []
+  AdditionalQuery:
+    Text: View all users
+    Query: summarize count() by Caller, total, Azure_Resource_Id | extend percentage = round((todouble(count_) * 100 / todouble(total)), 2) | sort by percentage desc | project  Caller, itemCount = count_, percentage
