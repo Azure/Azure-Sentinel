@@ -500,22 +500,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
-                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
-                                        if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
-                                        {
-                                            $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
-                                        }
+                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"                     
                                     }
                                     else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
+                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"               
+                                    }
+                                    if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
                                         {
                                             $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
                                         }
-                
-                                    }
                                 }
                             }
                             $playbookResource = $(replaceVarsRecursively $playbookResource)
