@@ -109,7 +109,6 @@
         $ConfigURI="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SAP/Demo/settings.json"
     )
 
-#https://docs.microsoft.com/ru-ru/azure/azure-monitor/logs/data-collector-api#powershell-sample
 Function Build-Signature ($customerId, $LogAnalyticsWorkspaceKey, $date, $contentLength, $method, $contentType, $resource) {
     $xHeaders = "x-ms-date:" + $date
     $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
