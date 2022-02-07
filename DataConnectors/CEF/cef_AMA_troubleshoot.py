@@ -3,6 +3,7 @@ import subprocess
 FAILED_TESTS_COUNT = 0
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file"
 
+
 class ColorfulPrint:
 
     def print_error(self, input_str):
@@ -48,9 +49,12 @@ class BasicCommand(ColorfulPrint):
     def __repr__(self):
         delimiter = "\n" + "-" * 20 + "\n"
         return str(
-            delimiter + "command name: " + str(self.command_name) + '\n' + "command to run: " + str(self.command_to_run) + '\n' +
-            "command output: " + str(self.command_result) + '\n' + "command error output: " + str(self.command_result_err) + '\n' +
-            "command array verification: " + str(self.result_keywords_array) + '\n' + "Is successful: " + str(self.is_successful) +
+            delimiter + "command name: " + str(self.command_name) + '\n' + "command to run: " + str(
+                self.command_to_run) + '\n' +
+            "command output: " + str(self.command_result) + '\n' + "command error output: " + str(
+                self.command_result_err) + '\n' +
+            "command array verification: " + str(self.result_keywords_array) + '\n' + "Is successful: " + str(
+                self.is_successful) +
             delimiter).replace(
             '%',
             '%%')
@@ -63,9 +67,15 @@ class BasicCommand(ColorfulPrint):
         except Exception:
             self.command_result_err = "Error processing command"
 
-    def is_command_successful(self):
+    def is_command_successful(self, exclude):
         if self.command_result_err is None:
             for key_word in self.result_keywords_array:
+                if exclude:
+                    if key_word in self.command_result:
+                        self.is_successful = False
+                        return False
+                    self.is_successful = True
+                    return True
                 if key_word not in self.command_result:
                     self.is_successful = False
                     return False
@@ -87,9 +97,9 @@ class BasicCommand(ColorfulPrint):
             print(str(self.command_name.command) + "was not documented successfully")
         output_file.close()
 
-    def run_test(self):
+    def run_test(self, exclude=False):
         self.run_command()
-        self.is_command_successful()
+        self.is_command_successful(exclude)
         self.print_result_to_prompt()
         self.log_result_to_file()
 
@@ -98,14 +108,14 @@ class AgentInstallationVerifications:
 
     def verify_agent_service_is_listening(self):
         command_name = "verify_ama_agent_service_is_running"
-        command_to_run = "netstat -lnpvt | grep mdsd"
+        command_to_run = "sudo netstat -lnpvt | grep mdsd"
         result_keywords_array = ["mdsd", "28130", "LISTEN", "tcp"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_test()
 
     def verify_agent_process_is_running(self):
         command_name = "verify_ama_agent_process_is_running"
-        command_to_run = "ps -ef | grep mdsd | grep -v grep"
+        command_to_run = "sudo ps -ef | grep mdsd | grep -v grep"
         result_keywords_array = ["mdsd", "azuremonitoragent"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_test()
@@ -122,7 +132,7 @@ class DCRConfigurationVerifications:
 
     def verify_DCR_exists(self):
         command_name = "verify_DCR_exists"
-        command_to_run = "ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
+        command_to_run = "sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
         result_keywords_array = [".json"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_test()
@@ -130,14 +140,14 @@ class DCRConfigurationVerifications:
     def check_multi_homing(self):
         # not finished
         command_name = "verify_DCR_exists"
-        command_to_run = "grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l"
+        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l"
         result_keywords_array = [".json"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_test()
 
     def verify_DCR_content_has_CEF_stream(self):
         command_name = "verify_DCR_content_has_CEF_stream"
-        command_to_run = "grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
+        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
         result_keywords_array = ["SECURITY_CEF_BLOB"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_test()
@@ -145,22 +155,26 @@ class DCRConfigurationVerifications:
 
 class SyslogDaemonVerifications:
     SYSLOG_DAEMON = ""
+
     def determine_Syslog_daemon(self):
-            is_Rsyslg_running = BasicCommand("find_Rsyslog_daemon", "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
-            is_Syslog_ng_running = BasicCommand("find_Syslog-ng_daemon", "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
-            is_Rsyslg_running.run_command(), is_Syslog_ng_running.run_command()
-            if is_Rsyslg_running.command_result == "True\n":
-                self.SYSLOG_DAEMON = "rsyslog"
-                return True
-            elif is_Syslog_ng_running.command_result == "True\n":
-                self.SYSLOG_DAEMON = "syslog-ng"
-                return True
-            is_Rsyslg_running.log_result_to_file()
-            is_Syslog_ng_running.log_result_to_file()
+        is_Rsyslg_running = BasicCommand("find_Rsyslog_daemon",
+                                         "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+        is_Syslog_ng_running = BasicCommand("find_Syslog-ng_daemon",
+                                            "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+        is_Rsyslg_running.run_command(), is_Syslog_ng_running.run_command()
+        if is_Rsyslg_running.command_result == "True\n":
+            self.SYSLOG_DAEMON = "rsyslog"
+            return True
+        elif is_Syslog_ng_running.command_result == "True\n":
+            self.SYSLOG_DAEMON = "syslog-ng"
+            return True
+        is_Rsyslg_running.log_result_to_file()
+        is_Syslog_ng_running.log_result_to_file()
 
     def verify_Syslog_daemon_listening(self):
+        # consider checking for only udp
         command_name = "verify_Syslog_daemon_listening"
-        command_to_run = "netstat -lnpv | grep " + self.SYSLOG_DAEMON
+        command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         if self.SYSLOG_DAEMON is not "":
@@ -169,12 +183,40 @@ class SyslogDaemonVerifications:
             command_object.result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
             command_object.run_test()
             if not command_object.is_successful:
-                command_object.print_warning("Warning: the syslog daemon on the machine is listening to a non-default port")
+                command_object.print_warning(
+                    "Warning: the syslog daemon on the machine is listening to a non-default port")
         else:
             command_object.is_successful = False
             command_object.print_result_to_prompt()
-            command_object.print_error("No syslog daemon running on the machine. Please start one and re-run the script.")
+            command_object.print_error(
+                "No syslog daemon running on the machine. Please start one and re-run the script.")
             command_object.log_result_to_file()
+
+
+class OperatingSystemVerifications:
+
+    def verify_selinux_disabled(self):
+        command_name = "verify_selinux_disabled"
+        command_to_run = "sudo getenforce"
+        result_keywords_array = ["Enforcing"]
+        command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
+        command_object.run_test(True)
+
+    def verify_iptables(self):
+        command_name = "verify_iptables_policy_permissive"
+        command_to_run = "sudo iptables -S | grep \\-P"
+        result_keywords_array = ["DROP", "REJECT"]
+        policy_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
+        policy_command_object.run_test(True)
+        command_name = "verify_iptables_rules_permissive"
+        command_to_run = "sudo iptables -S | grep -E '28130|514'"
+        result_keywords_array = ["DROP", "REJECT"]
+        rules_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
+        rules_command_object.run_test(True)
+        if not policy_command_object.is_successful or not rules_command_object.is_successful:
+            policy_command_object.print_warning(
+                "Iptables might be blocking incoming traffic to the agent. Please verify there are "
+                "firewall rules blocking traffic and run again.")
 
 
 # print the output file path
@@ -197,6 +239,10 @@ def main():
     syslog_verification = SyslogDaemonVerifications()
     syslog_verification.determine_Syslog_daemon()
     syslog_verification.verify_Syslog_daemon_listening()
+    # Create operating system level verifications
+    os_verification = OperatingSystemVerifications()
+    os_verification.verify_selinux_disabled()
+    os_verification.verify_iptables()
     printer.print_notice("The log output file is located here- " + LOG_OUTPUT_FILE)
 
 
