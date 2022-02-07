@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionZscalerZIA",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Zscaler ZIA",
+            "category": "Security",
+            "FunctionAlias": "ASimNetworkSessionZscalerZIA",
+            "query": "let ActionLookup = datatable (DvcOriginalAction: string, DvcAction:string) [\n  // See https://help.zscaler.com/zia/firewall-insights-logs-filters\n  'Allow','Allow',\n  'Allow due to insufficient app data','Allow',\n  'Block/Drop','Drop',\n  'Block/ICMP','Drop ICMP',\n  'Block/Reset', 'Reset',\n  'IPS Drop', 'Drop',\n  'IPS Reset', 'Reset',\n  // Observed in real world events\n  'Block ICMP', 'Drop ICMP',\n  'Drop', 'Drop'\n];\nlet parser=(disabled:bool=false){\nCommonSecurityLog | where not(disabled)\n| where DeviceVendor == \"Zscaler\"\n| where DeviceProduct == \"NSSFWlog\"\n// Event fields\n| extend \n  EventCount=DeviceCustomNumber1, \n  EventStartTime=TimeGenerated, \n  EventVendor = \"Zscaler\", \n  EventProduct = \"ZIA Firewall\", \n  EventSchema = \"NetworkSession\", \n  EventSchemaVersion=\"0.2.1\", \n  EventType = 'NetworkSession', \n  EventSeverity = 'Informational',\n  EventEndTime=TimeGenerated \n| project-rename\n  DvcOriginalAction = DeviceAction, \n  DvcHostname = Computer, \n  EventProductVersion = DeviceVersion, \n  NetworkProtocol = Protocol, \n  DstIpAddr = DestinationIP, \n  DstPortNumber = DestinationPort, \n  DstNatIpAddr = DestinationTranslatedAddress, \n  DstNatPortNumber = DestinationTranslatedPort,\n  DstAppName = DeviceCustomString3, \n  NetworkApplicationProtocol = DeviceCustomString2, \n  SrcIpAddr = SourceIP, \n  SrcPortNumber = SourcePort, \n  SrcUsername = SourceUserName,\n  SrcNatIpAddr= SourceTranslatedAddress, \n  SrcNatPortNumber = SourceTranslatedPort, \n  SrcUserDepartment = DeviceCustomString1,  // Not in standard schema\n  SrcUserLocation = SourceUserPrivileges,  // Not in standard schema\n  NetworkDuration = DeviceCustomNumber1, \n  ThreatName = DeviceCustomString6, \n  ThreatCategory = DeviceCustomString5, \n  RuleName = Activity \n// -- Calculated fields\n| lookup ActionLookup on DvcOriginalAction \n| extend\n  ThreatCategory = iff(DeviceCustomString4 == \"None\", \"\", ThreatCategory),\n  SrcUsername = iff (SrcUsername == SrcUserLocation, \"\", SrcUsername),\n  DstBytes = toint(ReceivedBytes), \n  SrcBytes = toint(SentBytes)\n// -- Enrichment\n| extend\n  EventResult = iff (DvcOriginalAction == \"Allow\", \"Success\", \"Failure\"),\n  DstAppType = \"Service\", \n  SrcUsernameType = \"UPN\" \n// -- Aliases\n| extend\n  Dvc = DvcHostname,\n  User = SrcUsername,\n  IpAddr = SrcIpAddr,\n  Src = SrcIpAddr,\n  Dst = DstIpAddr,\n  Duration = NetworkDuration\n| project-away \n  DeviceCustom*\n};\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

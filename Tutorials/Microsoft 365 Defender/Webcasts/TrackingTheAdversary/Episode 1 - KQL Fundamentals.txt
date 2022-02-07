@@ -1,0 +1,353 @@
+print Series = 'Tracking the Adversary with MTP Advanced Hunting', EpisodeNumber = 1, Topic = 'KQL Fundamentals', Presenter = 'Michael Melone, Tali Ash', Company = 'Microsoft'
+
+// Language Reference: https://docs.microsoft.com/azure/kusto/query/
+// Advanced Hunting Reference: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-schema-tables?view=o365-worldwide
+
+// ---------------
+
+// What is KQL \ Azure Data Explorer?
+// - Write Once, Read Many (WORM) dataset
+// - Used in a variety of Microsoft products including 
+//     + Defender ATP Advanced Hunting
+//     + Microsoft Threat Protection Advanced Hunting
+//     + Azure Sentinel
+//     + Azure Data Explorer
+// - Tuned to work best with log data
+// - Case sensitive
+// - Automatically expires records based on a specified interval (up to 10 years)
+
+// ---------------
+
+// When using Kusto datasources
+// - If the data source is log-based, try to reduce the timeframe
+// - More current data is likely to be in hot storage and will return more quickly
+// - Try to reduce data earlier in the query before joining or manipulating it
+
+// ---------------
+
+// Getting Started: Query Format
+//
+// DataSource
+// | filters \ modifiers \ limiters
+
+DeviceProcessEvents
+| take 100
+
+// DeviceProcessEvents
+// ref: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-deviceprocessevents-table?view=o365-worldwide
+// Process creation and related events
+//  - The newly-launched process
+//  - The process which initiated the process
+//   + The device the process 
+//   + The identity the process was launched as
+
+// take
+// Returns rows up to a pre-set count.  Good for testing out your query at a small scale before use.
+
+// Note: There is no order or consistency when using take without sorting!
+
+// SQL Equivalent: SELECT TOP 15 * FROM DeviceProcessEvents
+
+// ---------------
+
+// Data sources can be tables, functions, variables
+
+let foo = "bar";
+print foo
+
+// let
+// Declares a variable which can be used later in the query.
+// - Values can be:
+//   + Scalar (single value)
+//   + Tabular (a 2-dimensional table)
+//   + A function 
+//   + Dynamic (a JSON-formatted object that can be addressed using dotted notation (this.that))
+// - A semicolon must exist after every let statement!
+
+// print
+// Outputs a scalar value
+
+// ---------------
+
+DeviceLogonEvents
+| count
+
+// DeviceLogonEvents
+// A table containing a row for each logon a device enrolled in Defender ATP
+// Contains
+// - Account information associated with the logon
+// - The device which the account logged onto
+// - The process which performed the logon
+// - Network information (for network logons)
+// - Timestamp
+
+// count
+// Returns the row count for a tablular dataset
+
+// ---------------
+
+AppFileEvents
+| take 100
+| sort by Timestamp desc
+
+
+// AppFileEvents
+// ref: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-appfileevents-table?view=o365-worldwide
+// Information regarding activity relating to files stored in cloud services 
+// monitored by Microsoft Cloud App Security (MCAS), including
+// - The cloud application name
+// - The type of action performed
+// - The item the action was performed on
+// - The identity which performed the action
+// - The IP address and geolocation
+
+// sort
+// Orders the dataset based on the specified column
+
+// SQL Equivalent: SELECT TOP 100 * FROM DeviceFileEvents ORDER BY Timestamp desc
+
+// ---------------
+
+DeviceRegistryEvents
+| top 100 by Timestamp desc
+
+// DeviceRegistryEvents
+// Registry changes which occurred on a Windows device monitored by Defender ATP
+// Contains
+// - Registry information (Key, Value, Data)
+// - Device information
+// - The process which performed the operation
+// - Timestamp
+
+// top
+// Returns an ordered list of rows based on the column specified
+
+// SQL Equivalent: SELECT TOP 100 * FROM DeviceRegistryEvents ORDER BY Timestamp desc
+
+// ---------------
+
+DeviceNetworkEvents
+| take 1000
+| distinct RemoteIP, RemoteUrl
+
+// DeviceNetworkEvents
+// Table containing inbound and outbound network connections and attempts from a device monitored by Defender ATP
+// Contains
+// - Networking information (source and destination IP and port, URL, protocol)
+// - Device information
+// - The process which made or received the connection
+// - Timestamp
+
+// distinct
+// Returns a table of unique results based on the column(s) specified
+
+// SQL Equivalent: SELECT DISTINCT RemoteIP, RemoteUrl FROM DeviceNetworkEvents
+
+// ---------------
+
+DeviceInfo
+| take 100
+| project DeviceId, DeviceName, OSPlatform
+
+// DeviceInfo
+// Operating information about a device monitored by Defender ATP
+// Contains
+// - Device name, ID
+// - Operating system information
+// - Public IP address
+// - Logged on user
+// - Machine group
+
+// project
+// Can be used to
+// - Reduce columns returned from a dataset
+// - Rename columns in a dataset
+// - Create calculated columns
+
+// DataSource
+// | project Column1, Column2, Column3 = Column1 + Column2
+
+// SQL Equivalent: The column list in a query statement
+// SELECT [this is the project statement] FROM DataSource
+
+DeviceInfo
+| project Timestamp, DeviceName, Four = 2 + 2
+| take 100
+
+// --------------
+
+DeviceNetworkInfo
+| take 100
+| project-away Timestamp
+
+// DeviceNetworkInfo
+// Local network configurations for a device monitored by Defender ATP
+
+// Other useful project commands:
+
+// project-away
+// Removes columns from the dataset
+
+// project-rename
+// Renames a column
+
+// project-reorder
+// Changes the order of columns in the results making the specified columns first
+// No real change to the data, just how its represented
+
+// ---------------
+
+DeviceImageLoadEvents
+| take 100
+| extend DomainAndUser = strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)
+| project-reorder DomainAndUser, InitiatingProcessAccountDomain, InitiatingProcessAccountName
+
+// DeviceImageLoadEvents
+// Identifies any DLLs loaded by a process.  Useful for tracking DLL sideloading attacks.
+// Contains
+// - The process that loaded the library
+// - The module loaded by the process
+// - The device where the load occurred
+// - Timestamp
+
+// extend
+// Adds a column to the current dataset
+
+// strcat()
+// Concatenates two or more strings
+
+// ---------------
+
+AppFileEvents 
+| where Timestamp > ago(3d)
+
+// where
+// Used to filter a tables results based on a Boolean expression
+
+// DataSource
+// | where Column == "value"
+
+// SQL Equivalent
+// SELECT * FROM SecurityEvent WHERE EventID = 4624
+
+// ago()
+// Function used to identify a timespan relative to the current date and time
+// Used with one of the following quantifiers:
+// d: days
+// h: hours
+// m: minutes
+// s: seconds
+// ms: milliseconds
+// microsecond: microseconds
+// tick: ticks (100 nanosecond intervals)
+
+// Important note: The most effective way to improve query performance in KQL
+// is filtering based on time.
+
+// ----------------------------------
+
+// Note that Kusto is a case sensitive language and
+// many of the operators are case sensitive.
+
+print IsItEqual = 'TEST' == 'test'
+
+// For a case insensitive string search, use =~
+
+print IsItEqual = 'TEST' =~ 'test'
+
+// Common Operators and their case insensitive counterparts
+//  __________________________________________________________________
+// | Case Sensitive | Case Insensitive | Operation                    |
+// --------------------------------------------------------------------
+// |      ==        |         =~       | Equality                     |
+// |      !=        |         !~       | Inequality                   |
+// |    has_cs      |         has      | Term comparison (whole word) |
+// |    !has_cs     |         !has     | Term comparison (whole word) |
+// |   hasprefix_cs |       hasprefix  | Term prefix comparison (any) |
+// |  !hasprefix_cs |       !hasprefix | Term prefix comparison (any) |
+// |  hassuffix_cs  |      hassuffix   | Term suffix comparison (any) |
+// |  !hassuffix_cs |      !hassuffix  | Term suffix comaprison (any) |
+// |   contains_cs  |       contains   | Substring                    |
+// |   !contains_cs |       !contains  | Substring                    |
+// |  startswith_cs |      startswith  | String prefix                |
+// | !startswith_cs |     !startswith  | String prefix                |
+// |   endswith_cs  |      endswith    | String suffix                |
+// |  !endswith_cs  |     !endswith    | String suffix                |
+// |      in        |        in~       | Array element match          |
+// |     !in        |       !in~       | Array element match          |
+// |                |      has_any     | Term array match             |
+// |  matches regex |                  | Regular expression match     |
+// --------------------------------------------------------------------
+ 
+print IsItEqual = "quick" in ("The", "Quick", "Brown", "Fox")
+
+print IsItEqual = pack_array("lorem","ipsum","dolor") has "Dolor"
+
+print IsItEqual = "Microsoft" contains_cs "ICR" 
+
+// For a list of all string operators: https://docs.microsoft.com/azure/kusto/query/datatypes-string-operators
+
+// ---------------
+
+// Special characters \ escaping
+
+// In KQL, the '\' character is the escape character.  If you want to use a '\'
+// in your query you will need to either escape it by using '\\', or you can
+// make it a string literal by prepending '@' before the string
+
+print '\\ This \\ example \\ uses \\ the \\ escape \\ method \\'
+
+// Now using the string literal method
+print @'\ This \ example \ uses \ the \ string \ literal \ method \'
+
+// ---------------
+
+// Checking for null or blank values
+
+// isnull(Column) / isnotnull(Column)
+// - Checks for null values
+
+// SQL Equivalent: SELECT TimeGenerated, EventData FROM SecurityEvent WHERE EventData IS NOT NULL
+
+print isnull("")
+
+// isempty(Column) / isnotempty(Column)
+// - Checks for null values or empty strings
+
+// SQL Equivalent: SELECT TimeGenerated, EventData FROM SecurityEvent WHERE EventData LIKE '%'
+
+IdentityQueryEvents
+| where isnotempty(AccountSid)
+| take 100
+
+// IdentityQueryEvents
+// - contains query activities performed against Active Directory objects, such as users, groups, devices, and domains monitored by Azure ATP
+// - Includes SAMR, DNS and LDAP requests
+
+// ---------------
+
+search 'microsoft.com'
+| take 10
+| project-reorder RemoteUrl
+
+// search
+// Searches the entire dataset for a given value
+// Can be used to search the entire database (all tables and columns) all at once.
+// Columns will be an aggregate of every table that brought back 1+ results, with 
+// columns having the same name merged together
+
+// No true SQL equivalent (aside from indexing every table and searching the index, or unioning every table and column and searching that... yuck)
+
+IdentityInfo 
+| search "administrator"
+| take 100
+| project-reorder AccountUpn, AccountName, AccountDisplayName, Surname, EmailAddress, JobTitle 
+
+// IdentityInfo
+// - Contains information about users in Azure Active Directory
+
+// Can be used with string equality comparisons.  Comparison is row-based
+
+search "administrator" and "cmd"
+| take 100
+| project-reorder ProcessCommandLine, FileName, AccountName, FolderPath, AccountDisplayName, Surname, EmailAddress, JobTitle, AccountUpn 
