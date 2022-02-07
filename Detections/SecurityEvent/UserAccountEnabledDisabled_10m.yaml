@@ -11,6 +11,9 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsEvents
+    dataTypes: 
+      - WindowsEvent  
 queryFrequency: 1d
 queryPeriod: 25h
 triggerOperator: gt
@@ -25,7 +28,8 @@ query: |
   let timeframe = 1d;
   let spanoftime = 10m;
   let threshold = 0;
-  SecurityEvent
+  (union isfuzzy=true
+  (SecurityEvent
   | where TimeGenerated > ago(timeframe+spanoftime)
   // A user account was enabled
   | where EventID == 4722
@@ -33,14 +37,50 @@ query: |
   | where TargetAccount !hassuffix "$"
   | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer, UserPrincipalName, 
   AccountUsedToEnable = SubjectAccount, SIDofAccountUsedToEnable = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid
+  ),
+  (
+  WindowsEvent
+  | where TimeGenerated > ago(timeframe+spanoftime)
+  // A user account was enabled
+  | where EventID == 4722 and EventData has "User"
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend AccountType = case(TargetAccount endswith "$", "Machine", iff(TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", iff(isempty(TargetUserSid), "", "User")))
+  | where AccountType =~ "User"
+  | where TargetAccount !hassuffix "$"
+  | extend Activity="4722 - A user account was enabled."
+  | extend TargetSid = tostring(EventData.TargetSid)
+  | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
+  | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer, UserPrincipalName, 
+  AccountUsedToEnable = SubjectAccount, SIDofAccountUsedToEnable = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid
+  ))
   | join kind= inner (
-    SecurityEvent
+    (union isfuzzy=true
+    (SecurityEvent
     | where TimeGenerated > ago(timeframe)
     // A user account was disabled
     | where EventID == 4725
   | where AccountType =~ "User"
   | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer, UserPrincipalName, 
   AccountUsedToDisable = SubjectAccount, SIDofAccountUsedToDisable = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid
+  ),
+  (WindowsEvent
+    | where TimeGenerated > ago(timeframe)
+    // A user account was disabled
+    | where EventID == 4725
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend AccountType = case(TargetAccount endswith "$", "Machine", iff(TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", iff(isempty(TargetUserSid), "", "User")))
+  | where AccountType =~ "User"
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend TargetSid = tostring(EventData.TargetSid)
+  | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
+  | extend Activity = "4725 - A user account was disabled."
+  | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer, UserPrincipalName, 
+  AccountUsedToDisable = SubjectAccount, SIDofAccountUsedToDisable = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid))
   ) on Computer, TargetAccount
   | where DisableTime - EnableTime < spanoftime
   | extend TimeDelta = DisableTime - EnableTime
@@ -59,5 +99,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
