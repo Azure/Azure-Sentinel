@@ -87,9 +87,8 @@ To use your own application with the Azure Sentinel connector, perform the follo
 <a name="prerequisites">
 
 ### Prerequisites for using and deploying Custom Connector
-1. Firewall service end point should be https://management.azure.com/
-2. Register an AAD app and capture the ClientID, SecretKey and TenantID
-3. Playbook templates leverage VirusTotal for IP enrichment. To use this VirusTotal capabilities,generate a Virus Total API key. Refer this link [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
+1. Register an AAD app and capture the ClientID, SecretKey and TenantID
+2. Playbook templates leverage VirusTotal for IP enrichment. To use this VirusTotal capabilities,generate a Virus Total API key. Refer this link [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
 <a name="deployment">
 
