@@ -13,6 +13,8 @@ class Resources(Enum):
 class FilterParam(Enum):
     receivedTime = 0
     createdTime = 1
+    firstObserved = 2
+    latestTimeRemediated = 3
 
 
 class AbnormalSoarConnectorAsync:
@@ -30,7 +32,10 @@ class AbnormalSoarConnectorAsync:
         """
         returns header for all HTTP requests to Abnormal Security's API
         """
-        return {"Authorization": f"Bearer {self.api_key}"}
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Soar-Integration-Origin": "AZURE SENTINEL",
+        }
 
     def _get_filter_query(self, filter_param, gte_datetime=None, lte_datetime=None):
         """
@@ -56,8 +61,8 @@ class AbnormalSoarConnectorAsync:
     def _get_object_url(self, resource_name, resource_id):
         return f"{self.BASEURL}/{resource_name}/{resource_id}"
 
-    def _extract_messages(self, threat):
-        return threat.get("messages")
+    def _extract_messages(self, context, threat_resp):
+        return [message for message in threat_resp.get("messages") if message.get("receivedTime") >= context.get("gte_datetime") and message.get("receivedTime") <= context.get("lte_datetime")]
 
     def _extract_message_ids(self, threats_resp):
         return [threat.get("threatId") for threat in threats_resp.get('threats', [])]
@@ -98,7 +103,7 @@ class AbnormalSoarConnectorAsync:
                 await output_queue.put(id)
             nextPageNumber = response_data.get("nextPageNumber")
 
-    async def process_resource_ids(self, session, resource, input_queue, output_queue, post_processing_func=lambda x:[x]):
+    async def process_resource_ids(self, session, resource, context, input_queue, output_queue, post_processing_func=lambda context, x:[x]):
         resource_log_type = self.MAP_RESOURCE_TO_LOGTYPE[resource]
         while True:
             current_id = await input_queue.get()
@@ -107,30 +112,30 @@ class AbnormalSoarConnectorAsync:
             except Exception:
                 logging.error(f"Discarding enqueued resource id: {current_id}")
             else:
-                for output in post_processing_func(response_data):
+                for output in post_processing_func(context, response_data):
                     await output_queue.put((resource_log_type, output))
             input_queue.task_done()
 
-    async def get_all_threat_messages(self, gte_datetime, lte_datetime, output_queue, caching_func=None):
+    async def get_all_threat_messages(self, context, output_queue, caching_func=None):
         intermediate_queue = asyncio.Queue()
         async with aiohttp.ClientSession() as session:
-            filter_query = self._get_filter_query(FilterParam.receivedTime, gte_datetime, lte_datetime)
+            filter_query = self._get_filter_query(FilterParam.latestTimeRemediated, context.get("gte_datetime"), context.get("lte_datetime"))
             producer_post_process_func = lambda x: caching_func(self._extract_message_ids(x)) if caching_func else self._extract_message_ids(x)
             producer = asyncio.create_task(self.generate_resource_ids(session, Resources.threats, filter_query, intermediate_queue, producer_post_process_func))
-            consumers = [asyncio.create_task(self.process_resource_ids(session, Resources.threats, intermediate_queue, output_queue, self._extract_messages)) for _ in range(self.num_consumers)]
+            consumers = [asyncio.create_task(self.process_resource_ids(session, Resources.threats, context, intermediate_queue, output_queue, self._extract_messages)) for _ in range(self.num_consumers)]
             await asyncio.gather(producer)
             await intermediate_queue.join()  # Implicitly awaits consumers, too
             for c in consumers:
                 c.cancel()
 
 
-    async def get_all_cases(self, gte_datetime, lte_datetime, output_queue, caching_func=None):
+    async def get_all_cases(self, context, output_queue, caching_func=None):
         intermediate_queue = asyncio.Queue()
         async with aiohttp.ClientSession() as session:
-            filter_query = self._get_filter_query(FilterParam.createdTime, gte_datetime, lte_datetime)
+            filter_query = self._get_filter_query(FilterParam.firstObserved, context.get("gte_datetime"), context.get("lte_datetime"))
             producer_post_process_func = lambda x: caching_func(self._extract_case_ids(x)) if caching_func else self._extract_case_ids(x)
             producer = asyncio.create_task(self.generate_resource_ids(session, Resources.cases, filter_query, intermediate_queue, producer_post_process_func))
-            consumers = [asyncio.create_task(self.process_resource_ids(session, Resources.cases, intermediate_queue, output_queue)) for _ in range(self.num_consumers)]
+            consumers = [asyncio.create_task(self.process_resource_ids(session, Resources.cases, context, intermediate_queue, output_queue)) for _ in range(self.num_consumers)]
             await asyncio.gather(producer)
             await intermediate_queue.join()  # Implicitly awaits consumers, too
             for c in consumers:

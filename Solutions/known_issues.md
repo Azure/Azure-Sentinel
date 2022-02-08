@@ -5,8 +5,8 @@ Microsoft Sentinel solutions deploy resources for Microsoft Sentinel scenarios. 
 
 ![Microsoft Sentinel solutions resource group selection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_resource_group.png)
 
-## Known Issue #2 – Solution Re-deployment
-Redeploying or Reinstalling the same Solution creates duplicate content items in the respective feature galleries. The Solutions package includes content like analytic rules, workbooks etc. that gets saved in the Active rules gallery, saved workbooks gallery etc., respectively. Overwriting the content would mean loss in customizations if any to any content post Solution deployment. Hence, duplicate content items are created so that you can decide and delete the extraneous content as needed.
+## Known Issue #2 – Solution Re-deployment or update
+Updating or Redeploying or Reinstalling the Solution creates duplicate content items in the respective feature galleries. The Solutions package includes content like analytic rules, workbooks etc. that gets saved in the Active rules gallery, saved workbooks gallery etc., respectively. Overwriting the content would mean loss in customizations if any to any content post Solution deployment. Hence, duplicate content items are created so that you can decide and delete the extraneous content as needed.
 Refer to following screenshots as examples.
 ![Microsoft Sentinel solutions re-deployment analytics](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions-reinstall-analytics.png)
 
@@ -38,6 +38,7 @@ Few Microsoft Sentinel solutions are selectively enabled for CSP Program (Cloud 
 6. Palo Alto Prisma
 7. Imperva WAF Cloud
 8. Cybersecurity Maturity Model Certification CMMC
+9. Sophos Endpoint Protection
 
 * If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription for those solutions not yet enabled for CSP Program (not from the list above), you'll encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers'. 
 

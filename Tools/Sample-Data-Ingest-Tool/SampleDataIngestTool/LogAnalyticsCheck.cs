@@ -1,98 +1,71 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Azure.OperationalInsights;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
-using Microsoft.Rest.Azure.Authentication;
+using Azure;
+using Azure.Identity;
+using Azure.Monitor.Query;
+using Azure.Monitor.Query.Models;
 
 namespace SampleDataIngestTool
 {
     public class LogAnalyticsCheck
     {
-        static string clientId = "";
-        static string clientSecret = "";
-        static string customerId = "";
-        static string domain = "";
+        private static string _clientId = "";
+        private static string _clientSecret = "";
+        private static string _domain = "";
+        private static string _workspaceId = "";
+
         public LogAnalyticsCheck()
         {
-
         }
 
-        public bool RunLAQuery(string tableName)
+        public async Task<bool> RunLAQuery(string tableName)
         {
             try
             {
-                // Get credentials fron config.json
-                var appConfig = new AppConfig();
-                var credentials = appConfig.GetCredentials();
-                customerId = credentials["workspaceId"];
-                clientId = credentials["clientId"];
-                clientSecret = credentials["clientSecret"];
-                domain = credentials["domain"];
+                // Get credentials from config.txt
+                Dictionary<string, string> credentials = new AppConfig().GetCredentials();
+                _workspaceId = credentials["workspaceId"];
+                _clientId = credentials["clientId"];
+                _clientSecret = credentials["clientSecret"];
+                _domain = credentials["domain"];
 
-                var authEndpoint = "https://login.microsoftonline.com";
-                var tokenAudience = "https://api.loganalytics.io/";
+                var credential = new ClientSecretCredential(_domain, _clientId, _clientSecret);
+                var logsClient = new LogsQueryClient(credential);
 
-                var adSettings = new ActiveDirectoryServiceSettings
-                {
-                    AuthenticationEndpoint = new Uri(authEndpoint),
-                    TokenAudience = new Uri(tokenAudience),
-                    ValidateAuthority = true
-                };
+                // Get a list of table names in your workspace
+                var distinctTablesQuery = "search * | distinct $table";
+                Response<LogsQueryResult> response = 
+                    await logsClient.QueryWorkspaceAsync(_workspaceId, distinctTablesQuery, QueryTimeRange.All);
+                LogsTable table = response.Value.Table;
 
-                var creds = ApplicationTokenProvider.LoginSilentAsync(domain, clientId, clientSecret, adSettings).GetAwaiter().GetResult();
+                IEnumerable<string> tableNames = from row in table.Rows
+                                                 let columnValue = row.GetString("$table")
+                                                 where columnValue.EndsWith("_CL")
+                                                 select columnValue;
 
-                var laClient = new OperationalInsightsDataClient(creds);
-                laClient.WorkspaceId = customerId;
+                // Get custom table name
+                tableName = tableName.Replace(".json", "");
 
-                //get custom table name
-                var path = new SampleDataPath();
-                var dirPath = path.GetDirPath();
-                tableName = tableName.Replace(dirPath, "").Replace(".json", "");
-
-                //get a list of table names in your workspace
-                var tableNameList = new List<string>();
-                string query = @"search * | distinct $table";
-                var result = laClient.Query(query).Tables;
-                foreach (var table in result)
-                {
-                    var rows = table.Rows;
-                    foreach (var r in rows)
-                    {
-                        var customFileName = r[0];
-                        if (customFileName.EndsWith("_CL"))
-                        {
-                            tableNameList.Add(customFileName);
-                        }
-                    }
-                }
-
-                //check if the custom table name exists in the list
-                if (tableNameList.Contains(tableName) == false)
-                {
+                // Check if the custom table name exists in the list
+                if (!tableNames.Contains(tableName))
                     return false;
-                }
                 else
                 {
-                    //check if there's any data in the table for last 7 days
-                    string query1 = tableName
-                               + @"| where TimeGenerated > ago(7d)
-                             | limit 10";
-                    var results = laClient.Query(query1);
-                    var tableCount = results.Tables.Count;
-                    if (tableCount > 0)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
+                    // Check if there's any data in the table for last 7 days
+                    var query = $"{tableName} | limit 10";
+                    var timeRange = new QueryTimeRange(TimeSpan.FromDays(7));
+                    Response<LogsQueryResult> results = 
+                        await logsClient.QueryWorkspaceAsync(_workspaceId, query, timeRange);
+                    int tableCount = results.Value.AllTables.Count;
+
+                    return tableCount > 0;
                 }
             }
             catch (Exception ex)
             {
-                throw new Exception("Calling Log Analytics Error " + ex.Message);
+                throw new Exception("Calling Log Analytics error " + ex.Message);
             }
         }
     }
