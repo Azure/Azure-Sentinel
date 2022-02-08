@@ -173,80 +173,58 @@ ParserQuery: |
       254,"",
       255,"Reserved"
     ];
-    let ActionLookup = datatable (Action:String, DvcAction:string)  [
+    let DirectionLookup = datatable (FlowDirection:string, NetworkDirection:string)  [
+      'ingress', 'Inbound',
+      'egress', 'Outbound'
+    ];
+    let ActionLookup = datatable (Action:string, DvcAction:string)  [
       'ACCEPT', 'Allow',
       'REJECT', 'Deny'
     ];
     let parser = (disabled:bool=false){
     AWSVPCFlow | where not(disabled)
+    | where LogStatus != "NODATA"
     | project-rename 
-        EventProductVersion=DeviceVersion // Not Documented
-      , Dvc=DeviceName   
-      , NetworkApplicationProtocol=ApplicationProtocol
-      , SrcZone=DeviceCustomString4 
-      , DstZone=DeviceCustomString5
-      , NetworkRuleName=DeviceCustomString1
-      , SrcUsername=SourceUserName 
-      , DstUsername=DestinationUserName 
-      , EventOriginalSeverity=LogSeverity // not documented
-      , NetworkPackets=DeviceCustomNumber2 
-      , SrcNatIpAddr=SourceTranslatedAddress
-      , DstNatIpAddr=DestinationTranslatedAddress
-      , PaloAltoFlags=FlexString1 // Flags
     | extend
-        EventVendor="AWS", // OK
-        EventProduct="VPC", // OK
-        NetworkBytes = toint(Bytes), // OK
-        NetworkPackets = toint(Packets), // OK
-        SrcBytes=toint(SentBytes)
-      , DstBytes=toint(ReceivedBytes) 
-      , NetworkProtocol=toupper(Protocol)
-      , NetworkBytes=toint(FlexNumber1)
-      , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
-      , DstUsernameType=case(isempty(DstUsername), "", DstUsername contains "@", "UPN", "Simple")
-      , EventType="NetworkSession"
-      , EventCount=toint(1)
-      , EventResult=case(DeviceAction=="allow","Success","Failure")
-      , NetworkSessionId=tostring(DeviceCustomNumber1)
-      , NetworkDuration=toint(1000*DeviceCustomNumber3)
-        EventSchemaVersion="0.2.2", // OK
-        EventSchema="NetworkSession", // OK
-        EventSeverity = "Informational"
-    | extend hostelements=split(Dvc,'.')
-    | extend DvcHostname=tostring(hostelements[0])
-           , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
-    | extend DvcFQDN = iff(Dvc contains ".",Dvc,"" )
-          , DvcDomainType=iff(Dvc contains ".","FQDN","" )
-    | project-away hostelements
-    | lookup ProtocolLookup on Protocol // OK
-    | lookup ActionLookup on Action // OK
+        EventVendor="AWS", 
+        EventProduct="VPC",
+        NetworkBytes = tolong(Bytes),
+        NetworkPackets = tolong(Packets),
+        EventProductVersion = tostring(Version),
+        EventType="NetworkSession",
+        EventCount=toint(1),
+        EventResult = iff (Action=="ACCEPT","Success","Failure"),
+        EventSeverity = iff (Action=="ACCEPT","Informational","Low"),
+        EventSchemaVersion="0.2.2",
+        EventSchema="NetworkSession",
+        SrcAppType = iff (PktSrcAwsService != "", "CloudService", ""),
+        DstAppType = iff (PktDstAwsService != "", "CloudService", ""),
+        DvcIdType = "AwsVpcId"
+    | lookup ProtocolLookup on Protocol
+    | lookup ActionLookup on Action
+    | lookup DirectionLookup on FlowDirection
     | project-rename
-      DstMacAddr=DestinationMACAddress
-      , SrcMacAddr=SourceMACAddress
-        DstIpAddr = DstAddr, // OK 
-        DstPortNumber = DstPort, // OK
-      , DstNatPortNumber=DestinationTranslatedPort
-        SrcPortNumber = SrcPort, // OK
-        SrcIpAddr = SrcAddr, // OK
-        EventEndTime = End, // OK
-        EventProductVersion = Version, // OK
-        DvcInboundInterface = InterfaceId, // OK
-      , SrcNatPortNumber=SourceTranslatedPort
-      , DvcOutboundInterface=DeviceOutboundInterface
-      , DvcInboundInterface=DeviceInboundInterface
-      , EventMessage=Message
-      , DvcOriginalAction=DeviceAction
+        DstIpAddr = DstAddr,  
+        DstPortNumber = DstPort, 
+        SrcNatIpAddr=PktSrcAddr, 
+        DstNatIpAddr=PktDstAddr, 
+        SrcPortNumber = SrcPort, 
+        SrcIpAddr = SrcAddr, 
+        EventEndTime = End, 
+        DvcInboundInterface = InterfaceId,
+        DvcSubscriptionId = AccountId,
+        DvcId = VpcId,
+        NetworkProtocolVersion = TrafficType,
+        EventOriginalResultDetails = LogStatus,
+        SrcAppName = PktSrcAwsService,
+        DstAppName = PktDstAwsService
     // -- Aliases
     | extend
-    IpAddr = SrcIpAddr,
-    Rule=NetworkRuleName,
-    Dst=DstIpAddr,
-    // Host=DstHostname, 
-    User=DstUsername,
-    Duration=NetworkDuration,
-    SessionId=NetworkSessionId,
-        EventStartTime = TimeGenerated, // OK
-        DvcInterface = DvcInboundInterface, // OK
-    Src=SrcIpAddr
+        IpAddr = SrcIpAddr,
+        Src = SrcIpAddr,
+        Dst = DstIpAddr,
+        Dvc = DvcId,
+        EventStartTime = TimeGenerated,
+        DvcInterface = DvcInboundInterface
     };
-    NWParser(disabled)
+    parser (disabled)
