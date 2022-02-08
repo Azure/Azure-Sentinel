@@ -687,7 +687,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     elseif ($objectKeyLowercase -eq "watchlists") {
                         $watchlistData = $json.resources[0]
 
-                        $watchlistName = watchlistData.properties.displayName;
+                        $watchlistName = $watchlistData.properties.displayName;
                         $baseMainTemplate.variables | Add-Member -NotePropertyName $watchlistName -NotePropertyValue $watchlistName
                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_$watchlistName" -NotePropertyValue "[variables('$watchlistName')]"
 
