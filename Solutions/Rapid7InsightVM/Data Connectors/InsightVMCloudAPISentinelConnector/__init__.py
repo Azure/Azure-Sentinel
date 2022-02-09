@@ -1,3 +1,4 @@
+from time import sleep
 import requests
 from requests.packages.urllib3.util.retry import Retry
 import azure.functions as func
@@ -9,13 +10,13 @@ import datetime
 import os
 import re
 import logging
-from .state_manager import StateManager
 
 insightvm_apikey = os.environ['InsightVMAPIKey']
 region = os.environ['InsightVMCloudRegion']
 insightvm_url = f"https://{region}.api.insight.rapid7.com/vm/v4/integration/"
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
+chunksize = 100
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
@@ -27,10 +28,10 @@ if(not match):
 
 class InsightVMAPIv4integration:
 
-    def __init__(self, base_url, api_key):
+    def __init__(self):
         self.sentinel = ProcessToSentinel()
-        self.base_url = base_url
-        self.api_key = api_key
+        self.base_url = insightvm_url
+        self.api_key = insightvm_apikey
         self.headers = {
             'Accept': "application/json",
             'Content-Type': "application/json",
@@ -45,9 +46,6 @@ class InsightVMAPIv4integration:
         adapter = requests.adapters.HTTPAdapter(max_retries=retries)
         self.session = requests.Session()
         self.session.mount('https://', adapter)
-        self.start_time, self.end_time = self.generate_date()
-        self.success_processed = 0
-        self.fail_processed = 0
         
     def get_asset_list(self):
         assets_data = "data"
@@ -70,19 +68,15 @@ class InsightVMAPIv4integration:
                 if  200 <= r.status_code <= 299:
                     page_num += 1
                     if assets_data is not None:
-                        if  200 <= self.sentinel.post_data(json.dumps(assets_data), len(assets_data), "assets") <= 299:
-                            self.success_processed += len(assets_data)
-                        else:
-                            self.fail_processed += len(assets_data)
+                        self.sentinel.gen_chunks(assets_data, "assets")
                         vuln_data = self.vulnerabilities_info_enrich(assets_data)
-                        if  200 <= self.sentinel.post_data(json.dumps(vuln_data), len(vuln_data), "vulnerabilities") <= 299:
-                            self.success_processed += len(vuln_data)
-                        else:
-                            self.fail_processed += len(vuln_data)
+                        if vuln_data is not None:
+                            self.sentinel.gen_chunks(vuln_data, "vulnerabilities")            
                 else:
                     logging.error("Error. Code: {}. Meaning: {}.".format(r.status_code,r.json().get("message")))
             except Exception as err:
                 logging.error("Something wrong. Exception error text: {}".format(err))
+        logging.info("Total events processed successfully: {}, failed: {}.".format(self.sentinel.processed_events_success, self.sentinel.processed_events_fail))
 
     def vulnerabilities_info_enrich(self, asset_chunk_data):
         vuln_list = []
@@ -136,24 +130,31 @@ class InsightVMAPIv4integration:
                 logging.error("Something wrong. Exception error text: {}".format(err))
         return vulnerabilities_results
 
-    def generate_date(self):
-        current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0)
-        state = StateManager(connection_string=connection_string)
-        past_time = state.get()
-        if past_time is not None:
-            logging.info("The last time point is: {}".format(past_time))
-        else:
-            logging.info("There is no last time point, trying to get events for last day.")
-            past_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-        return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-
 class ProcessToSentinel:
 
     def __init__(self):
         self.logAnalyticsUri = logAnalyticsUri
         self.processed_events_success = 0
         self.processed_events_fail = 0
+        self.chunksize = chunksize
+    
+    def gen_chunks_to_object(self, data, chunksize=100):
+        chunk = []
+        for index, line in enumerate(data):
+            if (index % chunksize == 0 and index > 0):
+                yield chunk
+                del chunk[:]
+            chunk.append(line)
+        yield chunk
+
+    def gen_chunks(self, data, table):
+        for chunk in self.gen_chunks_to_object(data, chunksize=self.chunksize):
+            obj_array = []
+            for row in chunk:
+                if row != None and row != '':
+                    obj_array.append(row)
+            body = json.dumps(obj_array)
+            self.post_data(body, len(obj_array), table)
 
     def build_signature(self, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
@@ -183,20 +184,15 @@ class ProcessToSentinel:
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
             logging.info("Chunk was processed({} events) to the table: {}".format(chunk_count, table))
+            self.processed_events_success = self.processed_events_success + chunk_count
         else:
             logging.error("Error during sending events to Azure Sentinel. Response code:{}".format(response.status_code))
-        return response.status_code
+            self.processed_events_fail = self.processed_events_fail + chunk_count
 
 def main(mytimer: func.TimerRequest)  -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
     logging.info('Starting program')
-    api = InsightVMAPIv4integration(insightvm_url,insightvm_apikey)
-    start_time, end_time = api.generate_date()
-    logging.info("Time period parameters: from {} - to {}.".format(start_time, end_time))
+    api = InsightVMAPIv4integration()
+    logging.info("Get Assets and Vulnerabilities reports.")
     api.get_asset_list()
-    sentinel_class_vars = vars(api)
-    success_processed, fail_processed = sentinel_class_vars["success_processed"], \
-                                        sentinel_class_vars["fail_processed"]
-    logging.info("Total events processed successfully: {}, failed: {}. Period: {} - {}"
-          .format(success_processed, fail_processed, start_time, end_time))
