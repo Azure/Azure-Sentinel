@@ -158,6 +158,10 @@ function QualysKB {
         Write-Error -Message $_.Exception.Message
     }
 
+    Write-Host "Start Time :" $($startDate)
+    Write-Host " UTC current Time :" [datetime]::UtcNow
+    Write-Host "Constructed URL : $base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters"
+
     $response = Try {
         Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess
     }
