@@ -106,7 +106,7 @@ class AzureBlobStorageConnector:
             logging.info("Start processing {}".format(blob['name']))
             sentinel = AzureSentinelConnectorAsync(session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
             s = ''
-            async for chunk in self._get_chunks(blob['name'], container_client):
+            async for chunk in self._get_chunks(blob, container_client):
                 s += chunk
                 lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
                 for n, line in enumerate(lines):
@@ -135,8 +135,10 @@ class AzureBlobStorageConnector:
                 logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))
 
     @classmethod
-    async def _get_chunks(cls, blob_name: str, container_client: ContainerClient) -> AsyncIterable[str]:
-        blob_cor = await container_client.download_blob(blob_name)
+    async def _get_chunks(cls, blob, container_client: ContainerClient) -> AsyncIterable[str]:
+        blob.content_settings.content_encoding = None
+        await container_client.get_blob_client(blob).set_http_headers(blob.content_settings)
+        blob_cor = await container_client.download_blob(blob['name'])
         is_gz = None
         full_gz_file = b''
         async for chunk in blob_cor.chunks():
