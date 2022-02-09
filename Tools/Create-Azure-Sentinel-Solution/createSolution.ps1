@@ -51,6 +51,23 @@ function removePropertiesRecursively ($resourceObj) {
     $resourceObj
 }
 
+function queryResourceExists () {
+    foreach ($resource in $baseMainTemplate.resources) {
+        if ($resource.type -eq "Microsoft.OperationalInsights/workspaces") {
+            return $true
+        }
+    }
+    return $false
+}
+
+function getQueryResourceLocation () {
+    for($i = 0; $i -lt $baseMainTemplate.resources.Length; $i++){
+        if ($baseMainTemplate.resources[$i].type -eq "Microsoft.OperationalInsights/workspaces") {
+            return $i
+        }
+    }
+}
+
 foreach ($inputFile in $(Get-ChildItem $path)) {
     $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
 
@@ -785,14 +802,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 version   = $contentToImport.Version;
                             };
 
-                            function queryResourceExists () {
-                                foreach ($resource in $baseMainTemplate.resources) {
-                                    if ($resource.type -eq "Microsoft.OperationalInsights/workspaces") {
-                                        return $true
-                                    }
-                                }
-                                return $false
-                            }
                             if ($huntingQueryCounter -eq 1) {
                                 if (!$(queryResourceExists)) {
                                     $baseHuntingQueryResource = [PSCustomObject] @{
@@ -864,7 +873,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $huntingQueryObj.properties.tags += $tacticsObj
                             }
-                            $baseMainTemplate.resources[$baseMainTemplate.resources.Length - 1].resources += $huntingQueryObj
+                            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
 
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
@@ -1054,7 +1063,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Use File Name as Parser Name
                         $functionAlias = getFileNameFromPath $file
-                        if ($parserCounter -eq 1) {
+                        if ($parserCounter -eq 1 -and !$(queryResourceExists)) {
                             $baseParserResource = [PSCustomObject] @{
                                 type       = "Microsoft.OperationalInsights/workspaces";
                                 apiVersion = "2020-08-01";
@@ -1082,7 +1091,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 version       = 1;
                             }
                         }
-                        $baseMainTemplate.resources[$baseMainTemplate.resources.Length - 1].resources += $parserObj
+                        $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $parserObj
 
                         # Update Parser Counter
                         $parserCounter += 1
