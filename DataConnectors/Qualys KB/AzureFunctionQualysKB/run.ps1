@@ -237,15 +237,14 @@ function QualysKB {
                     Write-Host "SUCCESS: $objsLength Qualys KB vulnerability records found between $startInterval and $endInterval and posted to Log Analytics: $mbytes MB" -ForegroundColor Green
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
                 }
-
             }
             else {
-                Write-Host "ERROR: Log Analytics POST failed due to paylog exceeding 30Mb: $mbytes"
+                Write-Error "ERROR: Log Analytics POST failed due to paylog exceeding 30Mb: $mbytes"
                 }
             }
             else {
             Write-Host INFO: "No new Qualys KB vulnerability records between $startInterval and $endInterval"
-            UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
+            # UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
             }
 
         }
@@ -258,7 +257,7 @@ function QualysKB {
          # Logout of the Session
         Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess
         $endInterval = $endTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
-        UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
+        # UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
         Write-Host "INFO: No new Qualys KB vulnerability records between $startDate and $endInterval"
     }
  }
