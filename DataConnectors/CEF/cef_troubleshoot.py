@@ -754,7 +754,8 @@ def print_full_disk_warning():
 
 
 def main():
-    print_notice("Note this script should be run in elevated privileges")
+    print_notice("Note this script should be run in elevated privileges and only in order to verify a CEF scenario,"
+                 " NOT for SYSLOG")
     print_notice("Please validate you are sending CEF messages to agent machine.")
     if len(sys.argv) != 2:
         print_error("The installation script is expecting 1 arguments:")
