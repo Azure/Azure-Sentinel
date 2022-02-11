@@ -171,15 +171,11 @@ function Get-LATables {
                                          
         if ($RetentionMethod -eq "Analytics") {        
             $searchPattern = '(AzureActivity|Usage)'        
-            $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern -and $_.IngestionPlan -ne "Basic") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan  | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+            $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan  | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
         elseif ($RetentionMethod -eq "Basic") {            
             $TablesArray = $WSTables | Where-Object {($_.IngestionPlan -eq "Analytics") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
-        }
-        else {            
-            $TablesArray = $WSTables | Where-Object {($_.IngestionPlan -eq "Basic") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
-        }          
-       
+        }    
     }
     catch {
         Write-Log $_ -LogFileName $LogFileName -Severity Error
@@ -416,30 +412,24 @@ function Select-Plan {
     Add-Type -AssemblyName System.Drawing
     $logselectform = New-Object System.Windows.Forms.Form
     $logselectform.Text = 'Table Plan'
-    $logselectform.Size = New-Object System.Drawing.Size(440,180)
+    $logselectform.Size = New-Object System.Drawing.Size(400,180)
     $logselectform.StartPosition = 'CenterScreen'
+    
     $okb = New-Object System.Windows.Forms.Button
-    $okb.Location = New-Object System.Drawing.Point(45,50)
-    $okb.Size = New-Object System.Drawing.Size(75,25)
+    $okb.Location = New-Object System.Drawing.Point(75,50)
+    $okb.Size = New-Object System.Drawing.Size(105,30)
     $okb.Text = 'Basic Logs'
     $okb.DialogResult = [System.Windows.Forms.DialogResult]::OK
     $logselectform.AcceptButton = $okb
     $logselectform.Controls.Add($okb)
+    
     $cb = New-Object System.Windows.Forms.Button
-    $cb.Location = New-Object System.Drawing.Point(135,50)
-    $cb.Size = New-Object System.Drawing.Size(105,25)
+    $cb.Location = New-Object System.Drawing.Point(195,50)
+    $cb.Size = New-Object System.Drawing.Size(105,30)
     $cb.Text = 'Analytics Logs'
     $cb.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     $logselectform.CancelButton = $cb
     $logselectform.Controls.Add($cb)    
-
-    $btoa = New-Object System.Windows.Forms.Button
-    $btoa.Location = New-Object System.Drawing.Point(250,50)
-    $btoa.Size = New-Object System.Drawing.Size(135,25)
-    $btoa.Text = 'Basic2Analytics'
-    $btoa.DialogResult = [System.Windows.Forms.DialogResult]::Retry
-    $logselectform.AcceptButton = $btoa
-    $logselectform.Controls.Add($btoa)
 
     $rs = $logselectform.ShowDialog()
     if ($rs -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -447,9 +437,6 @@ function Select-Plan {
     }
     elseif ($rs -eq [System.Windows.Forms.DialogResult]::Cancel) {
         return "Analytics"
-    }
-    else {
-        return "Basic2Analytics"
     }
 }
 
@@ -573,13 +560,13 @@ foreach($CurrentSubscription in $GetSubscriptions)
                 $LogAnalyticsResourceGroup = $LAW.ResourceGroupName                            
                 DO {
                     $tablePlan = Select-Plan
-                    if ($tablePlan.Trim() -eq "Analytics" -or $tablePlan.Trim() -eq "Basic2Analytics") {
+                    if ($tablePlan.Trim() -eq "Analytics") {
                         #Get all the tables from the selected Azure Log Analytics Workspace
                         $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()
                         if($SelectedTables) {
                             $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
                             $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555
-                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType "Analytics"
+                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()
                             $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays                    
                             $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
                         }
