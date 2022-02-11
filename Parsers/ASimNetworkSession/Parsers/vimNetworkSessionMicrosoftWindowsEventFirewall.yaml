@@ -1,12 +1,12 @@
 Parser:
   Title: Network Session ASIM filtering parser for Microsoft Windows Firewall Events
-  Version: '0.2'
+  Version: '0.3'
   LastUpdated: Jan 17, 2022
 Product:
   Name: WindowsEventFirewall
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.0'
+  Version: '0.2.2'
 References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/AzSentinelNetworkSessionDoc
@@ -186,18 +186,18 @@ ParserQuery: |
             and (eventresult=='*' or EventResult==eventresult) 
           // *************** / Prefilterring *****************************************************************
           | parse EventData with * '<Data Name="ProcessID">'ProcessID:string'</Data>'
-              '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-              '\x0d\x0a  <Data Name="Direction">'DirectionCode'</Data>'
-              '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress'</Data>'
+              '\x0d\x0a  <Data Name="Application">'Application:string'</Data>'
+              '\x0d\x0a  <Data Name="Direction">'DirectionCode:string'</Data>'
+              '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress:string'</Data>'
               '\x0d\x0a  <Data Name="SourcePort">'SourcePort:int'</Data>'
-              '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
+              '\x0d\x0a  <Data Name="DestAddress">'DestAddress:string'</Data>'
               '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
               '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
               '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
               '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
               '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
-              '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
-              '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*
+              '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID:string'</Data>'
+              '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID:string'</Data>'*
               | project-away EventData;
       union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
       | lookup Directions on DirectionCode
@@ -205,12 +205,12 @@ ParserQuery: |
       | extend
             SrcAppName = iff(isOutBound, Application, ""),
             DstAppName = iff(not(isOutBound), Application, ""),
-            SrcIpAddr = iff(isOutBound, DestAddress, SourceAddress),
-            DstIpAddr = iff(not(isOutBound), SourceAddress, DestAddress),
+            SrcIpAddr = SourceAddress,
+            DstIpAddr = DestAddress,
             SrcHostId = iff(isOutBound, RemoteMachineID, ""),
             DstHostId = iff(not(isOutBound), RemoteMachineID, ""),
-            SrcPortNumber = iff(isOutBound, toint(DestPort), toint(SourcePort)),
-            DstPortNumber = iff(not(isOutBound), toint(SourcePort), toint(DestPort)),
+            SrcPortNumber = SourcePort,
+            DstPortNumber = DestPort,
             SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
             DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
             DstUserId = iff(isOutBound, RemoteUserID, ""),
@@ -261,12 +261,12 @@ ParserQuery: |
             | project-rename DvcHostname = Computer
             | extend  SrcAppName = iff(isOutBound, tostring(EventData.Application), ""),
                       DstAppName = iff(not(isOutBound), tostring(EventData.Application), ""),
-                      SrcIpAddr = iff(isOutBound, tostring(EventData.DestAddress), tostring(EventData.SourceAddress)),
-                      DstIpAddr = iff(not(isOutBound), tostring(EventData.SourceAddress), tostring(EventData.DestAddress)),
+                      SrcIpAddr = tostring(EventData.SourceAddress),
+                      DstIpAddr = tostring(EventData.DestAddress),
                       SrcHostId = iff(isOutBound, tostring(EventData.RemoteMachineID), ""),
                       DstHostId = iff(not(isOutBound), tostring(EventData.RemoteMachineID), ""),
-                      SrcPortNumber = iff(isOutBound, toint(EventData.DestPort), toint(EventData.SourcePort)),
-                      DstPortNumber = iff(not(isOutBound), toint(EventData.SourcePort), toint(EventData.DestPort)),
+                      SrcPortNumber = toint(EventData.SourcePort),
+                      DstPortNumber = toint(EventData.DestPort),
                       SrcProcessId =  iff(isOutBound, tostring(EventData.ProcessId), ""),
                       DstProcessId =  iff(not(isOutBound), tostring(EventData.ProcessId), ""),
                       DstUserId = iff(isOutBound, tostring(EventData.RemoteUserID), ""),
