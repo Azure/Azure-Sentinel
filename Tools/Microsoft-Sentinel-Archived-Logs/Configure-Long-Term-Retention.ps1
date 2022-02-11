@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 2/8/2022
+        LASTEDIT: 2/11/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -170,15 +170,14 @@ function Get-LATables {
         $WSTables = Get-AllTables
                                          
         if ($RetentionMethod -eq "Analytics") {        
-            $searchPattern = '(_CL|ContainerLog^|ContainerLogV2|AppTraces)'        
-            $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalArchiveInDays, ArchiveRetentionInDays, WorkspaceRetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+            $searchPattern = '(AzureActivity|Usage)'        
+            $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern -and $_.IngestionPlan -ne "Basic") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan  | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
-        elseif ($RetentionMethod -eq "Basic") {
-            $searchPattern = '(_CL|ContainerLog^|ContainerLogV2|AppTraces)'        
-            $TablesArray = $WSTables | Where-Object {($_.TableName -match $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalArchiveInDays, ArchiveRetentionInDays, WorkspaceRetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+        elseif ($RetentionMethod -eq "Basic") {            
+            $TablesArray = $WSTables | Where-Object {($_.IngestionPlan -eq "Analytics") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
         else {            
-            $TablesArray = $WSTables | Where-Object {($_.PlanName -eq "Basic") } | Sort-Object -Property TableName | Select-Object -Property TableName, TotalArchiveInDays, ArchiveRetentionInDays, WorkspaceRetentionInDays | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+            $TablesArray = $WSTables | Where-Object {($_.IngestionPlan -eq "Basic") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }          
        
     }
@@ -211,10 +210,10 @@ function Get-TableConfiguration {
 
 		If ($TablesApiResult) {                                
             $TableConfigs += [pscustomobject]@{TableName=$TablesApiResult.name.Trim();
-                                PlanName=$TablesApiResult.properties.Plan.Trim();
-                                TotalRetentionInDays=$TablesApiResult.properties.totalRetentionInDays.ToString().Trim();
-                                ArchiveRetentionInDays=$TablesApiResult.properties.archiveRetentionInDays.ToString().Trim();
-                                RetentionInDays=$TablesApiResult.properties.retentionInDays.ToString().Trim()}
+                                IngestionPlan=$TablesApiResult.properties.Plan.Trim();
+                                TotalLogRetention=$TablesApiResult.properties.totalRetentionInDays.ToString().Trim();
+                                RetentionInArchive=$TablesApiResult.properties.archiveRetentionInDays.ToString().Trim();
+                                RetentionInWorkspace=$TablesApiResult.properties.retentionInDays.ToString().Trim()}
 		}
 	}
 	
@@ -252,10 +251,10 @@ function Set-TableConfiguration {
 		If ($TablesApiResult.StatusCode -ne 200) {
             $SuccessTables += [pscustomobject] @{
                                 TableName=$TablesApiResult.name.Trim();
-                                PlanName=$TablesApiResult.properties.Plan.Trim();
-                                TotalArchiveInDays=$TablesApiResult.properties.totalRetentionInDays;
-                                ArchiveRetentionInDays=$TablesApiResult.properties.archiveRetentionInDays;
-                                WorkspaceRetentionInDays=$TablesApiResult.properties.retentionInDays
+                                IngestionPlan=$TablesApiResult.properties.Plan.Trim();
+                                TotalLogRetention=$TablesApiResult.properties.totalRetentionInDays;
+                                RetentionInArchive=$TablesApiResult.properties.archiveRetentionInDays;
+                                RetentionInWorkspace=$TablesApiResult.properties.retentionInDays
                             }  
              
 
@@ -284,10 +283,10 @@ function Get-AllTables {
             try {
                 if($ta.name.Trim() -notmatch $searchPattern) {                    
                     $AllTables += [pscustomobject]@{TableName=$ta.name.Trim();
-                                PlanName=$ta.properties.Plan.Trim();
-                                TotalArchiveInDays=$ta.properties.totalRetentionInDays;
-                                ArchiveRetentionInDays=$ta.properties.archiveRetentionInDays;
-                                WorkspaceRetentionInDays=$ta.properties.retentionInDays
+                                IngestionPlan=$ta.properties.Plan.Trim();
+                                TotalLogRetention=$ta.properties.totalRetentionInDays;
+                                RetentionInArchive=$ta.properties.archiveRetentionInDays;
+                                RetentionInWorkspace=$ta.properties.retentionInDays
                             }  
                 }
             }
@@ -309,14 +308,13 @@ function Update-TablesRetention {
     )
 	$UpdatedTablesRetention = @()
     foreach($tbl in $TablesForRetention) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-07-01-privatepreview"						
-		$LARetentionDays = [int]$($tbl.WorkspaceRetentionInDays)	
-        $ArchiveDays = [int]($LARetentionDays + $TotalRetentionInDays)
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-07-01-privatepreview"		
+        $ArchiveDays = [int]($TotalRetentionInDays)
         
         $TablesApiBody = @"
 			{
 				"properties": {
-					"retentionInDays": $LARetentionDays,
+					"retentionInDays": $null,
 					"totalRetentionInDays":$ArchiveDays
 				}
 			}
@@ -331,10 +329,10 @@ function Update-TablesRetention {
 
         if($TablesApiResult) {
             $UpdatedTablesRetention += [pscustomobject]@{TableName=$TablesApiResult.name.Trim();
-                PlanName=$TablesApiResult.properties.Plan.Trim();
-                TotalArchiveInDays=$TablesApiResult.properties.totalRetentionInDays;
-                ArchiveRetentionInDays=$TablesApiResult.properties.archiveRetentionInDays;
-                WorkspaceRetentionInDays=$TablesApiResult.properties.retentionInDays
+                IngestionPlan=$TablesApiResult.properties.Plan.Trim();
+                TotalLogRetention=$TablesApiResult.properties.totalRetentionInDays;
+                RetentionInArchive=$TablesApiResult.properties.archiveRetentionInDays;
+                RetentionInWorkspace=$TablesApiResult.properties.retentionInDays
             }
             Write-Log -Message "Table : $($TablesApiResult.name.Trim()) archive updated successfully to $ArchiveDays" -LogFileName $LogFileName -Severity Information
         }		
@@ -579,11 +577,11 @@ foreach($CurrentSubscription in $GetSubscriptions)
                         #Get all the tables from the selected Azure Log Analytics Workspace
                         $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()
                         if($SelectedTables) {
-                            $WorkspaceRetention = $SelectedTables[0].WorkspaceRetentionInDays
+                            $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
                             $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555
                             $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType "Analytics"
                             $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays                    
-                            $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, PlanName, TotalArchiveInDays, ArchiveRetentionInDays, WorkspaceRetentionInDays | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
+                            $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
                         }
                         else {
                             exit
@@ -592,7 +590,7 @@ foreach($CurrentSubscription in $GetSubscriptions)
                     elseif ($tablePlan.Trim() -eq "Basic") {
                         $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
                         $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()                                            
-                        $BasicPlanTables | Sort-Object -Property TableName | Select-Object -Property TableName, PlanName, TotalArchiveInDays, ArchiveRetentionInDays, WorkspaceRetentionInDays | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
+                        $BasicPlanTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
                     }
                     
                     $GetConfirmation = Get-Confirmation
