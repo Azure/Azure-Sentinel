@@ -1,10 +1,10 @@
 // GitHub Enterprise Audit Entry Data Parser
 // Last Updated Date: Feb 9, 2021
 //
-//This parser parses GitHub Enterprise Audit Entry extract the infromation from their various components. It is assumed that the playbook to ingest audit entry data into Sentinel is enabled
+//This parser parses GitHub Enterprise Audit Entry extract the infromation from their various components. It is assumed that you are ingesting GitHub audit data using Github function app based connector or Native poller connector 
 //
 // Parser Notes:
-// 1. This parser assumes logs are collected into a custom log table entitled GitHub_CL
+// 1. This parser assumes logs are collected into a custom log table entitled GitHub_CL or GitHubAuditLogPolling_CL
 //
 // Usage Instruction : 
 // Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias. 
@@ -18,31 +18,61 @@
 //
 //
 
-GitHub_CL
-| project TimeGenerated=node_createdAt_t,
-    Organization=columnifexists('node_organizationName_s', ""),
-    Action=node_action_s,
-    OperationType=node_operationType_s,
-    Repository=columnifexists('node_repositoryName_s',""),
-    Actor=columnifexists('node_actorLogin_s', ""),
-    IPaddress=columnifexists('node_actorIp_s', ""),
-    City=columnifexists('node_actorLocation_city_s', ""),
-    Country=columnifexists('node_actorLocation_country_s', ""),
-    ImpactedUser=columnifexists('node_userLogin_s', ""),
-    ImpactedUserEmail=columnifexists('node_user_email_s', ""),
-    InvitedUserPermission=columnifexists('node_permission_s', ""),
-    Visibility=columnifexists('node_visibility_s', ""),
-    OauthApplication=columnifexists('node_oauthApplicationName_s', ""),
-    OauthApplicationUrl=columnifexists('node_applicationUrl_s', ""),
-    OauthApplicationState=columnifexists('node_state_s', ""),
-    UserCanInviteCollaborators=columnifexists('node_canInviteOutsideCollaboratorsToRepositories_b', ""),
-    MembershipType=columnifexists('node_membershipTypes_s', ""),
-    CurrentPermission=columnifexists('node_permission_s', ""),
-    PreviousPermission=columnifexists('node_permissionWas_s', ""),
-    TeamName=columnifexists('node_teamName_s', ""),
-    Reason=columnifexists('node_reason_s', ""),
-    BlockedUser=columnifexists('node_blockedUserName_s', ""),
-    CanCreateRepositories=columnifexists('canCreateRepositories_b', "")
+union isfuzzy=true (
+    GitHub_CL
+    | project TimeGenerated=node_createdAt_t,
+        Organization=columnifexists('node_organizationName_s', ""),
+        Action=tolower(node_action_s),
+        OperationType=node_operationType_s,
+        Repository=columnifexists('node_repositoryName_s', ""),
+        Actor=columnifexists('node_actorLogin_s', ""),
+        IPaddress=columnifexists('node_actorIp_s', ""),
+        City=columnifexists('node_actorLocation_city_s', ""),
+        Country=columnifexists('node_actorLocation_countryCode_s', ""),
+        ImpactedUser=columnifexists('node_userLogin_s', ""),
+        ImpactedUserEmail=columnifexists('node_user_email_s', ""),
+        InvitedUserPermission=toupper(columnifexists('node_permission_s', "")),
+        Visibility=columnifexists('node_visibility_s', ""),
+        OauthApplication=columnifexists('node_oauthApplicationName_s', ""),
+        OauthApplicationUrl=columnifexists('node_applicationUrl_s', ""),
+        OauthApplicationState=columnifexists('node_state_s', ""),
+        UserCanInviteCollaborators=columnifexists('node_canInviteOutsideCollaboratorsToRepositories_b', ""),
+        MembershipType=columnifexists('node_membershipTypes_s', ""),
+        CurrentPermission=toupper(columnifexists('node_permission_s', "")),
+        PreviousPermission=toupper(columnifexists('node_permissionWas_s', "")),
+        TeamName=columnifexists('node_teamName_s', ""),
+        Reason=columnifexists('node_reason_s', ""),
+        BlockedUser=columnifexists('node_blockedUserName_s', ""),
+        CanCreateRepositories=columnifexists('canCreateRepositories_b', "")
+    ),
+    (
+    GitHubAuditLogPolling_CL
+    | project TimeGenerated= unixtime_milliseconds_todatetime(created_at_d),
+        Organization=columnifexists('org_s', ""),
+        Action=tolower(action_s),
+        OperationType="",
+        Repository=columnifexists('repo_s', ""),
+        Actor=columnifexists('actor_s', ""),
+        IPaddress=columnifexists('actorIp_s', ""),
+        City=columnifexists('actorLocation_city_s', ""),
+        Country=columnifexists('actor_location_country_code_s', ""),
+        ImpactedUser=columnifexists('user_s', ""),
+        ImpactedUserEmail=columnifexists('user_email_s', ""),
+        InvitedUserPermission=toupper(columnifexists('permission_s', "")),
+        Visibility=toupper(columnifexists('visibility_s', "")),
+        OauthApplication="",
+        OauthApplicationUrl="",
+        OauthApplicationState="",
+        UserCanInviteCollaborators="",
+        MembershipType="",
+        CurrentPermission=toupper(columnifexists('permission_s', "")),
+        PreviousPermission=toupper(columnifexists('old_permission_s', "")),
+        TeamName=toupper(columnifexists('team_s', "")),
+        Reason="",
+        BlockedUser=columnifexists('blocked_user_s', ""),
+        CanCreateRepositories=""
+    )
+
 
 
 
