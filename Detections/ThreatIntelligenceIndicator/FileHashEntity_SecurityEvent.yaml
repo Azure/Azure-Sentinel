@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents      
   - connectorId: ThreatIntelligence
     dataTypes:
       - ThreatIntelligenceIndicator
@@ -21,7 +24,7 @@ tactics:
   - Impact
 query: |
 
-  let dt_lookBack = 1h;
+ let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
@@ -30,11 +33,17 @@ query: |
   | where isnotempty(FileHashValue)
   | extend FileHashValue = toupper(FileHashValue)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-    SecurityEvent | where TimeGenerated >= ago(dt_lookBack)
+  | join kind=innerunique ( union isfuzzy=true 
+    (SecurityEvent | where TimeGenerated >= ago(dt_lookBack)
         | where EventID in ("8003","8002","8005")
         | where isnotempty(FileHash)
         | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, FileHash = toupper(FileHash)
+    ),
+    (WindowsEvent | where TimeGenerated >= ago(dt_lookBack)
+        | where EventID in ("8003","8002","8005")
+        | where isnotempty(EventData.FileHash)
+        | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID, FileHash = toupper(EventData.FileHash)
+    )
   )
   on $left.FileHashValue == $right.FileHash
   | where SecurityEvent_TimeGenerated < ExpirationDateTime
@@ -55,5 +64,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.2.2
+version: 1.3.0
 kind: Scheduled
