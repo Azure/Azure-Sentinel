@@ -25,7 +25,8 @@ relevantTechniques:
 query: |
   let WellKnownLocalSID = "S-1-5-32-5[0-9][0-9]$";
   let WellKnownGroupSID = "S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$";
-  let GroupAddition = SecurityEvent 
+  let GroupAddition = (union isfuzzy=true 
+  (SecurityEvent 
   // 4728 - A member was added to a security-enabled global group
   // 4732 - A member was added to a security-enabled local group
   // 4756 - A member was added to a security-enabled universal group  
@@ -35,7 +36,27 @@ query: |
   | where TargetSid !in ("S-1-5-32-555")
   | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
   | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, GroupAddTargetAccount = TargetAccount, 
-  GroupAddTargetSid = TargetSid, GroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserSid = SubjectUserSid, GroupSid = MemberSid;
+  GroupAddTargetSid = TargetSid, GroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserSid = SubjectUserSid, GroupSid = MemberSid
+  ),
+  (WindowsEvent 
+  // 4728 - A member was added to a security-enabled global group
+  // 4732 - A member was added to a security-enabled local group
+  // 4756 - A member was added to a security-enabled universal group  
+  | where EventID in ("4728", "4732", "4756")  and not(EventData has "S-1-5-32-555")
+  | extend AccountType=case(Account endswith "$", "Machine", iff(SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", iff(isempty(SubjectUserSid), "", "User")))
+  | extend MemberName = tostring(EventData.MemberName)
+  | where AccountType =~ "User" and MemberName == "-"
+  // Exclude Remote Desktop Users group: S-1-5-32-555
+  | extend TargetSid = tostring(EventData.TargetSid)
+  | where TargetSid !in ("S-1-5-32-555")
+  | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend MemberSid = tostring(EventData.MemberSid)
+  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, GroupAddTargetAccount = TargetAccount, 
+  GroupAddTargetSid = TargetSid, GroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserSid = SubjectUserSid, GroupSid = MemberSid
+  ));
   let GroupCreated = SecurityEvent
   // 4727 - A security-enabled global group was created
   // 4731 - A security-enabled local group was created
@@ -60,5 +81,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
