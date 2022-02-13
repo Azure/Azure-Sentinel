@@ -10,8 +10,6 @@ For more information, see [Normalization and the Advanced SIEM Information Model
 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2FASimFullDeployment.json)
 
-[![Deploy to Azure China](https://aka.ms/deploytoazurechinabutton)](https://portal.azure.cn/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FASIM%2FASimFullDeployment.json)
-
 <br>
 
 To deploy a single schema use the buttons below:
