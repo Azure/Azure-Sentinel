@@ -75,9 +75,17 @@ namespace Kqlvalidations.Tests
                 firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
             }
 
-            Assert.True(validationRes.IsValid,
-                validationRes.IsValid 
-                    ? string.Empty 
+            var listOfDiagnostics = validationRes.Diagnostics;
+
+            var filteredListOfErrors = from p in listOfDiagnostics
+                               where !p.Message.Contains("_GetWatchlist")
+                               select p;
+
+            bool isvalid = !filteredListOfErrors.Any();
+
+            Assert.True(isvalid,
+                validationRes.IsValid
+                    ? string.Empty
                     : @$"Template Id: {id} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
 Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
