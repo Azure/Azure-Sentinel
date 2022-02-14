@@ -89,14 +89,12 @@ ParserQuery: |
                       ActingProcessId = tostring(toint(EventData.ProcessId)),
                       ActingProcessName = tostring(EventData.ProcessName),
                       Status = tostring(EventData.Status),
-                      ActorSessionId = tostring(EventData.SubjectLogonId),
-                      ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
+                      ActorSessionId = tostring(EventData.SubjectLogonId),                      
                       ActorUserId = tostring(EventData.SubjectUserSid),
                       SubStatus = tostring(EventData.SubStatus),
                       TargetDomainName = tostring(EventData.TargetDomainName),
                       TargetSessionId = tostring(EventData.TargetLogonId),
-                      TargetUserId = tostring(EventData.TargetUserSid),
-                      TargetUsername = tostring(iff (EventData.TargetDomainName == '-', EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName))),
+                      TargetUserId = tostring(EventData.TargetUserSid),                      
                       SrcDvcHostname = tostring(EventData.WorkstationName),
                       EventProduct = "Security Events"
           | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
@@ -109,8 +107,8 @@ ParserQuery: |
           | project-rename 
               TargetDvcHostname = Computer
           // , TargetUserType=AccountType - no AccountType in windowsEvents
-          // , EventOriginalUid = EventOriginId - no EventOriginalId in WindowsEvents
-          , EventOriginId=EventID
+              , EventOriginalUid = EventOriginId          
+          | extend EventOriginId=EventID | project-away EventID
           | extend  EventCount=int(1)
                   , EventSchemaVersion='0.1.0'
                   , ActorUserIdType='SID'
@@ -119,10 +117,10 @@ ParserQuery: |
                   , EventStartTime =TimeGenerated
                   , EventEndTime=TimeGenerated
                   , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')
-                  , ActorUsername = tostring(EventData.SubjectUserName)
+                  , ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName)))
                   , ActorUsernameType= iff(EventData.SubjectDomainName == '-','Simple', 'Windows' )
-                  , TargetUsername = tostring(EventData.TargetUsername)
-                  , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
+                  , TargetUsername = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName)))
+                  , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
                   , SrcDvcOs = 'Windows'
                   , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
           | lookup LogonStatus on EventStatus
