@@ -14,8 +14,6 @@ References:
     Link: https://aka.ms/AboutASIM
   - Title: Logging IP traffic with VPC Flow Logs
     Link: https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html
-  - Title: Original parsers by Koos Goossens
-    Link: https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/AzureFirewall
 Description: |
   This ASIM parser supports filtering and normalizing Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
 ParserName: vimNetworkSessionAzureFirewall
@@ -83,16 +81,11 @@ ParserQuery: |
           | where not(disabled)
           | where Category == "AzureFirewallNetworkRule"
           | where isnotempty(msg_s);
-      let prefilter = (T: (msg_s: string, TimeGenerated: datetime)) {
+      let prefilter = (T: (msg_s:string, TimeGenerated:datetime, OperationName:string)) {
         T | where  
         (array_length(hostname_has_any) == 0)
          and (isnull(starttime) or TimeGenerated>=starttime) 
          and (isnull(endtime) or TimeGenerated<=endtime) 
-         and (
-            eventresult == "*"
-            or (OperationName == "AzureFirewallNatRuleLog" and dvcaction == "Allow")
-         )
-         and (eventresult=='*' or eventresult=='Success')
          and (
             array_length(srcipaddr_has_any_prefix)==0 
             or has_any_ipv4_prefix(msg_s,srcipaddr_has_any_prefix)
@@ -107,8 +100,8 @@ ParserQuery: |
           AzureFirewallNetworkRuleLogs
           | where OperationName in ("AzureFirewallNetworkRuleLog","AzureFirewallThreatIntelLog")
           // -- pre-filter
-          | where dvcaction == "*" or msg_s has dvcaction
-          | where eventresult == "*" or (eventresult == "Success" and msg_s has "Allow") or (eventresult == "Failure" and msg_s has "Deny")
+          | where (array_length(dvcaction) == 0) or (msg_s has_any (dvcaction))
+          | where (eventresult == "*") or ((eventresult == "Success") and (msg_s has "Allow")) or ((eventresult == "Failure") and (msg_s has "Deny"))
           | invoke prefilter()
           // -- end pre-filter
           | parse-where
@@ -133,7 +126,7 @@ ParserQuery: |
           AzureFirewallNetworkRuleLogs
           | where OperationName == "AzureFirewallNatRuleLog"
           // -- pre-filter
-          | where dvcaction in ("*", "Allow")
+          | where (array_length(dvcaction) == 0) or ("Allow" in (dvcaction))
           | where eventresult in ("*", "Success")
           | invoke prefilter()
           // -- end pre-filter
@@ -189,4 +182,4 @@ ParserQuery: |
           _ResourceId,
           TimeGenerated
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser  (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
