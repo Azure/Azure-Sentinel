@@ -14,7 +14,7 @@ namespace Kqlvalidations.Tests
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
-               .WithSentinelDefaultTableSchemas()
+               .WithSentinelDefaultTablesAndFunctionsSchemas()
                .WithCustomTableSchemasLoader(new CustomTablesSchemasLoader())
                .Build();
         }
