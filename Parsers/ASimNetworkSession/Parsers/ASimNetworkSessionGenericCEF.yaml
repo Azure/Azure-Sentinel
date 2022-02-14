@@ -174,56 +174,75 @@ ParserQuery: |
     ];
     CommonSecurityLog
     /// Filtering for probable network session events
-    | where isnotempty( SourceIP) and isnotempty( DestinationIP) 
+    | where isnotempty(SourceIP) and isnotempty(DestinationIP) 
     // Generic parser
-    | extend EventSchemaVersion='0.1',
-        EventType='NetworkSession', ///////// might need a more sophisticated calc.
-        EventCount=toint(1),
-        EventSchema='NetworkSession',
-        EventResult=iff(DeviceAction has_any ('allow','accept'), 'Success', 'Failure' ) ////<=========//////////////////////////////////////////
-        | extend NumericProtocol=toint(Protocol)
-          , EventStartTime= TimeGenerated // StartTime is empty on all our records
-        | lookup ProtocolLookup on $left.NumericProtocol==$right.Protocol
+    | extend EventSchemaVersion='0.1'
+        , EventType='NetworkSession' //////////////// might need a more sophisticated calc.
+        , EventCount=toint(1)
+        , EventSchema='NetworkSession'
+        , EventResult=iff(DeviceAction has_any ('allow','accept'), 'Success', 'Failure' ) ////<=========//////////////////////////////////////////
+        , NumericProtocol=toint(Protocol)
+        , EventStartTime= TimeGenerated // StartTime is empty on all our records
+    | lookup ProtocolLookup on $left.NumericProtocol==$right.Protocol
+    // //
+        | extend hostelements=split(Computer,'.')
+        | extend DvcHostname=tostring(hostelements[0])
+               , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
+        | extend DvcFQDN = iff(Computer contains ".",Computer,"" )
+               , DvcDomainType=iff(Computer contains ".","FQDN","" )
+        | project-away hostelements
+    // //
+        | extend hostelements=split(SourceHostName,'.')
+        | extend SrcHostname=tostring(hostelements[0])
+               , SrcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
+        | extend SrcFQDN = iff(SourceHostName contains ".",SourceHostName,"" )
+               , SrcDomainType=iff(SourceHostName contains ".","FQDN","" )
+        | project-away hostelements
+    // //
+        | extend hostelements=split(DestinationHostName,'.')
+        | extend DstHostname=tostring(hostelements[0])
+               , DstDomain=strcat_array( array_slice(hostelements,1,-1), '.')
+        | extend DstFQDN = iff(DestinationHostName contains ".",DestinationHostName,"" )
+               , DstDomainType=iff(DestinationHostName contains ".","FQDN","" )
+        | project-away hostelements
+    // //
     | project-rename 
-        DvcHostname=Computer,
-        EventVendor=DeviceVendor,
-        EventProduct=DeviceProduct,
-        EventProductVersion=DeviceVersion, 
-        DvcMacAddr=DeviceMacAddress, 
-        EventResourceId=_ResourceId,
-        NetworkApplicationProtocol=ApplicationProtocol,
-        DstBytes=ReceivedBytes, 
-        SrcBytes=SentBytes, 
-        DstDvcHostname=DestinationHostName,
-        DstMacAddr=DestinationMACAddress,
-        DstNatIpAddr=DestinationTranslatedAddress,
-        DstUserSid=DestinationUserID
-      , SrcMacAddr=SourceMACAddress
-      , SrcNatIpAddr=SourceTranslatedAddress
-        , SrcUserSid=SourceUserID
-    //  Trivial renames to mitigate Autocomplete
-        , NetworkDirection=CommunicationDirection ////////////////////////////////////////////////////////////////////////////////
-      , EventMessage=Message
-        , DstIpAddr=DestinationIP
-        , DstPortNumber=DestinationPort
-        , DstNatPortNumber=DestinationTranslatedPort
-      , SrcIpAddr=SourceIP
-      , SrcPortNumber=SourcePort
+         Dvc=Computer 
+      ,  DvcMacAddr=DeviceMacAddress
+      ,  DvcOutboundInterface=DeviceOutboundInterface
+      ,  DvcInboundInterface=DeviceInboundInterface
+      , DstBytes=ReceivedBytes
+      , DstMacAddr=DestinationMACAddress
+      , DstNatIpAddr=DestinationTranslatedAddress
+      , DstUserSid=DestinationUserID
       , DstUserName=DestinationUserName
-      , SrcNatPortNumber=SourceTranslatedPort
-      , DvcOutboundInterface=DeviceOutboundInterface
-      , DvcInboundInterface=DeviceInboundInterface
-      , SrcUserName=SourceUserName
+      , DstIpAddr=DestinationIP
+      , DstPortNumber=DestinationPort
+      , DstNatPortNumber=DestinationTranslatedPort
+      ,  EventVendor=DeviceVendor
+      ,  EventProduct=DeviceProduct
+      ,  EventProductVersion=DeviceVersion 
+      ,  EventMessage=Message
+      ,  EventResourceId=_ResourceId
+      , NetworkApplicationProtocol=ApplicationProtocol
+      , NetworkDirection=CommunicationDirection ////////////////////////////////////////////////////////////////////////////////
+      ,  SrcBytes=SentBytes
+      ,  SrcMacAddr=SourceMACAddress
+      ,  SrcNatIpAddr=SourceTranslatedAddress
+      ,  SrcUserSid=SourceUserID
+      ,  SrcIpAddr=SourceIP
+      ,  SrcPortNumber=SourcePort
+      ,  SrcNatPortNumber=SourceTranslatedPort
+      ,  SrcUserName=SourceUserName
     | extend 
         Dst=DstIpAddr
-        , Src=SrcIpAddr
+        , EventEndTime=EventStartTime // Empty on all our records
         , EventSeverity=iff(EventResult == "Success", "Informational", "Low")
         , NetworkProtocol=coalesce(NetworkProtocol, toupper(Protocol))
-        , Dvc=DvcHostname
-        , EventEndTime=EventStartTime // Empty on all our records
         , IpAddr=SrcIpAddr
+        , Src=SrcIpAddr
         , SrcUsernameType=case(SrcUsername contains "@", "UPN"
-            ,SrcUsername contains '\\', 'Windows'
-            ,SrcUsername contains 'OU=', 'DN'
-            ,SrcUsername !contains ' ', 'Simple'
-            ,'') ///// what about "San Jose"? is that considered Simple?///////////////////////////////////////////////
+            , SrcUsername contains '\\', 'Windows'
+            , SrcUsername contains 'OU=', 'DN'
+            , SrcUsername !contains ' ', 'Simple'
+            , '') ///// what about "San Jose"? is that considered Simple?///////////////////////////////////////////////
