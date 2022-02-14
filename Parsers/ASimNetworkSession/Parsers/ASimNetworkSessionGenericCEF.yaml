@@ -12,6 +12,10 @@ References:
   Link: https://aka.ms/AzSentinelNetworkSessionDoc
 - Title: ASIM
   Link: https://aka.ms/AzSentinelNormalization
+- Title: Micro Focus Security ArcSight Common Event Format [pdf]
+  Link: https://www.microfocus.com/documentation/arcsight/arcsight-smartconnectors/pdfdoc/common-event-format-v25/common-event-format-v25.pdf
+- Title: CEF and CommonSecurityLog field mapping
+  Link: https://docs.microsoft.com/en-us/azure/sentinel/cef-name-mapping
 Description: |
   This ASIM parser supports normalizing Common Event Format to the ASIM Network Session schema.
 ParserName: ASimNetworkSessionGenericCEF
@@ -21,7 +25,22 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    // Should be replaced with externaldata or watchlist
+    //let ASimParsers=externaldata(ASimSchema:string, Vendor:string, Product:string, Table:string)
+    //  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/ASIM/dev/ASimParsers.csv"]
+    //    with(format="csv");
+    // let NwCSLParsers=materialize(ASimParsers| where Table=="CommonSecurityLog" and ASimSchema=="NetworkSession");
+    let ASimNwCSLParsers = datatable(Vendor:string, Product:string)[
+      "Palo Alto Networks", "PAN-OS"
+      , "Zscaler" , "NSSFWlog"];
+    let Customization=materialize(_GetWatchlist("ASimParserCustomization") 
+        | extend 
+            ASimParser=column_ifexists("ASimParser","-")
+          , CustomizableKey=column_ifexists("CustomizableKey","-")
+          , CustomizableValue=column_ifexists("CustomizableValue","-"));
+    let CustomExcludedVendors=toscalar(Customization
+        | where ASimParser=="ASimNetworkGenericCEF"
+            and CustomizableKey =="ExcludedVendor"
+        | summarize make_set(CustomizableValue));
     let ProtocolLookup = datatable(Protocol:int, NetworkProtocol:string) [
       0,"HOPOPT",
       1,"ICMP",
@@ -172,24 +191,30 @@ ParserQuery: |
       254,"",
       255,"Reserved"
     ];
+    let ALLOW_TERMS = dynamic(['allow', 'allowed', 'permit', 'accept', 'start']);
+    let RESET_TERMS = dynamic(['reset', 'rst']);
+    let DENY_TERMS = dynamic(['deny', 'denied']);
+    let DROP_TERMS = dynamic(['drop', 'block', 'blocked', 'dropped', 'close', 'closed' ]);
     CommonSecurityLog
     /// Filtering for probable network session events
     | where isnotempty(SourceIP) and isnotempty(DestinationIP) 
+    /// Filter out dedicated Parsers
+      and DeviceVendor !in ((ASimNwCSLParsers | project Vendor)) and DeviceProduct !in ((ASimNwCSLParsers | project Product))
+      and DeviceVendor !in (CustomExcludedVendors)
     // Generic parser
-    | extend EventSchemaVersion='0.1'
+    | extend EventSchemaVersion='2.2'
         , EventType='NetworkSession' //////////////// might need a more sophisticated calc.
         , EventCount=toint(1)
         , EventSchema='NetworkSession'
-        , EventResult=iff(DeviceAction has_any ('allow','accept'), 'Success', 'Failure' ) ////<=========//////////////////////////////////////////
         , NumericProtocol=toint(Protocol)
         , EventStartTime= TimeGenerated // StartTime is empty on all our records
     | lookup ProtocolLookup on $left.NumericProtocol==$right.Protocol
     // //
-        | extend hostelements=split(Computer,'.')
+        | extend hostelements=split(DeviceName,'.')
         | extend DvcHostname=tostring(hostelements[0])
                , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
-        | extend DvcFQDN = iff(Computer contains ".",Computer,"" )
-               , DvcDomainType=iff(Computer contains ".","FQDN","" )
+        | extend DvcFQDN = iff(DeviceName contains ".",DeviceName,"" )
+               , DvcDomainType=iff(DeviceName contains ".","FQDN","" )
         | project-away hostelements
     // //
         | extend hostelements=split(SourceHostName,'.')
@@ -206,16 +231,25 @@ ParserQuery: |
                , DstDomainType=iff(DestinationHostName contains ".","FQDN","" )
         | project-away hostelements
     // //
+    | extend 
+        DvcAction=case(DeviceAction has_any (ALLOW_TERMS), "Allow"
+                    ,  DeviceAction has_any (RESET_TERMS), "Reset"
+                    ,  DeviceAction has_any (DENY_TERMS), "Deny"
+                    ,  DeviceAction has_any (DROP_TERMS), "Drop"
+                    ,"")
+    |extend EventResult=iff(DvcAction =='Allow', 'Success', 'Failure' ) 
+          , NetworkDirection=case(CommunicationDirection=='0','Inbound',CommunicationDirection=='1','Outbound','')
     | project-rename 
-         Dvc=Computer 
+         Dvc=DeviceName 
       ,  DvcMacAddr=DeviceMacAddress
       ,  DvcOutboundInterface=DeviceOutboundInterface
       ,  DvcInboundInterface=DeviceInboundInterface
+      ,  DvcOriginalAction=DeviceAction
       , DstBytes=ReceivedBytes
       , DstMacAddr=DestinationMACAddress
       , DstNatIpAddr=DestinationTranslatedAddress
       , DstUserSid=DestinationUserID
-      , DstUserName=DestinationUserName
+      , DstUsername=DestinationUserName
       , DstIpAddr=DestinationIP
       , DstPortNumber=DestinationPort
       , DstNatPortNumber=DestinationTranslatedPort
@@ -225,7 +259,6 @@ ParserQuery: |
       ,  EventMessage=Message
       ,  EventResourceId=_ResourceId
       , NetworkApplicationProtocol=ApplicationProtocol
-      , NetworkDirection=CommunicationDirection ////////////////////////////////////////////////////////////////////////////////
       ,  SrcBytes=SentBytes
       ,  SrcMacAddr=SourceMACAddress
       ,  SrcNatIpAddr=SourceTranslatedAddress
@@ -233,11 +266,11 @@ ParserQuery: |
       ,  SrcIpAddr=SourceIP
       ,  SrcPortNumber=SourcePort
       ,  SrcNatPortNumber=SourceTranslatedPort
-      ,  SrcUserName=SourceUserName
+      ,  SrcUsername=SourceUserName
     | extend 
         Dst=DstIpAddr
         , EventEndTime=EventStartTime // Empty on all our records
-        , EventSeverity=iff(EventResult == "Success", "Informational", "Low")
+        , EventSeverity=iff(DvcAction == "Allow", "Informational", "Low")
         , NetworkProtocol=coalesce(NetworkProtocol, toupper(Protocol))
         , IpAddr=SrcIpAddr
         , Src=SrcIpAddr
@@ -245,4 +278,5 @@ ParserQuery: |
             , SrcUsername contains '\\', 'Windows'
             , SrcUsername contains 'OU=', 'DN'
             , SrcUsername !contains ' ', 'Simple'
-            , '') ///// what about "San Jose"? is that considered Simple?///////////////////////////////////////////////
+            , SrcUsername contains ' ', 'GivenName'
+            , '') 
