@@ -68,26 +68,26 @@ namespace Kqlvalidations.Tests
 
         private void ValidateKql(string id, string queryStr)
         {
-            var validationRes = _queryValidator.ValidateSyntax(queryStr);
+            var validationResult = _queryValidator.ValidateSyntax(queryStr);
             var firstErrorLocation = (Line: 0, Col: 0);
-            if (!validationRes.IsValid)
+            if (!validationResult.IsValid)
             {
-                firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
+                firstErrorLocation = GetLocationInQuery(queryStr, validationResult.Diagnostics.First(d => d.Severity == "Error").Start);
             }
 
-            var listOfDiagnostics = validationRes.Diagnostics;
+            var listOfDiagnostics = validationResult.Diagnostics;
 
-            var filteredListOfErrors = from p in listOfDiagnostics
-                               where !p.Message.Contains("_GetWatchlist")
-                               select p;
+            bool isQueryValid = !(from p in listOfDiagnostics
+                               where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                               select p).Any();
 
-            bool isvalid = !filteredListOfErrors.Any();
 
-            Assert.True(isvalid,
-                validationRes.IsValid
+            Assert.True(
+                isQueryValid,
+                isQueryValid
                     ? string.Empty
                     : @$"Template Id: {id} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
-Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+                    Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
