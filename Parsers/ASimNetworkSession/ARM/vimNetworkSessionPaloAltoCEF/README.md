@@ -1,6 +1,6 @@
-# Palo Alto Networks ASIM NetworkSessions Normalization Parser
+# PaloAlto ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Palo Alto Networks.
+This template deploys the ASIM NetworkSession schema parser for PaloAlto.
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
