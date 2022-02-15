@@ -11,7 +11,7 @@ namespace Kqlvalidations.Tests
             var files = yamlFilesLoader.GetFilesNames();
             files.ForEach(filePath =>
             {
-                if (!fileNamesToIgnore?.Any(fileName => filePath.EndsWith(fileName)) ?? true)
+                if (!fileNamesToIgnore?.Any(fileNameToIgnore => filePath.EndsWith(fileNameToIgnore)) ?? true)
                 {
                     var fileName = Path.GetFileName(filePath);
                     Add(fileName, Utils.EncodeToBase64(filePath));
