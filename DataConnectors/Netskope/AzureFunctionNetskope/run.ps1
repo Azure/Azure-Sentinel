@@ -1,4 +1,4 @@
-<#  
+<#
     Title:          Netskope Connector
     Language:       PowerShell
     Version:        1.0
@@ -7,7 +7,7 @@
     Comment:        Initial Release
 
     DESCRIPTION
-    This Function App calls the Netskope Platform API (https://innovatechcloud.goskope.com/docs/Netskope_Help/en/rest-api-v2-overview.html) to pull alert and events data. The response from the Netskope API is recieved in JSON format. This function will build the signature and authorization header 
+    This Function App calls the Netskope Platform API (https://innovatechcloud.goskope.com/docs/Netskope_Help/en/rest-api-v2-overview.html) to pull alert and events data. The response from the Netskope API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post to the Netskope_CL table in the Log Analytics workspace.
 #>
 
@@ -55,7 +55,7 @@ function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         Write-Host "ERROR encountered while retrieving '$LogType' events - $errorCode - $errors"
     }
     else {
-       return $response      
+       return $response
     }
 }
 
@@ -70,11 +70,11 @@ function GetStartTime($CheckpointFile, $LogType, $TimeInterval){
             $CheckpointLog.Add($apiType,$firstStartTimeRecord)
         }
         $CheckpointLog.GetEnumerator() | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-        return $firstStartTimeRecord 
+        return $firstStartTimeRecord
     }
     else{
         $GetLastRecordTime = Import-Csv -Path $CheckpointFile
-        $startTime = $GetLastRecordTime | ForEach-Object{ 
+        $startTime = $GetLastRecordTime | ForEach-Object{
                         if($_.Key -eq $LogType){
                             $_.Value
                         }
@@ -99,7 +99,7 @@ function Netskope () {
     $uri = $env:uri
     $tableName = "Netskope"
     $timeInterval = [int]($env:timeInterval) * 60
-    $pageLimit = 5000
+    $pageLimit = 10000
     $skip = 0
     $loggingOptions = $env:logTypes
     $apitypes = @($loggingOptions.split(",").Trim())
@@ -111,23 +111,30 @@ function Netskope () {
     {
         $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
     }
-    
+
     # Returning if the Log Analytics Uri is in incorrect format.
     # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
     if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
     {
         throw "Netskope: Invalid Log Analytics Uri."
     }
-            
+
     foreach($logtype in $apitypes){
 
-        $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)  
+        $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $startTime = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
-
+        $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
+        $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
+        $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
+        if($netskopetimediff.Days -gt 1)
+        {
+           Write-Host "Time difference is > 1 day.Hence Resetting the endtime to have 6 hours difference between starttime and endtime"
+           $endTime = $startTime + 6*60*60
+        }
         $alleventobjs = @()
         $count = 0
         Do {
-            $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip                     
+            $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip
             $netskopeevents = $response.data
 			$netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
 			$netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
@@ -136,7 +143,7 @@ function Netskope () {
 			$netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
 			$netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
 			$netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
-			
+
 			if($null -ne $netskopeevents)
             {
 				$netskopeevents | ForEach-Object{
@@ -163,21 +170,21 @@ function Netskope () {
 					}
                 }
             }
-			
+
             $dataLength = $response.data.Length
             $alleventobjs += $netskopeevents
-    
-                # Write-Host "$dataLength records added for '$logtype' events" 
+
+                # Write-Host "$dataLength records added for '$logtype' events"
                 # If the API response length for the given log type is equal to the page limit, it indicates there are subsquent pages, continue while loop, and increment the skip value by the records already recieved for the subquent API requests
                 if($dataLength -eq $pageLimit){
-                    $skip = $skip + $pageLimit      
+                    $skip = $skip + $pageLimit
                 }
                 else {
                     # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
                     $count = 1
                     $skip = 0
                     }
-         
+
         } while ($count -eq 0)
 
         $allEventsLength = $alleventobjs.Length
@@ -185,31 +192,46 @@ function Netskope () {
         if ($allEventsLength -ne 0){
         $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
         $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)).Count/1024/1024
-          
+
         # Check the payload size, if under 30MB post to Log Analytics.
-        if (($mbytes -le 30)){                                
+        if (($mbytes -le 30)){
              $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
             if ($responseCode -ne 200){
-                Write-Host "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
-            } 
+                Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
+            }
             else {
                 Write-Host "SUCCESS: $allEventsLength total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
                 UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime
             }
         }
         else {
-            Write-Host "ERROR: Log Analytics POST failed due to paylog exceeding 30Mb: $mbytes"
+            try {
+                Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
+                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $logtype
+
+                if ($responseCode -ne 200){
+                    Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
+                }
+                else {
+                    Write-Host "SUCCESS: $allEventsLength total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime
+                }
             }
-        }
-        else {
-            $startInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
-            $endInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
-            Write-Host "INFO: No new '$logtype' records created between $startInterval and $endInterval"
-            UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime
+            catch
+            {
+                Write-Error "Error, error message: $($Error[0].Exception.Message)"
+			}
         }
     }
+    else {
+        $startInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
+        $endInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
+        Write-Host "INFO: No new '$logtype' records created between $startInterval and $endInterval"
+        UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime
+    }
+    }
 }
- 
+
 # Function to build the authorization signature to post to Log Analytics
 function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
 {
@@ -225,7 +247,7 @@ function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     return $authorization;
 }
 
-# Function to POST the data payload to a Log Analytics workspace 
+# Function to POST the data payload to a Log Analytics workspace
 function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 {
     $TimeStampField = "DateValue"
@@ -247,6 +269,44 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     return $response.StatusCode
 }
 
+# Function to POST the data payload to a Log Analytics workspace
+function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType)
+{
+    $tempdata = @()
+    $tempdataLength = 0
+    $tempDataSize = 0
+    $StartTime = (Get-Date).ToUniversalTime()
+    try {
+        if ((($payload |  Convertto-json -depth 3).Length) -gt 25MB)
+        {
+            Write-Host "Upload is over 25MB, needs to be split"
+            foreach ($record in $payload)
+            {
+                $tempdata += $record
+                $tempdataLength =  $tempdata.Count
+                $tempDataSize += ($record  | ConvertTo-Json).Length
+                if ($tempDataSize -gt 25MB)
+                {
+                    write-Host "Sending data to log analytics when data size = $TempDataSize greater than 25mb post chuncking the data and length of events = $tempdataLength"
+                    Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes(($tempdata | ConvertTo-Json))) -logType $logType
+                    $tempdata = $null
+                    $tempdata = @()
+                    $tempDataSize = 0
+                    $tempdataLength = 0
+                }
+            }
+            Write-Host "Sending left over data = $Tempdatasize after all the chuncking of done is completed. Now datasize will be < 25mb and length of events = $tempdataLength"
+            $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes(($tempdata | ConvertTo-Json))) -logType $logType
+            $elapsedTime = (Get-Date).ToUniversalTime() - $StartTime
+        }
+        $totalTime = "{0:HH:mm:ss}" -f ([datetime]$elapsedTime.Ticks)
+        Write-Host "Total Time taken to process this data = $totalTime"
+        return $responseCode.StatusCode
+    }
+    catch {
+        Write-Error "Error, error message: $($Error[0].Exception.Message)"
+    }
+}
 # Execute the Function to pull Netskope alerts and events and post to a Log Analytics workspace
 
 Netskope
