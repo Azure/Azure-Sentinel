@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -58,12 +61,42 @@ query: |
   | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName
   ),
   (
+  WindowsEvent
+  | where EventID == '4656' and EventData has aadHealthMonAgentRegKey
+  | extend ObjectType = tostring(EventData.ObjectType)
+  | where ObjectType == 'Key'
+  | extend ObjectName = tostring(EventData.ObjectName)
+  | where ObjectName == aadHealthMonAgentRegKey
+  | extend ProcessName = tostring(EventData.ProcessName)
+  | extend Process = tostring(split(ProcessName, '\\')[-1])
+  | where Process !in (aadConnectHealthProcs)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName
+  ),
+  (
   SecurityEvent
   | where EventID == '4663'
   | where ObjectType == 'Key'
   | where ObjectName == aadHealthMonAgentRegKey
   | extend Process = tostring(split(ProcessName, '\\', -1)[-1])
   | where Process !in (aadConnectHealthProcs)
+  | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName
+  ),
+    (
+  WindowsEvent
+  | where EventID == '4663' and EventData has aadHealthMonAgentRegKey
+  | extend ObjectType = tostring(EventData.ObjectType)
+  | where ObjectType == 'Key'
+  | extend ObjectName = tostring(EventData.ObjectName)
+  | where ObjectName == aadHealthMonAgentRegKey
+  | extend ProcessName = tostring(EventData.ProcessName)
+  | extend Process = tostring(split(ProcessName, '\\')[-1])
+  | where Process !in (aadConnectHealthProcs)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
   | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName
   )
   )
@@ -79,5 +112,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.2
+version: 1.1.0
 kind: Scheduled
