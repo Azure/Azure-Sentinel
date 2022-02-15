@@ -362,11 +362,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 							elseif ($param.Name.ToLower().contains("apikey")) {
                                 $playbookPasswordObject = [PSCustomObject] @{
                                     name        = "playbook$playbookCounter-$paramName";
-                                    type        = "Microsoft.Common.PasswordBox";
-                                    label       = [PSCustomObject] @{password = "ApiKey"};
+                                    type        = "Microsoft.Common.TextBox";
+                                    label       = "$paramName";
+                                    # label     = [PSCustomObject] @{password = "ApiKey"};
                                     toolTip     = "ApiKey to connect to $solutionName API";
-                                    constraints = [PSCustomObject] @{ required = $true; };
-                                    options     = [PSCustomObject] @{ hideConfirmation = $true; };
+                                    constraints  = [PSCustomObject] @{
+                                        required          = $true;
+                                        regex             = "[a-z0-9A-Z]{1,256}$";
+                                        validationMessage = "Please enter the $paramName"
+                                    }
+                                    # options     = [PSCustomObject] @{ hideConfirmation = $true; };
                                 }
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -447,7 +452,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             else
                             {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
-                            }                           
+                            }
                         }
 
                         $azureManagementUrlExists = $false
@@ -533,12 +538,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
-                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"                     
+                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
                                     }
                                     else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"               
+                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
                                     }
                                     if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
                                         {
@@ -614,10 +619,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
                         }
-                        elseif ($connectorData.resources -and 
-                            $connectorData.resources[0] -and 
-                            $connectorData.resources[0].properties -and 
-                            $connectorData.resources[0].properties.connectorUiConfig -and 
+                        elseif ($connectorData.resources -and
+                            $connectorData.resources[0] -and
+                            $connectorData.resources[0].properties -and
+                            $connectorData.resources[0].properties.connectorUiConfig -and
                             $connectorData.resources[0].properties.pollingConfig) {
                             # Else check if Polling connector
                             $connectorData = $connectorData.resources[0]
@@ -1021,7 +1026,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
-                            
+
                             # Handle optional fields
                             foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
                                 if ($yaml.$yamlField) {
