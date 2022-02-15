@@ -249,11 +249,13 @@ class DCRConfigurationVerifications:
 
     def verify_CEF_dcr_has_valid_content(self):
         '''
-        Verifying there is a DCR on the machine for forwarding cef data
+        Verifying that the CE dcr on the machine has valid content with all necessary dcr components
         '''
         command_name = "verify_CEF_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1"
-        result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames", "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-", "azure.com", "id"]
+        result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
+                                 "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
+                                 "azure.com", "id"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
@@ -264,7 +266,7 @@ class DCRConfigurationVerifications:
 
     def check_cef_multi_homing(self):
         '''
-        Counting the amount of DCR's forwarding CEF data in order to alert from multi-homing scenarios.
+        Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         '''
         command_name = "verify_DCR_exists"
         command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l"
@@ -300,9 +302,15 @@ class DCRConfigurationVerifications:
 
 
 class SyslogDaemonVerifications:
+    '''
+    This class is for Syslog daemon related verifications
+    '''
     SYSLOG_DAEMON = ""
 
     def determine_Syslog_daemon(self):
+        '''
+        This function is in order to determine what Syslog daemon is running on the machine (Rsyslog or Syslog-ng)
+        '''
         is_Rsyslg_running = BasicCommand("find_Rsyslog_daemon",
                                          "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_Syslog_ng_running = BasicCommand("find_Syslog-ng_daemon",
@@ -318,6 +326,9 @@ class SyslogDaemonVerifications:
         is_Syslog_ng_running.log_result_to_file()
 
     def verify_Syslog_daemon_listening(self):
+        '''
+        Verifying the Syslog daemon is listening on the default 514 port for incoming traffic
+        '''
         command_name = "verify_Syslog_daemon_listening"
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN"]
@@ -338,21 +349,34 @@ class SyslogDaemonVerifications:
             command_object.log_result_to_file()
 
     def verify_Syslog_daemon_forwarding_configuration(self):
-        # consider checking for only udp
+        '''
+        Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
+        '''
         if self.SYSLOG_DAEMON is not "":
-            syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf", "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
-            syslog_daemon_forwarding_keywords = {"rsyslog": ['omuxsock', 'azuremonitoragent', 'OMUxSockSocket', 'OMUxSockDefaultTemplate'], "syslog-ng": ['destination', 'd_azure_mdsd', 'unix-dgram', 'azuremonitoragent', 'syslog', 'socket', 's_src']}
+            syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
+                                             "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
+            syslog_daemon_forwarding_keywords = {
+                "rsyslog": ['omuxsock', 'azuremonitoragent', 'OMUxSockSocket', 'OMUxSockDefaultTemplate'],
+                "syslog-ng": ['destination', 'd_azure_mdsd', 'unix-dgram', 'azuremonitoragent', 'syslog', 'socket',
+                              's_src']}
             command_name = "verify_Syslog_daemon_forwarding_configuration"
             command_to_run = "sudo cat " + syslog_daemon_forwarding_path[self.SYSLOG_DAEMON]
             result_keywords_array = syslog_daemon_forwarding_keywords[self.SYSLOG_DAEMON]
             command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
             command_object.run_full_test()
             if not command_object.is_successful:
-                    command_object.print_error(self.SYSLOG_DAEMON + " configuration was found invalid")
+                command_object.print_error(self.SYSLOG_DAEMON + " configuration was found invalid")
+
 
 class OperatingSystemVerifications:
+    '''
+    This class is for general operating system verifications
+    '''
 
     def verify_selinux_disabled(self):
+        '''
+        Verify SELinux is not in enforcing mode, which can harm the events' forwarding to the agent.
+        '''
         command_name = "verify_selinux_disabled"
         command_to_run = "sudo getenforce"
         result_keywords_array = ["Enforcing"]
@@ -364,6 +388,9 @@ class OperatingSystemVerifications:
                 "and having SELinux in Enforcing mode can harm the forwarding of data. Please disable SELinux by running the commns \'setenforce 0\' and try again.")
 
     def verify_iptables(self):
+        '''
+        Verify there is no firewall rule in the iptables blocking the Syslog daemon or agent incoming ports
+        '''
         command_name = "verify_iptables_policy_permissive"
         command_to_run = "sudo iptables -S | grep \\\\-P | grep -E 'INPUT|OUTPUT'"
         result_keywords_array = ["DROP", "REJECT"]
@@ -380,6 +407,9 @@ class OperatingSystemVerifications:
                 "firewall rules blocking traffic and run again.")
 
     def verify_free_disk_space(self):
+        '''
+        Verify there is enough free disk space on the machine for the event forwarding to work as expected. The minimal is set to 1 GB
+        '''
         minimal_free_space_kb = 1048576
         command_name = "verify_free_disk_space"
         command_to_run = "sudo df --output=avail / | head -2 | tail -1"
@@ -399,21 +429,26 @@ class OperatingSystemVerifications:
 
 
 class IncomingEventsVerifications:
+    '''
+    This class is for sending and capturing CEF events in the incoming stream of events to the syslog daemon port
+    '''
     fixed_cef_message = "0|TestCommonEventFormat|MOCK|common=event-format-test|end|TRAFFIC|1|rt=$common=event-formatted-receive_time deviceExternalId=0002D01655 src=1.1.1.1 dst=2.2.2.2 sourceTranslatedAddress=1.1.1.1 destinationTranslatedAddress=3.3.3.3 cs1Label=Rule cs1=CEF_TEST_InternetDNS"
 
     def handle_tcpdump_line(self, line):
+        '''
+        Validate there are incoming CEF events.
+        :param line: a text line from the tcpdump stream
+        :return: True if CEF exists in the line. Otherwise false.
+        '''
         if "CEF" in line:
             return True
         return False
 
     def incoming_logs_validations(self, mock_message=False):
         '''
-        Validate that there is incoming traffic of CEF messages to the given port
-        :param mock_message: Tells if to mock messages into the tcpdump
-        :param mock_messages: Tels if to send mock messages to the pipe to validate it
-        :param incoming_port: port to validate
-        :param ok_message: message printed if found CEF messages
-        :return:
+        Validate that there is incoming traffic of CEF messages
+        :param mock_message: Tells if to generate mock messages
+        :return: True if successfully captured CEF events.
         '''
         tcpdump_time_restriction = 10
         start_seconds = int(round(time.time()))
@@ -459,6 +494,11 @@ class IncomingEventsVerifications:
         return False
 
     def send_cef_message_local(self, port, amount):
+        '''
+        Generate local CEF events in a given amount to a given port
+        :param port: A destination port to send the events
+        :param amount: The amount of events to send
+        '''
         try:
             for index in range(0, amount):
                 command_tokens = ["logger", "-p", "local4.warn", "-t", "CEF:", self.fixed_cef_message, "-P", str(port),
@@ -468,7 +508,6 @@ class IncomingEventsVerifications:
                 o, e = logger.communicate()
                 if e is not None:
                     print("Error could not send cef mock message")
-            return
         except OSError:
             print(
                 "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace.")
