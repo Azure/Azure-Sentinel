@@ -152,8 +152,14 @@ class BasicCommand(ColorfulPrint):
 
 
 class AgentInstallationVerifications:
+    '''
+    This class is for agent related verifications
+    '''
 
     def verify_agent_service_is_listening(self):
+        '''
+        Verifying the agent service called mdsd is listening on its default port
+        '''
         command_name = "verify_ama_agent_service_is_running"
         command_to_run = "sudo netstat -lnpvt | grep mdsd"
         result_keywords_array = ["mdsd", "28130", "LISTEN", "tcp"]
@@ -165,6 +171,9 @@ class AgentInstallationVerifications:
                 "following the steps in this manual- ###ADD HERE###")
 
     def verify_agent_process_is_running(self):
+        '''
+        Verifying the agent process is running
+        '''
         command_name = "verify_ama_agent_process_is_running"
         command_to_run = "sudo ps -ef | grep mdsd | grep -v grep"
         result_keywords_array = ["mdsd", "azuremonitoragent"]
@@ -176,6 +185,9 @@ class AgentInstallationVerifications:
                 "following the steps in this manual- ###ADD HERE###")
 
     def verify_error_log_empty(self):
+        '''
+        Verify the agent log file doesn't have many errors- needs work
+        '''
         # needs work
         command_name = "verify_error_log_empty"
         command_to_run = "if [ `cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | wc -l` -lt 50 ]; then echo \"True\"; else echo \"False\"; fi"
@@ -188,6 +200,9 @@ class AgentInstallationVerifications:
                 "\'tail -f /var/opt/microsoft/azuremonitoragent/log/mdsd.err\' and making sure there is nothing fatal")
 
     def verify_oms_not_running(self):
+        '''
+        Verify the old MMA agent is not running together with the new AMA agent.
+        '''
         # what will we like the warning to be
         command_name = "verify_oms_agent_not_running"
         command_to_run = "sudo netstat -lnpvt | grep ruby"
@@ -200,8 +215,14 @@ class AgentInstallationVerifications:
 
 
 class DCRConfigurationVerifications:
+    '''
+    This class is for data collection rules verifications
+    '''
 
     def verify_DCR_exists(self):
+        '''
+        Verifying there is at least one dcr on the machine
+        '''
         command_name = "verify_DCR_exists"
         command_to_run = "sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
         result_keywords_array = [".json"]
@@ -212,6 +233,9 @@ class DCRConfigurationVerifications:
                 "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace.")
 
     def verify_DCR_content_has_CEF_stream(self):
+        '''
+        Verifying there is a DCR on the machine for forwarding cef data
+        '''
         command_name = "verify_DCR_content_has_CEF_stream"
         command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
         result_keywords_array = ["SECURITY_CEF_BLOB"]
@@ -223,7 +247,43 @@ class DCRConfigurationVerifications:
             return False
         return True
 
+    def verify_CEF_dcr_has_valid_content(self):
+        '''
+        Verifying there is a DCR on the machine for forwarding cef data
+        '''
+        command_name = "verify_CEF_dcr_has_valid_content"
+        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1"
+        result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames", "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-", "azure.com", "id"]
+        command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
+        command_object.run_full_test()
+        if not command_object.is_successful:
+            command_object.print_error(
+                "CEF DCR is not valid. Missing crucial DCR sections. Please follow the following documentation for more details- ")
+            return False
+        return True
+
     def check_cef_multi_homing(self):
+        '''
+        Counting the amount of DCR's forwarding CEF data in order to alert from multi-homing scenarios.
+        '''
+        command_name = "verify_DCR_exists"
+        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l"
+        command_object = BasicCommand(command_name, command_to_run)
+        command_object.run_command()
+        try:
+            if int(command_object.command_result) > 1:
+                command_object.run_full_verification()
+                command_object.print_warning(
+                    "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and will have effect on ths agents' performance")
+        except ValueError:
+            command_object.is_successful = False
+            command_object.print_result_to_prompt()
+            command_object.log_result_to_file()
+
+    def check_cef_dcr_content(self):
+        '''
+        Counting the amount of DCR's forwarding CEF data in order to alert from multi-homing scenarios.
+        '''
         command_name = "verify_DCR_exists"
         command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l"
         command_object = BasicCommand(command_name, command_to_run)
@@ -237,6 +297,7 @@ class DCRConfigurationVerifications:
             command_object.is_successful = False
             command_object.print_result_to_prompt()
             command_object.log_result_to_file()
+
 
 class SyslogDaemonVerifications:
     SYSLOG_DAEMON = ""
@@ -257,7 +318,6 @@ class SyslogDaemonVerifications:
         is_Syslog_ng_running.log_result_to_file()
 
     def verify_Syslog_daemon_listening(self):
-        # consider checking for only udp
         command_name = "verify_Syslog_daemon_listening"
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN"]
@@ -431,7 +491,8 @@ def main():
     printer.print_notice("------Starting validation tests for data collection rules-----")
     dcr_verification = DCRConfigurationVerifications()
     dcr_verification.verify_DCR_exists()
-    dcr_verification.verify_DCR_content_has_CEF_stream()
+    if dcr_verification.verify_DCR_content_has_CEF_stream():
+        dcr_verification.verify_CEF_dcr_has_valid_content()
     dcr_verification.check_cef_multi_homing()
     # Create Syslog daemon verification object
     printer.print_notice("--------Starting validation tests for the Syslog daemon-------")
