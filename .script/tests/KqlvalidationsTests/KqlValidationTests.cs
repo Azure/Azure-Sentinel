@@ -67,7 +67,7 @@ namespace Kqlvalidations.Tests
         // }
 
         [Theory]
-        [ClassData(typeof(ExlplorationQueriesYamlFilesTestData))]
+        [ClassData(typeof(ExplorationQueriesYamlFilesTestData))]
         public void Validate_ExplorationQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
