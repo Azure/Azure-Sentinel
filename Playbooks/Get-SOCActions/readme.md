@@ -1,4 +1,4 @@
-#Get-SOCActions
+## Get-SOCActions
 author: Rin Ure
 
 This playbook will provide users with Recommended SOC Actions using a .csv file that they upload into a WatchList and give it the the Alias of "SocRA". This also contains steps an Analyst should consider taking when an Analytic Detection has not been onboarded to the WatchList .csv file.
