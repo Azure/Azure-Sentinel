@@ -1,13 +1,13 @@
 # ASIM ProcessEvent Normalization Parser for Microsoft Defender 4 IoT (MD4IoT) - Endpoint
 
-This template deploys the ASIM ProcessEvent schema parser for Azure Defender 4 IoT (MD4IoT). The parser is a part of the Advanced SIEM Information Model.
+This template deploys the ASIM ProcessEvent schema parser for Azure Defender 4 IoT (MD4IoT). The parser is a part of the Advanced Security Information Model.
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Microsoft Sentinel ProcessEvent normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Microsoft Sentinel ProcessEvent normalization schema reference](https://aka.ms/ASimProcessEventDoc)
 
 <br>
 
