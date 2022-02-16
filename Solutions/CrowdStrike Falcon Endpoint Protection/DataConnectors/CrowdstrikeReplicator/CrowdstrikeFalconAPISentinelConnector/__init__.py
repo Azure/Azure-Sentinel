@@ -24,7 +24,7 @@ VISIBILITY_TIMEOUT = 1800
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
 
 # Defines how many files can be processed simultaneously
-MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 40))
+MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 20))
 
 # Defines max number of events that can be sent in one request to Azure Sentinel
 MAX_BUCKET_SIZE = int(os.environ.get('EventsBucketSize', 2000))
@@ -97,6 +97,10 @@ async def main(mytimer: func.TimerRequest):
                 )
                 if 'Messages' in response:
                     for msg in response['Messages']:
+                        body_obj = json.loads(msg["Body"])
+                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
+                        await download_message_files(body_obj, session)
+                        logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
                         try:
                             await client.delete_message(
                                 QueueUrl=QUEUE_URL,
@@ -104,10 +108,6 @@ async def main(mytimer: func.TimerRequest):
                             )
                         except Exception as e:
                             logging.error("Error during deleting message with MessageId {} from queue. Bucket: {}. Path prefix: {}. Error: {}".format(msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"], e))
-                        body_obj = json.loads(msg["Body"])
-                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
-                        await download_message_files(body_obj, session)
-                        logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
                 else:
                     logging.info('No messages in queue. Re-trying to check...')
             except KeyboardInterrupt:
