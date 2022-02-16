@@ -2,7 +2,7 @@
 
 This templates deploy ASIM empty custom unifying parsers which are used as part of managing ASIM built-in parsers. For more information refer to:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 
 <br>
 
