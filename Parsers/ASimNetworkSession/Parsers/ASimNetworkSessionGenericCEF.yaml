@@ -1,46 +1,75 @@
 Parser:
-  Title:  Network Session ASIM parser for Generic CEF
-  Version: '0.1'
-  LastUpdated: Feb 17, 2022
+    Title:  Network Session ASIM parser for Generic CEF
+    Version: '0.1'
+    LastUpdated: Feb 17, 2022
 Product:
-  Name: Common Event Format
+    Name: Common Event Format
 Normalization:
-  Schema: NetworkSession
-  Version: '0.2.2'
+    Schema: NetworkSession
+    Version: '0.2.2'
 References:
-- Title: ASIM Network Session Schema
-  Link: https://aka.ms/AzSentinelNetworkSessionDoc
-- Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
-- Title: Micro Focus Security ArcSight Common Event Format [pdf]
-  Link: https://www.microfocus.com/documentation/arcsight/arcsight-smartconnectors/pdfdoc/common-event-format-v25/common-event-format-v25.pdf
-- Title: CEF and CommonSecurityLog field mapping
-  Link: https://docs.microsoft.com/en-us/azure/sentinel/cef-name-mapping
+    - Title: ASIM Network Session Schema
+      Link: https://aka.ms/AzSentinelNetworkSessionDoc
+    - Title: ASIM
+      Link: https://aka.ms/AzSentinelNormalization
+    - Title: Micro Focus Security ArcSight Common Event Format [pdf]
+      Link: https://www.microfocus.com/documentation/arcsight/arcsight-smartconnectors/pdfdoc/common-event-format-v25/common-event-format-v25.pdf
+    - Title: CEF and CommonSecurityLog field mapping
+      Link: https://docs.microsoft.com/en-us/azure/sentinel/cef-name-mapping
 Description: |
-  This ASIM parser supports normalizing Common Event Format to the ASIM Network Session schema.
+    This ASIM parser supports normalizing Common Event Format to the ASIM Network Session schema.
 ParserName: ASimNetworkSessionGenericCEF
 EquivalentBuiltInParser: _ASim_NetworkSession_GenericCEF
 ParserParams:
-  - Name: disabled
-    Type: bool
-    Default: false
+    - Name: disabled
+      Type: bool
+      Default: false
 ParserQuery: |
-    //let ASimParsers=externaldata(ASimSchema:string, Vendor:string, Product:string, Table:string)
-    //  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/ASIM/dev/ASimParsers.csv"]
-    //    with(format="csv");
-    // let NwCSLParsers=materialize(ASimParsers| where Table=="CommonSecurityLog" and ASimSchema=="NetworkSession");
-    let ASimNwCSLParsers = datatable(Vendor:string, Product:string)[
+    let ASimNwCSLParsers = datatable(DeviceVendor:string, DeviceProduct:string)[
       "Palo Alto Networks", "PAN-OS"
       , "Zscaler" , "NSSFWlog"];
-    let Customization=materialize(_GetWatchlist("ASimParserCustomization") 
-        | extend 
-            ASimParser=column_ifexists("ASimParser","-")
-          , CustomizableKey=column_ifexists("CustomizableKey","-")
-          , CustomizableValue=column_ifexists("CustomizableValue","-"));
-    let CustomExcludedVendors=toscalar(Customization
-        | where ASimParser=="ASimNetworkGenericCEF"
-            and CustomizableKey =="ExcludedVendor"
-        | summarize make_set(CustomizableValue));
+    let ALLOW_TERMS = dynamic(['allow', 'allowed', 'permit', 'accept', 'start']);
+    let RESET_TERMS = dynamic(['reset', 'rst']);
+    // [1] Fortinet: https://docs.fortinet.com/document/fortigate/6.0.0/handbook/554066/firewall-policies
+    let DeviceActions=datatable(DvcAction:string, OriginalDeviceAction:string )[
+        'Allow','allow'
+        'Allow','allowed'
+        'Allow','permit'
+        'Allow','accept'
+        'Allow','start'
+        'Allow','IPsec' // [1]
+
+        ,'Deny', 'deny'
+        ,'Deny', 'denied'
+
+        ,'Drop', 'drop'
+        ,'Drop', 'block'
+        ,'Drop', 'blocked'
+        ,'Drop', 'close'
+        ,'Drop', 'closed'
+
+        ,'Drop ICMP', 'drop icmp'
+
+        ,'Reset', 'reset'
+        ,'Reset', 'rst'
+
+        ,'Reset Source', 'reset source'
+        ,'Reset Source', 'client-rst'
+
+        ,'Reset Destination', 'reset destination'
+        ,'Reset Destination', 'server-rst'
+
+        ,'Encrypt', 'encrypt'
+
+        ,'Decrypt', 'decrypt'
+        
+        ,'VPNroute', 'vpnroute'
+        ,''];
+    let CustomCEFExclusions=materialize(
+        _GetWatchlist("ASimGenericCEFexclusion")  
+        // [ASimSchema (SearchKey),  DeviceVendor, DeviceProduct]
+        | where SearchKey == "NetworkSession" | project-away SearchKey; // ==> [DeviceVendor, DeviceProduct]
+    let FULLEXCLUSIONLIST=union ASimNwCSLParsers, CustomCEFExclusions;
     let ProtocolLookup = datatable(Protocol:int, NetworkProtocol:string) [
       0,"HOPOPT",
       1,"ICMP",
@@ -191,16 +220,12 @@ ParserQuery: |
       254,"",
       255,"Reserved"
     ];
-    let ALLOW_TERMS = dynamic(['allow', 'allowed', 'permit', 'accept', 'start']);
-    let RESET_TERMS = dynamic(['reset', 'rst']);
-    let DENY_TERMS = dynamic(['deny', 'denied']);
-    let DROP_TERMS = dynamic(['drop', 'block', 'blocked', 'dropped', 'close', 'closed' ]);
-    CommonSecurityLog
-    /// Filtering for probable network session events
-    | where isnotempty(SourceIP) and isnotempty(DestinationIP) 
-    /// Filter out dedicated Parsers
-      and DeviceVendor !in ((ASimNwCSLParsers | project Vendor)) and DeviceProduct !in ((ASimNwCSLParsers | project Product))
-      and DeviceVendor !in (CustomExcludedVendors)
+    FULLEXCLUSIONLIST 
+    | join kind=rightanti
+    (CommonSecurityLog
+        /// Filtering for probable network session events
+        | where isnotempty(SourceIP) and isnotempty(DestinationIP) 
+    ) on DeviceVendor, DeviceProduct
     // Generic parser
     | extend EventSchemaVersion='2.2'
         , EventType='NetworkSession' //////////////// might need a more sophisticated calc.
@@ -209,6 +234,8 @@ ParserQuery: |
         , NumericProtocol=toint(Protocol)
         , EventStartTime= TimeGenerated // StartTime is empty on all our records
     | lookup ProtocolLookup on $left.NumericProtocol==$right.Protocol
+    | extend
+        NetworkProtocol=coalesce(NetworkProtocol, toupper(Protocol))
     // //
         | extend hostelements=split(DeviceName,'.')
         | extend DvcHostname=tostring(hostelements[0])
@@ -271,7 +298,6 @@ ParserQuery: |
         Dst=DstIpAddr
         , EventEndTime=EventStartTime // Empty on all our records
         , EventSeverity=iff(DvcAction == "Allow", "Informational", "Low")
-        , NetworkProtocol=coalesce(NetworkProtocol, toupper(Protocol))
         , IpAddr=SrcIpAddr
         , Src=SrcIpAddr
         , SrcUsernameType=case(SrcUsername contains "@", "UPN"
@@ -279,4 +305,10 @@ ParserQuery: |
             , SrcUsername contains 'OU=', 'DN'
             , SrcUsername !contains ' ', 'Simple'
             , SrcUsername contains ' ', 'GivenName'
+            , '')
+        , DstUsernameType=case(SrcUsername contains "@", "UPN"
+            , DstUsername contains '\\', 'Windows'
+            , DstUsername contains 'OU=', 'DN'
+            , DstUsername !contains ' ', 'Simple'
+            , DstUsername contains ' ', 'GivenName'
             , '') 
