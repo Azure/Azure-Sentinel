@@ -70,14 +70,16 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   }
   else if(dataTypes[0].name.endsWith("_CL"))
   {
-    let isAzureFunction:boolean = false;
     if(JSON.stringify(instructionSteps).includes("[Deploy To Azure]"))
     {
-      isAzureFunction = true;
+        return ConnectorCategory.AzureFunction;
     }
-    return isAzureFunction ? ConnectorCategory.AzureFunction: ConnectorCategory.RestAPI;
+    else if(JSON.stringify(instructionSteps).includes("\"type\":\"InstallAgent\""))
+    {
+        return ConnectorCategory.SysLog;
+    }
+    return ConnectorCategory.RestAPI;
   }
-
   return "";
 }
 
