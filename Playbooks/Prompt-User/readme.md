@@ -30,4 +30,4 @@ After deployment, you can run this playbook manually on an alert or attach it to
 **Incident Trigger**<br>
 ![Incident Trigger](./incident-trigger/images/designerLight.png)<br>
 **Alert Trigger**<br>
-![Alert Trigger](./alert--trigger/images/Prompt-User_alert.png)<br>
+![Alert Trigger](./alert-trigger/images/Prompt-User_alert.png)<br>
