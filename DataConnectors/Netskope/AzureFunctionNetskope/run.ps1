@@ -207,7 +207,7 @@ function Netskope () {
         else {
             try {
                 Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
-                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $logtype
+                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName
 
                 if ($responseCode -ne 200){
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
