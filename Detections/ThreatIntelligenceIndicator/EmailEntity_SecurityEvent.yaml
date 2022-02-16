@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -31,12 +34,24 @@ query: |
   //Filtering the table for Email related IOCs
   | where isnotempty(EmailSenderAddress)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-      SecurityEvent | where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)
-      //Normalizing the column to lower case for exact match with EmailSenderAddress column
-      | extend TargetUserName = tolower(TargetUserName)
-      // renaming timestamp column so it is clear the log this came from SecurityEvent table
-      | extend SecurityEvent_TimeGenerated = TimeGenerated
+  | join kind=innerunique ( 
+  (union isfuzzy=true
+  (SecurityEvent
+  | where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)
+  //Normalizing the column to lower case for exact match with EmailSenderAddress column
+  | extend TargetUserName = tolower(TargetUserName)
+  // renaming timestamp column so it is clear the log this came from SecurityEvent table
+  | extend SecurityEvent_TimeGenerated = TimeGenerated
+  ),
+  (WindowsEvent
+  | where TimeGenerated >= ago(dt_lookBack) 
+  | extend TargetUserName = tostring(EventData.TargetUserName) 
+  | where isnotempty(TargetUserName)
+  //Normalizing the column to lower case for exact match with EmailSenderAddress column
+  | extend TargetUserName = tolower(TargetUserName)
+  // renaming timestamp column so it is clear the log this came from SecurityEvent table
+  | extend SecurityEvent_TimeGenerated = TimeGenerated
+  ))
   )
   on $left.EmailSenderAddress == $right.TargetUserName
   | where SecurityEvent_TimeGenerated < ExpirationDateTime
@@ -44,7 +59,13 @@ query: |
   | project SecurityEvent_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
   EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,
   LogonTypeName, LogonProcessName, Status, SubStatus
-  | extend timestamp = SecurityEvent_TimeGenerated, AccountCustomEntity = TargetUserName, IPCustomEntity = IpAddress, HostCustomEntity = Computer, URLCustomEntity = Url
+  | extend
+  timestamp = SecurityEvent_TimeGenerated,
+  AccountCustomEntity = TargetUserName,
+  IPCustomEntity = IpAddress,
+  HostCustomEntity = Computer,
+  URLCustomEntity = Url
+
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -62,5 +83,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.2.1
+version: 1.3.0
 kind: Scheduled
