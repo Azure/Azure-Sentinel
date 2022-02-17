@@ -234,6 +234,12 @@ class AgentInstallationVerifications:
             command_object.print_warning(
                 "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace.")
 
+    def run_all_agent_verifications(self):
+        self.verify_agent_service_is_listening()
+        self.verify_error_log_empty()
+        self.verify_agent_process_is_running()
+        self.verify_oms_not_running()
+
 
 class DCRConfigurationVerifications:
     '''
@@ -310,6 +316,12 @@ class DCRConfigurationVerifications:
             command_object.document_result()
             command_object.print_warning("Failed to run this tests since no DCRs were found")
 
+    def run_all_dcr_verifications(self):
+        self.verify_DCR_exists()
+        if self.verify_DCR_content_has_CEF_stream():
+            self.verify_CEF_dcr_has_valid_content()
+        self.check_cef_multi_homing()
+
 
 class SyslogDaemonVerifications:
     '''
@@ -377,6 +389,11 @@ class SyslogDaemonVerifications:
                     "{} configuration was found invalid and there for forwarding might of the syslog daemon to the agent might not work".format(
                         self.SYSLOG_DAEMON))
 
+    def run_all_syslog_daemon_verifications(self):
+        self.determine_Syslog_daemon()
+        self.verify_Syslog_daemon_listening()
+        self.verify_Syslog_daemon_forwarding_configuration()
+
 
 class OperatingSystemVerifications:
     '''
@@ -436,6 +453,11 @@ class OperatingSystemVerifications:
         else:
             command_object.is_successful = True
             command_object.document_result()
+
+    def run_all_os_verifications(self):
+        self.verify_selinux_disabled()
+        self.verify_iptables()
+        self.verify_free_disk_space()
 
 
 class IncomingEventsVerifications:
@@ -522,6 +544,12 @@ class IncomingEventsVerifications:
             print(
                 "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace.")
 
+    def run_incoming_events_verifications(self):
+        printer = ColorfulPrint()
+        if not self.incoming_logs_validations():
+            printer.print_notice("Generating CEF mock events and trying again")
+            self.incoming_logs_validations(mock_message=True)
+
 
 class SystemInfo:
     commands_dict = {
@@ -574,7 +602,7 @@ class SystemInfo:
 
     def handle_commands(self):
         """
-        :param commands: A dictionary of commands to iterate over
+        This function handles the whole command flow from running to documenting.
         """
         for command_name in self.commands_dict.keys():
             command_object = BasicCommand(command_name, self.commands_dict[command_name])
@@ -605,37 +633,25 @@ def main():
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     # Create agent_verification object
-    agent_verifications = AgentInstallationVerifications()
     printer.print_notice("\n---------------Starting validation tests for AMA--------------")
-    agent_verifications.verify_agent_service_is_listening()
-    agent_verifications.verify_error_log_empty()
-    agent_verifications.verify_agent_process_is_running()
-    agent_verifications.verify_oms_not_running()
+    agent_verifications = AgentInstallationVerifications()
+    agent_verifications.run_all_agent_verifications()
     # Create dcr_verification object
     printer.print_notice("\n------Starting validation tests for data collection rules-----")
     dcr_verification = DCRConfigurationVerifications()
-    dcr_verification.verify_DCR_exists()
-    if dcr_verification.verify_DCR_content_has_CEF_stream():
-        dcr_verification.verify_CEF_dcr_has_valid_content()
-    dcr_verification.check_cef_multi_homing()
+    dcr_verification.run_all_dcr_verifications()
     # Create Syslog daemon verification object
     printer.print_notice("\n--------Starting validation tests for the Syslog daemon-------")
     syslog_daemon_verification = SyslogDaemonVerifications()
-    syslog_daemon_verification.determine_Syslog_daemon()
-    syslog_daemon_verification.verify_Syslog_daemon_listening()
-    syslog_daemon_verification.verify_Syslog_daemon_forwarding_configuration()
+    syslog_daemon_verification.run_all_syslog_daemon_verifications()
     # Create operating system level verifications
     printer.print_notice("\n------Starting validation tests for the operating system------")
     os_verification = OperatingSystemVerifications()
-    os_verification.verify_selinux_disabled()
-    os_verification.verify_iptables()
-    os_verification.verify_free_disk_space()
+    os_verification.run_all_os_verifications()
     # Create incoming events verification
     printer.print_notice("\n---Starting validation tests for capturing incoming events----")
     incoming_events = IncomingEventsVerifications()
-    if not incoming_events.incoming_logs_validations():
-        printer.print_notice("Generating CEF mock events and trying again")
-        incoming_events.incoming_logs_validations(mock_message=True)
+    incoming_events.run_incoming_events_verifications()
     if FAILED_TESTS_COUNT > 0:
         printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
