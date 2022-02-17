@@ -1,9 +1,12 @@
 import subprocess
 import time
 import select
+import sys
 
-LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file"
+LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
+COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 FAILED_TESTS_COUNT = 0
+SCRIPT_VERSION = 1.0
 
 
 class ColorfulPrint:
@@ -63,7 +66,7 @@ class BasicCommand(ColorfulPrint):
         '''
         delimiter = "\n" + "-" * 20 + "\n"
         return str(
-            delimiter + "command name: " + str(self.command_name) + '\n' + "command to run: " + str(
+            delimiter + str(self.command_name) + '\n' + "command to run: " + str(
                 self.command_to_run) + '\n' +
             "command output: " + str(self.command_result) + '\n' + "command error output: " + str(
                 self.command_result_err) + '\n' +
@@ -520,50 +523,126 @@ class IncomingEventsVerifications:
                 "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace.")
 
 
+class SystemInfo:
+    commands_dict = {
+        "script_version": ["echo {}".format(SCRIPT_VERSION)],
+        "date": ["sudo date"],
+        "netstat": ["sudo netstat -lnpvt"],
+        "df": ["sudo df -h"],
+        "free": ["sudo free -m"],
+        "iptables": ["sudo iptables -vnL --line"],
+        "selinux": ["sudo cat /etc/selinux/config"],
+        "os_version": ["sudo cat /etc/issue"],
+        "python_version": ["sudo python -V"],
+        "ram_stats": ["sudo cat /proc/meminfo"],
+        "cron_jobs": ["sudo crontab -l"],
+        "wd_list": ["sudo ls -l ."],
+        "internet_connection": ["sudo curl -D - http://google.com"],
+        "sudoers_list": ["sudo cat /etc/sudoers"],
+        "rotation_configuration": ["sudo cat /etc/logrotate.conf"],
+        "rsyslog_conf": ["sudo cat /etc/rsyslog.conf"],
+        "rsyslog_dir": ["sudo ls -l /etc/rsyslog.d/"],
+        "rsyslog_dir_content": ["sudo find /etc/rsyslog.d/ -type f -exec cat {} ;"],
+        "syslog_ng_conf": ["sudo cat /etc/syslog-ng/syslog-ng.conf"],
+        "syslog_ng_dir": ["sudo ls -l /etc/syslog-ng/conf.d/"],
+        "syslog_ng_dir_content": ["find /etc/syslog-ng/conf.d/ -type f -exec cat {} ;"],
+        "agent_log_snip": ["sudo tail -f /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
+        "dcr_config_dir": ["sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
+        "messages_log_snip": ["sudo tail -15 /var/log/messages"],
+        "syslog_log_snip": ["sudo tail -15 /var/log/syslog"],
+        "top_processes": ["sudo top -bcn1 -w512", "head -n 20"]
+    }
+
+    def __repr__(self):
+        delimiter = "\n-----------------------------------\n"
+        return str(
+            delimiter + "command: " + self.command_name + '\n' + "output: " + self.command_result + delimiter).replace(
+            '%', '%%')
+
+    def append_content_to_file(self, command_object, file_path=COLLECT_OUTPUT_FILE):
+        """
+        :param command_object: consists of the name and the output
+        :param file_path: a file to share the commands outputs
+        """
+        output = repr(command_object)
+        cef_get_info_file = open(file_path, 'a')
+        try:
+            cef_get_info_file.write(output)
+        except Exception:
+            print(str(command_object.command) + "was not documented successfully")
+        cef_get_info_file.close()
+
+    def handle_commands(self):
+        """
+        :param commands: A dictionary of commands to iterate over
+        """
+        for command_name in self.commands_dict.keys():
+            command_object = BasicCommand(command_name, self.commands_dict[command_name])
+            command_object.run_command()
+            self.append_content_to_file(command_object)
+
+
 def main():
+    printer = ColorfulPrint()
+    o, e = subprocess.Popen(['id', '-u'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
+    if int(o) != 0:
+        printer.print_error(
+            "This script must be run in elevated privileges since some of the tests require root privileges")
+        exit()
+    if sys.argv[1:]:
+        printer.print_notice("Starting to collect data")
+        feature_flag = str(sys.argv[1])
+        if feature_flag == "collect":
+            subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
+            system_info = SystemInfo()
+            system_info.handle_commands()
+            printer.print_notice(
+                "Finished collecting data \nPlease provide CSS this file for further investigation-{}".format(
+                    COLLECT_OUTPUT_FILE))
+            printer.print_notice("\nStrting to run the CEF validation script")
     subprocess.Popen(['rm', LOG_OUTPUT_FILE, '2>', '/dev/null'],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
-    printer = ColorfulPrint()
-    printer.print_notice("Note this script should be run in elevated privileges")
-    printer.print_notice("Please validate you are sending CEF messages to agent machine.")
+    printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     # Create agent_verification object
     agent_verifications = AgentInstallationVerifications()
-    printer.print_notice("---------------Starting validation tests for AMA--------------")
+    printer.print_notice("\n---------------Starting validation tests for AMA--------------")
     agent_verifications.verify_agent_service_is_listening()
     agent_verifications.verify_error_log_empty()
     agent_verifications.verify_agent_process_is_running()
     agent_verifications.verify_oms_not_running()
     # Create dcr_verification object
-    printer.print_notice("------Starting validation tests for data collection rules-----")
+    printer.print_notice("\n------Starting validation tests for data collection rules-----")
     dcr_verification = DCRConfigurationVerifications()
     dcr_verification.verify_DCR_exists()
     if dcr_verification.verify_DCR_content_has_CEF_stream():
         dcr_verification.verify_CEF_dcr_has_valid_content()
     dcr_verification.check_cef_multi_homing()
     # Create Syslog daemon verification object
-    printer.print_notice("--------Starting validation tests for the Syslog daemon-------")
+    printer.print_notice("\n--------Starting validation tests for the Syslog daemon-------")
     syslog_daemon_verification = SyslogDaemonVerifications()
     syslog_daemon_verification.determine_Syslog_daemon()
     syslog_daemon_verification.verify_Syslog_daemon_listening()
     syslog_daemon_verification.verify_Syslog_daemon_forwarding_configuration()
     # Create operating system level verifications
-    printer.print_notice("------Starting validation tests for the operating system------")
+    printer.print_notice("\n------Starting validation tests for the operating system------")
     os_verification = OperatingSystemVerifications()
     os_verification.verify_selinux_disabled()
     os_verification.verify_iptables()
     os_verification.verify_free_disk_space()
     # Create incoming events verification
-    printer.print_notice("---Starting validation tests for capturing incoming events----")
+    printer.print_notice("\n---Starting validation tests for capturing incoming events----")
     incoming_events = IncomingEventsVerifications()
     if not incoming_events.incoming_logs_validations():
         printer.print_notice("Generating CEF mock events and trying again")
         incoming_events.incoming_logs_validations(mock_message=True)
     if FAILED_TESTS_COUNT > 0:
-        printer.print_error("Total amount of failed tests is: " + str(FAILED_TESTS_COUNT))
+        printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
         printer.print_ok("All tests passed successfully")
-    printer.print_notice("This script generated an output file located here - /tmp/cef_troubleshooter_output_file"
-                         "\nPlease review if you would like to get more information on failed tests.")
+    printer.print_notice("This script generated an output file located here - {}"
+                         "\nPlease review if you would like to get more information on failed tests.".format(
+        LOG_OUTPUT_FILE))
 
 
 if __name__ == '__main__':
