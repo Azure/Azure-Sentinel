@@ -30,45 +30,38 @@ ParserQuery: |
       , "Zscaler" , "NSSFWlog"];
     let ALLOW_TERMS = dynamic(['allow', 'allowed', 'permit', 'accept', 'start']);
     let RESET_TERMS = dynamic(['reset', 'rst']);
-    // [1] Fortinet: https://docs.fortinet.com/document/fortigate/6.0.0/handbook/554066/firewall-policies
     let DeviceActions=datatable(DvcAction:string, OriginalDeviceAction:string )[
-        'Allow','allow'
-        'Allow','allowed'
-        'Allow','permit'
-        'Allow','accept'
-        'Allow','start'
-        'Allow','IPsec' // [1]
-
-        ,'Deny', 'deny'
-        ,'Deny', 'denied'
-
-        ,'Drop', 'drop'
-        ,'Drop', 'block'
-        ,'Drop', 'blocked'
-        ,'Drop', 'close'
-        ,'Drop', 'closed'
-
-        ,'Drop ICMP', 'drop icmp'
-
-        ,'Reset', 'reset'
-        ,'Reset', 'rst'
-
-        ,'Reset Source', 'reset source'
-        ,'Reset Source', 'client-rst'
-
-        ,'Reset Destination', 'reset destination'
-        ,'Reset Destination', 'server-rst'
-
-        ,'Encrypt', 'encrypt'
-
-        ,'Decrypt', 'decrypt'
-        
-        ,'VPNroute', 'vpnroute'
-        ,''];
+       'Allow','allow' 
+      ,'Allow','allowed'
+      ,'Allow','permit'
+      ,'Allow','accept'
+      ,'Allow','start'
+      ,'Allow','IPsec'
+          ,'Deny', 'deny'
+          ,'Deny', 'denied'
+      ,'Drop', 'drop'
+      ,'Drop', 'block'
+      ,'Drop', 'blocked'
+      ,'Drop', 'close'
+      ,'Drop', 'closed'
+          ,'Drop ICMP', 'drop icmp'
+      ,'Reset', 'reset'
+      ,'Reset', 'rst'
+          ,'Reset Source', 'reset source'
+          ,'Reset Source', 'client-rst'
+          ,'Reset Source', 'reset client'
+       ,'Reset Destination', 'reset destination'
+       ,'Reset Destination', 'server-rst'
+       ,'Reset Destination', 'reset server'
+          ,'Encrypt', 'encrypt'
+       ,'Decrypt', 'decrypt'
+          ,'VPNroute', 'vpnroute'
+    ];
     let CustomCEFExclusions=materialize(
         _GetWatchlist("ASimGenericCEFexclusion")  
         // [ASimSchema (SearchKey),  DeviceVendor, DeviceProduct]
-        | where SearchKey == "NetworkSession" | project-away SearchKey; // ==> [DeviceVendor, DeviceProduct]
+        | where SearchKey == "NetworkSession" 
+        | project-away SearchKey); // ==> [DeviceVendor, DeviceProduct]
     let FULLEXCLUSIONLIST=union ASimNwCSLParsers, CustomCEFExclusions;
     let ProtocolLookup = datatable(Protocol:int, NetworkProtocol:string) [
       0,"HOPOPT",
@@ -258,12 +251,8 @@ ParserQuery: |
                , DstDomainType=iff(DestinationHostName contains ".","FQDN","" )
         | project-away hostelements
     // //
-    | extend 
-        DvcAction=case(DeviceAction has_any (ALLOW_TERMS), "Allow"
-                    ,  DeviceAction has_any (RESET_TERMS), "Reset"
-                    ,  DeviceAction has_any (DENY_TERMS), "Deny"
-                    ,  DeviceAction has_any (DROP_TERMS), "Drop"
-                    ,"")
+    | extend  DvcOriginalAction = DeviceAction, DeviceAction=tolower(DeviceAction)
+    | lookup  DeviceActions on $left.DeviceAction == $right.OriginalDeviceAction
     |extend EventResult=iff(DvcAction =='Allow', 'Success', 'Failure' ) 
           , NetworkDirection=case(CommunicationDirection=='0','Inbound',CommunicationDirection=='1','Outbound','')
     | project-rename 
@@ -271,7 +260,6 @@ ParserQuery: |
       ,  DvcMacAddr=DeviceMacAddress
       ,  DvcOutboundInterface=DeviceOutboundInterface
       ,  DvcInboundInterface=DeviceInboundInterface
-      ,  DvcOriginalAction=DeviceAction
       , DstBytes=ReceivedBytes
       , DstMacAddr=DestinationMACAddress
       , DstNatIpAddr=DestinationTranslatedAddress
