@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 2-14-2021
+        LASTEDIT: 2-17-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -463,6 +463,7 @@ else {
 }
 
 Get-RequiredModules("Az.Accounts")
+Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
 
 # Check Powershell version, needs to be 5 or higher
