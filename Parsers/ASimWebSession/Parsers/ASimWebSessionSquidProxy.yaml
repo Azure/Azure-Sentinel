@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for Squid Proxy
-  Version: '0.1'
-  LastUpdated: Dec 6, 2021
+  Version: '0.2'
+  LastUpdated: Jan 13, 2022
 Product:
   Name: Squid Proxy
 Normalization:
@@ -19,6 +19,7 @@ References:
 Description: |
   This ASIM parser supports normalizing Squid Proxy logs produced by the Microsoft Sentinel Squid Connector to the ASIM Web Session normalized schema. The parser supports squid native log format.
 ParserName: ASimWebSessionSquidProxy
+EquivalentBuiltInParser: _ASim_WebSession_SquidProxy
 ParserParams:
   - Name: disabled
     Type: bool
@@ -32,9 +33,10 @@ ParserQuery: |
       NetworkDuration = toint(AccessRawLog[1]), 
       SrcIpAddr = tostring(AccessRawLog[2]), 
       EventOriginalResultDetails = strcat (tostring(AccessRawLog[3]), ";", PeerStatus = tostring(AccessRawLog[9])), 
-      EventResultDetails = toint(AccessRawLog[4]), 
+      EventResultDetails = tostring(AccessRawLog[4]), 
       DstBytes = toint(AccessRawLog[5]), 
       HttpRequestMethod = tostring(AccessRawLog[6]), 
+      // -- Squid URL might be shortened by including ellipsis (...) instead of a section in the middle. This may impact the hostname part as well.
       Url = tostring(AccessRawLog[7]), 
       SrcUsername = tostring(AccessRawLog[8]), 
       DstIpAddr = tostring(AccessRawLog[10]), 
@@ -52,14 +54,28 @@ ParserQuery: |
       UsernameType = "Unknown",
       SrcUsername = iff (SrcUsername == "-", "", SrcUsername), 
       HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType), 
-      EventResult = iff (EventResultOriginalDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or EventResultDetails >= 400, "Failure", "Success")
-    // -- aliases
+      EventResult = iff (EventOriginalResultDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or toint(EventResultDetails) >= 400, "Failure", "Success"),
+      DstIpAddrIsHost = DstIpAddr matches regex @"^[^\:]*[a-zA-Z]$"
+    | extend 
+      DstFQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
+      DstIpAddr = iif (DstIpAddr == "-" or DstIpAddrIsHost, "", DstIpAddr)
+    | extend 
+      EventSeverity = iff(EventResult == "Success", "Informational", "Low"),
+      DstFQDNparts = split (DstFQDN, ".")
+    | extend    
+      DstHostname = tostring(DstFQDNparts[0]),
+      DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),"."),
+      DstDomainType = "FQDN"
+   // -- aliases
     | extend 
       EventStartTime = EventEndTime,
       Duration = NetworkDuration,
       HttpStatusCode = EventResultDetails,
       User = SrcUsername,
-      IpAddr = SrcIpAddr
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr,
+      Dst = DstHostname,
+      Hostname = DstHostname
     | project-away AccessRawLog, RawData
   };
   parser (disabled)
