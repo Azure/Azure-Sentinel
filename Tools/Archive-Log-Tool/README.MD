@@ -15,7 +15,7 @@ With the introduction of the new Search, Archive, and Restoration features withi
 3. Have been added to the allow list for the preview (done after the form is filled out and submitted).
 4. Use the feature flag included in the onboarding and preview document.
 
-##Tools
+## Tools
 
 1. PowerShell Script  
 2. Workbook
