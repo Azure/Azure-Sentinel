@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 2/11/2022
+        LASTEDIT: 2/18/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -136,13 +136,17 @@ function Get-RequiredModules {
                     }
                 }
                 else {
-                    Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
-                    Import-Module -Name $Module -Force
+                    # Get latest version
+                    $latestVersion = [Version](Get-Module -Name $Module).Version               
+                    Write-Log -Message "Importing module $Module with version $latestVersion" -LogFileName $LogFileName -Severity Information
+                    Import-Module -Name $Module -RequiredVersion $latestVersion -Force
                 }
             }
             else {
-                Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
-                Import-Module -Name $Module -Force
+                # Get latest version
+                $latestVersion = [Version](Get-Module -Name $Module).Version               
+                Write-Log -Message "Importing module $Module with version $latestVersion" -LogFileName $LogFileName -Severity Information
+                Import-Module -Name $Module -RequiredVersion $latestVersion -Force
             }
         }
         # Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
@@ -173,8 +177,9 @@ function Get-LATables {
             $searchPattern = '(AzureActivity|Usage)'        
             $TablesArray = $WSTables | Where-Object {($_.TableName -notmatch $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan  | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }
-        elseif ($RetentionMethod -eq "Basic") {            
-            $TablesArray = $WSTables | Where-Object {($_.IngestionPlan -eq "Analytics") } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
+        elseif ($RetentionMethod -eq "Basic") {  
+            $searchPattern = '(ContainerLog|ContainerLogV2|ContainerInsights|AppTraces)'          
+            $TablesArray = $WSTables | Where-Object {($_.TableName -match $searchPattern) } | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "Select Table (For Multi-Select use CTRL)" -PassThru
         }    
     }
     catch {
@@ -185,37 +190,6 @@ function Get-LATables {
 	
 	return $TablesArray	
 }
-
-
-function Get-TableConfiguration {
-	[CmdletBinding()]
-    param (        
-        [parameter(Mandatory = $true)] $LaTables        
-    )
-	$TableConfigs = @()
-	
-	foreach ($LaTable in $LaTables) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$LaTable" + "?api-version=2021-07-01-privatepreview"
-				
-		try {        
-			$TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "GET" -Headers $LaAPIHeaders		
-		} 
-		catch {                    
-			Write-Log -Message "Get-TableConfiguration $($_)" -LogFileName $LogFileName -Severity Error		                
-		}
-
-		If ($TablesApiResult) {                                
-            $TableConfigs += [pscustomobject]@{TableName=$TablesApiResult.name.Trim();
-                                IngestionPlan=$TablesApiResult.properties.Plan.Trim();
-                                TotalLogRetention=$TablesApiResult.properties.totalRetentionInDays.ToString().Trim();
-                                RetentionInArchive=$TablesApiResult.properties.archiveRetentionInDays.ToString().Trim();
-                                RetentionInWorkspace=$TablesApiResult.properties.retentionInDays.ToString().Trim()}
-		}
-	}
-	
-	return $TableConfigs
-}
-
 
 function Set-TableConfiguration {
 	[CmdletBinding()]
@@ -259,11 +233,8 @@ function Set-TableConfiguration {
     return $SuccessTables
 }
 
-
-function Get-AllTables {
-		
-	$AllTables = @()
-	
+function Get-AllTables {		
+	$AllTables = @()	
     $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-07-01-privatepreview"								
 	    		
     try {        
@@ -274,7 +245,7 @@ function Get-AllTables {
     }
 
     If ($TablesApiResult.StatusCode -ne 200) {
-        $searchPattern = '(_SRCH|_RST)'                
+        $searchPattern = '(_RST)'                
         foreach ($ta in $TablesApiResult.value) { 
             try {
                 if($ta.name.Trim() -notmatch $searchPattern) {                    
@@ -344,15 +315,15 @@ function Collect-AnalyticsPlanRetentionDays {
     )
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    $AcceptedDays = [int]($TableLevelRetentionLimit - $WorkspaceLevelRetention)
+    
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Table Plan:Analytics'
-    $form.Size = New-Object System.Drawing.Size(380,150)
+    $form.Size = New-Object System.Drawing.Size(380,250)
     $form.StartPosition = 'CenterScreen'
 
     $okButton = New-Object System.Windows.Forms.Button
-    $okButton.Location = New-Object System.Drawing.Point(90,80)
-    $okButton.Size = New-Object System.Drawing.Size(75,23)
+    $okButton.Location = New-Object System.Drawing.Point(90,130)
+    $okButton.Size = New-Object System.Drawing.Size(75,30)
     $okButton.Text = 'OK'
     $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
     $form.AcceptButton = $okButton
@@ -360,8 +331,8 @@ function Collect-AnalyticsPlanRetentionDays {
     $okButton.Enabled = $false    
 
     $cancelButton = New-Object System.Windows.Forms.Button
-    $cancelButton.Location = New-Object System.Drawing.Point(170,80)
-    $cancelButton.Size = New-Object System.Drawing.Size(75,23)
+    $cancelButton.Location = New-Object System.Drawing.Point(170,130)
+    $cancelButton.Size = New-Object System.Drawing.Size(75,30)
     $cancelButton.Text = 'Cancel'
     $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     $form.CancelButton = $cancelButton
@@ -369,24 +340,25 @@ function Collect-AnalyticsPlanRetentionDays {
 
     $label = New-Object System.Windows.Forms.Label
     $label.Location = New-Object System.Drawing.Point(10,20)
-    $label.Size = New-Object System.Drawing.Size(350,20)
-    $label.Text = "Enter number of days to archive (between 7 and $($AcceptedDays))*"
+    $label.Size = New-Object System.Drawing.Size(350,60)
+    $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days"
     $form.Controls.Add($label)
 
     $textBox = New-Object System.Windows.Forms.TextBox
-    $textBox.Location = New-Object System.Drawing.Point(10,50)
-    $textBox.Size = New-Object System.Drawing.Size(260,20)
+    $textBox.Location = New-Object System.Drawing.Point(10,90)
+    $textBox.Size = New-Object System.Drawing.Size(260,60)
     $textBox.TabIndex = 1
     $form.Controls.Add($textBox)  
     
     $textBox.Add_TextChanged({
         $days = [int]$textBox.Text.Trim()
-        if ($days -gt 7 -and $days -lt $AcceptedDays) {         
+        $AllowedDays = '(1095|1460|1826|2191|2556)'
+        if ($days -in 4..730 -or $days -match $AllowedDays) {         
             $okButton.Enabled = $true
             $ErrorProvider.Clear()
         }
         else {
-            $ErrorProvider.SetError($textBox, "Field must be between 7 and $($AcceptedDays) days")  
+            $ErrorProvider.SetError($textBox, "Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days")  
             $okButton.Enabled = $false            
         } 
     }) 
@@ -439,7 +411,6 @@ function Select-Plan {
         return "Analytics"
     }
 }
-
 
 function Get-Confirmation {
     Add-Type -AssemblyName System.Windows.Forms
