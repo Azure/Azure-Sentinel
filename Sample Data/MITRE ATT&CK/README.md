@@ -22,7 +22,7 @@ This folder has resources to generate MITRE ATT&CK coverage for Azure Sentinel a
  ***KQL Query:***
  ```
  let SentinelGithub = (externaldata(MITREMatrix: string, Tactic: string, TechniqueId:string, TechniqueName:string, Platform: string , DetectionType: string , DetectionService: string , DetectionId: string, DetectionName: string, DetectionDescription: string, ConnectorId: string, DataTypes: string, Query: string , QueryFrequency: string , QueryPeriod:string , TriggerOperator: string, TriggerThreshold: string, DetectionSeverity: string, DetctionUrl: string, IngestedDate: string )
-[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/MITRE%20ATT%26CK/AzureSentinel.csv"]
+[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/MITRE%20ATT%26CK/MicrosoftSentinel.csv"]
 );
 SentinelGithub
 ```
