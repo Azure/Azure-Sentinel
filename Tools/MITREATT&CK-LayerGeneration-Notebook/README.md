@@ -1,8 +1,8 @@
-# MITRE ATT&CK for Azure Sentinel
+# MITRE ATT&CK for Microsoft Sentinel
 
-This folder has resources to generate MITRE ATT&CK coverage for Azure Sentinel and other Microsoft threat Protection Portfolio solutions.
+This folder has resources to generate MITRE ATT&CK coverage for Microsoft Sentinel and other Microsoft threat Protection Portfolio solutions.
 
- **Jupyter Notebook** : Click on nbviewer Badge - [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/Azure/Azure-Sentinel/blob/master/Sample%20Data/MITRE%20ATT%26CK/MITRE%20ATT%26CK%20for%20Azure%20Sentinel.ipynb)
+ **Jupyter Notebook** : Click on nbviewer Badge - [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/Azure/Azure-Sentinel/blob/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MITRE%20ATT%26CK%20for%20Microsoft%20Sentinel.ipynb)
 
 
 - [Setup](#setup)
@@ -17,12 +17,12 @@ This folder has resources to generate MITRE ATT&CK coverage for Azure Sentinel a
     - [Donut Charts](#donutcharts)
 
 
-**Raw Csv file for Azure Sentinel Detections and hunting Queries**
+**Raw Csv file for Microsoft Sentinel Detections and hunting Queries**
  
  ***KQL Query:***
  ```
  let SentinelGithub = (externaldata(MITREMatrix: string, Tactic: string, TechniqueId:string, TechniqueName:string, Platform: string , DetectionType: string , DetectionService: string , DetectionId: string, DetectionName: string, DetectionDescription: string, ConnectorId: string, DataTypes: string, Query: string , QueryFrequency: string , QueryPeriod:string , TriggerOperator: string, TriggerThreshold: string, DetectionSeverity: string, DetctionUrl: string, IngestedDate: string )
-[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/MITRE%20ATT%26CK/MicrosoftSentinel.csv"]
+[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MicrosoftSentinel.csv"]
 );
 SentinelGithub
 ```
@@ -32,7 +32,7 @@ SentinelGithub
 ***KQL Query***
 ```
 let MSFTServices = (externaldata(Alert: string, Description: string, Tactics:string, Severity:string, Provider:string, DetectionService: string)
-[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/MITRE%20ATT%26CK/MSFTAlerts.csv"]
+[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MSFTAlerts.csv"]
 );
 MSFTServices
 ```
