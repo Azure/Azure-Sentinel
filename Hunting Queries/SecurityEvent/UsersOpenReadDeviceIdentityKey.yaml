@@ -19,19 +19,24 @@ tags:
   - AADInternals
 query: |
   // Activities: 
-  //    5058 - Key file operation
-  //    5061 - Cryptographic operation
+  //   5058 - Key file operation
+  //   5061 - Cryptographic operation (Event does not provide enough information to filter out potential false positives)
   // KeyType:
-  //    %%2499 -> Machine Key
+  //   %%2499 -> Machine Key
   // Operation:
-  //    %%2458 -> Read persisted key from file
-  //    %%2480 -> Open Key
+  //   %%2458 -> Read persisted key from file
+  //   %%2480 -> Open Key
+  // Machine Keys:
+  //   f686aace6942fb7f7ceb231212eef4a4 -> TSSECKeySet1
+  let filterList = dynamic(["TSSecKeySet1", "iisCngWasKey", "iisCngConfigurationKey", "ConfigMgrPrimaryKey"]);
   SecurityEvent
-  | where Activity == '5058 - Key file operation.' or Activity == '5061 - Cryptographic operation.'
+  | where Activity == '5058 - Key file operation.'
   | extend EventData = parse_xml(EventData).EventData.Data
   | mv-expand bagexpansion=array EventData
   | evaluate bag_unpack(EventData)
   | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
   | evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)
-  | where KeyType == '%%2499' and SubjectLogonId != '0x3e7'
-  | extend ProcessId = ClientProcessId
+  | where KeyType == '%%2499' and SubjectLogonId !in ('0x3e7', '0x3e4')
+  | where KeyFilePath has 'Microsoft\\Crypto\\Keys\\'
+  | where KeyName !in (filterList)
+  | extend ProcessId = ClientProcessId, KeyName = tostring(KeyName), SubjectLogonId = tostring(SubjectLogonId)
