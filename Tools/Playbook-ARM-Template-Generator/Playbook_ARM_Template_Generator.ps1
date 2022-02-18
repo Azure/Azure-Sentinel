@@ -133,9 +133,17 @@ function Get-RequiredModules {
                     Import-Module -Name $Module -Force
                 }
             }
-            else {
-                Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
-                Import-Module -Name $Module -Force
+            else {                
+                # Get latest version
+                $latestVersion = [Version](Get-Module -Name $Module).Version
+                if($null -ne $latestVersion) {
+                    Write-Log -Message "Importing module $Module with version $latestVersion" -LogFileName $LogFileName -Severity Information
+                    Import-Module -Name $Module -RequiredVersion $latestVersion -Force
+                }
+                else {
+                    Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
+                    Import-Module -Name $Module -Force
+                }
             }
         }
         # Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
