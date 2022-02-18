@@ -5,7 +5,7 @@
 
 1. Download the script 
   
-   [![Download](./images/Download.png)](https://aka.ms/Archive-Logs-Tool)
+   [![Download](./Archive-Log-Tool/images/Download.png)](https://aka.ms/Archive-Logs-Tool)
 
 2. Extract the folder and open "Configure-Long-Term-Retention.ps1" either in Visual Studio Code/PowerShell
 
