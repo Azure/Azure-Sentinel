@@ -235,6 +235,9 @@ class AgentInstallationVerifications:
                 "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace.")
 
     def run_all_agent_verifications(self):
+        '''
+        This function is only called by main and runs all the tests in this class
+        '''
         self.verify_agent_service_is_listening()
         self.verify_error_log_empty()
         self.verify_agent_process_is_running()
@@ -317,6 +320,9 @@ class DCRConfigurationVerifications:
             command_object.print_warning("Failed to run this tests since no DCRs were found")
 
     def run_all_dcr_verifications(self):
+        '''
+        This function is only called by main and runs all the tests in this class
+        '''
         self.verify_DCR_exists()
         if self.verify_DCR_content_has_CEF_stream():
             self.verify_CEF_dcr_has_valid_content()
@@ -390,6 +396,9 @@ class SyslogDaemonVerifications:
                         self.SYSLOG_DAEMON))
 
     def run_all_syslog_daemon_verifications(self):
+        '''
+        This function is only called by main and runs all the tests in this class
+        '''
         self.determine_Syslog_daemon()
         self.verify_Syslog_daemon_listening()
         self.verify_Syslog_daemon_forwarding_configuration()
@@ -433,7 +442,7 @@ class OperatingSystemVerifications:
         if (not rules_command_object.is_successful or (not policy_command_object.is_successful and (
                 not rules_command_object.is_successful or rules_command_object.command_result == ""))):
             policy_command_object.print_warning(
-                "Iptables might be blocking incoming traffic to the agent. Please verify there are no"
+                "Iptables might be blocking incoming traffic to the agent. Please verify there are no "
                 "firewall rules blocking incoming traffic to ports 514 and 28130 and run again.")
 
     def verify_free_disk_space(self):
@@ -455,6 +464,9 @@ class OperatingSystemVerifications:
             command_object.document_result()
 
     def run_all_os_verifications(self):
+        '''
+        This function is only called by main and runs all the tests in this class
+        '''
         self.verify_selinux_disabled()
         self.verify_iptables()
         self.verify_free_disk_space()
@@ -545,6 +557,9 @@ class IncomingEventsVerifications:
                 "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace.")
 
     def run_incoming_events_verifications(self):
+        '''
+        This function is only called by main and runs all the tests in this class
+        '''
         printer = ColorfulPrint()
         if not self.incoming_logs_validations():
             printer.print_notice("Generating CEF mock events and trying again")
@@ -574,15 +589,15 @@ class SystemInfo:
         "syslog_ng_conf": ["sudo cat /etc/syslog-ng/syslog-ng.conf"],
         "syslog_ng_dir": ["sudo ls -l /etc/syslog-ng/conf.d/"],
         "syslog_ng_dir_content": ["find /etc/syslog-ng/conf.d/ -type f -exec cat {} ;"],
-        "agent_log_snip": ["sudo tail -f /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
+        "agent_log_snip": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
         "dcr_config_dir": ["sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
-        "messages_log_snip": ["sudo tail -15 /var/log/messages"],
-        "syslog_log_snip": ["sudo tail -15 /var/log/syslog"],
+        "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
+        "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
         "top_processes": ["sudo top -bcn1 -w512", "head -n 20"]
     }
 
     def __repr__(self):
-        delimiter = "\n-----------------------------------\n"
+        delimiter = "\n" + "-" * 20 + "\n"
         return str(
             delimiter + "command: " + self.command_name + '\n' + "output: " + self.command_result + delimiter).replace(
             '%', '%%')
@@ -618,7 +633,8 @@ def main():
             "This script must be run in elevated privileges since some of the tests require root privileges")
         exit()
     if sys.argv[1:]:
-        printer.print_notice("Starting to collect data")
+        printer.print_notice("Starting to collect data. This may take a couple of seconds")
+        time.sleep(2)
         feature_flag = str(sys.argv[1])
         if feature_flag == "collect":
             subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
@@ -628,7 +644,9 @@ def main():
             printer.print_notice(
                 "Finished collecting data \nPlease provide CSS this file for further investigation-{}".format(
                     COLLECT_OUTPUT_FILE))
-            printer.print_notice("\nStrting to run the CEF validation script")
+            time.sleep(1)
+            printer.print_notice("\nStarting to run the CEF validation script")
+            time.sleep(1)
     subprocess.Popen(['rm', LOG_OUTPUT_FILE, '2>', '/dev/null'],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
