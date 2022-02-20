@@ -567,7 +567,7 @@ class IncomingEventsVerifications:
             self.incoming_logs_validations(mock_message=True)
 
 
-class SystemInfo:
+class SystemInfo():
     commands_dict = {
         "script_version": ["echo {}".format(SCRIPT_VERSION)],
         "date": ["sudo date"],
@@ -586,10 +586,10 @@ class SystemInfo:
         "rotation_configuration": ["sudo cat /etc/logrotate.conf"],
         "rsyslog_conf": ["sudo cat /etc/rsyslog.conf"],
         "rsyslog_dir": ["sudo ls -l /etc/rsyslog.d/"],
-        "rsyslog_dir_content": ["sudo find /etc/rsyslog.d/ -type f -exec cat {} ;"],
+        "rsyslog_dir_content": ["sudo grep -r ^ /etc/rsyslog.d/"],
         "syslog_ng_conf": ["sudo cat /etc/syslog-ng/syslog-ng.conf"],
         "syslog_ng_dir": ["sudo ls -l /etc/syslog-ng/conf.d/"],
-        "syslog_ng_dir_content": ["find /etc/syslog-ng/conf.d/ -type f -exec cat {} ;"],
+        "syslog_ng_dir_content": ["sudo grep -r ^ /etc/syslog-ng/conf.d/"],
         "agent_log_snip": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
         "dcr_config_dir": ["sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
@@ -597,10 +597,11 @@ class SystemInfo:
         "top_processes": ["sudo top -bcn1 -w512", "head -n 20"]
     }
 
-    def __repr__(self):
+    def __repr__(self, command_object):
         delimiter = "\n" + "-" * 20 + "\n"
         return str(
-            delimiter + "command: " + self.command_name + '\n' + "output: " + self.command_result + delimiter).replace(
+            delimiter + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
+                command_object.command_result) + delimiter).replace(
             '%', '%%')
 
     def append_content_to_file(self, command_object, file_path=COLLECT_OUTPUT_FILE):
@@ -608,7 +609,7 @@ class SystemInfo:
         :param command_object: consists of the name and the output
         :param file_path: a file to share the commands outputs
         """
-        output = repr(command_object)
+        output = self.__repr__(command_object)
         cef_get_info_file = open(file_path, 'a')
         try:
             cef_get_info_file.write(output)
@@ -643,7 +644,7 @@ def main():
             system_info = SystemInfo()
             system_info.handle_commands()
             printer.print_notice(
-                "Finished collecting data \nPlease provide CSS this file for further investigation-{}".format(
+                "Finished collecting data \nPlease provide CSS this file for further investigation- {}".format(
                     COLLECT_OUTPUT_FILE))
             time.sleep(1)
             printer.print_notice("\nStarting to run the CEF validation script")
