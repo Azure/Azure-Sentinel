@@ -340,18 +340,18 @@ class SyslogDaemonVerifications:
         '''
         This function is in order to determine what Syslog daemon is running on the machine (Rsyslog or Syslog-ng)
         '''
-        is_Rsyslg_running = BasicCommand("find_Rsyslog_daemon",
+        is_Rsyslog_running = BasicCommand("find_Rsyslog_daemon",
                                          "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_Syslog_ng_running = BasicCommand("find_Syslog-ng_daemon",
                                             "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
-        is_Rsyslg_running.run_command(), is_Syslog_ng_running.run_command()
-        if is_Rsyslg_running.command_result == "True\n":
+        is_Rsyslog_running.run_command(), is_Syslog_ng_running.run_command()
+        if "True" in str(is_Rsyslog_running.command_result):
             self.SYSLOG_DAEMON = "rsyslog"
             return True
-        elif is_Syslog_ng_running.command_result == "True\n":
+        elif "True" in str(is_Syslog_ng_running.command_result):
             self.SYSLOG_DAEMON = "syslog-ng"
             return True
-        is_Rsyslg_running.log_result_to_file()
+        is_Rsyslog_running.log_result_to_file()
         is_Syslog_ng_running.log_result_to_file()
 
     def verify_Syslog_daemon_listening(self):
