@@ -15,7 +15,7 @@ References:
     - Title: Micro Focus Security ArcSight Common Event Format [pdf]
       Link: https://www.microfocus.com/documentation/arcsight/arcsight-smartconnectors/pdfdoc/common-event-format-v25/common-event-format-v25.pdf
     - Title: CEF and CommonSecurityLog field mapping
-      Link: https://docs.microsoft.com/en-us/azure/sentinel/cef-name-mapping
+      Link: https://docs.microsoft.com/azure/sentinel/cef-name-mapping
 Description: |
     This ASIM parser supports normalizing Common Event Format to the ASIM Network Session schema.
 ParserName: ASimNetworkSessionGenericCEF
@@ -28,15 +28,12 @@ ParserQuery: |
     let ASimNwCSLParsers = datatable(DeviceVendor:string, DeviceProduct:string)[
       "Palo Alto Networks", "PAN-OS"
       , "Zscaler" , "NSSFWlog"];
-    let ALLOW_TERMS = dynamic(['allow', 'allowed', 'permit', 'accept', 'start']);
-    let RESET_TERMS = dynamic(['reset', 'rst']);
-    let DeviceActions=datatable(DvcAction:string, OriginalDeviceAction:string )[
+       let DeviceActions=datatable(DvcAction:string, OriginalDeviceAction:string )[
        'Allow','allow' 
       ,'Allow','allowed'
       ,'Allow','permit'
       ,'Allow','accept'
       ,'Allow','start'
-      ,'Allow','IPsec'
           ,'Deny', 'deny'
           ,'Deny', 'denied'
       ,'Drop', 'drop'
@@ -56,6 +53,7 @@ ParserQuery: |
           ,'Encrypt', 'encrypt'
        ,'Decrypt', 'decrypt'
           ,'VPNroute', 'vpnroute'
+          ,'VPNRoute','IPsec'
     ];
     let CustomCEFExclusions=materialize(
         _GetWatchlist("ASimGenericCEFexclusion")  
@@ -221,11 +219,11 @@ ParserQuery: |
     ) on DeviceVendor, DeviceProduct
     // Generic parser
     | extend EventSchemaVersion='2.2'
-        , EventType='NetworkSession' //////////////// might need a more sophisticated calc.
-        , EventCount=toint(1)
+        , EventType='NetworkSession' 
+        , EventCount=coalesce(EventCount,1)
         , EventSchema='NetworkSession'
         , NumericProtocol=toint(Protocol)
-        , EventStartTime= TimeGenerated // StartTime is empty on all our records
+        , EventStartTime= coalesce(StartTime, TimeGenerated) 
     | lookup ProtocolLookup on $left.NumericProtocol==$right.Protocol
     | extend
         NetworkProtocol=coalesce(NetworkProtocol, toupper(Protocol))
@@ -284,7 +282,7 @@ ParserQuery: |
       ,  SrcUsername=SourceUserName
     | extend 
         Dst=DstIpAddr
-        , EventEndTime=EventStartTime // Empty on all our records
+        , EventEndTime=EventStartTime 
         , EventSeverity=iff(DvcAction == "Allow", "Informational", "Low")
         , IpAddr=SrcIpAddr
         , Src=SrcIpAddr
@@ -300,3 +298,4 @@ ParserQuery: |
             , DstUsername !contains ' ', 'Simple'
             , DstUsername contains ' ', 'GivenName'
             , '') 
+        , EventSubtype=case(OriginalDeviceAction=~'start', 'Start',OriginalDeviceAction=~'end', 'End','')
