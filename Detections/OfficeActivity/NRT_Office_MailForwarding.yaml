@@ -1,0 +1,69 @@
+id: 3b05727d-a8d1-477d-bbdd-d957da96ac7b
+name: NRT Multiple users email forwarded to same destination
+description: |
+  'Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination.
+  This could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+  OfficeActivity
+  | where Operation =~ "Set-Mailbox"
+  | where Parameters has "ForwardingSmtpAddress"
+  | extend parsed = parse_json(Parameters)
+  | mv-expand parsed
+  | where parsed.Name == "ForwardingSmtpAddress"
+  | extend parameterName = tostring(parsed.Name), fwdingDestination = tostring(parsed.Value)
+  | where isnotempty(fwdingDestination)
+  | extend ClientIPOnly = case(
+  ClientIP has "." and ClientIP has ':', tostring(split(ClientIP,":")[0]),
+  ClientIP has "." and ClientIP has '-', tostring(split(ClientIP,"-")[0]),
+  ClientIP has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  ClientIP has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has ':', tostring(split(ClientIP_,":")[0]),
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has '-', tostring(split(ClientIP_,"-")[0]),
+  isempty(ClientIP) and ClientIP_ has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP_,"]")[0]))),
+  isempty(ClientIP) and ClientIP_ has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP_,"]")[0]))),
+  isnotempty(ClientIP), ClientIP,
+  isnotempty(ClientIP_), ClientIP_,
+  "IP Not Available"
+  )
+  | extend Port = case(
+  ClientIP has "." and ClientIP has ':', tostring(split(ClientIP,":")[1]),
+  ClientIP has "." and ClientIP has '-', tostring(split(ClientIP,"-")[1]),
+  ClientIP has ']-', tostring(split(ClientIP,"]-")[1]),
+  ClientIP has ']:', tostring(split(ClientIP,"]:")[1]),
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has ':', tostring(split(ClientIP_,":")[1]),
+  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has '-', tostring(split(ClientIP_,"-")[1]),
+  isempty(ClientIP) and ClientIP_ has ']-', tostring(split(ClientIP_,"]-")[1]),
+  isempty(ClientIP) and ClientIP_ has ']:', tostring(split(ClientIP_,"]:")[1]),
+  isnotempty(ClientIP), ClientIP,
+  isnotempty(ClientIP_), ClientIP_,
+  "IP Not Available"
+  )
+  | extend UserId = iff(isempty(UserId), UserId_, UserId)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId),
+  Ports = make_set(Port), EventCount = count() by fwdingDestination, ClientIP = ClientIPOnly
+  | where DistinctUserCount > 1
+  | mv-expand UserId
+  | extend UserId = tostring(UserId), Ports = tostring(Ports)
+  | distinct StartTimeUtc, EndTimeUtc, UserId, DistinctUserCount, ClientIP, Ports, fwdingDestination, EventCount
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.0
+kind: NRT

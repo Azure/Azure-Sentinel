@@ -8,7 +8,7 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -19,17 +19,29 @@ relevantTechniques:
 tags:
   - AADSecOpsGuide
 query: |
+  let queryfrequency = 1h;
+  let queryperiod = 1d;
   AuditLogs
-  | where OperationName =~ "Add user"
-  | extend UPN = tostring(TargetResources[0].userPrincipalName)
-  | join kind=inner (AuditLogs
+  | where TimeGenerated > ago(queryfrequency)
   | where OperationName =~ "Delete user"
-  | extend UPN = tostring(TargetResources[0].userPrincipalName)
-  | extend IPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) on UPN
-  | extend timedelta = TimeGenerated1 - TimeGenerated
-  | project-reorder TimeGenerated, TimeGenerated1, timedelta
-  | where timedelta < timespan(24h) and timedelta > timespan(0h)
-  | extend CustomAccountEntity = UPN, IPCustomEntity = IPAddress
+  //extend UserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+  | extend UserPrincipalName = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResources[0].userPrincipalName))
+  | extend DeletedByUser = tostring(InitiatedBy.user.userPrincipalName), DeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend DeletedByApp = tostring(InitiatedBy.app.displayName)
+  | project Deletion_TimeGenerated = TimeGenerated, UserPrincipalName, DeletedByUser, DeletedByIPAddress, DeletedByApp, Deletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources
+  | join kind=inner (
+      AuditLogs
+      | where TimeGenerated > ago(queryperiod)
+      | where OperationName =~ "Add user"
+      | extend UserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+      | project-rename Creation_TimeGenerated = TimeGenerated
+  ) on UserPrincipalName
+  | extend TimeDelta = Deletion_TimeGenerated - Creation_TimeGenerated
+  | where  TimeDelta between (time(0s) .. queryperiod)
+  | extend CreatedByUser = tostring(InitiatedBy.user.userPrincipalName), CreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend CreatedByApp = tostring(InitiatedBy.app.displayName)
+  | project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, UserPrincipalName, DeletedByUser, DeletedByIPAddress, DeletedByApp, CreatedByUser, CreatedByIPAddress, CreatedByApp, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources
+  | extend timestamp = Deletion_TimeGenerated, CustomAccountEntity = UserPrincipalName, IPCustomEntity = DeletedByIPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -39,5 +51,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.1
-kind: scheduled
+version: 1.0.2
+kind: Scheduled

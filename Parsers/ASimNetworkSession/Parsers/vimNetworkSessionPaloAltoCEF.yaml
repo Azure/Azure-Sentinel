@@ -1,0 +1,143 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Palo Alto PanOS
+  Version: '0.6'
+  LastUpdated: Feb 13, 2021
+Product:
+  Name: Palo Alto PanOS
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: traffic log fields
+    Link: https://docs.paloaltonetworks.com/pan-os/10-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions/traffic-log-fields.html
+  - Title: Palo Alto Common Event Format Integration Guide [pdf]
+    Link: https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/cef/pan-os-90-cef-configuration-guide.pdf
+Description: |
+  This ASIM parser supports filtering and normalizing Palo Alto PanOS logs produced by the Microsoft Sentinel Palo Alto Networks connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionPaloAltoCEF                                  
+EquivalentBuiltInParser: _Im_NetworkSession_PaloAltoCEF                                  
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let Actions=datatable(DeviceAction:string,DvcAction:string)
+    [ "reset client","Reset Source"
+    , "reset server","Reset Destination"
+    , "reset both", "Reset"
+    , "allow","Allow"
+    , "deny","Deny"
+    , "drop", "Drop"
+    , "drop ICMP", "Drop ICMP"];
+    let NWParser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
+    CommonSecurityLog | where not(disabled)
+    | where DeviceVendor == "Palo Alto Networks" and DeviceProduct == "PAN-OS" and Activity == "TRAFFIC"
+      /// Prefilterring:
+      | where (isnull(starttime) or TimeGenerated>=starttime)
+      and     (isnull(endtime) or TimeGenerated<=endtime)
+      and (array_length(srcipaddr_has_any_prefix)==0 
+                or has_any_ipv4_prefix(SourceIP,srcipaddr_has_any_prefix)
+                )
+      and (array_length(dstipaddr_has_any_prefix)==0 
+                or has_any_ipv4_prefix(DestinationIP,dstipaddr_has_any_prefix)
+                )
+      and (isnull(dstportnumber) or DestinationPort==dstportnumber)
+      and (array_length(hostname_has_any)==0)
+        // dvcaction - post filterring
+        and (eventresult=="*" or (DeviceAction=="allow" and eventresult=="Success") or (eventresult=="Failure"))
+    | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long ",PanOSPacketsSent=" SrcPackets:long ",start="EventStartTime ",reason="*
+    | project-rename 
+          EventProductVersion=DeviceVersion // Not Documented
+        , Dvc=DeviceName   
+        , NetworkApplicationProtocol=ApplicationProtocol
+        , SrcZone=DeviceCustomString4 
+        , DstZone=DeviceCustomString5
+        , NetworkRuleName=DeviceCustomString1
+        , SrcUsername=SourceUserName 
+        , DstUsername=DestinationUserName 
+        , EventOriginalSeverity=LogSeverity // not documented
+        , SrcNatIpAddr=SourceTranslatedAddress
+        , DstNatIpAddr=DestinationTranslatedAddress
+        , PaloAltoFlags=FlexString1 // Flags
+    | extend
+      EventVendor="Palo Alto"
+        ,EventProduct="PanOS"
+        , DstBytes=tolong(ReceivedBytes) 
+        , SrcBytes=tolong(SentBytes)      
+        , NetworkPackets=tolong(DeviceCustomNumber2) 
+        , NetworkProtocol=toupper(Protocol)
+        , NetworkBytes=tolong(FlexNumber1)
+        , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
+        , DstUsernameType=case(isempty(DstUsername), "", DstUsername contains "@", "UPN", "Simple")
+        , EventType="NetworkSession"
+        , EventCount=toint(1)
+        , EventResult=case(DeviceAction=="allow","Success","Failure")
+        , NetworkSessionId=tostring(DeviceCustomNumber1)
+        , NetworkDuration=toint(1000*DeviceCustomNumber3)
+        , EventSchemaVersion="0.2.1"
+        , EventSchema="NetworkSession"
+        , EventSeverity = "Informational"
+        , EventStartTime=coalesce(todatetime(EventStartTime), TimeGenerated)
+      | extend hostelements=split(Dvc,'.')
+      | extend DvcHostname=tostring(hostelements[0])
+            , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
+      | extend DvcFQDN = iff(Dvc contains ".",Dvc,"" )
+            , DvcDomainType=iff(Dvc contains ".","FQDN","" )
+    | project-away hostelements
+    | lookup Actions on DeviceAction
+    // Action post filtering
+    | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
+    | project-rename
+        DstMacAddr=DestinationMACAddress
+        , SrcMacAddr=SourceMACAddress
+        , DstIpAddr=DestinationIP
+        , DstPortNumber=DestinationPort
+        , DstNatPortNumber=DestinationTranslatedPort
+      , SrcPortNumber=SourcePort
+        , SrcIpAddr=SourceIP
+      , SrcNatPortNumber=SourceTranslatedPort
+      , DvcOutboundInterface=DeviceOutboundInterface
+      , DvcInboundInterface=DeviceInboundInterface
+      , EventMessage=Message
+      , DvcOriginalAction=DeviceAction
+    // -- Aliases
+    | extend
+      IpAddr = SrcIpAddr,
+      Rule=NetworkRuleName,
+      Dst=DstIpAddr,
+      // Host=DstHostname,
+      User=DstUsername,
+      Duration=NetworkDuration,
+      SessionId=NetworkSessionId,
+      EventEndTime =EventStartTime,
+      Src=SrcIpAddr
+    };
+    NWParser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
