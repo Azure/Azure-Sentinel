@@ -21,7 +21,8 @@ tactics:
 relevantTechniques:
   - T1190
 query: |
-  SecurityEvent
+  union isfuzzy=true 
+  (SecurityEvent
   // Look for specific Directory Service Changes and parse data
   | where EventID == 5136
   | extend EventData = parse_xml(EventData).EventData.Data
@@ -42,6 +43,21 @@ query: |
   | extend ObjectDN = column_ifexists("ObjectDN", "")
   | project-reorder LastSeen, Computer, Account, ObjectDN, AttributeLDAPDisplayName, AttributeValue
   | extend timestamp = LastSeen, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (WindowsEvent
+  | where EventID == 5136 and EventData has "msExchOABVirtualDirectory" and EventData has_any ("msExchExternalHostName", "msExchInternalHostName")
+  | extend ObjectClass = tostring(EventData.ObjectClass)
+  | where ObjectClass =~ "msExchOABVirtualDirectory"
+  | extend AttributeLDAPDisplayName = tostring(EventData.AttributeLDAPDisplayName)
+  | where AttributeLDAPDisplayName in ("msExchExternalHostName", "msExchInternalHostName")
+  | extend AttributeValue = tostring(EventData.AttributeValue)
+  | where AttributeValue has "script"
+  | project-rename LastSeen = TimeGenerated
+  | extend ObjectDN = tostring(EventData.ObjectDN)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | project-reorder LastSeen, Computer, Account, ObjectDN, AttributeLDAPDisplayName, AttributeValue
+  | extend timestamp = LastSeen, AccountCustomEntity = Account, HostCustomEntity = Computer
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -51,5 +67,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
