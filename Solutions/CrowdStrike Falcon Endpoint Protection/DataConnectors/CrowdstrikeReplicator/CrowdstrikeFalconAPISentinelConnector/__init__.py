@@ -59,6 +59,7 @@ def _create_s3_client():
 
 def customize_event(line):
     element = json.loads(line)
+    # Ingesting only the fields required
     required_fileds = [
                         "timestamp", "aip", "aid", "EventType", "LogonType", "HostProcessType", "UserPrincipal", "DomainName",
                         "RemoteAddressIP", "ConnectionDirection", "TargetFileName", "LocalAddressIP4", "IsOnRemovableDisk",
