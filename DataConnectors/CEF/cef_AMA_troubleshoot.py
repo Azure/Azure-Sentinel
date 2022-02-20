@@ -98,7 +98,9 @@ class BasicCommand(ColorfulPrint):
         '''
         global FAILED_TESTS_COUNT
         if self.command_result_err is None and self.command_result is not None and should_fail is not True:
+            self.command_result = str(self.command_result)
             for key_word in self.result_keywords_array:
+                key_word = str(key_word)
                 if exclude:
                     if key_word in self.command_result:
                         self.fault_keyword = key_word
@@ -315,9 +317,8 @@ class DCRConfigurationVerifications:
                 command_object.is_successful = True
                 command_object.document_result()
         except ValueError:
-            command_object.is_successful = True
-            command_object.document_result()
-            command_object.print_warning("Failed to run this tests since no DCRs were found")
+            command_object.run_full_verification(should_fail=True)
+            command_object.print_warning("Failed to run this test since no DCRs were found")
 
     def run_all_dcr_verifications(self):
         '''
@@ -368,7 +369,7 @@ class SyslogDaemonVerifications:
             command_object.run_full_test()
             if not command_object.is_successful:
                 command_object.print_warning(
-                    "Warning: the syslog daemon on the machine is listening to a non-default port")
+                    "Warning: the syslog daemon is not listening on the machine or is listening to a non-default port")
         else:
             command_object.run_full_verification()
             command_object.print_error(
