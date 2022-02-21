@@ -27,7 +27,8 @@ query: |
     let timeRange = 6h;
     let authenticationWindow = 1h;
     let authenticationThreshold = 5;
-    SecurityEvent
+    union isfuzzy=true
+    (SecurityEvent
     | where TimeGenerated > ago(timeRange)
     | where EventID == 4624 or EventID == 4625
     | where IpAddress != "-" and isnotempty(Account)
@@ -52,6 +53,35 @@ query: |
     | mvexpand set_IpAddress, set_Computer
     | extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)
     | extend timestamp=StartTime, AccountCustomEntity=Account, HostCustomEntity=Computer, IPCustomEntity=IpAddress
+    ),
+    (WindowsEvent
+    | where TimeGenerated > ago(timeRange)
+    | where EventID == 4624 or EventID == 4625
+    | extend IpAddress = tostring(EventData.IpAddress)
+    | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+    | where IpAddress != "-" and isnotempty(Account)
+    | extend Outcome = iff(EventID == 4624, "Success", "Failure")
+    // bin outcomes into 5 minute windows to reduce the volume of data
+    | summarize OutcomeCount=count() by Account, IpAddress, Computer, Outcome, bin(TimeGenerated, 5m)
+    | project TimeGenerated, Account, IpAddress, Computer, Outcome, OutcomeCount
+    // sort ready for sessionizing - by account and time of the authentication outcome
+    | sort by Account asc, TimeGenerated asc
+    | serialize 
+    // sessionize into failure groupings until either the account changes or there is a success
+    | extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, Account != prev(Account) or prev(Outcome) == "Success")
+    // count the failures in each session
+    | summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), makelist(Outcome), makeset(Computer), makeset(IpAddress) by SessionStartedUtc, Account
+    // the session must not start with a success, and must end with one
+    | where array_index_of(list_Outcome, "Success") != 0
+    | where array_index_of(list_Outcome, "Success") == array_length(list_Outcome) - 1
+    | project-away SessionStartedUtc, list_Outcome 
+    // where the number of failures before the success is above the threshold 
+    | where FailureCountBeforeSuccess >= authenticationThreshold
+    // expand out ip and computer for customer entity assignment
+    | mvexpand set_IpAddress, set_Computer
+    | extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)
+    | extend timestamp=StartTime, AccountCustomEntity=Account, HostCustomEntity=Computer, IPCustomEntity=IpAddress
+    )
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -65,5 +95,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
