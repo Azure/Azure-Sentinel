@@ -233,7 +233,7 @@ class AgentInstallationVerifications:
         command_object.run_full_test(exclude=True)
         if not command_object.is_successful:
             command_object.print_warning(
-                "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace.")
+                "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace, which can result in an increase in costs")
 
     def run_all_agent_verifications(self):
         '''
@@ -249,7 +249,7 @@ class DCRConfigurationVerifications:
     '''
     This class is for data collection rules verifications
     '''
-    DCR_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=ARMAgentPowerShell%2CPowerShellWindows%2CPowerShellWindowsArc%2CCLIWindows%2CCLIWindowsArc"
+    DCR_doc = "https://docs.microsoft.com/he-il/azure/azure-monitor/agents/data-collection-rule-overview"
 
     def verify_DCR_exists(self):
         '''
@@ -262,7 +262,7 @@ class DCRConfigurationVerifications:
         command_object.run_full_test()
         if not command_object.is_successful:
             command_object.print_error(
-                "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace. For explanation on how to install a Data collection rule please brose- {}".format(
+                "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace. For explanation on how to install a Data collection rule please browse- {}".format(
                     self.DCR_doc))
             return False
         return True
@@ -278,13 +278,13 @@ class DCRConfigurationVerifications:
         command_object.run_full_test()
         if not command_object.is_successful:
             command_object.print_error(
-                "Could not detect any data collection rule for CEF data. No CEF events will be collected from this machine to any workspace.")
+                "Could not detect any data collection rule for CEF data. No CEF events will be collected from this machine to any workspace")
             return False
         return True
 
     def verify_CEF_dcr_has_valid_content(self):
         '''
-        Verifying that the CE dcr on the machine has valid content with all necessary dcr components
+        Verifying that the CEF dcr on the machine has valid content with all necessary dcr components
         '''
         command_name = "verify_CEF_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1"
@@ -295,7 +295,7 @@ class DCRConfigurationVerifications:
         command_object.run_full_test()
         if not command_object.is_successful:
             command_object.print_error(
-                "CEF DCR is not valid. Please delete it from the portal and create a new one.")
+                "Found an invalid CEF DCR. Please delete it and create a new one")
             return False
         return True
 
