@@ -9,7 +9,8 @@ Note: Please ensure that the subscription, resource group and location are the s
 For more information, see:
 
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
-- [Microsoft Sentinel Registry events normalization schema reference](https://aka.ms/ASimRegistryEventDoc)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM Registry events normalization schema reference](https://aka.ms/ASimRegistryEventDoc)
 
 
 
