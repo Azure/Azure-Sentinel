@@ -68,14 +68,13 @@ class BasicCommand(ColorfulPrint):
         return str(
             delimiter + str(self.command_name) + '\n' + "command to run: " + str(
                 self.command_to_run) + '\n' +
-            "command output: " + str(self.command_result) + '\n' + "command error output: " + str(
+            "command output:" + '\n' + str(self.command_result) + '\n' + "command error output: " + str(
                 self.command_result_err) + '\n' +
             "command array verification: " + str(self.result_keywords_array) + '\n' + "fault key word: " + str(
                 self.fault_keyword) + '\n' + "Is successful: " + str(
                 self.is_successful) +
             delimiter).replace(
-            '%',
-            '%%')
+            '%', '%%').replace('\\n', '\n')
 
     def run_command(self):
         '''
@@ -341,7 +340,7 @@ class SyslogDaemonVerifications:
         This function is in order to determine what Syslog daemon is running on the machine (Rsyslog or Syslog-ng)
         '''
         is_Rsyslog_running = BasicCommand("find_Rsyslog_daemon",
-                                         "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
+                                          "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_Syslog_ng_running = BasicCommand("find_Syslog-ng_daemon",
                                             "if [ `ps -ef | grep syslog-ng | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_Rsyslog_running.run_command(), is_Syslog_ng_running.run_command()
@@ -362,7 +361,7 @@ class SyslogDaemonVerifications:
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        if self.SYSLOG_DAEMON is not "":
+        if self.SYSLOG_DAEMON != "":
             command_object.run_full_test()
             command_object.command_name = "verify_Syslog_daemon_listening_on_default_port"
             command_object.result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
@@ -379,7 +378,7 @@ class SyslogDaemonVerifications:
         '''
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
         '''
-        if self.SYSLOG_DAEMON is not "":
+        if self.SYSLOG_DAEMON != "":
             syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
                                              "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
             syslog_daemon_forwarding_keywords = {
@@ -602,7 +601,7 @@ class SystemInfo():
         return str(
             delimiter + "command: " + str(command_object.command_name) + '\n' + "output: " + str(
                 command_object.command_result) + delimiter).replace(
-            '%', '%%')
+            '%', '%%').replace('\\n', '\n')
 
     def append_content_to_file(self, command_object, file_path=COLLECT_OUTPUT_FILE):
         """
@@ -635,7 +634,7 @@ def main():
         printer.print_error(
             "This script must be run in elevated privileges since some of the tests require root privileges")
         exit()
-    if str(sys.argv[1]) == feature_flag:
+    if len(sys.argv) > 1 and str(sys.argv[1]) == feature_flag:
         printer.print_notice("Starting to collect data. This may take a couple of seconds")
         time.sleep(2)
         subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
