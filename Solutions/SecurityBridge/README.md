@@ -24,4 +24,4 @@ This is only a temporary solution to deploy the connector manually until the off
 * Wait for the validation to complete
 * Click on **Create**
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffrozenstrawberries%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSecurityBridge%2FPackage%2FmainTemplate.json%3D6.0)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffrozenstrawberries%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSecurityBridge%2FPackage%2FmainTemplate.json)
