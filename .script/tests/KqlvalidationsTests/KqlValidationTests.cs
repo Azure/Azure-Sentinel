@@ -14,7 +14,7 @@ namespace Kqlvalidations.Tests
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
-               .WithSentinelDefaultTableSchemas()
+               .WithSentinelDefaultTablesAndFunctionsSchemas()
                .WithCustomTableSchemasLoader(new CustomTablesSchemasLoader())
                .Build();
         }
@@ -66,20 +66,62 @@ namespace Kqlvalidations.Tests
         //     ValidateKql(fileProp.FileName, queryStr);
         // }
 
-        private void ValidateKql(string id, string queryStr)
+        [Theory]
+        [ClassData(typeof(ExplorationQueriesYamlFilesTestData))]
+        public void Validate_ExplorationQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
-            var validationRes = _queryValidator.ValidateSyntax(queryStr);
-            var firstErrorLocation = (Line: 0, Col: 0);
-            if (!validationRes.IsValid)
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var queryStr =  (string) res["query"];
+            var id = (string) res["Id"];
+
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
             {
-                firstErrorLocation = GetLocationInQuery(queryStr, validationRes.Diagnostics.First(d => d.Severity == "Error").Start);
+                return;
             }
 
-            Assert.True(validationRes.IsValid,
-                validationRes.IsValid 
-                    ? string.Empty 
+            ValidateKql(id, queryStr);
+        }
+
+        [Theory]
+        [ClassData(typeof(ExplorationQueriesYamlFilesTestData))]
+        public void Validate_ExplorationQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
+        {
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var queryStr =  (string) res["query"];
+            var id = (string) res["Id"];
+        
+            //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
+            if (ShouldSkipTemplateValidation(id))
+            {
+                var validationRes = _queryValidator.ValidateSyntax(queryStr);
+                Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
+            }
+        
+        }
+
+        private void ValidateKql(string id, string queryStr)
+        {
+            var validationResult = _queryValidator.ValidateSyntax(queryStr);
+            var firstErrorLocation = (Line: 0, Col: 0);
+            if (!validationResult.IsValid)
+            {
+                firstErrorLocation = GetLocationInQuery(queryStr, validationResult.Diagnostics.First(d => d.Severity == "Error").Start);
+            }
+
+            var listOfDiagnostics = validationResult.Diagnostics;
+
+            bool isQueryValid = !(from p in listOfDiagnostics
+                               where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                               select p).Any();
+
+
+            Assert.True(
+                isQueryValid,
+                isQueryValid
+                    ? string.Empty
                     : @$"Template Id: {id} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
-Errors: {validationRes.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+                    Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)

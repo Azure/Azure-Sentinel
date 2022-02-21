@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionPaloAltoCEF",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Palo Alto Networks",
+            "category": "Security",
+            "FunctionAlias": "ASimNetworkSessionPaloAltoCEF",
+            "query": "let Actions=datatable(DeviceAction:string,DvcAction:string)\n[ \"reset client\",\"Reset Source\"\n, \"reset server\",\"Reset Destination\"\n, \"reset both\", \"Reset\"\n, \"allow\",\"Allow\"\n, \"deny\",\"Deny\"\n, \"drop\", \"Drop\"\n, \"drop ICMP\", \"Drop ICMP\"];\nlet NWParser=(disabled:bool=false){\nCommonSecurityLog | where not(disabled)\n| where DeviceVendor==\"Palo Alto Networks\" and (Activity==\"TRAFFIC\")\n| parse AdditionalExtensions with \"PanOSPacketsReceived=\" DstPackets:long \",PanOSPacketsSent=\" SrcPackets:long \",start=\"EventStartTime \",reason=\"* \n| project-rename \n    EventProductVersion=DeviceVersion // Not Documented\n  , Dvc=DeviceName   \n  , NetworkApplicationProtocol=ApplicationProtocol\n  , SrcZone=DeviceCustomString4 \n  , DstZone=DeviceCustomString5\n  , NetworkRuleName=DeviceCustomString1\n  , SrcUsername=SourceUserName \n  , DstUsername=DestinationUserName \n  , EventOriginalSeverity=LogSeverity // not documented\n  , NetworkPackets=DeviceCustomNumber2 \n  , SrcNatIpAddr=SourceTranslatedAddress\n  , DstNatIpAddr=DestinationTranslatedAddress\n  , PaloAltoFlags=FlexString1 // Flags\n| extend\nEventVendor=\"Palo Alto\"\n  ,EventProduct=\"PanOS\" // Not Documented\n  , SrcBytes=toint(SentBytes)\n  , DstBytes=toint(ReceivedBytes) \n  , NetworkProtocol=toupper(Protocol)\n  , NetworkBytes=toint(FlexNumber1)\n  , SrcUsernameType=case(isempty(SrcUsername), \"\", SrcUsername contains \"@\", \"UPN\", \"Simple\")\n  , DstUsernameType=case(isempty(DstUsername), \"\", DstUsername contains \"@\", \"UPN\", \"Simple\")\n  , EventType=\"NetworkSession\"\n  , EventCount=toint(1)\n  , EventResult=case(DeviceAction==\"allow\",\"Success\",\"Failure\")\n  , NetworkSessionId=tostring(DeviceCustomNumber1)\n  , NetworkDuration=toint(1000*DeviceCustomNumber3)\n  , EventSchemaVersion=\"0.2.1\"\n  , EventSchema=\"NetworkSession\"\n  , EventSeverity = \"Informational\"\n  ,EventStartTime=coalesce(todatetime(EventStartTime), TimeGenerated)\n| extend hostelements=split(Dvc,'.')\n| extend DvcHostname=tostring(hostelements[0])\n       , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')\n| extend DvcFQDN = iff(Dvc contains \".\",Dvc,\"\" )\n      , DvcDomainType=iff(Dvc contains \".\",\"FQDN\",\"\" )\n| project-away hostelements\n| lookup Actions on DeviceAction\n| project-rename\n  DstMacAddr=DestinationMACAddress\n  , SrcMacAddr=SourceMACAddress\n  , DstIpAddr=DestinationIP\n  , DstPortNumber=DestinationPort\n  , DstNatPortNumber=DestinationTranslatedPort\n  , SrcPortNumber=SourcePort\n  , SrcIpAddr=SourceIP\n  , SrcNatPortNumber=SourceTranslatedPort\n  , DvcOutboundInterface=DeviceOutboundInterface\n  , DvcInboundInterface=DeviceInboundInterface\n  , EventMessage=Message\n  , DvcOriginalAction=DeviceAction\n// -- Aliases\n| extend\nIpAddr = SrcIpAddr,\nRule=NetworkRuleName,\nDst=DstIpAddr,\n// Host=DstHostname, \nUser=DstUsername,\nDuration=NetworkDuration,\nSessionId=NetworkSessionId,\nEventEndTime =EventStartTime,\nSrc=SrcIpAddr\n};\nNWParser(disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
