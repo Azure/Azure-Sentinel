@@ -46,7 +46,7 @@ ParserQuery: |
       , 1460, 'TIMEOUT'
       ];
     let ParsedDnsEvent_Event =(disabled:bool=false) {
-        Event 
+        Event | where not (disabled)
         | where Source == "Microsoft-Windows-Sysmon" and EventID==22
         | parse EventData with 
            *'<Data Name="RuleName">' RuleName:string '</Data>' 
@@ -59,9 +59,10 @@ ParserQuery: |
             '<Data Name="Image">' Process:string '</Data>'*
         | parse EventData with * '<Data Name="User">'SrcUsername:string '</Data>' *
         | project-away EventData, ParameterXml, RenderedDescription
+        | extend EventOriginalType = EventID
     };
     let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
-        WindowsEvent
+        WindowsEvent | where not(disabled)
         | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
         | extend 
             RuleName = tostring(EventData.RuleName),
@@ -73,6 +74,9 @@ ParserQuery: |
             DnsResponseName = tostring(EventData.QueryResults),
             Process = tostring(EventData.Image),
             SrcUsername = tostring(EventData.User)
+        | project-rename
+            EventOriginalType=EventID,
+            EventOriginalUid=EventOriginId
         | project-away EventData
     };
     union isfuzzy=true ParsedDnsEvent_Event(disabled), ParsedDnsEvent_WindowsEvent(disabled)
@@ -80,7 +84,7 @@ ParserQuery: |
       | project-rename 
           DvcHostname = Computer
       | extend
-          EventOriginalUid = '22',
+          // EventOriginalUid = '22',
           EventCount=int(1),
           EventProduct = 'Sysmon',
           EventVendor = 'Microsoft',
