@@ -628,27 +628,26 @@ class SystemInfo():
 
 
 def main():
+    feature_flag = "collect"
     printer = ColorfulPrint()
     o, e = subprocess.Popen(['id', '-u'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     if int(o) != 0:
         printer.print_error(
             "This script must be run in elevated privileges since some of the tests require root privileges")
         exit()
-    if sys.argv[1:]:
+    if str(sys.argv[1]) == feature_flag:
         printer.print_notice("Starting to collect data. This may take a couple of seconds")
         time.sleep(2)
-        feature_flag = str(sys.argv[1])
-        if feature_flag == "collect":
-            subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
-            system_info = SystemInfo()
-            system_info.handle_commands()
-            printer.print_notice(
-                "Finished collecting data \nPlease provide CSS this file for further investigation- {}".format(
-                    COLLECT_OUTPUT_FILE))
-            time.sleep(1)
-            printer.print_notice("\nStarting to run the CEF validation script")
-            time.sleep(1)
+        subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
+        system_info = SystemInfo()
+        system_info.handle_commands()
+        printer.print_notice(
+            "Finished collecting data \nPlease provide CSS this file for further investigation- {}".format(
+                COLLECT_OUTPUT_FILE))
+        time.sleep(1)
+    printer.print_notice("\nStarting to run the CEF validation script")
+    time.sleep(1)
     subprocess.Popen(['rm', LOG_OUTPUT_FILE, '2>', '/dev/null'],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
