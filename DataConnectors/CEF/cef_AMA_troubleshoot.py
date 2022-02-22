@@ -191,7 +191,7 @@ class AgentInstallationVerifications:
             if not command_object.is_successful:
                 command_object.print_error(
                     "Could not detect an AMA service running and listening on the machine. Please follow this "
-                    "documentation in order to install it- {}".format(
+                    "documentation in order to install it and verify your machine's operating system is in the supported list- {}".format(
                         self.Agent_installation_doc))
                 return False
             command_object.print_error(
@@ -200,7 +200,7 @@ class AgentInstallationVerifications:
                     self.Agent_installation_doc))
         command_object.command_to_run = "sudo /opt/microsoft/azuremonitoragent/bin/mdsd -V"
         command_object.run_command()
-        command_object.print_ok("Detected AMA running version- {}".format(command_object.command_result))
+        command_object.print_ok("Detected AMA running version- {}".format(command_object.command_result.strip('\n')))
 
     def verify_error_log_empty(self):
         # needs fixing
@@ -245,6 +245,7 @@ class DCRConfigurationVerifications:
     This class is for data collection rules verifications
     '''
     DCR_doc = "https://docs.microsoft.com/he-il/azure/azure-monitor/agents/data-collection-rule-overview"
+    CEF_stream_name = "SECURITY_CEF_BLOB"
 
     def verify_DCR_exists(self):
         '''
@@ -267,8 +268,8 @@ class DCRConfigurationVerifications:
         Verifying there is a DCR on the machine for forwarding cef data
         '''
         command_name = "verify_DCR_content_has_CEF_stream"
-        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
-        result_keywords_array = ["SECURITY_CEF_BLOB"]
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(self.CEF_stream_name)
+        result_keywords_array = [self.CEF_stream_name]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
@@ -282,7 +283,7 @@ class DCRConfigurationVerifications:
         Verifying that the CEF dcr on the machine has valid content with all necessary dcr components
         '''
         command_name = "verify_CEF_dcr_has_valid_content"
-        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1"
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1".format(self.CEF_stream_name)
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "azure.com", "id"]
@@ -298,8 +299,9 @@ class DCRConfigurationVerifications:
         '''
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
         '''
+
         command_name = "check_cef_multi_homing"
-        command_to_run = "sudo grep -ri \"SECURITY_CEF_BLOB\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l"
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(self.CEF_stream_name)
         command_object = BasicCommand(command_name, command_to_run)
         command_object.run_command()
         try:
@@ -318,9 +320,11 @@ class DCRConfigurationVerifications:
         '''
         This function is only called by main and runs all the tests in this class
         '''
-        self.verify_DCR_exists()
-        if self.verify_DCR_content_has_CEF_stream():
-            self.verify_CEF_dcr_has_valid_content()
+        if not self.verify_DCR_exists():
+            return False
+        if not self.verify_DCR_content_has_CEF_stream():
+            return False
+        self.verify_CEF_dcr_has_valid_content()
         self.check_cef_multi_homing()
 
 
@@ -581,10 +585,14 @@ class SystemInfo():
         "rsyslog_conf": ["sudo cat /etc/rsyslog.conf"],
         "rsyslog_dir": ["sudo ls -l /etc/rsyslog.d/"],
         "rsyslog_dir_content": ["sudo grep -r ^ /etc/rsyslog.d/"],
+        "is_rsyslog_running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep rsyslog"],
         "syslog_ng_conf": ["sudo cat /etc/syslog-ng/syslog-ng.conf"],
         "syslog_ng_dir": ["sudo ls -l /etc/syslog-ng/conf.d/"],
         "syslog_ng_dir_content": ["sudo grep -r ^ /etc/syslog-ng/conf.d/"],
+        "is_syslog_ng_running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep syslog-ng"],
         "agent_log_snip": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
+        "is_AMA__running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
+        "AMA_service_status": ["sudo service azuremonitoragent status"],
         "dcr_config_dir": ["sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
