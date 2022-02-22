@@ -11,6 +11,9 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - DefenseEvasion
 relevantTechniques:
@@ -20,6 +23,16 @@ query: |
   (union isfuzzy=true
   (SecurityEvent
   | where Process in~ (lolbins)
+  | where isnotempty(CommandLine)
+  | extend CommandLine = translate('–”“', '-""', CommandLine)
+  | extend ASCII = isascii(CommandLine)
+  | where ASCII == false),
+  (WindowsEvent
+  | where EventData has_any (lolbins) 
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | where Process in~ (lolbins)
+  | extend CommandLine = tostring(EventData.CommandLine) 
   | where isnotempty(CommandLine)
   | extend CommandLine = translate('–”“', '-""', CommandLine)
   | extend ASCII = isascii(CommandLine)
