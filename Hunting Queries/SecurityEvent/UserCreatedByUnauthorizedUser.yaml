@@ -6,6 +6,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Persistence
   - PrivilegeEscalation
@@ -16,9 +19,20 @@ query: |
 
   // Create DataTable with your own values, example below shows dummy usernames that are authorized and for what domain
   let List = datatable(AuthorizedUser:string, Domain:string)["Bob", "Domain", "joe", "domain", "MATT", "DOMAIN"];
-  SecurityEvent
+  (union isfuzzy=true (SecurityEvent
   | where EventID == 4720
+  | where AccountType == "User"),
+  (WindowsEvent
+  | where EventID == 4720
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
   | where AccountType == "User"
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend Activity="4720 - A user account was created."
+    ))
   | join kind= leftanti (
       List
       | project SubjectUserName = tolower(AuthorizedUser), SubjectDomainName = toupper(Domain)
