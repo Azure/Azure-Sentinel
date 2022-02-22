@@ -126,9 +126,9 @@ function Netskope () {
         $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
         $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
         $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
-        Write-Host "netskopetimediff Time Difference is : $($netskopetimediff.Days)"
+        Write-Host "netskopetimediff Time Difference is : $($netskopetimediff.TotalDays)"
 
-        if($netskopetimediff.Days -gt 1)
+        if($netskopetimediff.TotalDays -gt 1)
         {
            Write-Host "Time difference is > 1 day.Hence Resetting the endtime to have 6 hours difference between starttime and endtime"
            $endTime = $startTime + 6*60*60
