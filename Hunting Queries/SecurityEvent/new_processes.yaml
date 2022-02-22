@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
 query: |
@@ -16,10 +19,18 @@ query: |
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
   let ProcessCreationEvents=() {
-  let processEvents=SecurityEvent
+  let processEvents=(union isfuzzy=true (SecurityEvent
   | where TimeGenerated between(lookback..endtime)
   | where EventID==4688
-  | project TimeGenerated, Computer, Account, FileName=tostring(split(NewProcessName, @'')[(-1)]), NewProcessName, ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName;
+  | project TimeGenerated, Computer, Account, FileName=tostring(split(NewProcessName, @'')[(-1)]), NewProcessName, ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName),
+  (WindowsEvent
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID==4688
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | project TimeGenerated, Computer, Account, FileName=tostring(split(NewProcessName, '\\')[-1]), NewProcessName, ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName));
   processEvents};
   ProcessCreationEvents
   | where TimeGenerated between(lookback..starttime)
