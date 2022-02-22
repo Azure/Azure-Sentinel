@@ -6,18 +6,34 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Collection
 relevantTechniques:
   - T1119
 query: |
-  SecurityEvent
+  union isfuzzy=true 
+  (SecurityEvent
   | where EventID == 4688
   | where Process has_any ("cmd.exe", "powershell.exe", "PowerShell_ISE.exe")
   | where isnotempty(CommandLine)
   | where CommandLine contains "Add-PSSnapin Microsoft.Exchange.Management.Powershell.Snapin"
   | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Computer, Account, CommandLine 
+  | extend timestamp = FirstSeen, AccountCustomEntity = Account, HostCustomEntity = Computer),
+  (WindowsEvent
+  | where EventID == 4688 and EventData has_any ("cmd.exe", "powershell.exe", "PowerShell_ISE.exe")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | where Process has_any ("cmd.exe", "powershell.exe", "PowerShell_ISE.exe")
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where isnotempty(CommandLine)
+  | where CommandLine contains "Add-PSSnapin Microsoft.Exchange.Management.Powershell.Snapin"
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Computer, Account, CommandLine 
   | extend timestamp = FirstSeen, AccountCustomEntity = Account, HostCustomEntity = Computer
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
