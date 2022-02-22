@@ -11,6 +11,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
   - Discovery
@@ -30,11 +33,23 @@ query: |
   let threshold = 3; //number of commandlines in the set below
   let DCADFSServersList = dynamic (["DCServer01", "DCServer02", "ADFSServer01"]); // Enter a reference list of hostnames for your DC/ADFS servers
   let tokens = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*"]);
-  SecurityEvent
+  (union isfuzzy=true (SecurityEvent
   //| where Computer in (DCADFSServersList) // Uncomment to limit it to your DC/ADFS servers list if specified above or any pattern in hostnames (startswith, matches regex, etc).
   | where EventID == 4688
   | where CommandLine has_any (tokens)
   | where CommandLine matches regex "(.*)>(.*)"
   | summarize Commandlines = make_set(CommandLine), LastObserved=max(TimeGenerated) by bin(TimeGenerated, lookupwindow), Account, Computer, ParentProcessName, NewProcessName
   | extend Count = array_length(Commandlines)
-  | where Count > threshold
+  | where Count > threshold),
+  (WindowsEvent
+  //| where Computer in (DCADFSServersList) // Uncomment to limit it to your DC/ADFS servers list if specified above or any pattern in hostnames (startswith, matches regex, etc).
+  | where EventID == 4688 and EventData has_any (tokens)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has_any (tokens)
+  | where CommandLine matches regex "(.*)>(.*)"
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | summarize Commandlines = make_set(CommandLine), LastObserved=max(TimeGenerated) by bin(TimeGenerated, lookupwindow), Account, Computer, ParentProcessName, NewProcessName
+  | extend Count = array_length(Commandlines)
+  | where Count > threshold))
