@@ -174,35 +174,29 @@ class AgentInstallationVerifications:
     '''
     This class is for agent related verifications
     '''
-    Agent_name = "mdsd"
     Agent_installation_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=ARMAgentPowerShell%2CPowerShellWindows%2CPowerShellWindowsArc%2CCLIWindows%2CCLIWindowsArc"
 
-    def verify_agent_service_is_listening(self):
+    def verify_agent_is_running(self):
         '''
         Verifying the agent service called mdsd is listening on its default port
         '''
         command_name = "verify_ama_agent_service_is_running"
-        command_to_run = "sudo netstat -lnpvt | grep mdsd"
-        result_keywords_array = [self.Agent_name, "28130", "LISTEN", "tcp"]
+        command_to_run = "sudo service azuremonitoragent status"
+        result_keywords_array = ["azuremonitoragent.service", "Azure", "Monitor", "Agent", "active", "running"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
+            command_object.result_keywords_array = ["could not be found"]
+            command_object.is_command_successful(exclude=True)
+            if not command_object.is_successful:
+                command_object.print_error(
+                    "Could not detect an AMA service running and listening on the machine. Please follow this "
+                    "documentation in order to install it- {}".format(
+                        self.Agent_installation_doc))
+                return False
             command_object.print_error(
-                "Could not detect an AMA service running and listening on the machine. Please follow this documentaion in order to install it- {}".format(
-                    self.Agent_installation_doc))
-
-    def verify_agent_process_is_running(self):
-        '''
-        Verifying the agent process is running
-        '''
-        command_name = "verify_ama_agent_process_is_running"
-        command_to_run = "sudo ps -ef | grep mdsd | grep -v grep"
-        result_keywords_array = [self.Agent_name, "azuremonitoragent"]
-        command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        command_object.run_full_test()
-        if not command_object.is_successful:
-            command_object.print_warning(
-                "Could not detect an AMA process running on the machine. Please follow this documentaion in order to install it- {}".format(
+                "Detected AMA is installed on the machine but not running. Please start the agent by running \'service azuremonitoragent start\' \nif the agent esrvice fails to start, "
+                "please run the following command to review the agent error log file here- \'cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | tail -n 15\'".format(
                     self.Agent_installation_doc))
 
     def verify_error_log_empty(self):
@@ -225,7 +219,6 @@ class AgentInstallationVerifications:
         '''
         Verify the old MMA agent is not running together with the new AMA agent.
         '''
-        # what will we like the warning to be
         command_name = "verify_oms_agent_not_running"
         command_to_run = "sudo netstat -lnpvt | grep ruby"
         result_keywords_array = ["25226", "LISTEN", "tcp"]
@@ -239,9 +232,8 @@ class AgentInstallationVerifications:
         '''
         This function is only called by main and runs all the tests in this class
         '''
-        self.verify_agent_service_is_listening()
+        self.verify_agent_is_running()
         self.verify_error_log_empty()
-        self.verify_agent_process_is_running()
         self.verify_oms_not_running()
 
 
