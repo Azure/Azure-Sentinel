@@ -6,6 +6,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
   - CommandAndControl
@@ -16,11 +19,22 @@ query: |
   let lookback = totimespan((endtime-starttime)*3);
   let midlookback = totimespan((endtime-starttime)*2);
   let ProcessCreationEvents=() {
-  let processEvents=SecurityEvent
+  let processEvents=(union isfuzzy=true  (SecurityEvent
   | where TimeGenerated between(ago(lookback)..endtime)
   | where EventID==4688
   | where NewProcessName has_any ("powershell.exe","pwsh.exe")
-  | project TimeGenerated, Computer, Account, NewProcessName, FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, ParentProcessName;
+  | project TimeGenerated, Computer, Account, NewProcessName, FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, ParentProcessName),
+  (WindowsEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4688 and EventData has_any ("powershell.exe","pwsh.exe")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where NewProcessName has_any ("powershell.exe","pwsh.exe")
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | project TimeGenerated, Computer, Account, NewProcessName, FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, ParentProcessName)
+  )
+  ;
   processEvents};
   let encodedPSScripts =
   ProcessCreationEvents
