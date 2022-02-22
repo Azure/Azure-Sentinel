@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - CredentialAccess
   - LateralMovement
@@ -14,8 +17,19 @@ relevantTechniques:
   - T1110
 query: |
 
-  SecurityEvent
+  union isfuzzy=true 
+  (SecurityEvent
   | where EventID in (4624, 4625)
   | where AccountType == 'User' 
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Amount = count() by LogonTypeName
+  | extend timestamp = StartTimeUtc),
+  (WindowsEvent
+  | where EventID in (4624, 4625)
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+  | where AccountType == 'User' 
+  | extend LogonType = toint(EventData.LogonType)
+  | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Amount = count() by LogonTypeName
   | extend timestamp = StartTimeUtc
+  )
