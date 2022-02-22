@@ -8,11 +8,27 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
 relevantTechniques:
   - T1047
 query: |
- SecurityEvent
+ union isfuzzy=true 
+ (SecurityEvent
     | where EventID in (4624,4625) and ProcessName endswith_cs "WmiPrvSE.exe"
     | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonTypeName, IpAddress, ProcessName
+    ),
+    (WindowsEvent
+    | where EventID in (4624,4625) and EventData endswith_cs "WmiPrvSE.exe"
+    | extend ProcessName = tostring(EventData.ProcessName)
+    | where ProcessName endswith_cs "WmiPrvSE.exe"
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    | extend TargetLogonId = tostring(EventData.TargetLogonId)
+    | extend LogonType = toint(EventData.LogonType)
+    | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
+    | extend IpAddress = tostring(EventData.IpAddress)
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonTypeName, IpAddress, ProcessName
+    )
