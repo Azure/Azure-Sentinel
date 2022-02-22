@@ -7,15 +7,26 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - CredentialAccess
 relevantTechniques:
   - T1003
 query: |
-  SecurityEvent 
+  union isfuzzy=true 
+  (SecurityEvent 
   | where EventID == 4688
   | where CommandLine has_all ("procdump", "lsass") or CommandLine has_all ("rundll32", "comsvcs", "MiniDump")
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer),
+  (WindowsEvent 
+  | where EventID == 4688 and EventData has_all ("procdump", "lsass") or EventData has_all ("rundll32", "comsvcs", "MiniDump")
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has_all ("procdump", "lsass") or CommandLine has_all ("rundll32", "comsvcs", "MiniDump")
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
