@@ -357,7 +357,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         type      = "securestring";
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
-                                    })
+                                    }
+								)
                             }
 							elseif ($param.Name.ToLower().contains("apikey")) {
                                 $playbookPasswordObject = [PSCustomObject] @{
