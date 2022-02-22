@@ -6,16 +6,29 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Exfiltration
 relevantTechniques:
   - T1011
 query: |
-  SecurityEvent
+  union isfuzzy=true   
+  (SecurityEvent
   | where EventID == 4688
   | where Process has_any ("cmd.exe", "powershell.exe", "PowerShell_ISE.exe")
   | where CommandLine hassuffix "powercat.ps1"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer),
+   (WindowsEvent
+  | where EventID == 4688 and EventData has_any ("cmd.exe", "powershell.exe", "PowerShell_ISE.exe") and EventData has "powercat.ps1"
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | where Process has_any ("cmd.exe", "powershell.exe", "PowerShell_ISE.exe")
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine hassuffix "powercat.ps1"
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer)
 entityMappings:
   - entityType: Account
     fieldMappings:
