@@ -6,18 +6,33 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
   - CommandAndControl
 query: |
 
   let ProcessCreationEvents=() {
-  let processEvents=SecurityEvent
+  let processEvents=(union isfuzzy=true (SecurityEvent
   | where EventID==4688
   | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,        AccountDomain=SubjectDomainName,
     FileName=tostring(split(NewProcessName, '\\')[-1]),
   ProcessCommandLine = CommandLine, 
-  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName=""),
+  (WindowsEvent
+  | where EventID==4688
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,AccountDomain=SubjectDomainName,
+    FileName=tostring(split(NewProcessName, '\\')[-1]),
+  ProcessCommandLine = CommandLine, 
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="")
+  );
   processEvents};
   ProcessCreationEvents
   | where FileName in~ ("powershell.exe", "powershell_ise.exe","pwsh.exe")
