@@ -6,6 +6,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Persistence
   - PrivilegeEscalation
@@ -16,8 +19,16 @@ query: |
 
   // Create DataTable with your own values, example below shows dummy usernames that are authorized and for what domain
   let List = datatable(AuthorizedUser:string, Domain:string)["Bob", "Domain", "joe", "domain", "MATT", "DOMAIN"];
-  SecurityEvent
+  (union isfuzzy=true (SecurityEvent
+  | where EventID in (4728, 4729, 4732, 4733, 4746, 4747, 4751, 4752, 4756, 4757, 4761, 4762)),
+  (WindowsEvent
   | where EventID in (4728, 4729, 4732, 4733, 4746, 4747, 4751, 4752, 4756, 4757, 4761, 4762)
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend Activity=case(EventID=='4728', "4728 - A member was added to a security-enabled global group.", EventID=='4729', "4729 - A member was removed from a security-enabled global group.", EventID=='4732', "4732 - A member was added to a security-enabled local group.", EventID=='4733', "4733 - A member was removed from a security-enabled local group", EventID=='4746', "4746 - A member was added to a security-disabled local group.", EventID=='4747', "4747 - A member was removed from a security-disabled local group.", EventID=='4751', "4751 - A member was added to a security-disabled global group.", EventID=='4752', "4752 - A member was removed from a security-disabled global group.", EventID=='4756', "4756 - A member was added to a security-enabled universal group.", EventID=='4757', "4757 - A member was removed from a security-enabled universal group.", EventID=='4761', "4761 - A member was added to a security-disabled universal group.",EventID=='4762', "4762 - A member was removed from a security-disabled universal group.", tostring(EventID))
+  ))
   | join kind= leftanti (
       List
       | project SubjectUserName = tolower(AuthorizedUser), SubjectDomainName = toupper(Domain)
