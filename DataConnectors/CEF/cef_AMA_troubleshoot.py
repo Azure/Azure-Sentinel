@@ -198,6 +198,9 @@ class AgentInstallationVerifications:
                 "Detected AMA is installed on the machine but not running. Please start the agent by running \'service azuremonitoragent start\' \nif the agent esrvice fails to start, "
                 "please run the following command to review the agent error log file here- \'cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | tail -n 15\'".format(
                     self.Agent_installation_doc))
+        command_object.command_to_run = "sudo /opt/microsoft/azuremonitoragent/bin/mdsd -V"
+        command_object.run_command()
+        command_object.print_ok("Detected AMA running version- {}".format(command_object.command_result))
 
     def verify_error_log_empty(self):
         # needs fixing
