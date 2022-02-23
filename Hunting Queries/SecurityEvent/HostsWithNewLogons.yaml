@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - CredentialAccess
   - LateralMovement
@@ -19,14 +22,28 @@ query: |
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = totimespan((endtime-starttime)*7);
   let LogonEvents=() {
-  let logonSuccess=SecurityEvent
+  let logonSuccess=(union isfuzzy=true ( SecurityEvent
   | where TimeGenerated between(ago(lookback)..endtime)
   | where EventID==4624
-  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='Logon';
-  let logonFail=SecurityEvent
+  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='Logon'),
+   (WindowsEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4624
+  | extend TargetUserName = tostring(EventData.TargetUserName)
+  | extend TargetDomainName = tostring(EventData.TargetDomainName)
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='Logon'));
+  let logonFail=(union isfuzzy=true ( SecurityEvent
   | where TimeGenerated between(ago(lookback)..endtime)
   | where EventID==4625
-  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='LogonFailure';
+  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='LogonFailure'),
+  (WindowsEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4625
+  | extend TargetUserName = tostring(EventData.TargetUserName)
+  | extend TargetDomainName = tostring(EventData.TargetDomainName)
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | project TimeGenerated, ComputerName=Computer, AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType='LogonFailure'));
   logonFail
   | union logonSuccess
   };
