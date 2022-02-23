@@ -122,7 +122,8 @@ function Netskope () {
     foreach($logtype in $apitypes){
 
         $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-        $startTime = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
+        $startTime = $startTime = (Get-Date -Date ((Get-Date).AddMinutes(-10)) -UFormat %s)
+        #GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
         $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
         $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
         $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
