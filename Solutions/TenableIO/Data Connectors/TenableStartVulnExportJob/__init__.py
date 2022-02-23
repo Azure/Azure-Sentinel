@@ -8,7 +8,7 @@ def main(timestamp: int) -> object:
     tio = TenableIO()
     logging.info(
         f'requesting a new Vuln Export Job from Tenable')
-    job_id = tio.exports.vulns(updated_at=timestamp, num_assets=100)
+    job_id = tio.exports.vulns(updated_at=timestamp, num_assets=50)
 
     logging.info(f'received a response from Vuln Export Job request')
     logging.info(job_id)
