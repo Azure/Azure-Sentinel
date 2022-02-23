@@ -7,14 +7,32 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1070
 query: |
 
-  SecurityEvent
+  union isfuzzy=true   
+  (SecurityEvent
   | where EventID == 4616
   | where not(ProcessName has_any (":\\Windows\\System32\\svchost.exe", ":\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe"))
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Computer, EventID, Activity, Account, AccountType, NewTime, PreviousTime, ProcessName, ProcessId, SubjectAccount, SubjectUserSid, SourceComputerId, _ResourceId
-  | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = SubjectAccount
+  | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = SubjectAccount),
+  (WindowsEvent
+  | where EventID == 4616 and not(EventData has_any (":\\Windows\\System32\\svchost.exe", ":\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe"))
+  | extend ProcessName = tostring(EventData.ProcessName)
+  | where not(ProcessName has_any (":\\Windows\\System32\\svchost.exe", ":\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe"))
+  | extend Activity="4616 - The system time was changed."
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+  | extend NewTime = tostring(EventData.NewTime)
+  | extend PreviousTime = tostring(EventData.PreviousTime)
+  | extend ProcessId = tostring(EventData.ProcessId)
+  | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Computer, EventID, Activity, Account, AccountType, NewTime, PreviousTime, ProcessName, ProcessId, SubjectAccount, SubjectUserSid, _ResourceId
+  | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = SubjectAccount)
