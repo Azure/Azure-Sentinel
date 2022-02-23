@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
       - ThreatIntelligenceIndicator
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Impact
 query: |
@@ -25,12 +28,21 @@ query: |
   | where Active == true
   | where isnotempty(FileName)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-    SecurityEvent 
+  | join kind=innerunique ( union isfuzzy=false 
+    (SecurityEvent 
     | where TimeGenerated between(starttime..endtime)
     | where EventID in ("4688","8002","4648","4673")
     | where isnotempty(Process)
+    | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID),
+    (WindowsEvent 
+    | where TimeGenerated between(starttime..endtime)
+    | where EventID in ("4688","8002","4648","4673")
+    | extend NewProcessName = tostring(EventData.NewProcessName)
+    | extend Process=tostring(split(NewProcessName, '\\')[-1])
+    | where isnotempty(Process)
     | extend SecurityEvent_TimeGenerated = TimeGenerated, Event = EventID
+    | extend IpAddress = tostring(EventData.IpAddress)
+    | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
   )
   on $left.FileName == $right.Process
   | where SecurityEvent_TimeGenerated < ExpirationDateTime
