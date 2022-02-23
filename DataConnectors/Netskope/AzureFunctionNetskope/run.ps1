@@ -131,7 +131,7 @@ function Netskope () {
         if($netskopetimediff.TotalDays -gt 1)
         {
            Write-Host "Time difference is > 1 day.Hence Resetting the endtime to have 6 hours difference between starttime and endtime"
-           $endTime = (Get-Date -Date ($netskopestartInterval.AddHours(6)) -UFormat %s)
+           $endTime = (Get-Date -Date ($netskopestartInterval.AddMinutes(30)) -UFormat %s)
         }
         $alleventobjs = @()
         $count = 0
