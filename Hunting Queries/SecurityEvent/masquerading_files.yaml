@@ -10,16 +10,35 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
 query: |
 
-  SecurityEvent
+union isfuzzy=true 
+  (SecurityEvent
   | where NewProcessName endswith "\\svchost.exe"
   | where SubjectUserSid !in ("S-1-5-18", "S-1-5-19", "S-1-5-20")
   | where NewProcessName !contains ":\\Windows\\System32"
   | where NewProcessName !contains ":\\Windows\\Syswow64"
   | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by Computer, SubjectUserName, NewProcessName, CommandLine, Account
   | project minTimeGenerated , maxTimeGenerated , count_ , Computer , SubjectUserName , NewProcessName , CommandLine, Account 
+  | extend timestamp = minTimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account),
+  (WindowsEvent
+  | where  EventID == 4688 and EventData has "\\svchost.exe" and  not(EventData has_any ("S-1-5-18", "S-1-5-19", "S-1-5-20")) and  not(EventData has ":\\Windows\\System32") and  not(EventData has ":\\Windows\\Syswow64")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where NewProcessName endswith "\\svchost.exe"
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | where SubjectUserSid !in ("S-1-5-18", "S-1-5-19", "S-1-5-20")
+  | where NewProcessName !contains ":\\Windows\\System32"
+  | where NewProcessName !contains ":\\Windows\\Syswow64"
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by Computer, SubjectUserName, NewProcessName, CommandLine, Account
+  | project minTimeGenerated , maxTimeGenerated , count_ , Computer , SubjectUserName , NewProcessName , CommandLine, Account 
   | extend timestamp = minTimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  )
   
