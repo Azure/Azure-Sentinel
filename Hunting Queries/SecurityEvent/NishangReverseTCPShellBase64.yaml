@@ -7,12 +7,16 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Exfiltration
 relevantTechniques:
   - T1011
 query: |
-  SecurityEvent
+  union isfuzzy=true  
+  (SecurityEvent
   | where EventID == 4688
   | where Process in("powershell.exe","powershell_ise.exe") and CommandLine contains "-e" 
   | mvexpand SS = split(CommandLine, " ") 
@@ -20,7 +24,21 @@ query: |
   | extend DecodeString = base64_decodestring(tostring(SS)) 
   | extend FinalString = replace("\\0", "", DecodeString) 
   | where FinalString has "tcpclient" and FinalString contains "$" and (FinalString contains "invoke" or FinalString contains "iex") 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer),
+  (WindowsEvent
+  | where EventID == 4688 and EventData has_any ("powershell.exe","powershell_ise.exe") and EventData has "-e" 
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend CommandLine = tostring(EventData.CommandLine)  
+  | where Process in("powershell.exe","powershell_ise.exe") and CommandLine contains "-e" 
+  | mvexpand SS = split(CommandLine, " ") 
+  | where SS matches regex "[A-Za-z0-9+/]{50,}[=]{0,2}" 
+  | extend DecodeString = base64_decodestring(tostring(SS)) 
+  | extend FinalString = replace("\\0", "", DecodeString) 
+  | where FinalString has "tcpclient" and FinalString contains "$" and (FinalString contains "invoke" or FinalString contains "iex") 
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
