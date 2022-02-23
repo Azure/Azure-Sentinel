@@ -6,6 +6,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 tactics:
   - Execution
 query: |
@@ -15,7 +18,8 @@ query: |
   let lookback = starttime - 7d;
   let Allowlist = dynamic (['foo.exe', 'baz.exe']);
   let Sensitivity = 15;
-  SecurityEvent
+  union isfuzzy=true
+  (SecurityEvent
   | where TimeGenerated between(lookback..endtime)
   | where EventID == 4688
   | extend ProcArray = split(NewProcessName, '\\')
@@ -28,4 +32,22 @@ query: |
   | extend DriveDepthProc = strcat(ProcArray[0], '-', ProcArrayLength, '-', Proc)
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = makeset(Computer), UserCount = dcount(SubjectUserName), Users = makeset(SubjectUserName) by DriveDepthProc
   | where TimesSeen < Sensitivity
+  | extend timestamp = StartTimeUtc),
+  (WindowsEvent
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID == 4688
+  | extend  NewProcessName = tostring(EventData.NewProcessName)
+  | extend ProcArray = split(NewProcessName, '\\')
+  // ProcArrayLength is Folder Depth
+  | extend ProcArrayLength = arraylength(ProcArray)
+  | extend LastIndex = ProcArrayLength - 1
+  | extend Proc = ProcArray[LastIndex]
+  | where Proc !in (Allowlist)
+  // ProcArray[0] is the proc's Drive
+  | extend DriveDepthProc = strcat(ProcArray[0], '-', ProcArrayLength, '-', Proc)
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = makeset(Computer), UserCount = dcount(SubjectUserName), Users = makeset(SubjectUserName) by DriveDepthProc
+  | where TimesSeen < Sensitivity
   | extend timestamp = StartTimeUtc
+  )
+
