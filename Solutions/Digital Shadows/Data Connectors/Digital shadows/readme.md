@@ -40,14 +40,14 @@ i. Log in to Azure portal using the URL - [https://portal.azure.com/?feature.Bri
 
 ii. Go to Azure Sentinel -> Data Connectors
 
-iii. Click the “import” button at the top and select the json file `DigitalShadowsSearchlight_API_functionApp.JSON` downloaded on your local machine from Github.
+iii. Click the “import” button at the top and select the json file `DigitalShadowsSearchlight_API_functionApp.JSON` downloaded on your local machine from GitHub.
 
 iv. This will load the connector page and rest of the process will be same as the Installing for users guideline above.
 
 
 Each invocation and its logs of the function can be seen in Function App service of Azure, available in the Azure Portal outside the Azure Sentinel.
 
-i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployement stage.
+i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployment stage.
 
 ii. Go to Functions -> DigitalShadowsConnectorAzureFunction -> Monitor
 
