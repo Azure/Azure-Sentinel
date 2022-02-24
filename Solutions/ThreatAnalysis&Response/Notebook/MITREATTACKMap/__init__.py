@@ -197,7 +197,7 @@ def get_fusion_alerts():
                     "Impact",
                 ],
                 ["T1078", "T1496"],
-                ["AzureSentinel", "AzureActiveDirectoryIdentityProtection"],
+                ["MicrosoftSentinel", "AzureActiveDirectoryIdentityProtection"],
                 ["SecurityAlert"],
             ],
         ],
@@ -711,7 +711,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         # Export the whole dataset
         logging.info(f"Writing csv files to temporary directory")
-        out_path = tmp_path + "/AzureSentinel.csv"
+        out_path = tmp_path + "/MicrosoftSentinel.csv"
 
         az_defender_alerts = get_azure_defender_alerts()
         logging.info(
