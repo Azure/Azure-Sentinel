@@ -34,6 +34,9 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -118,8 +121,19 @@ query: |
   | project Type, TimeGenerated, Computer, Account, CommandLine, FileName
   ),
   (SecurityEvent
+  | where EventID == 4688
   | where ProcessName has_any ("powershell.exe", "rundll32.exe")
   | where (CommandLine has "is64bitoperatingsystem" and CommandLine has "Debug\\Browse") or (CommandLine has_any (tokens))
+  | project Type, TimeGenerated, Computer, Account, ProcessName, CommandLine 
+  ),
+  ( WindowsEvent
+  | where EventID == 4688
+  | where EventData has_any ("powershell.exe", "rundll32.exe") and EventData has_any (tokens, "Debug\\Browse","is64bitoperatingsystem" ) 
+  | extend  ProcessName = tostring(EventData.ProcessName)
+  | where ProcessName has_any ("powershell.exe", "rundll32.exe")
+  | extend CommandLine = tostring(EventData.CommandLine)  
+  | where (CommandLine has "is64bitoperatingsystem" and CommandLine has "Debug\\Browse") or (CommandLine has_any (tokens))
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | project Type, TimeGenerated, Computer, Account, ProcessName, CommandLine 
   ),
   (AzureDiagnostics
@@ -154,5 +168,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.4.0
+version: 1.5.0
 kind: Scheduled
