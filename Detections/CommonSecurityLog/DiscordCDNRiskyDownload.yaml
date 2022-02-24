@@ -1,0 +1,50 @@
+id: 010bd98c-a6be-498c-bdcd-502308c0fdae
+name: Discord CDN Risky File Download
+description: |
+  'Identifies  callouts to dicord CDN addreses for risky file extensions. This detection will trigger when a callout for a risky file
+  is made to a discord server that has only been seen once in your environment. Unique discord servers are identified using the server ID
+  that is included in the request URL (DiscordServerId in query).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ApplicationLayerProtocol
+relevantTechniques:
+  - T1071.001
+tags:
+  - AADSecOpsGuide
+query: |
+  let connectionThreshold = 1;
+  let riskyExtensions = dynamic([".bin",".exe",".dll",".bin",".msi"]);
+  CommonSecurityLog
+  | where RequestURL contains "media.discordapp.net" or RequestURL contains "cdn.discordapp.com"
+  | where RequestURL has "attachments"
+  | where DeviceAction !~ "blocked"
+  | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, RequestURL)
+  | summarize dcount(RequestURL), make_list(SourceUserName), make_list(SourceIP), make_list(RequestURL), min(TimeGenerated), max(TimeGenerated), make_list(DeviceAction) by DiscordServerId, DeviceProduct
+  | where dcount_RequestURL <= connectionThreshold
+  | mv-expand list_SourceUserName to typeof(string), list_RequestURL to typeof(string), list_DeviceAction to typeof(string), list_SourceIP to typeof(string)
+  | summarize by DiscordServerId, DeviceProduct, dcount_RequestURL, list_SourceUserName, min_TimeGenerated, max_TimeGenerated, list_DeviceAction, list_SourceIP, list_RequestURL
+  | project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, DeviceActionTaken=list_DeviceAction, DeviceProduct, SourceUser=list_SourceUserName, SourceIP=list_SourceIP, RequestURL=list_RequestURL
+  | where RequestURL has_any (riskyExtensions)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SourceUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+version: 1.0.0
+kind: Scheduled
