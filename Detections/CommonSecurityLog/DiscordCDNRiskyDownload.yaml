@@ -23,15 +23,16 @@ query: |
   let connectionThreshold = 1;
   let riskyExtensions = dynamic([".bin",".exe",".dll",".bin",".msi"]);
   CommonSecurityLog
+  | where DeviceVendor =~ "ZScaler"
   | where RequestURL contains "media.discordapp.net" or RequestURL contains "cdn.discordapp.com"
   | where RequestURL has "attachments"
   | where DeviceAction !~ "blocked"
   | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, RequestURL)
-  | summarize dcount(RequestURL), make_list(SourceUserName), make_list(SourceIP), make_list(RequestURL), min(TimeGenerated), max(TimeGenerated), make_list(DeviceAction) by DiscordServerId, DeviceProduct
+  | summarize dcount(RequestURL), make_set(SourceUserName), make_set(SourceIP), make_set(RequestURL), min(TimeGenerated), max(TimeGenerated), make_set(DeviceAction) by DiscordServerId, DeviceProduct
   | where dcount_RequestURL <= connectionThreshold
-  | mv-expand list_SourceUserName to typeof(string), list_RequestURL to typeof(string), list_DeviceAction to typeof(string), list_SourceIP to typeof(string)
-  | summarize by DiscordServerId, DeviceProduct, dcount_RequestURL, list_SourceUserName, min_TimeGenerated, max_TimeGenerated, list_DeviceAction, list_SourceIP, list_RequestURL
-  | project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, DeviceActionTaken=list_DeviceAction, DeviceProduct, SourceUser=list_SourceUserName, SourceIP=list_SourceIP, RequestURL=list_RequestURL
+  | mv-expand set_SourceUserName to typeof(string), set_RequestURL to typeof(string), set_DeviceAction to typeof(string), set_SourceIP to typeof(string)
+  | summarize by DiscordServerId, DeviceProduct, dcount_RequestURL, set_SourceUserName, min_TimeGenerated, max_TimeGenerated, set_DeviceAction, set_SourceIP, set_RequestURL
+  | project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, DeviceActionTaken=set_DeviceAction, DeviceProduct, SourceUser=set_SourceUserName, SourceIP=set_SourceIP, RequestURL=set_RequestURL
   | where RequestURL has_any (riskyExtensions)
 entityMappings:
   - entityType: Account
