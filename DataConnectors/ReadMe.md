@@ -68,7 +68,7 @@ Once you have decided on the type of data connector you plan to support, set the
 5. These logs will appear in a Custom Log Analytics table **CustomLogs** -> **&lt;log name&gt;** where the log name is what you have as data type name in the template.  
 5. Design and validate a few key queries that lands the value of the data stream using Kusto Query Language. Share these as sample queries in the data connector.
 
-**Example connectors to refer to** : GitHub, Lastpass (check in Content hub for the solution that has these data connectors)
+**Example connectors to refer to** : GitHub, [Lastpass](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/LastPass/Data%20Connectors/LastPassAPIConnector.json) (check in Content hub for the solution that has these data connectors)
 
 **Connector Validation Steps**
 1. Test the actual customer experience and validate if data flows as expected and appears in the expected Microsoft Sentinel Log Analytics custom table provided.
