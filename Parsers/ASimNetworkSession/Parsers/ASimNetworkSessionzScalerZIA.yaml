@@ -1,0 +1,101 @@
+Parser:
+  Title: Network Session ASIM parser for Zscaler ZIA
+  Version: '0.2'
+  LastUpdated: Jan 17, 2022
+Product:
+  Name: Zscaler ZIA
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Zscaler Connector
+  Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#zscaler
+- Title: Zscaler Sentinel deployment guide
+  Link: https://help.zscaler.com/zia/zscaler-microsoft-azure-sentinel-deployment-guide
+Description: |
+  This ASIM parser supports normalizing Zscaler ZIA proxy logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionZscalerZIA
+EquivalentBuiltInParser: _ASim_NetworkSession_ZscalerZIA
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ActionLookup = datatable (DvcOriginalAction: string, DvcAction:string) [
+    // See https://help.zscaler.com/zia/firewall-insights-logs-filters
+    'Allow','Allow',
+    'Allow due to insufficient app data','Allow',
+    'Block/Drop','Drop',
+    'Block/ICMP','Drop ICMP',
+    'Block/Reset', 'Reset',
+    'IPS Drop', 'Drop',
+    'IPS Reset', 'Reset',
+    // Observed in real world events
+    'Block ICMP', 'Drop ICMP',
+    'Drop', 'Drop'
+  ];
+  let parser=(disabled:bool=false){
+  CommonSecurityLog | where not(disabled)
+  | where DeviceVendor == "Zscaler"
+  | where DeviceProduct == "NSSFWlog"
+  // Event fields
+  | extend 
+    EventCount=DeviceCustomNumber1, 
+    EventStartTime=TimeGenerated, 
+    EventVendor = "Zscaler", 
+    EventProduct = "ZIA Firewall", 
+    EventSchema = "NetworkSession", 
+    EventSchemaVersion="0.2.1", 
+    EventType = 'NetworkSession', 
+    EventSeverity = 'Informational',
+    EventEndTime=TimeGenerated 
+  | project-rename
+    DvcOriginalAction = DeviceAction, 
+    DvcHostname = Computer, 
+    EventProductVersion = DeviceVersion, 
+    NetworkProtocol = Protocol, 
+    DstIpAddr = DestinationIP, 
+    DstPortNumber = DestinationPort, 
+    DstNatIpAddr = DestinationTranslatedAddress, 
+    DstNatPortNumber = DestinationTranslatedPort,
+    DstAppName = DeviceCustomString3, 
+    NetworkApplicationProtocol = DeviceCustomString2, 
+    SrcIpAddr = SourceIP, 
+    SrcPortNumber = SourcePort, 
+    SrcUsername = SourceUserName,
+    SrcNatIpAddr= SourceTranslatedAddress, 
+    SrcNatPortNumber = SourceTranslatedPort, 
+    SrcUserDepartment = DeviceCustomString1,  // Not in standard schema
+    SrcUserLocation = SourceUserPrivileges,  // Not in standard schema
+    NetworkDuration = DeviceCustomNumber1, 
+    ThreatName = DeviceCustomString6, 
+    ThreatCategory = DeviceCustomString5, 
+    RuleName = Activity 
+  // -- Calculated fields
+  | lookup ActionLookup on DvcOriginalAction 
+  | extend
+    ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
+    SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
+    DstBytes = tolong(ReceivedBytes), 
+    SrcBytes = tolong(SentBytes)
+  // -- Enrichment
+  | extend
+    EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure"),
+    DstAppType = "Service", 
+    SrcUsernameType = "UPN" 
+  // -- Aliases
+  | extend
+    Dvc = DvcHostname,
+    User = SrcUsername,
+    IpAddr = SrcIpAddr,
+    Src = SrcIpAddr,
+    Dst = DstIpAddr,
+    Duration = NetworkDuration
+  | project-away 
+    DeviceCustom*
+  };
+  parser (disabled)

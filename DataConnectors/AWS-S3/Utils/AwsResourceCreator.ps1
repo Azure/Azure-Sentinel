@@ -83,14 +83,13 @@ function New-S3Bucket
             if ($lastexitcode -eq 0)
             {
                 Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
+                Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
+                aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
             }
             elseif($error[0] -Match "InvalidBucketName")
             {
                  Write-Log -Message "Please see AWS bucket name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
             }
-
-            Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
-            aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
         }
     })
     

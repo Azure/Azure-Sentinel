@@ -13,7 +13,7 @@ Joshua-Import-To-Sentinel performs the following steps:
  - Submits each batch of indicators to Microsoft Sentinel using the Microsoft Graph Security Logic App connector
 
 Joshua-Import-To-Sentinel.json
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Import-To-Sentinel%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Import-To-Sentinel%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
@@ -24,27 +24,27 @@ Joshua-Indicators-Processors playbooks performs the following steps:
  - Uses the Batch action to send the indicators to the "Joshua-Import-To-Sentinel"
 
 Joshua-Indicators-Processor-IP
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-IP%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-IP%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Joshua-Indicators-Processor-URL
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-URL%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-URL%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Joshua-Indicators-Processor-DOMAIN
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-DOMAIN%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-DOMAIN%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Joshua-Indicators-Processor-FILE
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-FILE%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-FILE%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Joshua-Indicators-Processor-EMAIL
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-EMAIL%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Indicators-Processor-EMAIL%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
@@ -56,16 +56,16 @@ Through this integration, the analyst can enrich incidents with further informat
 Enriched data will be added in Microsoft Sentinel incident comments.
 
 Joshua-Intel-Enrichment-IP.json
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Intel-Enrichment-IP%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Intel-Enrichment-IP%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Joshua-Intel-Enrichment-URL.json
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Intel-Enrichment-URL%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Intel-Enrichment-URL%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
 Joshua-Intel-Enrichment-FILE.json
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcyberiskvision%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Intel-Enrichment-FILE%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoshua-Cyberiskvision%2FPlaybooks%2FJoshua-Intel-Enrichment-FILE%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>

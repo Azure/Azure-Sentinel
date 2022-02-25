@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM filtering parser for GCP
-  Version: '0.2'
-  LastUpdated: Nov 11 2021
+  Version: '0.3'
+  LastUpdated: Jan 17 2022
 Product:
   Name: GCP Cloud DNS
 Normalization:
@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports filtering and normalizing Google Cloud Platform (GCP) DNS logs to the ASIM DNS activity normalized schema.
+  Filter and normalize Google cloud platform (GCP) DNS logs to the ASIM DNS activity normalized schema.
 ParserName: vimDnsGcp
 EquivalentBuiltInParser: _Im_Dns_Gcp
 ParserParams:
@@ -45,6 +45,18 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  // https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry
+  let GCPSeverityTable=datatable(severity_s:string,EventSeverity:string)
+  ["DEFAULT","Informational",
+  "DEBUG","Informational",
+  "INFO","Informational",
+  "NOTICE","Medium",
+  "WARNING","Medium",
+  "ERROR","High",
+  "CRITICAL","High",
+  "ALERT","High",
+  "EMERGENCY","High"
+  ];
   let DNSQuery_GcpDns=(
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
@@ -66,16 +78,17 @@ ParserQuery: |
       and (response_has_ipv4=='*' or has_ipv4(payload_rdata_s,response_has_ipv4) )
       and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(payload_rdata_s, response_has_any_prefix))
     // *****************************************************************
+    | lookup GCPSeverityTable on severity_s
     | project-rename
-        DnsQuery=payload_queryName_s, 
         DnsQueryTypeName=payload_queryType_s,
         DnsResponseName=payload_rdata_s, 
         EventResultDetails=payload_responseCode_s,
         NetworkProtocol=payload_protocol_s, 
         SrcIpAddr=payload_sourceIP_s,
         EventOriginalUid=insert_id_s,
-        EventSeverity=severity_s    
+        EventOriginalSeverity=severity_s    
     | extend
+        DnsQuery=trim_end(@'\.',payload_queryName_s), 
         EventCount=int(1),
         EventProduct='Cloud DNS',
         EventVendor='GCP',
