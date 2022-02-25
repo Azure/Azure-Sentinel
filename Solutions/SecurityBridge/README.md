@@ -1,4 +1,4 @@
-# Deployment of Senitnel Connector for SecurityBridge Threat Detection for SAP
+# Deployment of Sentinel Connector for SecurityBridge Threat Detection for SAP
 
 This ARM template will deploy a connecter for "SecurityBridge Threat Detection for SAP" with the following elements:
 * Connector
