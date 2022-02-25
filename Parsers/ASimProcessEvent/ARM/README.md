@@ -26,7 +26,7 @@ This template deploys the following parsers:
   * vimProcessEmpty - Empty ASim Process table
 
 * Source specific parsers:
-  * **Microsoft 365 Defender for Endpoints** - vimProcessEventsMicrosoft365D
+  * **Microsoft 365 Defender for Endpoints** - vimProcessEventMicrosoft365D
   * **Sysmon for Windows** - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
   * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
