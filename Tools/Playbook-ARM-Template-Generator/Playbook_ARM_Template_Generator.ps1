@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 2-14-2021
+        LASTEDIT: 2-17-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -133,9 +133,12 @@ function Get-RequiredModules {
                     Import-Module -Name $Module -Force
                 }
             }
-            else {
-                Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
-                Import-Module -Name $Module -Force
+            else {                
+                # Get latest version
+                $latestVersion = [Version](Get-Module -Name $Module).Version               
+                Write-Log -Message "Importing module $Module with version $latestVersion" -LogFileName $LogFileName -Severity Information
+                Import-Module -Name $Module -RequiredVersion $latestVersion -Force
+                
             }
         }
         # Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
@@ -463,6 +466,7 @@ else {
 }
 
 Get-RequiredModules("Az.Accounts")
+Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
 
 # Check Powershell version, needs to be 5 or higher

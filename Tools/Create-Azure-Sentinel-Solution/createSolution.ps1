@@ -222,7 +222,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             name       = "[parameters('workbook$workbookCounter-id')]";
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
-                            apiVersion = "2020-02-12";
+                            apiVersion = "2021-08-01";
                             properties = [PSCustomObject] @{
                                 displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
