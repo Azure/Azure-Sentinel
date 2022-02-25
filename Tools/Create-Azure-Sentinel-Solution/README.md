@@ -50,7 +50,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
  * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
  * SavedSearches: This input assumes a format of any of the following:
- * -- Direct export via API (see https://docs.microsoft.com/en-us/rest/api/loganalytics/saved-searches/list-by-workspace)
+ * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
  * -- Array of SavedSearch resources
  * -- Raw ARM template
  *
