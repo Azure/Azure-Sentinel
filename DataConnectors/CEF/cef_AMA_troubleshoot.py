@@ -331,7 +331,7 @@ class DCRConfigurationVerifications:
         self.check_cef_multi_homing()
 
 
-class SyslogDaemonVerifications:
+class SyslogDaemonVerifications(ColorfulPrint):
     '''
     This class is for Syslog daemon related verifications
     '''
@@ -354,6 +354,9 @@ class SyslogDaemonVerifications:
             return True
         is_Rsyslog_running.log_result_to_file()
         is_Syslog_ng_running.log_result_to_file()
+        self.print_error(
+            "Could not detect any running Syslog daemon on the machine. The supported Syslog daemons are Rsyslog and Syslog-ng. Please install one of them and run this script again.")
+        return False
 
     def verify_Syslog_daemon_listening(self):
         '''
@@ -361,20 +364,13 @@ class SyslogDaemonVerifications:
         '''
         command_name = "verify_Syslog_daemon_listening"
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
-        result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN"]
+        result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        if self.SYSLOG_DAEMON != "":
-            command_object.run_full_test()
-            command_object.command_name = "verify_Syslog_daemon_listening_on_default_port"
-            command_object.result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
-            command_object.run_full_test()
-            if not command_object.is_successful:
-                command_object.print_warning(
-                    "Warning: the syslog daemon is not listening on the machine or is listening to a non-default port")
-        else:
-            command_object.run_full_verification()
-            command_object.print_error(
-                "No syslog daemon running on the machine. Please start one and re-run the script. The supported Syslog daemons are Rsyslog and Syslog-ng")
+        command_object.run_full_test()
+        if not command_object.is_successful:
+            command_object.print_warning(
+                "Warning: the syslog daemon- {} is running but not listening on the machine or it is listening to a non-default port".format(
+                    self.SYSLOG_DAEMON))
 
     def verify_Syslog_daemon_forwarding_configuration(self):
         '''
@@ -401,9 +397,9 @@ class SyslogDaemonVerifications:
         '''
         This function is only called by main and runs all the tests in this class
         '''
-        self.determine_Syslog_daemon()
-        self.verify_Syslog_daemon_listening()
-        self.verify_Syslog_daemon_forwarding_configuration()
+        if self.determine_Syslog_daemon():
+            self.verify_Syslog_daemon_listening()
+            self.verify_Syslog_daemon_forwarding_configuration()
 
 
 class OperatingSystemVerifications:
