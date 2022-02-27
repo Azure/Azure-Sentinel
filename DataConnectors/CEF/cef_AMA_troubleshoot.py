@@ -186,7 +186,7 @@ class AgentInstallationVerifications:
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
-            if "could not be found" in command_object.command_result:
+            if "could not be found" or "no such service" in command_object.command_result:
                 command_object.is_successful = False
                 if not command_object.is_successful:
                     command_object.print_error(
@@ -200,7 +200,8 @@ class AgentInstallationVerifications:
                     self.Agent_installation_doc))
         command_object.command_to_run = "sudo /opt/microsoft/azuremonitoragent/bin/mdsd -V"
         command_object.run_command()
-        command_object.print_ok("Detected AMA running version- {}".format(command_object.command_result.strip('\n')))
+        command_object.print_ok(
+            "Detected AMA running version- {}".format(command_object.command_result.decode('UTF-8').strip('\n')))
 
     def verify_error_log_empty(self):
         # needs fixing
