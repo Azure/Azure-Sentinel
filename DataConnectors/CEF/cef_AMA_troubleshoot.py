@@ -186,13 +186,13 @@ class AgentInstallationVerifications:
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
-            command_object.result_keywords_array = ["could not be found"]
-            command_object.is_command_successful(exclude=True)
-            if not command_object.is_successful:
-                command_object.print_error(
-                    "Could not detect an AMA service running and listening on the machine. Please follow this "
-                    "documentation in order to install it and verify your machine's operating system is in the supported list- {}".format(
-                        self.Agent_installation_doc))
+            if "could not be found" in command_object.command_result:
+                command_object.is_successful = False
+                if not command_object.is_successful:
+                    command_object.print_error(
+                        "Could not detect an AMA service running and listening on the machine. Please follow this "
+                        "documentation in order to install it and verify your machine's operating system is in the supported list- {}".format(
+                            self.Agent_installation_doc))
                 return False
             command_object.print_error(
                 "Detected AMA is installed on the machine but not running. Please start the agent by running \'service azuremonitoragent start\' \nif the agent esrvice fails to start, "
@@ -268,7 +268,8 @@ class DCRConfigurationVerifications:
         Verifying there is a DCR on the machine for forwarding cef data
         '''
         command_name = "verify_DCR_content_has_CEF_stream"
-        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(self.CEF_stream_name)
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
+            self.CEF_stream_name)
         result_keywords_array = [self.CEF_stream_name]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
@@ -283,7 +284,8 @@ class DCRConfigurationVerifications:
         Verifying that the CEF dcr on the machine has valid content with all necessary dcr components
         '''
         command_name = "verify_CEF_dcr_has_valid_content"
-        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1".format(self.CEF_stream_name)
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1".format(
+            self.CEF_stream_name)
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "azure.com", "id"]
@@ -301,7 +303,8 @@ class DCRConfigurationVerifications:
         '''
 
         command_name = "check_cef_multi_homing"
-        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(self.CEF_stream_name)
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
+            self.CEF_stream_name)
         command_object = BasicCommand(command_name, command_to_run)
         command_object.run_command()
         try:
