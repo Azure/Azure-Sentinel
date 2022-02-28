@@ -203,6 +203,17 @@ class AgentInstallationVerifications:
         command_object.print_ok(
             "Detected AMA running version- {}".format(command_object.command_result.decode('UTF-8').strip('\n')))
 
+    def print_arc_version(self):
+        '''
+        Checking if ARC is installed. If so- prints the version of it.
+        '''
+        command_name = "print_arc_version"
+        command_to_run = "azcmagent version"
+        command_object = BasicCommand(command_name, command_to_run)
+        command_object.run_command()
+        if "azcmagent version" in str(command_object.command_result) and "command not found" not in str(command_object.command_result):
+            command_object.print_notice("Detected ARC installed on the machine: {}".format(command_object.command_result.decode('UTF-8').strip('\n')))
+
     def verify_error_log_empty(self):
         # needs fixing
         '''
@@ -237,6 +248,7 @@ class AgentInstallationVerifications:
         This function is only called by main and runs all the tests in this class
         '''
         self.verify_agent_is_running()
+        self.print_arc_version()
         self.verify_error_log_empty()
         self.verify_oms_not_running()
 
