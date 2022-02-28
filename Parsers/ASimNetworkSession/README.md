@@ -1,12 +1,12 @@
-# Advanced SIEM Information Model (ASIM) Network Session parsers 
+# Advanced Security Information Model (ASIM) Network Session parsers 
 
-This template deploys all ASIM Network parsers. The template is part of the Advanced SIEM Information Model (ASIM).
+This template deploys all ASIM Network parsers. The template is part of the Advanced Security Information Model (ASIM).
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Microsoft Sentinel Network Session normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
 
 <br>
