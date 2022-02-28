@@ -186,7 +186,7 @@ class AgentInstallationVerifications:
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
         if not command_object.is_successful:
-            if "could not be found" or "no such service" in command_object.command_result:
+            if ("could not be found" or "no such service") in command_object.command_result:
                 command_object.is_successful = False
                 if not command_object.is_successful:
                     command_object.print_error(
@@ -246,6 +246,7 @@ class DCRConfigurationVerifications:
     This class is for data collection rules verifications
     '''
     DCR_doc = "https://docs.microsoft.com/he-il/azure/azure-monitor/agents/data-collection-rule-overview"
+    DCRA_doc = "https://docs.microsoft.com/en-us/rest/api/monitor/data-collection-rule-associations"
     CEF_stream_name = "SECURITY_CEF_BLOB"
 
     def verify_DCR_exists(self):
@@ -259,8 +260,9 @@ class DCRConfigurationVerifications:
         command_object.run_full_test()
         if not command_object.is_successful:
             command_object.print_error(
-                "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace. For explanation on how to install a Data collection rule please browse- {}".format(
-                    self.DCR_doc))
+                "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace. For explanation on how to install a Data collection rule please browse- {} \n"
+                "In order to read about how to associate a dcr to a machine please review- {}".format(
+                    self.DCR_doc, self.DCRA_doc))
             return False
         return True
 
@@ -312,7 +314,7 @@ class DCRConfigurationVerifications:
             if int(command_object.command_result) > 1:
                 command_object.run_full_verification(should_fail=True)
                 command_object.print_warning(
-                    "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and will have effect on ths agents' performance")
+                    "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and might have effect on the agents' performance")
             else:
                 command_object.is_successful = True
                 command_object.document_result()
@@ -370,7 +372,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
         command_object.run_full_test()
         if not command_object.is_successful:
             command_object.print_warning(
-                "Warning: the syslog daemon- {} is running but not listening on the machine or it is listening to a non-default port".format(
+                "Warning: the Syslog daemon- {} is running but not listening on the machine or it is listening to a non-default port".format(
                     self.SYSLOG_DAEMON))
 
     def verify_Syslog_daemon_forwarding_configuration(self):
@@ -391,7 +393,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
             command_object.run_full_test()
             if not command_object.is_successful:
                 command_object.print_error(
-                    "{} configuration was found invalid and there for forwarding might of the syslog daemon to the agent might not work".format(
+                    "{} configuration was found invalid and the forwarding of the syslog daemon to the agent might not work".format(
                         self.SYSLOG_DAEMON))
 
     def run_all_syslog_daemon_verifications(self):
@@ -420,7 +422,7 @@ class OperatingSystemVerifications:
         command_object.run_full_test(True)
         if not command_object.is_successful:
             command_object.print_error(
-                "Detected SELinux running on the machine. CEF connector does not support any form of hardening at the moment,"
+                "Detected SELinux running on the machine. The CEF connector does not support any form of hardening at the moment,"
                 "and having SELinux in Enforcing mode can harm the forwarding of data. Please disable SELinux by running the command \'setenforce 0\'."
                 "This will disable SELinux temporarily. In order to disable permemently please follow this documentation- {}".format(
                     self.SELinux_documentation))
@@ -680,7 +682,8 @@ def main():
     printer.print_notice("This script generated an output file located here - {}"
                          "\nPlease review if you would like to get more information on failed tests.".format(
         LOG_OUTPUT_FILE))
-
+    printer.print_notice("\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
+                         "\'python cef_AMA_troubleshoot.py collect\'")
 
 if __name__ == '__main__':
     main()
