@@ -2,6 +2,7 @@ import subprocess
 import time
 import select
 import sys
+import re
 
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
@@ -299,18 +300,22 @@ class DCRConfigurationVerifications:
         Verifying that the CEF dcr on the machine has valid content with all necessary dcr components
         '''
         command_name = "verify_CEF_dcr_has_valid_content"
-        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | head -1".format(
+        command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.CEF_stream_name)
         result_keywords_array = ["stream", "kind", "syslog", "dataSources", "configuration", "facilityNames",
                                  "logLevels", "SecurityInsights", "endpoint", "channels", "sendToChannels", "ods-",
                                  "azure.com", "id"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        command_object.run_full_test()
-        if not command_object.is_successful:
-            command_object.print_error(
-                "Found an invalid CEF DCR. Please delete it and create a new one")
-            return False
-        return True
+        command_object.run_command()
+        command_object.command_result = command_object.command_result.decode('UTF-8').split('\n')[:-1]
+        for dcr in command_object.command_result:
+            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)", str(dcr)).group()
+            for key_word in command_object.result_keywords_array:
+                if str(key_word) not in str(dcr):
+                    command_object.is_command_successful(should_fail=True)
+                    command_object.print_error("Found an invalid CEF DCR. It is missing this key-word \'{}\'. It's path is {}". format(key_word, dcr_path))
+                    return False
+        command_object.run_full_verification()
 
     def check_cef_multi_homing(self):
         '''
