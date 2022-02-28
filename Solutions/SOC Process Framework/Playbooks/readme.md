@@ -22,4 +22,4 @@ After deploying the playbook, you must authorize the connections leveraged.
 2. Under "Development Tools" (located on the left), click "API Connections".
 3. Ensure each connection has been authorized.
 
-**Note: If you've deployed the [Get-SOCActions Playbook](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SOCProcessFramework/Playbooks/Get-SOCActions/azuredeploy.json) playbook, you will only need to authorize the Microsoft Sentinel connection.**
+**Note: If you've deployed the [Get-SOCActions Playbook](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SOC Process Framework/Playbooks/Get-SOCActions/azuredeploy.json) playbook, you will only need to authorize the Microsoft Sentinel connection.**
