@@ -5,7 +5,7 @@
 This folder contains the Azure function time trigger code for SentinelOne-Azure Sentinel connector. The connector will run periodically and ingest the SentinelOne data into the Azure Sentinel logs custom table `SentinelOne_CL`. 
 ## Folders
 
-1. `SentinelOne/` - This contains The package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
+1. `SentinelOne/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
 2. `SentinelOneSentinelConnector/` - This contains the Azure function source code along with sample data.
 
 
@@ -40,7 +40,7 @@ iv. This will load the connector page and rest of the process will be same as th
 
 Each invocation and its logs of the function can be seen in Function App service of Azure, available in the Azure Portal outside the Azure Sentinel.
 
-i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployement stage.
+i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployment stage.
 
 ii. Go to Functions -> SentinelOneSentinelConnector -> Monitor
 
