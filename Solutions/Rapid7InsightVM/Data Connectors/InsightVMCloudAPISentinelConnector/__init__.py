@@ -16,7 +16,7 @@ region = os.environ['InsightVMCloudRegion']
 insightvm_url = f"https://{region}.api.insight.rapid7.com/vm/v4/integration/"
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
-chunksize = 100
+chunksize = 2000
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
@@ -56,7 +56,7 @@ class InsightVMAPIv4integration:
                                 headers=self.headers,
                                 verify=True,
                                 params = {
-                                    "size": 100,
+                                    "size": chunksize,
                                     "page": page_num,
                                     "includeSame": True,
                                     "includeUniqueIdentifiers": True
@@ -113,7 +113,7 @@ class InsightVMAPIv4integration:
                                       verify=True,
                                       data = json.dumps(body),
                                       params={
-                                          "size": 1000,
+                                          "size": chunksize,
                                           "page": page_num
                                       })
                 data = r.json().get("data")
@@ -136,7 +136,6 @@ class ProcessToSentinel:
         self.logAnalyticsUri = logAnalyticsUri
         self.processed_events_success = 0
         self.processed_events_fail = 0
-        self.chunksize = chunksize
     
     def gen_chunks_to_object(self, data, chunksize=100):
         chunk = []
@@ -148,7 +147,7 @@ class ProcessToSentinel:
         yield chunk
 
     def gen_chunks(self, data, table):
-        for chunk in self.gen_chunks_to_object(data, chunksize=self.chunksize):
+        for chunk in self.gen_chunks_to_object(data, chunksize=chunksize):
             obj_array = []
             for row in chunk:
                 if row != None and row != '':
