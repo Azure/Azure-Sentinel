@@ -201,7 +201,7 @@ function Set-TableConfiguration {
 	$SuccessTables = @()
     
     foreach($QTable in $QualifiedTables) {	
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-07-01-privatepreview"								
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-12-01-preview"								
 		
 		$TablesApiBody = @"
 			{
@@ -235,7 +235,7 @@ function Set-TableConfiguration {
 
 function Get-AllTables {		
 	$AllTables = @()	
-    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-07-01-privatepreview"								
+    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-12-01-preview"								
 	    		
     try {        
         $TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "GET" -Headers $LaAPIHeaders           			
@@ -275,7 +275,7 @@ function Update-TablesRetention {
     )
 	$UpdatedTablesRetention = @()
     foreach($tbl in $TablesForRetention) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-07-01-privatepreview"		
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
         $ArchiveDays = [int]($TotalRetentionInDays)
         
         $TablesApiBody = @"

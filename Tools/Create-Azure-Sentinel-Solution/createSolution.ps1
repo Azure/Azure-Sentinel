@@ -357,6 +357,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         type      = "securestring";
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
+                                    }
+								)
+                            }
+							elseif ($param.Name.ToLower().contains("apikey")) {
+                                $playbookPasswordObject = [PSCustomObject] @{
+                                    name        = "playbook$playbookCounter-$paramName";
+                                    type        = "Microsoft.Common.PasswordBox";
+                                    label       = [PSCustomObject] @{password = "ApiKey"};
+                                    toolTip     = "ApiKey to connect to $solutionName API";
+                                    constraints = [PSCustomObject] @{ required = $true; };
+                                    options     = [PSCustomObject] @{ hideConfirmation = $true; };
+                                }
+                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                        type      = "securestring";
+                                        minLength = 1;
+                                        metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
                                     })
                             }
                             else {
@@ -424,7 +441,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
-                            if (($solutionName.ToLower() -eq "ciscomeraki") -and ($variableName.ToLower().contains("apikey")))
+                            if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey")))
                             {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
                             }
