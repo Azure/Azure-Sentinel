@@ -454,14 +454,14 @@ class OperatingSystemVerifications:
         policy_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         policy_command_object.run_full_test(exclude=True)
         command_name = "verify_iptables_rules_permissive"
-        command_to_run = "sudo iptables -S | grep -E '28130|514' | grep INPUT"
+        command_to_run = "sudo iptables -S | grep -E '514' | grep INPUT"
         rules_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         rules_command_object.run_full_test(exclude=True)
         if (not rules_command_object.is_successful or (not policy_command_object.is_successful and (
                 not rules_command_object.is_successful or rules_command_object.command_result == ""))):
             policy_command_object.print_warning(
                 "Iptables might be blocking incoming traffic to the agent. Please verify there are no "
-                "firewall rules blocking incoming traffic to ports 514 and 28130 and run again.")
+                "firewall rules blocking incoming traffic to port 514 and run again.")
 
     def verify_free_disk_space(self):
         '''
@@ -673,23 +673,23 @@ def main():
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     # Create agent_verification object
-    printer.print_notice("\n---------------Starting validation tests for AMA--------------")
+    printer.print_notice("\n-----Starting validation tests for AMA-------------------------")
     agent_verifications = AgentInstallationVerifications()
     agent_verifications.run_all_agent_verifications()
     # Create dcr_verification object
-    printer.print_notice("\n------Starting validation tests for data collection rules-----")
+    printer.print_notice("\n-----Starting validation tests for data collection rules-------")
     dcr_verification = DCRConfigurationVerifications()
     dcr_verification.run_all_dcr_verifications()
     # Create Syslog daemon verification object
-    printer.print_notice("\n--------Starting validation tests for the Syslog daemon-------")
+    printer.print_notice("\n-----Starting validation tests for the Syslog daemon-----------")
     syslog_daemon_verification = SyslogDaemonVerifications()
     syslog_daemon_verification.run_all_syslog_daemon_verifications()
     # Create operating system level verifications
-    printer.print_notice("\n------Starting validation tests for the operating system------")
+    printer.print_notice("\n-----Starting validation tests for the operating system--------")
     os_verification = OperatingSystemVerifications()
     os_verification.run_all_os_verifications()
     # Create incoming events verification
-    printer.print_notice("\n---Starting validation tests for capturing incoming events----")
+    printer.print_notice("\n-----Starting validation tests for capturing incoming events---")
     incoming_events = IncomingEventsVerifications()
     incoming_events.run_incoming_events_verifications()
     if FAILED_TESTS_COUNT > 0:
