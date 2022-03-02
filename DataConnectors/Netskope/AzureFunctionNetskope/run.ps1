@@ -51,8 +51,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $pageLimit = 10000
         $skip = 0
         $cwd = (Get-Location).Drive.Root
-        #$checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
-        $checkPointFile = "C:\Users\v-rucdu\Downloads\NetskopeCheckpoint.csv"
+        $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
+        # $checkPointFile = "C:\Users\v-rucdu\Downloads\NetskopeCheckpoint.csv"
         $apikey = $env:apikey
         $uri = $env:uri
         $tableName = "Netskope"
