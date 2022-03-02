@@ -311,7 +311,7 @@ function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType) {
 
 # Main Function to call the API and Post the response to the Log Analytics API
 function Netskope () {
-    Write-Host "PS Version : " $PSVersionTable
+    Write-Host "PS Version : $($PSVersionTable.PSVersion)"
     $Time = [System.Diagnostics.Stopwatch]::StartNew()
     $loggingOptions = $env:logTypes
     $apitypes = @($loggingOptions.split(",").Trim())
