@@ -318,7 +318,8 @@ function GetPlaybookResource() {
 function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbookResource) {
     Try {
         $connectionName = $apiConnectionReference.Name
-        $connectionVariableName = "$($connectionName)ConnectionName"
+        $connectionName = $connectionName -replace '[^a-zA-Z]', ''
+        $connectionVariableName = "$($connectionName)ConnectionName"        
         $templateVariables.Add($connectionVariableName, "[concat('$connectionName-', parameters('PlaybookName'))]")
         $connectorType = if ($apiConnectionReference.Value.id.ToLowerInvariant().Contains("/managedapis/")) { "managedApis" } else { "customApis" } 
         $connectionAuthenticationType = if ($apiConnectionReference.Value.connectionProperties.authentication.type -eq "ManagedServiceIdentity") { "Alternative" } else  { $null }    
