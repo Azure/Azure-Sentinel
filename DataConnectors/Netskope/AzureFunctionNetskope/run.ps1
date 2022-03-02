@@ -51,8 +51,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $pageLimit = 10000
         $skip = 0
         $cwd = (Get-Location).Drive.Root
-        $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
-        #"C:\Users\v-rucdu\Downloads\NetskopeCheckpoint.csv"
+        #$checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
+        $checkPointFile = "C:\Users\v-rucdu\Downloads\NetskopeCheckpoint.csv"
         $apikey = $env:apikey
         $uri = $env:uri
         $tableName = "Netskope"
@@ -218,9 +218,23 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         }
         else {
             $GetLastRecordTime = Import-Csv -Path $CheckpointFile
-            $LastRecordObject = $GetLastRecordTime | ForEach-Object{
-                if($_.Key -eq $LogType){
-                    $_.Value
+            if($null -eq $GetLastRecordTime)
+            {
+                $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+                $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
+                $CheckpointLog = @{}
+                foreach ($apiType in $apitypes) {
+                    $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
+                }
+                $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                return $firstStartTimeRecord.ToString() + "|" + 0
+            }
+            else
+            {
+                $LastRecordObject = $GetLastRecordTime | ForEach-Object{
+                    if($_.Key -eq $LogType){
+                        $_.Value
+                    }
                 }
             }
             return $LastRecordObject
@@ -314,6 +328,7 @@ function Netskope () {
     Write-Host "PS Version : $($PSVersionTable.PSVersion)"
     $Time = [System.Diagnostics.Stopwatch]::StartNew()
     $loggingOptions = $env:logTypes
+    #"page,alert"
     $apitypes = @($loggingOptions.split(",").Trim())
     # foreach($iapiType in $apitypes)
     # {
