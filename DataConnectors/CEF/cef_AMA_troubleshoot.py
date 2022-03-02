@@ -88,6 +88,8 @@ class BasicCommand(ColorfulPrint):
                                                                             stderr=subprocess.STDOUT).communicate()
         except Exception:
             self.command_result_err = "Error processing command"
+        if "not found" in str(self.command_result):
+            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again".format(self.command_to_run)
 
     def is_command_successful(self, exclude=False, should_fail=False):
         '''
@@ -175,7 +177,7 @@ class AgentInstallationVerifications:
     '''
     This class is for agent related verifications
     '''
-    Agent_installation_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=ARMAgentPowerShell%2CPowerShellWindows%2CPowerShellWindowsArc%2CCLIWindows%2CCLIWindowsArc"
+    Agent_installation_doc = "https://docs.microsoft.com/he-il/azure/azure-monitor/agents/azure-monitor-agent-manage"
 
     def verify_agent_is_running(self):
         '''
@@ -196,7 +198,7 @@ class AgentInstallationVerifications:
                             self.Agent_installation_doc))
                 return False
             command_object.print_error(
-                "Detected AMA is installed on the machine but not running. Please start the agent by running \'service azuremonitoragent start\' \nif the agent esrvice fails to start, "
+                "Detected AMA is installed on the machine but not running. Please start the agent by running \'service azuremonitoragent start\' \nif the agent service fails to start, "
                 "please run the following command to review the agent error log file here- \'cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | tail -n 15\'".format(
                     self.Agent_installation_doc))
         command_object.command_to_run = "sudo /opt/microsoft/azuremonitoragent/bin/mdsd -V"
@@ -212,8 +214,10 @@ class AgentInstallationVerifications:
         command_to_run = "azcmagent version"
         command_object = BasicCommand(command_name, command_to_run)
         command_object.run_command()
-        if "azcmagent version" in str(command_object.command_result) and "command not found" not in str(command_object.command_result):
-            command_object.print_notice("Detected ARC installed on the machine: {}".format(command_object.command_result.decode('UTF-8').strip('\n')))
+        if "azcmagent version" in str(command_object.command_result) and "command not found" not in str(
+                command_object.command_result):
+            command_object.print_notice("Detected ARC installed on the machine: {}".format(
+                command_object.command_result.decode('UTF-8').strip('\n')))
 
     def verify_error_log_empty(self):
         # needs fixing
@@ -274,7 +278,7 @@ class DCRConfigurationVerifications:
         if not command_object.is_successful:
             command_object.print_error(
                 "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace. For explanation on how to install a Data collection rule please browse- {} \n"
-                "In order to read about how to associate a dcr to a machine please review- {}".format(
+                "In order to read about how to associate a DCR to a machine please review- {}".format(
                     self.DCR_doc, self.DCRA_doc))
             return False
         return True
@@ -291,13 +295,14 @@ class DCRConfigurationVerifications:
         command_object.run_full_test()
         if not command_object.is_successful:
             command_object.print_error(
-                "Could not detect any data collection rule for CEF data. No CEF events will be collected from this machine to any workspace")
+                "Could not detect any data collection rule for CEF data. No CEF events will be collected from this machine to any workspace. Please create a CEF DCR using the following documentation- {} and run again".format(
+                    self.DCR_doc))
             return False
         return True
 
-    def verify_CEF_dcr_has_valid_content(self):
+    def verify_dcr_has_valid_content(self):
         '''
-        Verifying that the CEF dcr on the machine has valid content with all necessary dcr components
+        Verifying that the CEF DCR on the machine has valid content with all necessary DCR components
         '''
         command_name = "verify_CEF_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
@@ -309,11 +314,14 @@ class DCRConfigurationVerifications:
         command_object.run_command()
         command_object.command_result = command_object.command_result.decode('UTF-8').split('\n')[:-1]
         for dcr in command_object.command_result:
-            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)", str(dcr)).group()
+            dcr_path = re.search("(/etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/.*.json)",
+                                 str(dcr)).group()
             for key_word in command_object.result_keywords_array:
                 if str(key_word) not in str(dcr):
                     command_object.is_command_successful(should_fail=True)
-                    command_object.print_error("Found an invalid CEF DCR. It is missing this key-word \'{}\'. It's path is {}". format(key_word, dcr_path))
+                    command_object.print_error(
+                        "Found an invalid DCR. It is missing this key-word \'{}\'. It's path is {}".format(key_word,
+                                                                                                           dcr_path))
                     return False
         command_object.run_full_verification()
 
@@ -331,7 +339,7 @@ class DCRConfigurationVerifications:
             if int(command_object.command_result) > 1:
                 command_object.run_full_verification(should_fail=True)
                 command_object.print_warning(
-                    "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and might have effect on the agents' performance")
+                    "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and might have effect on the agent's performance")
             else:
                 command_object.is_successful = True
                 command_object.document_result()
@@ -347,7 +355,7 @@ class DCRConfigurationVerifications:
             return False
         if not self.verify_DCR_content_has_CEF_stream():
             return False
-        self.verify_CEF_dcr_has_valid_content()
+        self.verify_dcr_has_valid_content()
         self.check_cef_multi_homing()
 
 
@@ -410,8 +418,8 @@ class SyslogDaemonVerifications(ColorfulPrint):
             command_object.run_full_test()
             if not command_object.is_successful:
                 command_object.print_error(
-                    "{} configuration was found invalid and the forwarding of the syslog daemon to the agent might not work".format(
-                        self.SYSLOG_DAEMON))
+                    "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again.".format(
+                        self.SYSLOG_DAEMON, syslog_daemon_forwarding_path[self.SYSLOG_DAEMON]))
 
     def run_all_syslog_daemon_verifications(self):
         '''
@@ -590,6 +598,7 @@ class SystemInfo():
         "date": ["sudo date"],
         "netstat": ["sudo netstat -lnpvt"],
         "df": ["sudo df -h"],
+        # add lsof
         "free": ["sudo free -m"],
         "iptables": ["sudo iptables -vnL --line"],
         "selinux": ["sudo cat /etc/selinux/config"],
@@ -598,7 +607,7 @@ class SystemInfo():
         "ram_stats": ["sudo cat /proc/meminfo"],
         "cron_jobs": ["sudo crontab -l"],
         "wd_list": ["sudo ls -la ."],
-        "internet_connection": ["sudo curl -D - http://google.com"],
+        "internet_connection": ["sudo curl -D - http://microsoft.com"],
         "sudoers_list": ["sudo cat /etc/sudoers"],
         "rotation_configuration": ["sudo cat /etc/logrotate.conf"],
         "rsyslog_conf": ["sudo cat /etc/rsyslog.conf"],
@@ -610,9 +619,9 @@ class SystemInfo():
         "syslog_ng_dir_content": ["sudo grep -r ^ /etc/syslog-ng/conf.d/"],
         "is_syslog_ng_running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep syslog-ng"],
         "agent_log_snip": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
-        "is_AMA__running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
+        "is_AMA__running_from_boot": ["sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
         "AMA_service_status": ["sudo service azuremonitoragent status"],
-        "dcr_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
+        "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
         "top_processes": ["sudo top -bcn1 -w512", "head -n 20"]
@@ -699,8 +708,10 @@ def main():
     printer.print_notice("This script generated an output file located here - {}"
                          "\nPlease review if you would like to get more information on failed tests.".format(
         LOG_OUTPUT_FILE))
-    printer.print_notice("\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
-                         "\'python cef_AMA_troubleshoot.py collect\'")
+    printer.print_notice(
+        "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
+        "\'python cef_AMA_troubleshoot.py collect\'")
+
 
 if __name__ == '__main__':
     main()
