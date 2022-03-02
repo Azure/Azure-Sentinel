@@ -1,4 +1,18 @@
-# Deployment of Sentinel Connector for SecurityBridge Threat Detection for SAP
+# Deployment of Sentinel Connector for SecurityBridge Threat Detection for SAP Through ARM template
+This ARM template will deploy a connecter for "SecurityBridge Threat Detection for SAP" with the following elements:
+* Connector
+* Workbook
+* Parser Function
+
+Follow the below steps to deploy this solution in your environment:
+* Log on to Azure Portal
+* Navigate to Azure Sentinel and select your workspace
+* Select `Content Hub`
+* Search for `SecurityBridge Threat Detection for SAP`
+* Click on `Install` and then click on `Create`
+* Follow the steps to install the connector
+
+# Deployment of Sentinel Connector for SecurityBridge Threat Detection for SAP Through ARM template
 
 This ARM template will deploy a connecter for "SecurityBridge Threat Detection for SAP" with the following elements:
 * Connector
