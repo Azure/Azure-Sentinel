@@ -14,7 +14,26 @@ relevantTechniques:
   - T1078
 query: |
   // Enter a reference list of default local administrators for your Windows systems
-  let LocalAdminsList = dynamic (["administrator","admin"]);
-  SecurityEvent
-  | where EventID in (4624,4625) and TargetUserSid endswith "-500" and TargetUserName !in (LocalAdminsList)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, TargetUserName, TargetUserSid, TargetLogonId, IpAddress, LogonTypeName
+    let LocalAdminsList = dynamic (["administrator", "admin"]);
+union isfuzzy=true
+    (
+    SecurityEvent
+    | where EventID in (4624, 4625)
+        and TargetUserSid endswith "-500"
+        and TargetUserName !in (LocalAdminsList)
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, TargetUserName, TargetUserSid, TargetLogonId, IpAddress, LogonTypeName
+    ),
+    (WindowsEvent
+    | where EventID in (4624, 4625)
+        and EventData has "-500"
+        and not(EventData has_any (LocalAdminsList))
+    | extend TargetUserSid = tostring(EventData.TargetUserSid)
+    | where TargetUserSid endswith "-500" 
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    | where TargetUserName !in (LocalAdminsList)
+    | extend TargetLogonId = tostring(EventData.TargetLogonId)
+    | extend IpAddress = tostring(EventData.IpAddress)
+    | extend LogonType = toint(EventData.LogonType)
+    | extend LogonTypeName=case(LogonType == 2, "2 - Interactive", LogonType == 3, "3 - Network", LogonType == 4, "4 - Batch", LogonType == 5, "5 - Service", LogonType == 7, "7 - Unlock", LogonType == 8, "8 - NetworkCleartext", LogonType == 9, "9 - NewCredentials", LogonType == 10, "10 - RemoteInteractive", LogonType == 11, "11 - CachedInteractive", tostring(LogonType))
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, TargetUserName, TargetUserSid, TargetLogonId, IpAddress, LogonTypeName
+    )
