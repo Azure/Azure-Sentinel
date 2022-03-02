@@ -24,6 +24,7 @@ This is only a temporary solution to deploy the connector manually until the off
 ### Pre-reqs
 * Log in: You should be logged into the Azure Sentinel Environment
 * Workspace Name: Workspace id of the azure sentinel.
+* Workspace Location: You can get that from Sentinel > Settings > Workspace Settings > Properties > Location.  For example `southcentralus`
 * Installation of Azure Sentinel Agent on the SAP Machine
 * Path of logs file generation
 * Cron job to be added to the machine to append the newly created logs into an already existing file
