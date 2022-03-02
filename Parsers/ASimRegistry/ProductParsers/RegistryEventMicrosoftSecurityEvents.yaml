@@ -9,9 +9,9 @@ Normalization:
   Version: '0.1.0'
 References:
 - Title: ASIM Registry Schema
-  Link: https://aka.ms/AzSentinelRegistryEventsDoc
+  Link: https://aka.ms/ASimRegistryEventDoc
 - Title: ASIM
-  Link: https:/aka.ms/AzSentinelNormalization
+  Link: https:/aka.ms/AboutASIM
 Description: ASIM Security Events Registry Creation Event Parser (event number 4657)
 ParserName: vimRegistryEventMicrosoftSecurityEvents
 ParserQuery: | 
@@ -36,12 +36,10 @@ ParserQuery: |
                   "MACHINE", "HKEY_LOCAL_MACHINE",
                   "USER", "HKEY_USERS",   
                 ];
-
               let RegistryEvents=(){
               SecurityEvent
               // -- Filter
               | where EventID == 4657          
-
               // Event
               | extend
                   EventCount = int(1), 
@@ -54,16 +52,13 @@ ParserQuery: |
               | project-rename
                   EventOriginalSubType = OperationType,
                   EventOriginalUid = EventOriginId
- 
               | lookup RegistryAction on EventOriginalSubType
- 
               // Registry
               // Normalize key hive
               | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" Key
               | lookup Hives on KeyPrefix
               | extend RegistryKey = strcat (Hive, "\\", Key)
               | project-away Hive, Key, KeyPrefix, ObjectName
-
               | project-rename
                 RegistryValue = ObjectValueName
               | extend
@@ -74,13 +69,11 @@ ParserQuery: |
               | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName
               | lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryValueTypeModified = TypeName
               | project-away OldValue, NewValue, OldValueType, NewValueType
-
               // Device
               | extend
                   DvcId = SourceComputerId,
                   DvcHostname = Computer,
                   DvcOs = 'Windows'
-
               // User
               | project-rename
                   ActorUserId = SubjectUserSid, 
@@ -89,23 +82,19 @@ ParserQuery: |
               | extend
                   ActorUserIdType = 'SID',
                   ActorUsername = iff (ActorDomainName == '-', SubjectUserName, SubjectAccount), 
-                  ActorUsernameType = iff(ActorDomainName == '-','Simple', 'Windows') 
-              
+                  ActorUsernameType = iff(ActorDomainName == '-','Simple', 'Windows'),
+                  ActingProcessId = tostring(toint(ProcessId)) 
               // Process 
               | project-rename
-                  ActingProcessId = ProcessId, 
                   ActingProcessName = ProcessName
-
               // -- Aliases
                 | extend
                   User = ActorUsername,
                   UserId = ActorUserId,
                   Dvc = DvcHostname,
                   Process = ActingProcessName
-
               // -- Remove potentially confusing
                 | project-away 
                     SubjectUserName,
                     SubjectAccount
-
               }; RegistryEvents
