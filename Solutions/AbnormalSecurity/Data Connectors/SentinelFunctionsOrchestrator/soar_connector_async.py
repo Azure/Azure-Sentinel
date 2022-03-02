@@ -91,7 +91,6 @@ class AbnormalSoarConnectorAsync:
                     attempts += 1
                 else:
                     logging.error(f"Abnormal Soar API request Failed. Err: {e}")
-                    raise e
             else:
                 return response_data
 
