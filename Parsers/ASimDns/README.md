@@ -1,16 +1,16 @@
-# Advanced Security Information Model (ASIM) DNS parsers 
+# Azure Sentinel Information Model (ASIM) Dns parsers 
 
-This template deploys all ASIM DNS parsers. The template is part of the Advanced Security Information Model (ASIM).
+This template deploys all ASIM Dns parsers.
 
-The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced SIEM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/MsASIM)
-- [Microsoft Sentinel DNS normalization schema reference](https://aka.ms/ASimDnsDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM Dns normalization schema reference](https://aka.ms/ASimDnsDoc)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM)
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Frearrangement2%2FParsers%2FASimDns%2FARM%2FFullDeploymentDns.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Frearrangement2%2FParsers%2FASimDns%2FARM%2FFullDeploymentDns.json)
 <br>
