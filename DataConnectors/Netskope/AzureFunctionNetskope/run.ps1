@@ -135,7 +135,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             catch {
                 UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                Write-Host "Exiting from do while loop because of error message as : " + $($Error[0].Exception.Message)
+                Write-Host "Exiting from do while loop for logType : $($logtype) because of error message as : " + $($Error[0].Exception.Message)
                 break
             }
 
@@ -182,10 +182,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
         $checkpoints = Import-Csv -Path $CheckpointFile
         $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
-        $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
-        $mutex.WaitOne() > $null;
-        $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-        $mutex.ReleaseMutex();
+        $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+
+        # $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
+        # $mutex.WaitOne() > $null;
+        # $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+        # $mutex.ReleaseMutex();
     }
 
     function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip) {
@@ -301,6 +303,7 @@ function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType) {
                 if ($tempDataSize -gt 25MB) {
                     write-Host "Sending data to log analytics when data size = $TempDataSize greater than 25mb post chuncking the data and length of events = $tempdataLength"
                     $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes(($tempdata | ConvertTo-Json))) -logType $logType
+                    Write-Host "Post-LogAnalyticsData response code is $($responseCode) for LogType : $($logType)"
                     $tempdata = $null
                     $tempdata = @()
                     $tempDataSize = 0
