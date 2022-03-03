@@ -583,7 +583,7 @@ class SystemInfo():
         "date": ["sudo date"],
         "netstat": ["sudo netstat -lnpvt"],
         "df": ["sudo df -h"],
-        # add lsof
+        "list_open_files": ["sudo lsof +L1"],
         "free": ["sudo free -m"],
         "iptables": ["sudo iptables -vnL --line"],
         "selinux": ["sudo cat /etc/selinux/config"],
