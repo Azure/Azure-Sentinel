@@ -610,7 +610,6 @@ class SystemInfo():
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
         "top_processes": ["sudo top -bcn1 -w512 head -n 20"],
-        "sudoers_list": ["sudo getent group sudo"]
     }
 
     def __repr__(self, command_object):
@@ -659,7 +658,7 @@ def main():
         system_info = SystemInfo()
         system_info.handle_commands()
         printer.print_notice(
-            "Finished collecting data \nPlease provide CSS this file for further investigation- {} \n"
+            "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
             "In order to open a support case please browse: {}".format(
                 COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET))
         time.sleep(1)
