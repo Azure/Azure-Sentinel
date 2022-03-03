@@ -12,7 +12,7 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -25,7 +25,10 @@ relevantTechniques:
   - T1136.003
   - T1087.004
 query: |
+  let queryfrequency = 1h;
+  let queryperiod = 1d;
   AuditLogs
+  | where TimeGenerated > ago(queryperiod)
   | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)", "Invite external user with reset invitation status")
   | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
   //| where InitiatedBy has_any ("live.com#", "#EXT#")
@@ -37,6 +40,7 @@ query: |
       InvitationTime = TimeGenerated
   | join (
       (union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs)
+      | where TimeGenerated > ago(queryfrequency)
       | where UserType != "Member"
       | where AppId has_any
           ("1b730954-1685-4b74-9bfd-dac224a7b894",// Azure Active Directory PowerShell
