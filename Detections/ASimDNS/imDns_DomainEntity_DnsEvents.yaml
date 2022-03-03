@@ -51,6 +51,7 @@ tags:
   - Schema: ASIMDns
     SchemaVersion: 0.1.1
 query: |
+  let HAS_ANY_MAX = 10000;
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let DomainTIs= ThreatIntelligenceIndicator
@@ -59,15 +60,16 @@ query: |
     | where isnotempty(DomainName)
     | where Active == true
     | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId;
-  let Domains= toscalar(DomainTIs | where isnotempty(DomainName) |summarize make_set(DomainName));
+  let Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) | project DomainList = iff(array_length(DomainsList) > HAS_ANY_MAX, dynamic([]), DomainsList) ;
   DomainTIs
     | join (
-        _Im_Dns(starttime=ago(dt_lookBack))
+        _Im_Dns(starttime=ago(dt_lookBack), domain_has_any=toscalar(Domains))
         | extend DNS_TimeGenerated = TimeGenerated
   ) on $left.DomainName==$right.DnsQuery
   | where DNS_TimeGenerated < ExpirationDateTime
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, QueryType
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, DnsQueryType
   | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Dvc, IPCustomEntity = SrcIpAddr, URLCustomEntity = Url
+
 entityMappings:
   - entityType: Host
     fieldMappings:
