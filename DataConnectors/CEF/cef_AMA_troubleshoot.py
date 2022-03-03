@@ -6,6 +6,7 @@ import re
 
 LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
+PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
 SCRIPT_VERSION = 1.0
 
@@ -89,7 +90,8 @@ class BasicCommand(ColorfulPrint):
         except Exception:
             self.command_result_err = "Error processing command"
         if "not found" in str(self.command_result):
-            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again".format(self.command_to_run)
+            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again".format(
+                self.command_to_run)
 
     def is_command_successful(self, exclude=False, should_fail=False):
         '''
@@ -219,22 +221,6 @@ class AgentInstallationVerifications:
             command_object.print_notice("Detected ARC installed on the machine: {}".format(
                 command_object.command_result.decode('UTF-8').strip('\n')))
 
-    def verify_error_log_empty(self):
-        # needs fixing
-        '''
-        Verify the agent log file doesn't have many errors- needs work
-        '''
-        # needs work
-        command_name = "verify_error_log_empty"
-        command_to_run = "if [ `cat /var/opt/microsoft/azuremonitoragent/log/mdsd.err | wc -l` -lt 50 ]; then echo \"True\"; else echo \"False\"; fi"
-        result_keywords_array = ["True"]
-        command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        command_object.run_full_test()
-        if not command_object.is_successful:
-            command_object.print_warning(
-                "Detected multiple errors in the agent log file. Please review it by running this command "
-                "\'tail -f /var/opt/microsoft/azuremonitoragent/log/mdsd.err\' and making sure there is nothing fatal")
-
     def verify_oms_not_running(self):
         '''
         Verify the old MMA agent is not running together with the new AMA agent.
@@ -254,7 +240,6 @@ class AgentInstallationVerifications:
         '''
         self.verify_agent_is_running()
         self.print_arc_version()
-        self.verify_error_log_empty()
         self.verify_oms_not_running()
 
 
@@ -624,7 +609,8 @@ class SystemInfo():
         "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
-        "top_processes": ["sudo top -bcn1 -w512", "head -n 20"]
+        "top_processes": ["sudo top -bcn1 -w512 head -n 20"],
+        "sudoers_list": ["sudo getent group sudo"]
     }
 
     def __repr__(self, command_object):
@@ -673,8 +659,9 @@ def main():
         system_info = SystemInfo()
         system_info.handle_commands()
         printer.print_notice(
-            "Finished collecting data \nPlease provide CSS this file for further investigation- {}".format(
-                COLLECT_OUTPUT_FILE))
+            "Finished collecting data \nPlease provide CSS this file for further investigation- {} \n"
+            "In order to open a support case please browse: {}".format(
+                COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET))
         time.sleep(1)
     printer.print_notice("\nStarting to run the CEF validation script")
     time.sleep(1)
@@ -682,23 +669,23 @@ def main():
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     # Create agent_verification object
-    printer.print_notice("\n-----Starting validation tests for AMA-------------------------")
+    printer.print_notice("\n----- Starting validation tests for AMA -------------------------")
     agent_verifications = AgentInstallationVerifications()
     agent_verifications.run_all_agent_verifications()
     # Create dcr_verification object
-    printer.print_notice("\n-----Starting validation tests for data collection rules-------")
+    printer.print_notice("\n----- Starting validation tests for data collection rules -------")
     dcr_verification = DCRConfigurationVerifications()
     dcr_verification.run_all_dcr_verifications()
     # Create Syslog daemon verification object
-    printer.print_notice("\n-----Starting validation tests for the Syslog daemon-----------")
+    printer.print_notice("\n----- Starting validation tests for the Syslog daemon -----------")
     syslog_daemon_verification = SyslogDaemonVerifications()
     syslog_daemon_verification.run_all_syslog_daemon_verifications()
     # Create operating system level verifications
-    printer.print_notice("\n-----Starting validation tests for the operating system--------")
+    printer.print_notice("\n----- Starting validation tests for the operating system --------")
     os_verification = OperatingSystemVerifications()
     os_verification.run_all_os_verifications()
     # Create incoming events verification
-    printer.print_notice("\n-----Starting validation tests for capturing incoming events---")
+    printer.print_notice("\n----- Starting validation tests for capturing incoming events ---")
     incoming_events = IncomingEventsVerifications()
     incoming_events.run_incoming_events_verifications()
     if FAILED_TESTS_COUNT > 0:
@@ -708,7 +695,8 @@ def main():
     printer.print_notice("This script generated an output file located here - {}"
                          "\nPlease review if you would like to get more information on failed tests.".format(
         LOG_OUTPUT_FILE))
-    printer.print_notice(
+    if not feature_flag:
+        printer.print_notice(
         "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
         "\'python cef_AMA_troubleshoot.py collect\'")
 
