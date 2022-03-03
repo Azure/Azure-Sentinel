@@ -697,8 +697,8 @@ def main():
         LOG_OUTPUT_FILE))
     if not feature_flag:
         printer.print_notice(
-        "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
-        "\'python cef_AMA_troubleshoot.py collect\'")
+            "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
+            "\'python cef_AMA_troubleshoot.py collect\'")
 
 
 if __name__ == '__main__':
