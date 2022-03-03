@@ -1,13 +1,13 @@
 # Microsoft Azure Queue Storage ASIM FileEvent Normalization Parser
 
-This template deploys the ASIM FileEvent schema parser for Microsoft Azure Queue Storage. The parser is a part of the Advanced SIEM Information Model.
+This template deploys the ASIM FileEvent schema parser for Microsoft Azure Queue Storage. The parser is a part of the Advanced Security Information Model.
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Microsoft Sentinel FileEvent normalization schema reference](https://aka.ms/AzSentinelFileEventDoc)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Microsoft Sentinel FileEvent normalization schema reference](https://aka.ms/ASimFileEventDoc)
 
 <br>
  

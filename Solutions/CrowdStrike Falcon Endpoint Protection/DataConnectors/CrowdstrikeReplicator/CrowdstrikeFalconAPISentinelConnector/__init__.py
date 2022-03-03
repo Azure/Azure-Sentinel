@@ -13,8 +13,6 @@ import aiohttp
 import logging
 import azure.functions as func
 
-MAX_SCRIPT_EXEC_TIME_MINUTES = 5
-
 WORKSPACE_ID = os.environ['WorkspaceID']
 SHARED_KEY = os.environ['WorkspaceKey']
 LOG_TYPE = "CrowdstrikeReplicatorLogs"
@@ -22,14 +20,14 @@ AWS_KEY = os.environ['AWS_KEY']
 AWS_SECRET = os.environ['AWS_SECRET']
 AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
 QUEUE_URL = os.environ['QUEUE_URL']
-VISIBILITY_TIMEOUT = 60
+VISIBILITY_TIMEOUT = 1800
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
 
 # Defines how many files can be processed simultaneously
-MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 5))
+MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 20))
 
 # Defines max number of events that can be sent in one request to Azure Sentinel
-MAX_BUCKET_SIZE = int(os.environ.get('EventsBucketSize', 1000))
+MAX_BUCKET_SIZE = int(os.environ.get('EventsBucketSize', 2000))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
@@ -38,8 +36,6 @@ pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern, str(LOG_ANALYTICS_URI))
 if not match:
     raise Exception("Invalid Log Analytics Uri.")
-
-script_start_time = int(time.time())
 
 def _create_sqs_client():
     sqs_session = get_session()
@@ -61,11 +57,32 @@ def _create_s3_client():
                                     config=boto_config
                                     )
 
-def check_if_script_runs_too_long(script_start_time):
-    now = int(time.time())
-    duration = now - script_start_time
-    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
-    return duration > max_duration
+def customize_event(line):
+    element = json.loads(line)
+    # Ingesting only the fields required
+    required_fileds = [
+                        "timestamp", "aip", "aid", "EventType", "LogonType", "HostProcessType", "UserPrincipal", "DomainName",
+                        "RemoteAddressIP", "ConnectionDirection", "TargetFileName", "LocalAddressIP4", "IsOnRemovableDisk",
+                        "UserPrincipal", "UserIsAdmin", "LogonTime", "LogonDomain", "RemoteAccount", "UserId", "Prevalence",
+                        "CurrentProcess", "ConnectionDirection", "event_simpleName", "TargetProcessId", "ProcessStartTime",
+                        "UserName", "DeviceProductId", "TargetSHA256HashData", "SHA256HashData", "MD5HashData", "TargetDirectoryName",
+                        "TargetFileName", "FirewallRule", "TaskName", "TaskExecCommand", "TargetAddress", "TargetProcessId",
+                        "SourceFileName", "RegObjectName", "RegValueName", "ServiceObjectName", "RegistryPath", "RawProcessId",
+                        "event_platform", "CommandLine", "ParentProcessId", "ParentCommandLine", "ParentBaseFileName",
+                        "GrandParentBaseFileName", "RemotePort", "VolumeDeviceType", "VolumeName", "ClientComputerName", "ProductId"
+                    ]
+    required_fields_data = {}
+    custom_fields_data = {}
+    for key, value in element.items():
+        if key in required_fileds:
+            required_fields_data[key] = value
+        else:
+            custom_fields_data[key] = value
+    event = required_fields_data
+    custom_fields_data_text = str(json.dumps(custom_fields_data))
+    if custom_fields_data_text != "{}":
+        event["custom_fields_message"] = custom_fields_data_text
+    return event
 
 async def main(mytimer: func.TimerRequest):
     script_start_time = int(time.time())
@@ -73,35 +90,29 @@ async def main(mytimer: func.TimerRequest):
     async with _create_sqs_client() as client:
         async with aiohttp.ClientSession() as session:
             logging.info('Trying to check messages off the queue...')
-            while True:
-                try:
-                    response = await client.receive_message(
-                        QueueUrl=QUEUE_URL,
-                        WaitTimeSeconds=2,
-                        VisibilityTimeout=VISIBILITY_TIMEOUT
-                    )
-                    if 'Messages' in response:
-                        for msg in response['Messages']:
-                            body_obj = json.loads(msg["Body"])
-                            logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
-                            await download_message_files(body_obj, session)
-                            logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))
-                            try:
-                                await client.delete_message(
-                                    QueueUrl=QUEUE_URL,
-                                    ReceiptHandle=msg['ReceiptHandle']
-                                )
-                            except Exception as e:
-                                logging.error("Error during deleting message with MessageId {} from queue. Bucket: {}. Path prefix: {}. Error: {}".format(msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"], e))
-                    else:
-                        logging.info('No messages in queue. Re-trying to check...')
-                except KeyboardInterrupt:
-                    break
-
-                if check_if_script_runs_too_long(script_start_time):
-                    logging.info('Script is running too long. Stop processing new messages from queue.')
-                    break
-
+            try:
+                response = await client.receive_message(
+                    QueueUrl=QUEUE_URL,
+                    WaitTimeSeconds=2,
+                    VisibilityTimeout=VISIBILITY_TIMEOUT
+                )
+                if 'Messages' in response:
+                    for msg in response['Messages']:
+                        body_obj = json.loads(msg["Body"])
+                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
+                        await download_message_files(body_obj, session)
+                        logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
+                        try:
+                            await client.delete_message(
+                                QueueUrl=QUEUE_URL,
+                                ReceiptHandle=msg['ReceiptHandle']
+                            )
+                        except Exception as e:
+                            logging.error("Error during deleting message with MessageId {} from queue. Bucket: {}. Path prefix: {}. Error: {}".format(msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"], e))
+                else:
+                    logging.info('No messages in queue. Re-trying to check...')
+            except KeyboardInterrupt:
+                pass
 
 async def process_file(bucket, s3_path, client, semaphore, session):
     async with semaphore:
@@ -124,7 +135,7 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                 if n < len(lines) - 1:
                     if line:
                         try:
-                            event = json.loads(line)
+                            event = customize_event(line)
                         except ValueError as e:
                             logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
                             raise e
@@ -132,7 +143,7 @@ async def process_file(bucket, s3_path, client, semaphore, session):
             s = line
         if s:
             try:
-                event = json.loads(s)
+                event = customize_event(line)
             except ValueError as e:
                 logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
                 raise e
@@ -140,7 +151,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
         await sentinel.flush()
         total_events += sentinel.successfull_sent_events_number
         logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
-
 
 async def download_message_files(msg, session):
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)

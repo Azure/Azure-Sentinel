@@ -21,10 +21,22 @@ relevantTechniques:
   - T1070
 query: |
 
+  (union isfuzzy=true
+  (
   SecurityEvent
   | where EventID == 1102 and EventSourceName == "Microsoft-Windows-Eventlog" 
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  WindowsEvent
+  | where EventID == 1102 and Provider == "Microsoft-Windows-Eventlog"  
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend Activity= "1102 - The audit log was cleared."
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
+  )
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -34,5 +46,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
