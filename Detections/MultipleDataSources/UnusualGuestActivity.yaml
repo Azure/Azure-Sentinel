@@ -28,10 +28,12 @@ query: |
   AuditLogs
   | where OperationName has_any ("Invite external user", "invite users - started (bulk)", "Invite external user with reset invitation status")
   | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
-  //| where InitiatedBy has_any ("live.com#", "#EXT#")
   | extend InvitedUser = TargetResources[0].userPrincipalName
+  | extend UsersToCompare = pack_array(InitiatedBy, InvitedUser)
+  | mv-expand UserToCompare = UsersToCompare
+  | where UserToCompare has_any ("live.com#", "#EXT#")
   | extend
-      parsedUser = replace_string((iff(InvitedUser has "live.com#", tostring(split(InvitedUser, "#")[1]), tostring(split(InvitedUser, "#EXT#")[0]))), "@", "_"),
+      parsedUser = replace_string((iff(UserToCompare has "live.com#", tostring(split(UserToCompare, "#")[1]), tostring(split(UserToCompare, "#EXT#")[0]))), "@", "_"),
       InvitationTime = TimeGenerated
   | join (
       (union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs)
