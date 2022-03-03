@@ -114,8 +114,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 }
                 $dataLength = $response.data.Length
                 $alleventobjs += $netskopeevents
-                $allEventsLength = $alleventobjs.Length
-                $responseCode = ProcessData -allEventsLength $allEventsLength -alleventobjs $alleventobjs -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
+                $allEventsLength = $netskopeevents.Length
+                $responseCode = ProcessData -allEventsLength $allEventsLength -alleventobjs $netskopeevents -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
                 # Write-Host "$dataLength records added for '$logtype' events"
                 # If the API response length for the given log type is equal to the page limit, it indicates there are subsquent pages, continue while loop, and increment the skip value by the records already recieved for the subquent API requests
                 if($dataLength -eq $pageLimit){
@@ -262,7 +262,7 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
     $TimeStampField = "DateValue"
     $method = "POST";
     $contentType = "application/json";
-    $customerId = "5919a129-93ab-4129-a482-a6f74c08b569"
+    $customerId = $customerId
     $resource = "/api/logs";
     $rfc1123date = [DateTime]::UtcNow.ToString("r");
     $contentLength = $body.Length;
