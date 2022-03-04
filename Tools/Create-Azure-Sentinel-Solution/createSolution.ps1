@@ -718,12 +718,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $searchData = $json # Assume input is basic array of SavedSearches to start
                         # Check if SavedSearch input file uses direct structure given by export
                         if ($searchData -isnot [System.Array] -and $searchData.value) {
-                            Write-Host "Value prop exists"
                             $searchData = $searchData.value 
                         }
                         # Check if SavedSearch input file uses standard template structure
                         if ($searchData -isnot [System.Array] -and $searchData.resources) {
-                            Write-Host "Resources prop exists"
                             $isStandardTemplate = $true
                             $searchData = $searchData.resources
                         }
@@ -749,7 +747,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $savedSearchCounter++
                             }
                         } elseif ($isStandardTemplate) {
-                            Write-Host "Adding resources as if standard template"
                             $baseMainTemplate.resources += $searchData
                         }
                     }
