@@ -11,6 +11,9 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceFileEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -30,6 +33,20 @@ query: |
   | where Process has_any ("umworkerprocess.exe", "UMService.exe")
   | where ObjectName has_any (scriptExtensions)
   | where AccessMask in ('0x2','0x100', '0x10', '0x4')
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  ),
+    (WindowsEvent
+  | where EventID == 4663 and EventData has_any ("umworkerprocess.exe", "UMService.exe") and EventData has_any (scriptExtensions) 
+  | where EventData has_any ('0x2','0x100', '0x10', '0x4')
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | where Process has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend ObjectName = tostring(EventData.ObjectName)
+  | where ObjectName has_any (scriptExtensions)
+  | extend AccessMask = tostring(EventData.AccessMask)
+  | where AccessMask in ('0x2','0x100', '0x10', '0x4')
+  | extend Account = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend IpAddress = tostring(EventData.IpAddress)
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   ),
   (imFileEvent
@@ -66,5 +83,6 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.1.0
+version: 1.2.0
 kind: Scheduled
+

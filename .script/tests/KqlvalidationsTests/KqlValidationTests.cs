@@ -5,17 +5,21 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Xunit;
 using YamlDotNet.Serialization;
+using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 
 namespace Kqlvalidations.Tests
 {
     public class KqlValidationTests
     {
         private readonly IKqlQueryAnalyzer _queryValidator;
+        private const int TestFolderDepth = 3;
+
         public KqlValidationTests()
         {
             _queryValidator = new KqlQueryAnalyzerBuilder()
                .WithSentinelDefaultTablesAndFunctionsSchemas()
-               .WithCustomTableSchemasLoader(new CustomTablesSchemasLoader())
+               .WithCustomTableSchemasLoader(new CustomJsonDirectoryTablesLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables")))
+               .WithCustomFunctionSchemasLoader(new CustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
                .Build();
         }
 
