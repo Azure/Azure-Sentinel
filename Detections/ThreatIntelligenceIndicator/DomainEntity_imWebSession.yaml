@@ -20,6 +20,7 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
+    let HAS_ANY_MAX = 10000;
     let dt_lookBack = 1h;
     let ioc_lookBack = 14d;
     //Create a list of TLDs in our threat feed for later validation
@@ -29,11 +30,12 @@ query: |
     | where Active == true
     // Picking up only IOC's that contain the entities we want
     | where isnotempty(DomainName);
-    let DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize make_set(DomainName)));
+    let DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) 
+      | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));
     DOMAIN_TI
     // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
     | join kind=innerunique (
-        _Im_WebSession(starttime=ago(dt_lookBack))
+        _Im_WebSession(starttime=ago(dt_lookBack), domain_has_any=  )
         //Extract domain patterns from syslog message
         | extend domain = tostring(parse_url(Url)["Host"])
         | where isnotempty(domain)

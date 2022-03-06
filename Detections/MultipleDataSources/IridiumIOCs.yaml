@@ -114,22 +114,6 @@ query:  |
   | extend DestinationIPAddress = DstIpAddr,  Host = Dvc
   | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Host
   ),
-  (VMConnection 
-  | where isnotempty(SourceIp) or isnotempty(DestinationIp) 
-  | where SourceIp in (IPList) or DestinationIp in (IPList) 
-  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer
-  ),
-  (Event
-  | where Source == "Microsoft-Windows-Sysmon"
-  | where EventID == 3
-  | extend EvData = parse_xml(EventData)
-  | extend EventDetail = EvData.DataItem.EventData.Data
-  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
-  | where SourceIP in (IPList) or DestinationIP in (IPList) 
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
-  ),
   (SigninLogs
   | where isnotempty(IPAddress)
   | where IPAddress in (IPList)
@@ -160,16 +144,6 @@ query:  |
   AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
-  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
-  | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (IPList)  
-  | extend DestinationIP = DestinationHost 
-  | extend IPCustomEntity = SourceHost
-  ),
-  (
-  AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallNetworkRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
   | where DestinationHost has_any (IPList)  
