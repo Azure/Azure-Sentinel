@@ -40,7 +40,7 @@ This template deploys the following parsers:
 
 ## Parser parameters
 
-Parametersize parsers support the following parameters which allow for pre-filtering and therefore significantly enhance parser perofrmance. All parameters are optional. The results will match all of the used parameters (AND logic).
+Parameterized parsers support the following parameters which allow for pre-filtering and therefore significantly enhance parser perofrmance. All parameters are optional. The results will match all of the used parameters (AND logic).
 
 To use parameters, set their value as you invoke the parser, for example
 
