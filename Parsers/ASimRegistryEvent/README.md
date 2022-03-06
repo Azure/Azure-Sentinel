@@ -1,30 +1,16 @@
-# Advanced Security Information Model (ASIM) Registry parsers 
+# Azure Sentinel Information Model (ASIM) RegistryEvent parsers 
 
-This template deploys all ASIM Registry parsers. The template is part of the Advanced Security Information Model (ASIM).
+This template deploys all ASIM RegistryEvent parsers.
 
-The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
-
-Note: Please ensure that the subscription, resource group and location are the same as your current Microsoft Sentinel (Log Analytics) workspace to prevent duplicate workspaces from being created.
+The Advanced SIEM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
-- [Microsoft Sentinel Registry events normalization schema reference](https://aka.ms/ASimRegistryEventDoc)
-
-
-
-<br>
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimRegistryEventARM)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM RegistryEvent normalization schema reference](https://aka.ms/ASimRegistryEventDoc)
 
 <br>
 
-This template deploys the following:
-* vimRegistryEmpty - Empty ASim Registry table
-* imRegistry - Registry Events from all normalized Registry events sources
-* vimRegistryEventsMicrosoft365D - Registry events from Microsoft 365 Defender for Endpoints
-* vimRegistryEventMicrosoftSysmon - Registry events from Sysmon (Events 12,13 and 14) collected using the Log Analytics Agent or the Azure Monitor Agent to the Event table.
-* vimRegistryEventMicrosoftSecurityEvents - Registry Events from Windows Events (Event 4657) collected using the Log Analytics Agent or the Azure Monitor Agent to the SecuirtyEvent table.
-* vimRegistryEventMicrosoftWindowsEvent - Registry Events from Windows Events (Event 4657) collected using the Azure Monitor Agent to the WindowsEvent table. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Frearrangement2%2FParsers%2FASimRegistryEvent%2FARM%2FFullDeploymentRegistryEvent.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Frearrangement2%2FParsers%2FASimRegistryEvent%2FARM%2FFullDeploymentRegistryEvent.json)
 <br>
