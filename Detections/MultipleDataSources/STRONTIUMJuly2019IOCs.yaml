@@ -60,18 +60,24 @@ query: |
   (union isfuzzy=true
   (CommonSecurityLog 
   | parse Message with * '(' DNSName ')' * 
-  | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP),
+  | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP
+  ),
   (_Im_Dns(domain_has_any=DomainNames)
   | extend IPAddress = SrcIpAddr, DNSName = DnsQuery, Host = Dvc),
   (VMConnection 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | extend IPAddress = RemoteIp, Host = Computer),
+  | extend IPAddress = RemoteIp, Host = Computer
+  ),
   (AzureDiagnostics 
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | extend DNSName = DestinationHost 
   | extend IPAddress = SourceHost)
+  ),
+  (
+    _im_WebSession(url_has_any=DomainNames)
+    | extend IPCustomEntity=IpAddr, HostCustomEntity=Hostname, AccoutCustomEntity=User
   )
   | where isnotempty(DNSName)
   | where DNSName  has_any (DomainNames)
