@@ -24,11 +24,22 @@ query: |
     | summarize count(),make_set(AlertName) by WorkspaceSubscriptionId,CompromisedEntity= toupper(CompromisedEntity),TimeGenerated
     | extend number_alerts = array_length(set_AlertName)
     | join kind=inner
-    (
-    SecurityEvent
+    (union isfuzzy=true 
+    (SecurityEvent
     | where EventID == 4624 and LogonType == 10
       | project  Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName,Interactivelogontime=TimeGenerated
-      ) on  $left.CompromisedEntity==$right.Computer
+      ),
+      (WindowsEvent 
+      | where EventID == 4624 
+      | extend LogonType = toint(EventData.LogonType)
+      | where LogonType == 10
+      | extend Account = iff((isempty(EventData.TargetDomainName) or EventData.TargetDomainName == "-"),"", strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName)))
+      | extend  IpAddress = tostring(EventData.IpAddress)
+      | extend TargetUserSid = tostring(EventData.TargetUserSid)
+      | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+      | extend Activity=  "4624 - An account was successfully logged on."
+      | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
+      | project  Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName,Interactivelogontime=TimeGenerated)) on  $left.CompromisedEntity==$right.Computer
       | project TimeGenerated,Interactivelogontime,AccountCustomEntity=Account,AccountType,CompromisedEntity,Activity,IpAddress
       | extend TimeWindow = TimeGenerated + 15m
       | where Interactivelogontime between (TimeGenerated .. TimeWindow)
