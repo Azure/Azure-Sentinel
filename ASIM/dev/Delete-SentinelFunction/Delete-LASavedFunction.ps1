@@ -22,15 +22,12 @@
         .PARAMETER Category
         Specifies the category of deleted functions.
 
-        .PARAMETER Category
-        Specifies which subscription (aka context) to use.
-
-
+        
         .EXAMPLE
         PS> Delete-LASavedFunction DeleteM*, TestFunction* -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
 
         .LINK
-        https://github.com/Azure/Azure-Sentinel/tree/master/ASIM/dev/Delete-LASavedFunction
+        https://aka.ms/ASimDeleFunctionScript
     #>
 [CmdletBinding(PositionalBinding=$false)]
 param(
