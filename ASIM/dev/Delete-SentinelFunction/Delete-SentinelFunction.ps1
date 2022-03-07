@@ -22,7 +22,8 @@
         .PARAMETER Category
         Specifies the category of deleted functions.
 
-        
+        .PARAMETER Emulate
+        If used script will run without deleting functions
         .EXAMPLE
         PS> Delete-SentinelFunction DeleteM*, TestFunction* -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
 
