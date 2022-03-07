@@ -12,10 +12,7 @@ tags:
     SchemaVersion: 0.1.1
   - Schema: ASIMNetworkSession
     SchemaVersion: 0.2.0
-requiredDataConnectors:
-  - connectorId: Syslog
-    dataTypes:
-      - Syslog
+requiredDataConnectors: 
   - connectorId: Office365 
     dataTypes: 
      - OfficeActivity
@@ -58,28 +55,6 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics  
-  - connectorId: Zscaler
-    dataTypes:
-      - CommonSecurityLog
-  - connectorId: InfobloxNIOS
-    dataTypes: 
-      - Syslog
-  - connectorId: GCPDNSDataConnector
-    dataTypes: 
-      - GCP_DNS_CL
-  - connectorId: NXLogDnsLogs
-    dataTypes: 
-      - NXLog_DNS_Server_CL
-  - connectorId: CiscoUmbrellaDataConnector
-    dataTypes: 
-      - Cisco_Umbrella_dns_CL
-  - connectorId: ASimDnsActivityLogs
-    dataTypes: 
-      - ASimDnsActivityLogs
-  - connectorId: Corelight
-    dataTypes: 
-      - Corelight_CL
-
 queryFrequency: 1h 
 queryPeriod: 1h
 triggerOperator: gt 
@@ -95,9 +70,9 @@ query:  |
   let CSlogDestIP = CommonSecurityLog | summarize by IPAddress = DestinationIP, Type;
   let CSlogMsgIP = CommonSecurityLog | extend MessageIP = extract(IPRegex, 0, Message) | summarize by IPAddress = MessageIP, Type;
   let DnsIP = DnsEvents | summarize by IPAddress = IPAddresses, Type;
-  // 
-  let imDnsIP = _Im_Dns (response_has_any_prefix=IPList) | summarize by IPAddress = ResponseName, Type;
-  let imNetSessIP = _Im_NetworkSession (dstipaddr_has_any_prefix=IPList) | summarize by IPAddress = DstIpAddr, Type;
+  // If you have enabled the imDNS and/or imNetworkSession normalization in your workspace, you can uncomment one or both below.  Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  //let imDnsIP = imDns (response_has_any_prefix=IPList) | summarize by IPAddress = ResponseName, Type;
+  //let imNetSessIP = imNetworkSession (dstipaddr_has_any_prefix=IPList) | summarize by IPAddress = DstIpAddr, Type;
   //Cloud service logs
   let officeIP = OfficeActivity | summarize by IPAddress = ClientIP, Type;
   let signinIP = SigninLogs | summarize by IPAddress, Type;
@@ -116,10 +91,10 @@ query:  |
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"])
   | where SourceIP in (IPList) or DestinationIP in (IPList) | extend IPAddress = iff(SourceIP in (IPList), SourceIP, DestinationIP) | summarize by IPAddress, Type;
-  //
-  let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP, imDnsIP, imNetSessIP
-  // 
-  // 
+  // If you have enabled the imDNS and/or imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  //let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP, imDnsIP, imNetSessIP
+  // If you uncomment above, then comment out the line below
+  let ipsort = union isfuzzy=true CSlogDestIP, CSlogMsgIP, CSlogSourceIP, DnsIP, officeIP, signinIP, nonintSigninIP, azureActIP, awsCtIP, vmConnDestIP, vmConnSourceIP, azureDiagIP, sysEvtIP
   | summarize by IPAddress
   | where isnotempty(IPAddress) | where not(ipv4_is_private(IPAddress)) and IPAddress !in ('0.0.0.0','127.0.0.1');
   let ipMatch = ipsort | where IPAddress in (IPList);
@@ -136,6 +111,12 @@ query:  |
   | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
   | extend SourceIPAddress = ClientIP, Account = UserId
   | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account
+  ),
+  (DnsEvents
+  | where  IPAddresses has_any (ipMatch)
+  | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
+  | extend DestinationIPAddress = IPAddresses,  Host = Computer
+  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
   ),
   (VMConnection
   | where SourceIp in (ipMatch) or DestinationIp in (ipMatch)
@@ -196,17 +177,19 @@ query:  |
   | parse msg_s with Protocol 'request from ' SourceIP ':' SourcePort 'to ' DestinationIP ':' DestinationPort '. Action:' Action
   | where DestinationIP has_any (ipMatch)
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP
-  ),
-  (_Im_Dns (response_has_any_prefix=IPList)
-  | project TimeGenerated, ResponseName, SrcIpAddr, Type
-  | extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
-  ),
-  (_Im_NetworkSession (dstipaddr_has_any_prefix=IPList)
-  | project TimeGenerated, DstIpAddr, SrcIpAddr, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = DstIpAddr, HostCustomEntity = SrcIpAddr
   )
-  ) 
+  // If you have enabled the imDNS and/or imNetworkSession normalization in your workdspace, you can uncomment below and include. Reference - https://docs.microsoft.com/azure/sentinel/normalization
+  //,
+  //(imDns (response_has_any_prefix=IPList)
+  //| project TimeGenerated, ResponseName, SrcIpAddr, Type
+  //| extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr
+  //| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
+  //),
+  //(imNetworkSession (dstipaddr_has_any_prefix=IPList)
+  //| project TimeGenerated, DstIpAddr, SrcIpAddr, Type
+  //| extend timestamp = TimeGenerated, IPCustomEntity = DstIpAddr, HostCustomEntity = SrcIpAddr
+  //)
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -220,5 +203,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 2.1.0
+version: 2.0.0
 kind: Scheduled
