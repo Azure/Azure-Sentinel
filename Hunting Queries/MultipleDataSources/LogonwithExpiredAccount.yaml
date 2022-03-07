@@ -10,13 +10,16 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+   - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvent 
 tactics:
   - InitialAccess
 relevantTechniques:
   - T1078
 query: |
 
-  (union isfuzzy=true
+ (union isfuzzy=true
   (SecurityEvent 
   | where EventID == 4625
   //4625: An account failed to log on
@@ -27,6 +30,20 @@ query: |
   ( SubStatus == '0xc0000193', 'Windows EventID (4625) - Account has expired', "Unknown")
   | project Computer, Account,  Reason , TimeGenerated
   ),
+  (WindowsEvent
+    | where EventID == 4625
+  //4625: An account failed to log on
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+    | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+  | where AccountType == 'User' 
+  | extend SubStatus = tostring(EventData.SubStatus)
+  | where SubStatus == '0xc0000193' 
+  | extend Reason = 
+  case
+  ( SubStatus == '0xc0000193', 'Windows EventID (4625) - Account has expired', "Unknown")
+    | extend Account = iff((isempty(EventData.TargetDomainName) or EventData.TargetDomainName == "-"),"", strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName)))
+  | project Computer, Account,  Reason , TimeGenerated
+  ),
   (
   SecurityEvent 
   | where EventID == 4769
@@ -34,6 +51,19 @@ query: |
   | parse EventData with * 'Status">' Status "<" *
   | parse EventData with * 'TargetUserName">' TargetUserName "<" *
   | where Status == '0x12'
+  | where TargetUserName !has "$" and isnotempty(TargetUserName)
+  | extend Reason = 
+  case(
+  Status == '0x12', 'Windows EventID (4769) - Account disabled, expired, locked out',
+  'Unknown'), Account = TargetUserName 
+  | project Computer, Account, Reason , TimeGenerated
+  ),
+  (WindowsEvent
+    | where EventID == 4769
+  //4769: A Kerberos service ticket was requested ( Kerberos Auth)
+  | extend Status= tostring(EventData.Status)
+  | where Status == '0x12'
+  | extend TargetUserName = tostring(EventData.TargetUserName)
   | where TargetUserName !has "$" and isnotempty(TargetUserName)
   | extend Reason = 
   case(
@@ -55,6 +85,22 @@ query: |
   | extend Computer = iff(isnotempty(Workstation), Workstation, Computer ) 
   | project Computer, Account, Reason , TimeGenerated
   ) ,
+  ( WindowsEvent
+   | where EventID == 4776 
+  // 4776: The domain controller attempted to validate the credentials for an account ( NTLM Auth)
+  | extend Status= tostring(EventData.Status)
+  | where Status == "0xc0000193"
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend ErrorCode = tostring(EventData.ErrorCode)
+  | extend Reason = 
+  case(
+  ErrorCode == '0xc0000193', 'Windows EventID (4776) - Account has expired',
+  'Unknown'), Account = TargetAccount 
+  | extend Workstation = tostring(EventData.Workstation)
+  | extend Workstation = trim_start(@"[\\]*", Workstation)
+  | extend Computer = iff(isnotempty(Workstation), Workstation, Computer ) 
+  | project Computer, Account, Reason , TimeGenerated
+  ),
   (
   SigninLogs 
   | where ResultType == "50057" 
@@ -67,3 +113,4 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTImeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, Reason
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer
   | order by EventCount desc 
+
