@@ -179,20 +179,24 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
     # Function to update the checkpoint time with the last successful API call end time
     function UpdateCheckpointTime($CheckpointFile, $LogType, $LastSuccessfulTime, $skip) {
-        $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
-        $checkpoints = Import-Csv -Path $CheckpointFile
-        $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
-        # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-
-        $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
-        $mutex.WaitOne() > $null;
-        $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-        $mutex.ReleaseMutex();
-        Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
+        try {
+            Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
+            $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
+            $mutex.WaitOne() > $null;
+            $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
+            $checkpoints = Import-Csv -Path $CheckpointFile
+            $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
+            # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+            $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+            Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
+            $mutex.ReleaseMutex();
+        }
+        catch {
+            Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
+        }
     }
 
     function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip) {
-
         $url = GetUrl -Uri $Uri -ApiKey $ApiKey -StartTime $StartTime -EndTime $EndTime -logtype $LogType -Page $Page -Skip $Skip
         $obfurl = $url -replace "token=[a-z0-9]+\&", "token=<apiToken>&"
         Write-Host "Retrieving '$LogType' events from $obfurl"
