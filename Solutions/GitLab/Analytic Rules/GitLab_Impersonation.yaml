@@ -1,0 +1,32 @@
+id: 0f4f16a2-b464-4c10-9a42-993da3e15a40
+name: GitLab - User Impersonation
+description: |
+  'This queries GitLab Audit Logs for user impersonation. A malicious operator or a compromised admin account could leverage the impersonation feature of GitLab to change code or
+  repository settings bypassing usual processes. This hunting queries allows you to track the audit actions done under impersonation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - LateralMovement
+query: |
+  let impersonationStart = (GitLabAudit
+  | where CustomMessage == 'Started Impersonation'
+  | extend AuthorID = tostring(AuthorID), TargetID = tostring(AuthorID));
+  let impersonationStop = (GitLabAudit
+  | where CustomMessage == 'Stopped Impersonation'
+  | extend AuthorID = tostring(AuthorID), TargetID = tostring(AuthorID));
+  impersonationStart
+  | join kind=inner impersonationStop on $left.TargetID == $right.TargetID and $left.AuthorID == $right.AuthorID 
+  | where todatetime(EventTime1) > todatetime(EventTime)
+  | extend AuthorID, AuthorName, TargetID, TargetDetails = tostring(TargetDetails), IPStart = IPAddress, IPStop = IPAddress1, ImpStartTime = EventTime, ImpStopTime = EventTime1, EntityPath
+  | join kind=inner (GitLabAudit | extend ActionTime = EventTime, AuthorName = tostring(AuthorName)) on $left.TargetDetails == $right.AuthorName 
+  | where todatetime(ImpStartTime) < todatetime(ActionTime) and todatetime(ActionTime) > todatetime(ImpStopTime)
+version: 1.0.0
+kind: Scheduled
